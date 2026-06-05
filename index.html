@@ -182,6 +182,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 .item.priority-task .item-text{color:var(--text)}
 .priority-badge{font-size:10px;font-weight:600;background:var(--coral);color:#FAF8F4;border-radius:4px;padding:1px 6px;margin-left:6px;letter-spacing:0.04em;text-transform:uppercase;vertical-align:middle}
 .delegated-badge{font-size:10px;font-weight:600;background:rgba(160,117,42,0.25);color:var(--gold-lt);border:1px solid rgba(160,117,42,0.4);border-radius:4px;padding:1px 6px;letter-spacing:0.04em;vertical-align:middle}
+.item.delegated-win{background:rgba(160,117,42,0.08);border-color:rgba(160,117,42,0.3);border-left:3px solid var(--gold)}
 .item.miss-item{border-left:2px solid var(--miss)}
 .chk{width:22px;height:22px;border-radius:6px;border:1.5px solid var(--border2);cursor:pointer;flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center;transition:all 0.15s}
 .chk.on{background:var(--gold);border-color:var(--gold)}
@@ -974,9 +975,25 @@ function renderList(key, items) {
       return `<div class="item ${item.done?'done':''} ${isPriority?'priority-task':''}"><div class="chk ${item.done?'on':''}" onclick="toggle(${i})"></div><div style="flex:1"><div class="item-text">${esc(displayText)} ${priorityBadge}${delegatedBadge}</div>${tsMeta}</div><button class="idel" onclick="del('tasks',${i})">✕</button></div>`;
     }
     if (key === 'wins') {
-      const winTs = item.completedAt ? `<div class="item-meta">${item.fromTask ? '✦ from completed task · ' : ''}${item.completedAt}</div>` : (item.fromTask ? '<div class="item-meta">✦ from completed task</div>' : '');
-      const addTs = item.addedAt && !item.fromTask ? `<div class="item-meta">Added ${item.addedAt}</div>` : '';
-      return `<div class="item win-item"><div class="idot dg"></div><div style="flex:1"><div class="item-text">${esc(item.text)}</div>${winTs}${addTs}</div><button class="idel" onclick="del('wins',${i})">✕</button></div>`;
+      // Determine win type — priority, delegated, or normal
+      const isPriority = item.priority || item.text?.startsWith('*');
+      const isDelegated = !!item.delegatedBy;
+      const displayText = item.text?.startsWith('*') ? item.text.slice(1).trim() : item.text;
+      
+      // Extra classes for priority and delegated wins
+      const extraClass = isPriority ? 'priority-task' : isDelegated ? 'delegated-win' : '';
+      
+      // Badges
+      const priorityBadge = isPriority ? '<span class="priority-badge">Priority</span>' : '';
+      const delegatedBadge = isDelegated ? `<span class="delegated-badge">↓ from ${item.delegatedBy.split('@')[0]}</span>` : '';
+      
+      // Meta line
+      const winTs = item.completedAt
+        ? `<div class="item-meta">${item.fromTask ? '✦ completed task · ' : isDelegated ? '↓ delegated · ' : ''}${item.completedAt}</div>`
+        : (item.fromTask ? '<div class="item-meta">✦ from completed task</div>' : isDelegated ? `<div class="item-meta">↓ delegated by ${item.delegatedBy.split('@')[0]}</div>` : '');
+      const addTs = item.addedAt && !item.fromTask && !isDelegated ? `<div class="item-meta">Added ${item.addedAt}</div>` : '';
+      
+      return `<div class="item win-item ${extraClass}"><div class="idot dg"></div><div style="flex:1"><div class="item-text">${esc(displayText)} ${priorityBadge}${delegatedBadge}</div>${winTs}${addTs}</div><button class="idel" onclick="del('wins',${i})">✕</button></div>`;
     }
     if (key === 'misses') return `<div class="item miss-item"><div class="idot dm"></div><div style="flex:1"><div class="item-text">${esc(item.text)}</div><div class="item-meta">Missed from ${fmtDate(item.missedFrom)}</div></div></div>`;
     // issues
