@@ -1249,43 +1249,30 @@ async function delegateTask(memberId, memberEmail) {
   const cleanText = isPriority ? text.slice(1).trim() : text;
   const now = new Date();
   const ts = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
-  const task = { text: cleanText, done: false, delegatedBy: currentUser.email, delegatedAt: ts, addedAt: ts, priority: isPriority };
 
   try {
-    // Always fetch fresh from Supabase first
-    const r = await fetch(SB_URL + '/rest/v1/daytrack?user_id=eq.' + memberId + '&day_key=eq.' + selectedDate + '&select=id,data', {
-      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token }
+    // Call the Supabase RPC function which bypasses RLS
+    const r = await fetch(SB_URL + '/rest/v1/rpc/delegate_task', {
+      method: 'POST',
+      headers: { 
+        'apikey': SB_KEY, 
+        'Authorization': 'Bearer ' + currentUser.token,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        p_member_id: memberId,
+        p_org_id: profile.org_id,
+        p_day_key: selectedDate,
+        p_task_text: cleanText,
+        p_delegated_by: currentUser.email,
+        p_added_at: ts,
+        p_is_priority: isPriority
+      })
     });
-    const rows = await r.json();
-    let memberData = rows?.[0]?.data || { tasks: [], issues: [], wins: [], misses: [] };
-    ['tasks','issues','wins','misses'].forEach(k => { if (!memberData[k]) memberData[k] = []; });
     
-    // Check not already delegated
-    if (memberData.tasks.find(t => t.text === cleanText && t.delegatedBy)) {
-      alert('This task was already delegated.'); return;
-    }
-    memberData.tasks.push(task);
-
-    // Get member's org_id
-    const profR = await fetch(SB_URL + '/rest/v1/user_profiles?user_id=eq.' + memberId + '&select=org_id', {
-      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token }
-    });
-    const profRows = await profR.json();
-    const orgId = profRows?.[0]?.org_id || profile.org_id;
-
-    // Use PATCH if row exists, POST if not
-    if (rows?.[0]?.id) {
-      await fetch(SB_URL + '/rest/v1/daytrack?user_id=eq.' + memberId + '&day_key=eq.' + selectedDate, {
-        method: 'PATCH',
-        headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data: memberData })
-      });
-    } else {
-      await fetch(SB_URL + '/rest/v1/daytrack', {
-        method: 'POST',
-        headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
-        body: JSON.stringify({ user_id: memberId, org_id: orgId, day_key: selectedDate, data: memberData })
-      });
+    if (!r.ok) {
+      const err = await r.text();
+      throw new Error(err);
     }
 
     inp.value = '';
