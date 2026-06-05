@@ -178,11 +178,14 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 .item.done{opacity:0.4}
 .item.done .item-text{text-decoration:line-through}
 .item.win-item{border-left:2px solid var(--green)}
-.item.priority-task{background:rgba(192,82,63,0.12);border-color:rgba(192,82,63,0.4);border-left:3px solid var(--coral)}
+.item.priority-task{background:rgba(192,82,63,0.18) !important;border-color:rgba(192,82,63,0.5) !important;border-left:3px solid var(--coral) !important}
 .item.priority-task .item-text{color:var(--text)}
-.priority-badge{font-size:10px;font-weight:600;background:var(--coral);color:#FAF8F4;border-radius:4px;padding:1px 6px;margin-left:6px;letter-spacing:0.04em;text-transform:uppercase;vertical-align:middle}
-.delegated-badge{font-size:10px;font-weight:600;background:rgba(160,117,42,0.25);color:var(--gold-lt);border:1px solid rgba(160,117,42,0.4);border-radius:4px;padding:1px 6px;letter-spacing:0.04em;vertical-align:middle}
-.item.delegated-win{background:rgba(160,117,42,0.08);border-color:rgba(160,117,42,0.3);border-left:3px solid var(--gold)}
+.priority-badge{font-size:11px;font-weight:700;background:var(--coral);color:#FAF8F4;border-radius:4px;padding:2px 8px;margin-left:6px;letter-spacing:0.04em;text-transform:uppercase;vertical-align:middle}
+.delegated-badge{font-size:11px;font-weight:700;background:rgba(160,117,42,0.3);color:var(--gold);border:1.5px solid var(--gold);border-radius:4px;padding:2px 8px;margin-left:6px;letter-spacing:0.04em;vertical-align:middle}
+.item.delegated-win{background:rgba(160,117,42,0.15) !important;border-color:rgba(160,117,42,0.45) !important;border-left:3px solid var(--gold) !important}
+/* Light mode overrides */
+body.light-mode .item.priority-task{background:rgba(192,82,63,0.12) !important}
+body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 .item.miss-item{border-left:2px solid var(--miss)}
 .chk{width:22px;height:22px;border-radius:6px;border:1.5px solid var(--border2);cursor:pointer;flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center;transition:all 0.15s}
 .chk.on{background:var(--gold);border-color:var(--gold)}
@@ -976,9 +979,9 @@ function renderList(key, items) {
     }
     if (key === 'wins') {
       // Determine win type — priority, delegated, or normal
-      const isPriority = item.priority || item.text?.startsWith('*');
-      const isDelegated = !!item.delegatedBy;
-      const displayText = item.text?.startsWith('*') ? item.text.slice(1).trim() : item.text;
+      const isPriority = item.priority === true || item.text?.startsWith('*');
+      const isDelegated = !!(item.delegatedBy);
+      const displayText = item.text?.startsWith('*') ? item.text.slice(1).trim() : (item.text || '');
       
       // Extra classes for priority and delegated wins
       const extraClass = isPriority ? 'priority-task' : isDelegated ? 'delegated-win' : '';
