@@ -341,7 +341,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
           <span class="user-email" id="uEmail"></span>
           <span class="role-pill" id="uRole"></span>
           <span class="org-pill" id="uOrg"></span>
-          <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle dark/light mode">◑</button>
+          <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle dark/light mode">⬡</button>
           <button class="logout-btn" onclick="doLogout()">Sign out</button>
         </div>
       </div>
@@ -1469,7 +1469,7 @@ function toggleTheme() {
 
 function updateThemeIcon(mode) {
   const btn = document.getElementById('themeToggle');
-  if (btn) btn.textContent = mode === 'dark' ? '☀' : '☾';
+  if (btn) btn.textContent = mode === 'dark' ? 'Light' : 'Dark';
 }
 
 // ══════════════════════════════════════════════════════════
