@@ -924,7 +924,7 @@ function runCarryOver() {
         t.addedToWins = true;
         if (!d.wins) d.wins = [];
         if (!d.wins.find(w => w.text === t.text && w.fromTask))
-          d.wins.push({ text: t.text, fromTask: true, done: false, completedAt: t.completedAt || null });
+          d.wins.push({ text: t.text, fromTask: true, done: false, completedAt: t.completedAt || null, priority: t.priority || false, delegatedBy: t.delegatedBy || null });
       }
     });
     // Incomplete past task → miss next day
