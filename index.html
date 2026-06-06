@@ -122,6 +122,16 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 .prog-lbl{font-size:13px;color:var(--text2);white-space:nowrap}
 .streak-row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
 .spill{font-size:13px;color:var(--text2);background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:5px 12px;display:flex;align-items:center;gap:6px}
+.momentum-row{display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap}
+.streak-badge{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:8px 14px}
+.streak-fire{font-size:22px;line-height:1}
+.streak-info{display:flex;flex-direction:column}
+.streak-num{font-family:'EB Garamond',Georgia,serif;font-size:22px;font-weight:600;color:var(--gold);line-height:1}
+.streak-lbl{font-size:11px;color:var(--text3);margin-top:1px}
+.momentum-bar-wrap{flex:1;min-width:120px}
+.momentum-lbl{font-size:11px;color:var(--text3);margin-bottom:4px;display:flex;justify-content:space-between}
+.momentum-bar{height:6px;background:var(--surface2);border-radius:3px;overflow:hidden}
+.momentum-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--gold),var(--green));transition:width 0.6s ease}
 .spill span{color:var(--text);font-weight:500}
 
 /* ── CAL STRIP ── */
@@ -163,6 +173,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 .ab-row input{flex:1;background:transparent;border:none;outline:none;color:var(--text);font-family:'DM Sans',sans-serif;font-size:16px}
 .ab-row input::placeholder{color:var(--text3)}
 .ab-row button{background:var(--gold);border:none;border-radius:8px;width:32px;height:32px;cursor:pointer;color:#0f0f13;font-size:22px;display:flex;align-items:center;justify-content:center;font-weight:300;transition:opacity 0.2s;flex-shrink:0}
+.mic-btn{background:var(--surface2) !important;border:1px solid var(--border2) !important;color:var(--text2) !important;font-size:16px !important}
+.mic-btn.recording{background:rgba(192,82,63,0.2) !important;border-color:var(--coral) !important;animation:micPulse 1s infinite}
+@keyframes micPulse{0%,100%{opacity:1}50%{opacity:0.5}}
 .ab-row button:hover{opacity:0.85}
 .cbar{height:2px;background:var(--surface2);border-radius:1px;overflow:hidden;opacity:0;transition:opacity 0.2s}
 .cbar.vis{opacity:1}
@@ -210,7 +223,23 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 .slbl{font-size:12px;color:var(--text2);margin-top:5px}
 .snum.purple{color:var(--gold)}.snum.green{color:var(--green)}.snum.coral{color:var(--coral)}.snum.miss{color:var(--miss)}
 .ai-card{background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);overflow:hidden;margin-bottom:14px}
+.signal-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:10px;transition:border-color 0.2s}
+.signal-card:hover{border-color:var(--border2)}
+.signal-card.dying{border-color:rgba(192,82,63,0.3);background:rgba(192,82,63,0.04)}
+.signal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.signal-type{font-size:11px;font-weight:600;border-radius:4px;padding:2px 8px;letter-spacing:0.04em}
+.signal-type.call{background:rgba(110,231,183,0.15);color:var(--green)}
+.signal-type.email{background:rgba(160,117,42,0.15);color:var(--gold)}
+.signal-type.linkedin{background:rgba(96,165,250,0.15);color:#60a5fa}
+.signal-time{font-size:11px;color:var(--text3)}
+.signal-account{font-size:14px;font-weight:600;color:var(--text);margin-bottom:5px;font-family:'EB Garamond',Georgia,serif}
+.signal-body{font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:8px}
+.signal-action{font-size:12px;color:var(--green);background:rgba(110,231,183,0.08);border-radius:6px;padding:5px 10px}
+.dying-action{color:var(--coral);background:rgba(192,82,63,0.08)}
+.sam-coming-soon{background:var(--surface2);border:1px dashed var(--border2);border-radius:var(--radius);padding:14px 16px;margin-top:14px;text-align:center}
 .rtab{flex:1;padding:10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:transparent;color:var(--text2);font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer;transition:all 0.2s}
+.template-btn{font-size:12px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text2);padding:6px 12px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all 0.2s}
+.template-btn:hover{border-color:var(--gold);color:var(--gold)}
 .rtab:hover{border-color:var(--border2);color:var(--text)}
 .rtab.active{background:var(--surface);border-color:var(--gold);color:var(--gold)}
 .ai-hdr{padding:13px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
@@ -291,14 +320,17 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 .filter-btn:hover{border-color:var(--gold);color:var(--gold)}
 
 /* ── BOTTOM NAV ── */
-.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:rgba(15,15,19,0.94);backdrop-filter:blur(12px);border-top:1px solid var(--border);padding:10px 0 max(10px,env(safe-area-inset-bottom));z-index:100}
-.nav-inner{max-width:720px;margin:0 auto;display:flex;padding:0 16px;gap:2px}
-.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;cursor:pointer;padding:5px 2px;border-radius:var(--radius-sm);transition:all 0.2s;position:relative}
-.nav-btn:hover{background:var(--surface)}
-.nav-btn.active{background:var(--surface2)}
-.nav-icon{font-size:20px;line-height:1}
-.nav-label{font-size:11px;color:var(--text2);font-family:'DM Sans',sans-serif}
-.nav-btn.active .nav-label{color:var(--gold)}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--surface);backdrop-filter:blur(20px);border-top:1px solid var(--border2);padding:8px 0 max(12px,env(safe-area-inset-bottom));z-index:100;box-shadow:0 -4px 24px rgba(0,0,0,0.15)}
+.nav-inner{max-width:780px;margin:0 auto;display:flex;padding:0 8px;gap:2px}
+.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;cursor:pointer;padding:6px 2px;border-radius:10px;transition:all 0.2s;position:relative}
+.nav-btn:hover{background:var(--surface2)}
+.nav-btn.active .nav-icon{color:var(--gold)}
+.nav-icon{font-size:18px;line-height:1;color:var(--text3);transition:color 0.2s}
+.nav-label{font-size:10px;color:var(--text3);font-family:'DM Sans',sans-serif;letter-spacing:0.02em;transition:color 0.2s}
+.nav-btn.active .nav-label{color:var(--gold);font-weight:600}
+.nav-btn:hover .nav-icon,.nav-btn:hover .nav-label{color:var(--text2)}
+.nav-active-pill{display:none}
+.nav-btn.active::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:32px;height:2.5px;background:var(--gold);border-radius:0 0 4px 4px}
 .nav-tip{position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:5px 9px;font-size:11px;color:var(--text2);white-space:nowrap;pointer-events:none;opacity:0;transition:opacity 0.2s;z-index:200;box-shadow:0 4px 12px rgba(0,0,0,0.4)}
 .nav-btn:hover .nav-tip{opacity:1}
 
@@ -369,6 +401,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
       <div class="prog-lbl" id="progLbl"></div>
     </div>
     <div class="streak-row" id="streakRow"></div>
+<div class="momentum-row" id="momentumRow"></div>
   </div>
 
   <div class="cal-strip" id="calStrip"></div>
@@ -394,6 +427,9 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
     <button class="tab" onclick="switchTab('review')" id="tab-review">
       ✦ Review<div class="ttip">AI-powered day summary</div>
     </button>
+    <button class="tab" onclick="switchTab('signals')" id="tab-signals">
+      ⚡ SAM<div class="ttip">Agent SAM signals for your accounts</div>
+    </button>
     <button class="tab" id="tab-team" style="display:none" onclick="switchTab('team')">
       👥 Team<div class="ttip">Your team's daily snapshot</div>
     </button>
@@ -407,19 +443,29 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 
   <!-- ── Tasks ── -->
   <div class="panel active" id="panel-tasks">
-    <div class="add-box"><div class="ab-row"><input id="pInput" placeholder="Add a priority (min 25 chars)…" oninput="updateCBar('p')" onkeydown="if(event.key==='Enter')addItem('tasks')" maxlength="300"/><button onclick="addItem('tasks')">+</button></div><div class="cbar" id="cb-p"><div class="cfill" id="cf-p" style="width:0%"></div></div><div class="chint" id="ch-p">Minimum 25 characters</div></div>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:8px;gap:8px">
+      <button class="template-btn" onclick="applyTemplate()" title="Load your saved template">⚡ Load template</button>
+      <button class="template-btn" onclick="saveTemplate()" title="Save current tasks as template">💾 Save as template</button>
+    </div>
+    <div class="add-box"><div class="ab-row"><input id="pInput" placeholder="Add a priority (min 25 chars)…" oninput="updateCBar('p')" onkeydown="if(event.key==='Enter')addItem('tasks')" maxlength="300"/><button class="mic-btn" id="mic-p" onclick="toggleVoice('pInput','mic-p')" title="Voice input">🎙</button><button onclick="addItem('tasks')">+</button></div><div class="cbar" id="cb-p"><div class="cfill" id="cf-p" style="width:0%"></div></div><div class="chint" id="ch-p">Minimum 25 characters</div></div>
     <div class="items" id="list-tasks"></div>
   </div>
 
   <!-- ── Issues ── -->
   <div class="panel" id="panel-issues">
-    <div class="add-box"><div class="ab-row"><input id="iInput" placeholder="Describe the issue (min 25 chars)…" oninput="updateCBar('i')" onkeydown="if(event.key==='Enter')addItem('issues')" maxlength="300"/><button style="background:var(--coral)" onclick="addItem('issues')">+</button></div><div class="cbar" id="cb-i"><div class="cfill" id="cf-i" style="width:0%"></div></div><div class="chint" id="ch-i">Minimum 25 characters</div></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--text2)">
+        <input type="checkbox" id="anonToggle" style="accent-color:var(--gold);width:15px;height:15px">
+        Log anonymously <span style="font-size:11px;color:var(--text3)">(manager sees it grouped, not attributed to you)</span>
+      </label>
+    </div>
+    <div class="add-box"><div class="ab-row"><input id="iInput" placeholder="Describe the issue (min 25 chars)…" oninput="updateCBar('i')" onkeydown="if(event.key==='Enter')addItem('issues')" maxlength="300"/><button class="mic-btn" id="mic-i" onclick="toggleVoice('iInput','mic-i')" title="Voice input">🎙</button><button style="background:var(--coral)" onclick="addItem('issues')">+</button></div><div class="cbar" id="cb-i"><div class="cfill" id="cf-i" style="width:0%"></div></div><div class="chint" id="ch-i">Minimum 25 characters</div></div>
     <div class="items" id="list-issues"></div>
   </div>
 
   <!-- ── Wins ── -->
   <div class="panel" id="panel-wins">
-    <div class="add-box"><div class="ab-row"><input id="aInput" placeholder="Log a win (min 25 chars)…" oninput="updateCBar('a')" onkeydown="if(event.key==='Enter')addItem('wins')" maxlength="300"/><button style="background:var(--green);color:#0f0f13" onclick="addItem('wins')">+</button></div><div class="cbar" id="cb-a"><div class="cfill" id="cf-a" style="width:0%"></div></div><div class="chint" id="ch-a">Minimum 25 characters</div></div>
+    <div class="add-box"><div class="ab-row"><input id="aInput" placeholder="Log a win (min 25 chars)…" oninput="updateCBar('a')" onkeydown="if(event.key==='Enter')addItem('wins')" maxlength="300"/><button class="mic-btn" id="mic-a" onclick="toggleVoice('aInput','mic-a')" title="Voice input">🎙</button><button style="background:var(--green);color:#0f0f13" onclick="addItem('wins')">+</button></div><div class="cbar" id="cb-a"><div class="cfill" id="cf-a" style="width:0%"></div></div><div class="chint" id="ch-a">Minimum 25 characters</div></div>
     <div class="items" id="list-wins"></div>
   </div>
 
@@ -449,6 +495,38 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
         <div class="ai-hint" onclick="askQ('What should be my top priority tomorrow?')">Tomorrow's focus →</div>
         <div class="ai-hint" onclick="askQ('How can I avoid similar issues?')">Prevent issues →</div>
         <div class="ai-hint" onclick="askQ('Motivate me based on today.')">Motivate me →</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SAM Signals ── -->
+  <div class="panel" id="panel-signals">
+    <div class="sum-card" style="margin-bottom:16px">
+      <div class="sum-title">⚡ Agent SAM — Today's Signals</div>
+      <div style="font-size:13px;color:var(--text3);margin-bottom:16px">What SAM has captured across your accounts today. Coming soon: live feed from calls, emails and LinkedIn.</div>
+      <div id="samSignalsList">
+        <div class="signal-card">
+          <div class="signal-header"><span class="signal-type call">📞 Call</span><span class="signal-time">09:15 AM</span></div>
+          <div class="signal-account">TotalEnergies France</div>
+          <div class="signal-body">Connected with Sanjay. Discussed Q3 pilot timeline. Positive intent signal — requested proposal by Friday.</div>
+          <div class="signal-action">💡 Suggested next step: Send proposal draft today</div>
+        </div>
+        <div class="signal-card">
+          <div class="signal-header"><span class="signal-type email">✉ Email</span><span class="signal-time">11:32 AM</span></div>
+          <div class="signal-account">Ferrero — Centre of Excellence</div>
+          <div class="signal-body">Reply received from procurement. Budget approved for Q3. Decision timeline moved to end of June.</div>
+          <div class="signal-action">💡 Suggested next step: Schedule closing call this week</div>
+        </div>
+        <div class="signal-card dying">
+          <div class="signal-header"><span class="signal-type linkedin">in LinkedIn</span><span class="signal-time">2 days ago</span></div>
+          <div class="signal-account">BlueStar Foods</div>
+          <div class="signal-body">No engagement in 8 days. Last message unread. Champion may have changed roles.</div>
+          <div class="signal-action dying-action">⚠ Dying signal — re-engage or mark at risk</div>
+        </div>
+        <div class="sam-coming-soon">
+          <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:4px">🔗 Full Agent SAM integration coming soon</div>
+          <div style="font-size:12px;color:var(--text3)">Live signals from your calls, emails, LinkedIn and meetings will appear here automatically — no logging required.</div>
+        </div>
       </div>
     </div>
   </div>
@@ -532,6 +610,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
     <button class="nav-btn" onclick="switchTab('wins')" id="nav-wins"><span class="nav-icon">★</span><span class="nav-label">Wins</span><div class="nav-tip">Your wins</div></button>
     <button class="nav-btn" onclick="switchTab('misses')" id="nav-misses"><span class="nav-icon">○</span><span class="nav-label">Misses</span><div class="nav-tip">Missed tasks</div></button>
     <button class="nav-btn" onclick="switchTab('review')" id="nav-review"><span class="nav-icon">✦</span><span class="nav-label">Review</span><div class="nav-tip">AI summary</div></button>
+    <button class="nav-btn" onclick="switchTab('signals')" id="nav-signals"><span class="nav-icon">⚡</span><span class="nav-label">SAM</span><div class="nav-tip">Agent SAM signals</div></button>
     <button class="nav-btn" id="nav-team" style="display:none" onclick="switchTab('team')"><span class="nav-icon">👥</span><span class="nav-label">Team</span><div class="nav-tip">Team view</div></button>
     <button class="nav-btn" id="nav-org" style="display:none" onclick="switchTab('org')"><span class="nav-icon">🏢</span><span class="nav-label">Org</span><div class="nav-tip">Manage org</div></button>
     <button class="nav-btn" onclick="switchTab('settings')" id="nav-settings"><span class="nav-icon">⚙</span><span class="nav-label">Settings</span><div class="nav-tip">Keys & sync</div></button>
@@ -939,6 +1018,15 @@ function runCarryOver() {
             next.misses.push({ text: t.text, missedFrom: k, done: false });
         }
       });
+      // Unresolved issues → also added as misses on SAME day
+      d.issues.forEach(issue => {
+        if (!issue.addedToMisses) {
+          issue.addedToMisses = true;
+          if (!d.misses) d.misses = [];
+          if (!d.misses.find(m => m.text === issue.text && m.issueMiss))
+            d.misses.push({ text: issue.text, missedFrom: k, issueMiss: true, done: false });
+        }
+      });
     }
   });
   saveLocal();
@@ -953,7 +1041,7 @@ function render() {
   renderList('issues', d.issues);
   renderList('wins', d.wins);
   renderList('misses', d.misses);
-  updateHeader(); updateBadges(); renderCalStrip(); renderSummary();
+  updateHeader(); updateBadges(); renderCalStrip(); renderSummary(); renderMomentum();
   // Keep team date input in sync with main date navigation
   const tdi = document.getElementById('teamDateInput');
   if (tdi) tdi.value = viewDate;
@@ -998,10 +1086,14 @@ function renderList(key, items) {
       
       return `<div class="item win-item ${extraClass}"><div class="idot dg"></div><div style="flex:1"><div class="item-text">${esc(displayText)} ${priorityBadge}${delegatedBadge}</div>${winTs}${addTs}</div><button class="idel" onclick="del('wins',${i})">✕</button></div>`;
     }
-    if (key === 'misses') return `<div class="item miss-item"><div class="idot dm"></div><div style="flex:1"><div class="item-text">${esc(item.text)}</div><div class="item-meta">Missed from ${fmtDate(item.missedFrom)}</div></div></div>`;
+    if (key === 'misses') {
+      const missLabel = item.issueMiss ? '⚡ Unresolved issue' : '○ Incomplete task';
+      return `<div class="item miss-item"><div class="idot dm"></div><div style="flex:1"><div class="item-text">${esc(item.text)}</div><div class="item-meta">${missLabel} from ${fmtDate(item.missedFrom)}</div></div></div>`;
+    }
     // issues
-    const issueTs = item.addedAt ? `<div class="item-meta">Logged ${item.addedAt}</div>` : '';
-    return `<div class="item"><div class="idot dc"></div><div style="flex:1"><div class="item-text">${esc(item.text)}</div>${issueTs}</div><button class="idel" onclick="del('issues',${i})">✕</button></div>`;
+    const issueTs = item.addedAt ? `<div class="item-meta">${item.anonymous?'🔒 Anonymous · ':''}Logged ${item.addedAt}</div>` : (item.anonymous ? '<div class="item-meta">🔒 Anonymous</div>' : '');
+    const anonBadge = item.anonymous ? '<span style="font-size:10px;background:rgba(160,117,42,0.15);color:var(--gold);border-radius:4px;padding:1px 6px;margin-left:6px;font-weight:600">Anon</span>' : '';
+    return `<div class="item"><div class="idot dc"></div><div style="flex:1"><div class="item-text">${esc(item.text)}${anonBadge}</div>${issueTs}</div><button class="idel" onclick="del('issues',${i})">✕</button></div>`;
   }).join('');
 }
 
@@ -1092,8 +1184,11 @@ function addItem(key) {
   const ts = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
   const isPriority = text.startsWith('*');
   const cleanText = isPriority ? text.slice(1).trim() : text;
+  const isAnon = key === 'issues' && isAnonymous();
   if (isPriority && key === 'tasks') {
     dayData(viewDate)[key].push({ text: cleanText, done: false, addedAt: ts, priority: true });
+  } else if (isAnon) {
+    dayData(viewDate)[key].push({ text, done: false, addedAt: ts, anonymous: true });
   } else {
     dayData(viewDate)[key].push({ text, done: false, addedAt: ts });
   }
@@ -1140,6 +1235,7 @@ function switchTab(tab) {
   const ne = document.getElementById('nav-'+tab); if(ne) ne.classList.add('active');
   if (tab === 'settings') renderSettings();
   if (tab === 'review') renderSummary();
+  if (tab === 'signals') {} // static for now, will connect to Agent SAM API
   if (tab === 'team') {
     document.getElementById('teamDateInput').value = viewDate;
     // Refresh token before loading team data
@@ -1232,9 +1328,14 @@ async function renderTeam() {
 function renderMemberDetail(d, memberId, memberEmail) {
   const canDelegate = profile?.role === 'manager' || profile?.role === 'super_admin';
   const taskSection = `<div class="det-sec"><div class="det-lbl">Tasks</div>${
-    (d.tasks||[]).length ? (d.tasks||[]).map(it =>
-      `<div class="det-item ${it.done?'done-item':''}"><span class="di-dot" style="background:var(--gold)"></span>${esc(it.text)}${it.delegatedBy?` <span class="delegated-badge">Delegated</span>`:''}</div>`
-    ).join('') : '<div class="m-empty">None logged</div>'
+    (d.tasks||[]).length ? (d.tasks||[]).map(it => {
+      const isPri = it.priority || it.text?.startsWith('*');
+      const displayTxt = it.text?.startsWith('*') ? it.text.slice(1).trim() : (it.text||'');
+      const priBadge = isPri ? '<span class="priority-badge">Priority</span>' : '';
+      const delBadge = it.delegatedBy ? `<span class="delegated-badge">↓ ${it.delegatedBy.split('@')[0]}</span>` : '';
+      const ts = it.completedAt ? `<span style="font-size:11px;color:var(--text3);margin-left:6px">✓ ${it.completedAt}</span>` : it.addedAt ? `<span style="font-size:11px;color:var(--text3);margin-left:6px">${it.addedAt}</span>` : '';
+      return `<div class="det-item ${it.done?'done-item':''}" style="${isPri?'background:rgba(192,82,63,0.1);':''}${it.delegatedBy?'background:rgba(160,117,42,0.08);':''}"><span class="di-dot" style="background:${isPri?'var(--coral)':it.delegatedBy?'var(--gold)':'var(--gold)'}"></span><span>${esc(displayTxt)}</span>${priBadge}${delBadge}${ts}</div>`;
+    }).join('') : '<div class="m-empty">None logged</div>'
   }</div>`;
   const issueSection = `<div class="det-sec"><div class="det-lbl">Issues</div>${
     (d.issues||[]).length ? (d.issues||[]).map(it =>
@@ -1566,6 +1667,153 @@ function toggleTheme() {
 function updateThemeIcon(mode) {
   const btn = document.getElementById('themeToggle');
   if (btn) btn.textContent = mode === 'dark' ? 'Light' : 'Dark';
+}
+
+// ══════════════════════════════════════════════════════════
+// FEATURE 3: VOICE INPUT
+// ══════════════════════════════════════════════════════════
+let activeRecognition = null;
+
+function toggleVoice(inputId, btnId) {
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    alert('Voice input is not supported in this browser. Try Chrome or Safari.');
+    return;
+  }
+  const btn = document.getElementById(btnId);
+  if (activeRecognition) {
+    activeRecognition.stop();
+    activeRecognition = null;
+    btn.classList.remove('recording');
+    btn.textContent = '🎙';
+    return;
+  }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const recognition = new SR();
+  recognition.lang = 'en-IN';
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.onstart = () => { btn.classList.add('recording'); btn.textContent = '🔴'; };
+  recognition.onresult = (e) => {
+    const transcript = e.results[0][0].transcript;
+    const inp = document.getElementById(inputId);
+    inp.value = (inp.value + ' ' + transcript).trim();
+    inp.dispatchEvent(new Event('input'));
+    inp.focus();
+  };
+  recognition.onend = () => { btn.classList.remove('recording'); btn.textContent = '🎙'; activeRecognition = null; };
+  recognition.onerror = () => { btn.classList.remove('recording'); btn.textContent = '🎙'; activeRecognition = null; };
+  activeRecognition = recognition;
+  recognition.start();
+}
+
+// ══════════════════════════════════════════════════════════
+// FEATURE 5: STREAK & MOMENTUM (excludes weekends)
+// ══════════════════════════════════════════════════════════
+function isWeekday(dateStr) {
+  const d = parseDate(dateStr);
+  const day = d.getDay();
+  return day !== 0 && day !== 6; // exclude Sun(0) and Sat(6)
+}
+
+function calcStreak() {
+  const today = todayKey();
+  let streak = 0;
+  let d = new Date();
+  // Check backwards from yesterday (today may not be done yet)
+  d.setDate(d.getDate() - 1);
+  while (true) {
+    const k = dateKey(d);
+    if (!isWeekday(k)) { d.setDate(d.getDate() - 1); continue; }
+    const data = allData[k];
+    const tasks = data?.tasks || [];
+    const done = tasks.filter(t => t.done).length;
+    if (!tasks.length || done === 0) break;
+    streak++;
+    d.setDate(d.getDate() - 1);
+    if (streak > 365) break;
+  }
+  return streak;
+}
+
+function calcMomentum() {
+  // Last 5 weekdays completion rate
+  let total = 0, done = 0, days = 0;
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  while (days < 5) {
+    const k = dateKey(d);
+    if (isWeekday(k)) {
+      const data = allData[k];
+      const tasks = data?.tasks || [];
+      total += tasks.length;
+      done += tasks.filter(t => t.done).length;
+      days++;
+    }
+    d.setDate(d.getDate() - 1);
+  }
+  return total ? Math.round((done / total) * 100) : 0;
+}
+
+function renderMomentum() {
+  const streak = calcStreak();
+  const momentum = calcMomentum();
+  const mr = document.getElementById('momentumRow');
+  if (!mr) return;
+  if (streak === 0 && momentum === 0) { mr.innerHTML = ''; return; }
+  const fireEmoji = streak >= 7 ? '🔥' : streak >= 3 ? '⚡' : '✦';
+  const streakLabel = streak === 0 ? 'Start your streak today!' : streak === 1 ? '1 day streak' : `${streak} day streak`;
+  mr.innerHTML = `
+    <div class="streak-badge">
+      <div class="streak-fire">${fireEmoji}</div>
+      <div class="streak-info">
+        <div class="streak-num">${streak}</div>
+        <div class="streak-lbl">${streakLabel} (weekdays)</div>
+      </div>
+    </div>
+    <div class="momentum-bar-wrap">
+      <div class="momentum-lbl"><span>5-day momentum</span><span style="color:var(--gold);font-weight:600">${momentum}%</span></div>
+      <div class="momentum-bar"><div class="momentum-fill" style="width:${momentum}%"></div></div>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════════════
+// FEATURE 6: DAILY TEMPLATE
+// ══════════════════════════════════════════════════════════
+function saveTemplate() {
+  const tasks = dayData(viewDate).tasks;
+  if (!tasks.length) { alert('No tasks to save as template.'); return; }
+  const template = tasks.map(t => t.text);
+  localStorage.setItem('dt-template-' + currentUser?.id, JSON.stringify(template));
+  alert(`Template saved with ${template.length} task${template.length > 1 ? 's' : ''}. Load it any morning to pre-fill your day.`);
+}
+
+function applyTemplate() {
+  const saved = localStorage.getItem('dt-template-' + currentUser?.id);
+  if (!saved) { alert('No template saved yet. Add tasks and click "Save as template" first.'); return; }
+  const template = JSON.parse(saved);
+  const d = dayData(viewDate);
+  const now = new Date();
+  const ts = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+  let added = 0;
+  template.forEach(text => {
+    if (!d.tasks.find(t => t.text === text)) {
+      const isPriority = text.startsWith('*');
+      const cleanText = isPriority ? text.slice(1).trim() : text;
+      d.tasks.push({ text: cleanText, done: false, addedAt: ts, priority: isPriority });
+      added++;
+    }
+  });
+  if (added === 0) { alert('All template tasks are already in today\'s list.'); return; }
+  runCarryOver(); render(); save(viewDate);
+  alert(`${added} task${added > 1 ? 's' : ''} loaded from template.`);
+}
+
+// ══════════════════════════════════════════════════════════
+// FEATURE 8: ANONYMOUS ISSUE FLAGGING
+// ══════════════════════════════════════════════════════════
+function isAnonymous() {
+  const toggle = document.getElementById('anonToggle');
+  return toggle ? toggle.checked : false;
 }
 
 // ══════════════════════════════════════════════════════════
