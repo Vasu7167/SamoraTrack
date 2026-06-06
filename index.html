@@ -443,9 +443,33 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 
   <!-- ── Tasks ── -->
   <div class="panel active" id="panel-tasks">
-    <div style="display:flex;justify-content:flex-end;margin-bottom:8px;gap:8px">
-      <button class="template-btn" onclick="applyTemplate()" title="Load your saved template">⚡ Load template</button>
-      <button class="template-btn" onclick="saveTemplate()" title="Save current tasks as template">💾 Save as template</button>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <span style="font-size:12px;color:var(--text3)">Your tasks for today</span>
+      <button class="template-btn" onclick="openTemplateManager()" title="Manage your task templates">📋 Templates</button>
+    </div>
+
+    <!-- Template Manager Modal -->
+    <div id="templateModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:500;align-items:center;justify-content:center;padding:20px">
+      <div style="background:var(--surface);border:1px solid var(--border2);border-radius:16px;width:100%;max-width:480px;max-height:80vh;overflow-y:auto;padding:24px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+          <span style="font-family:'EB Garamond',Georgia,serif;font-size:20px;color:var(--text)">Task Templates</span>
+          <button onclick="closeTemplateManager()" style="background:none;border:none;font-size:20px;color:var(--text3);cursor:pointer">✕</button>
+        </div>
+        <!-- Add new template task -->
+        <div style="margin-bottom:16px">
+          <div style="font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Add to your template</div>
+          <div style="display:flex;gap:8px">
+            <input id="tmplInput" class="setup-input" style="margin-bottom:0;flex:1" placeholder="e.g. Morning pipeline review (min 25 chars)" maxlength="300" onkeydown="if(event.key==='Enter')addTemplateTask()"/>
+            <button class="setup-btn" style="white-space:nowrap;padding:10px 14px" onclick="addTemplateTask()">Add</button>
+          </div>
+          <div id="tmplHint" style="font-size:11px;color:var(--coral);margin-top:4px;display:none">Minimum 25 characters</div>
+        </div>
+        <!-- Saved template tasks list -->
+        <div style="font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Saved tasks <span id="tmplCount" style="color:var(--gold)"></span></div>
+        <div id="tmplList" style="margin-bottom:18px"></div>
+        <!-- Load button -->
+        <button class="setup-btn" style="width:100%;padding:12px;font-size:14px" onclick="loadTemplateToday()">⚡ Load selected tasks into today</button>
+      </div>
     </div>
     <div class="add-box"><div class="ab-row"><input id="pInput" placeholder="Add a priority (min 25 chars)…" oninput="updateCBar('p')" onkeydown="if(event.key==='Enter')addItem('tasks')" maxlength="300"/><button class="mic-btn" id="mic-p" onclick="toggleVoice('pInput','mic-p')" title="Voice input">🎙</button><button onclick="addItem('tasks')">+</button></div><div class="cbar" id="cb-p"><div class="cfill" id="cf-p" style="width:0%"></div></div><div class="chint" id="ch-p">Minimum 25 characters</div></div>
     <div class="items" id="list-tasks"></div>
@@ -1777,36 +1801,98 @@ function renderMomentum() {
 }
 
 // ══════════════════════════════════════════════════════════
-// FEATURE 6: DAILY TEMPLATE
+// FEATURE 6: DAILY TEMPLATE — proper implementation
 // ══════════════════════════════════════════════════════════
-function saveTemplate() {
-  const tasks = dayData(viewDate).tasks;
-  if (!tasks.length) { alert('No tasks to save as template.'); return; }
-  const template = tasks.map(t => t.text);
-  localStorage.setItem('dt-template-' + currentUser?.id, JSON.stringify(template));
-  alert(`Template saved with ${template.length} task${template.length > 1 ? 's' : ''}. Load it any morning to pre-fill your day.`);
+function getTemplates() {
+  try { return JSON.parse(localStorage.getItem('dt-tmpl-' + currentUser?.id) || '[]'); } catch { return []; }
+}
+function saveTemplates(list) {
+  localStorage.setItem('dt-tmpl-' + currentUser?.id, JSON.stringify(list));
 }
 
-function applyTemplate() {
-  const saved = localStorage.getItem('dt-template-' + currentUser?.id);
-  if (!saved) { alert('No template saved yet. Add tasks and click "Save as template" first.'); return; }
-  const template = JSON.parse(saved);
-  const d = dayData(viewDate);
+function openTemplateManager() {
+  document.getElementById('templateModal').style.display = 'flex';
+  renderTemplateList();
+}
+function closeTemplateManager() {
+  document.getElementById('templateModal').style.display = 'none';
+}
+
+function renderTemplateList() {
+  const templates = getTemplates();
+  const list = document.getElementById('tmplList');
+  const count = document.getElementById('tmplCount');
+  count.textContent = templates.length ? `(${templates.length})` : '';
+  if (!templates.length) {
+    list.innerHTML = '<div style="font-size:13px;color:var(--text3);font-style:italic;padding:8px 0">No template tasks yet. Add some above.</div>';
+    return;
+  }
+  list.innerHTML = templates.map((t, i) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface2);border-radius:8px;margin-bottom:6px">
+      <input type="checkbox" id="tmpl-chk-${i}" checked style="accent-color:var(--gold);width:16px;height:16px;flex-shrink:0">
+      <input type="text" value="${esc(t)}" id="tmpl-txt-${i}" 
+        style="flex:1;background:transparent;border:none;outline:none;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px"
+        onchange="updateTemplateTask(${i}, this.value)"/>
+      <button onclick="deleteTemplateTask(${i})" 
+        style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;flex-shrink:0">✕</button>
+    </div>`).join('');
+}
+
+function addTemplateTask() {
+  const inp = document.getElementById('tmplInput');
+  const text = inp.value.trim();
+  const hint = document.getElementById('tmplHint');
+  if (text.length < 25) { hint.style.display = 'block'; inp.focus(); return; }
+  hint.style.display = 'none';
+  const templates = getTemplates();
+  templates.push(text);
+  saveTemplates(templates);
+  inp.value = '';
+  renderTemplateList();
+}
+
+function updateTemplateTask(i, newVal) {
+  const templates = getTemplates();
+  if (newVal.trim().length >= 25) templates[i] = newVal.trim();
+  saveTemplates(templates);
+}
+
+function deleteTemplateTask(i) {
+  const templates = getTemplates();
+  templates.splice(i, 1);
+  saveTemplates(templates);
+  renderTemplateList();
+}
+
+function loadTemplateToday() {
+  const templates = getTemplates();
+  if (!templates.length) { alert('No template tasks saved yet.'); return; }
   const now = new Date();
   const ts = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+  const d = dayData(viewDate);
   let added = 0;
-  template.forEach(text => {
-    if (!d.tasks.find(t => t.text === text)) {
-      const isPriority = text.startsWith('*');
-      const cleanText = isPriority ? text.slice(1).trim() : text;
-      d.tasks.push({ text: cleanText, done: false, addedAt: ts, priority: isPriority });
-      added++;
-    }
+  templates.forEach((text, i) => {
+    const chk = document.getElementById('tmpl-chk-' + i);
+    const editedTxt = document.getElementById('tmpl-txt-' + i)?.value?.trim() || text;
+    if (!chk || !chk.checked) return; // skip unchecked
+    if (d.tasks.find(t => t.text === editedTxt)) return; // skip duplicates
+    const isPriority = editedTxt.startsWith('*');
+    const cleanText = isPriority ? editedTxt.slice(1).trim() : editedTxt;
+    d.tasks.push({ text: cleanText, done: false, addedAt: ts, priority: isPriority });
+    added++;
   });
-  if (added === 0) { alert('All template tasks are already in today\'s list.'); return; }
+  if (added === 0) { alert('All selected tasks are already in today\'s list.'); return; }
   runCarryOver(); render(); save(viewDate);
-  alert(`${added} task${added > 1 ? 's' : ''} loaded from template.`);
+  closeTemplateManager();
+  // Pre-fill input with first task for quick editing
+  document.getElementById('pInput').focus();
 }
+
+// Close modal on backdrop click
+document.addEventListener('click', e => {
+  const modal = document.getElementById('templateModal');
+  if (modal && e.target === modal) closeTemplateManager();
+});
 
 // ══════════════════════════════════════════════════════════
 // FEATURE 8: ANONYMOUS ISSUE FLAGGING
