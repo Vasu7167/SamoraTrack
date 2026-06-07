@@ -1126,11 +1126,8 @@ function launchApp() {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   const todayNav = document.getElementById('nav-today');
   if (todayNav) todayNav.classList.add('active');
-  // Render everything — cal strip renders after a frame so layout is complete
   _lastCalDate = null;
   render();
-  // Force cal strip re-render after browser paints — 200ms ensures layout is done
-  setTimeout(function() { _lastCalDate = null; renderCalStrip(); }, 200);
   if (SB_URL && SB_KEY) {
     syncDown().then(() => { runCarryOver(); _lastCalDate = null; render(); });
   }
@@ -1343,28 +1340,21 @@ function renderSummary() {
 function renderCalStrip() {
   const strip = document.getElementById('calStrip');
   if (!strip) return;
-  const today = new Date(), dow = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+  const dow = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+  // Render 7 days back to 7 days forward — today near centre, no scroll needed
   const days = [];
-  for (let i=-10; i<=5; i++) { const d=new Date(today); d.setDate(today.getDate()+i); days.push(d); }
-  strip.innerHTML = '';
-  let activeEl = null;
-  days.forEach(function(d) {
+  for (let i = -7; i <= 7; i++) {
+    const d = new Date(); d.setDate(d.getDate() + i); days.push(d);
+  }
+  strip.innerHTML = days.map(function(d) {
     const k = dateKey(d);
     const isToday = (k === todayKey()), isActive = (k === viewDate);
     const hd = allData[k] && ((allData[k].tasks && allData[k].tasks.length) || (allData[k].priorities && allData[k].priorities.length) || (allData[k].issues && allData[k].issues.length));
-    const div = document.createElement('div');
-    div.className = 'cal-d' + (isActive ? ' active' : '') + (isToday ? ' today-m' : '') + (hd && !isActive ? ' has-d' : '');
-    div.innerHTML = '<div class="cal-dow">' + dow[d.getDay()] + '</div><div class="cal-num">' + d.getDate() + '</div>';
-    div.addEventListener('click', function() { gotoDate(k); });
-    strip.appendChild(div);
-    if (isActive) activeEl = div;
-  });
-  // Centre active day — defer until after layout is painted
-  if (activeEl) {
-    requestAnimationFrame(function() {
-      strip.scrollLeft = activeEl.offsetLeft - (strip.clientWidth / 2) + (activeEl.clientWidth / 2);
-    });
-  }
+    const cls = 'cal-d' + (isActive ? ' active' : '') + (isToday ? ' today-m' : '') + (hd && !isActive ? ' has-d' : '');
+    return '<div class="' + cls + '" onclick="gotoDate(\'' + k + '\')">' +
+      '<div class="cal-dow">' + dow[d.getDay()] + '</div>' +
+      '<div class="cal-num">' + d.getDate() + '</div></div>';
+  }).join('');
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1468,10 +1458,7 @@ function switchTab(tab) {
     if (tab !== 'misses') setTodaySection(tab);
     renderToday();
   }
-  if (tab === 'today') {
-    setTodaySection('tasks'); renderToday();
-    setTimeout(function() { _lastCalDate = null; renderCalStrip(); }, 50);
-  }
+  if (tab === 'today') { setTodaySection('tasks'); renderToday(); }
   if (tab === 'settings') renderSettings();
   if (tab === 'you') renderYouPanel();
   if (tab === 'review') renderSummary();
