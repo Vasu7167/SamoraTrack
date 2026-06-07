@@ -1138,10 +1138,12 @@ function launchApp() {
     document.getElementById('nav-org').style.display = '';
   }
 
-  loadLocal(); runCarryOver(); render();
+  loadLocal(); runCarryOver();
+  renderCalStrip(); // render calendar first — instant, no network needed
+  render();
   switchTab('today');
   if (SB_URL && SB_KEY) {
-    syncDown().then(() => { runCarryOver(); render(); });
+    syncDown().then(() => { runCarryOver(); _lastCalDate = null; render(); });
   }
 }
 
@@ -1254,13 +1256,17 @@ function runCarryOver() {
 // ══════════════════════════════════════════════════════════
 // RENDER
 // ══════════════════════════════════════════════════════════
+let _lastCalDate = null;
 function render() {
   const d = dayData(viewDate);
   renderList('tasks', d.tasks);
   renderList('issues', d.issues);
   renderList('wins', d.wins);
   renderList('misses', d.misses);
-  updateHeader(); updateBadges(); renderCalStrip(); renderSummary(); renderMomentum();
+  updateHeader(); updateBadges();
+  // Only re-render cal strip when date changes, not on every update
+  if (_lastCalDate !== viewDate) { _lastCalDate = viewDate; renderCalStrip(); }
+  renderSummary(); renderMomentum();
   renderToday();
   const tdi = document.getElementById('teamDateInput');
   if (tdi) tdi.value = viewDate;
@@ -1350,15 +1356,23 @@ function renderSummary() {
 
 function renderCalStrip() {
   const strip = document.getElementById('calStrip');
-  const today = new Date(), days = [];
+  if (!strip) return;
+  const today = new Date(), dow = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+  const days = [];
   for (let i=-10; i<=5; i++) { const d=new Date(today); d.setDate(today.getDate()+i); days.push(d); }
-  const dow = ['Su','Mo','Tu','We','Th','Fr','Sa'];
-  strip.innerHTML = days.map(d => {
-    const k = dateKey(d), isToday = k===todayKey(), isActive = k===viewDate;
-    const hd = allData[k] && ((allData[k].tasks?.length || allData[k].priorities?.length) || allData[k].issues?.length);
-    return `<div class="cal-d ${isActive?'active':''} ${isToday?'today-m':''} ${hd&&!isActive?'has-d':''}" onclick="gotoDate('${k}')"><div class="cal-dow">${dow[d.getDay()]}</div><div class="cal-num">${d.getDate()}</div></div>`;
-  }).join('');
-  setTimeout(() => { const a = strip.querySelector('.cal-d.active'); if(a) a.scrollIntoView({inline:'center',block:'nearest'}); }, 0);
+  strip.innerHTML = '';
+  days.forEach(function(d) {
+    const k = dateKey(d);
+    const isToday = (k === todayKey()), isActive = (k === viewDate);
+    const hd = allData[k] && ((allData[k].tasks && allData[k].tasks.length) || (allData[k].priorities && allData[k].priorities.length) || (allData[k].issues && allData[k].issues.length));
+    const div = document.createElement('div');
+    div.className = 'cal-d' + (isActive ? ' active' : '') + (isToday ? ' today-m' : '') + (hd && !isActive ? ' has-d' : '');
+    div.innerHTML = '<div class="cal-dow">' + dow[d.getDay()] + '</div><div class="cal-num">' + d.getDate() + '</div>';
+    div.addEventListener('click', function() { gotoDate(k); });
+    strip.appendChild(div);
+  });
+  var active = strip.querySelector('.cal-d.active');
+  if (active) active.scrollIntoView({inline:'center', block:'nearest'});
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1430,8 +1444,8 @@ function toggle(i) {
 }
 
 function del(key, i) { dayData(viewDate)[key].splice(i,1); runCarryOver(); render(); save(viewDate); }
-function shiftDay(n) { const d=parseDate(viewDate); d.setDate(d.getDate()+n); viewDate=dateKey(d); render(); }
-function gotoDate(k) { viewDate = k; render(); }
+function shiftDay(n) { const d=parseDate(viewDate); d.setDate(d.getDate()+n); viewDate=dateKey(d); _lastCalDate = null; render(); }
+function gotoDate(k) { _lastCalDate = null; viewDate = k; render(); }
 
 function updateCBar(t) {
   const map = { p:'pInput', i:'iInput', a:'aInput' };
