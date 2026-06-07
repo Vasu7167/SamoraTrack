@@ -1124,9 +1124,11 @@ function launchApp() {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   const todayNav = document.getElementById('nav-today');
   if (todayNav) todayNav.classList.add('active');
-  // Render everything synchronously
+  // Render everything — cal strip renders after a frame so layout is complete
   _lastCalDate = null;
   render();
+  // Force cal strip re-render after browser has painted (fixes desktop Chrome)
+  requestAnimationFrame(() => { _lastCalDate = null; renderCalStrip(); });
   if (SB_URL && SB_KEY) {
     syncDown().then(() => { runCarryOver(); _lastCalDate = null; render(); });
   }
@@ -1343,6 +1345,7 @@ function renderCalStrip() {
   const days = [];
   for (let i=-10; i<=5; i++) { const d=new Date(today); d.setDate(today.getDate()+i); days.push(d); }
   strip.innerHTML = '';
+  let activeEl = null;
   days.forEach(function(d) {
     const k = dateKey(d);
     const isToday = (k === todayKey()), isActive = (k === viewDate);
@@ -1352,9 +1355,12 @@ function renderCalStrip() {
     div.innerHTML = '<div class="cal-dow">' + dow[d.getDay()] + '</div><div class="cal-num">' + d.getDate() + '</div>';
     div.addEventListener('click', function() { gotoDate(k); });
     strip.appendChild(div);
+    if (isActive) activeEl = div;
   });
-  var active = strip.querySelector('.cal-d.active');
-  if (active) active.scrollIntoView({inline:'center', block:'nearest'});
+  // Scroll strip horizontally to centre active day — don't use scrollIntoView (scrolls page)
+  if (activeEl) {
+    strip.scrollLeft = activeEl.offsetLeft - (strip.offsetWidth / 2) + (activeEl.offsetWidth / 2);
+  }
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1491,9 +1497,11 @@ function setTodaySection(section) {
     const el = document.getElementById('today-' + s + '-section');
     if (el) el.style.display = s === section ? '' : 'none';
   });
-  // Hide add box for misses (can't add misses manually)
+  // Hide add box for misses
   const addBox = document.getElementById('today-add-box');
   if (addBox) addBox.style.display = section === 'misses' ? 'none' : '';
+  // Re-render today to apply filter
+  renderToday();
   const input = document.getElementById('todayInput');
   const addBtn = document.getElementById('todayAddBtn');
   const anonRow = document.getElementById('today-anon-row');
@@ -1557,8 +1565,18 @@ function renderToday() {
     if (listEl) listEl.innerHTML = renderListHTML(s.key, items);
     const secEl = document.getElementById(s.secId);
     if (secEl) {
-      // Show only the active section (or all if no filter set yet)
+      // Show only the active section; always visible even if empty
       secEl.style.display = (todayActiveSection === s.key) ? '' : 'none';
+      // If this is the selected section and empty, show a friendly message
+      if (todayActiveSection === s.key && !items.length && listEl) {
+        const emptyMsgs = {
+          tasks: 'No tasks yet — add what you must get done today',
+          issues: 'No issues logged today',
+          wins: 'No wins yet — complete a task or add one',
+          misses: 'No misses — all clear!'
+        };
+        listEl.innerHTML = '<div class="empty-msg" style="padding:20px 0;color:var(--text3);font-size:14px;text-align:center">' + (emptyMsgs[s.key]||'Nothing here') + '</div>';
+      }
     }
   });
   // Keep add box hidden for misses
