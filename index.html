@@ -1203,7 +1203,12 @@ function runCarryOver() {
           d.wins.push({ text: t.text, fromTask: true, done: false, completedAt: t.completedAt || null, priority: t.priority || false, delegatedBy: t.delegatedBy || null });
       }
     });
-    // Incomplete past task → miss on SAME day (not carried forward)
+    // CLEAN UP: remove any misses that don't belong to this day
+    // (legacy data may have missedFrom pointing to a different date)
+    if (d.misses) {
+      d.misses = d.misses.filter(m => !m.missedFrom || m.missedFrom === k);
+    }
+    // Incomplete past task → miss on SAME day only
     if (k < today) {
       if (!d.misses) d.misses = [];
       d.tasks.forEach(t => {
@@ -1221,6 +1226,10 @@ function runCarryOver() {
             d.misses.push({ text: issue.text, missedFrom: k, issueMiss: true, done: false });
         }
       });
+    }
+    // CLEAN today's misses — today cannot have misses yet
+    if (k === today && d.misses) {
+      d.misses = d.misses.filter(m => m.missedFrom && m.missedFrom < today);
     }
   });
   saveLocal();
