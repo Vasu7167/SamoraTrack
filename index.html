@@ -207,7 +207,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 .idot::before{content:'';width:7px;height:7px;border-radius:50%;display:block}
 .dc::before{background:var(--coral)}.dg::before{background:var(--green)}.dm::before{background:var(--miss)}
 .item-text{flex:1;font-size:15px;color:var(--text);line-height:1.6}
-.item-meta{font-size:12px;color:var(--text3);margin-top:3px}
+.item-meta{font-size:10px;color:var(--text3);margin-top:3px;letter-spacing:0.01em;opacity:0.8}
 .idel{background:none;border:none;cursor:pointer;color:var(--text3);font-size:15px;padding:0 2px;opacity:0;transition:opacity 0.15s;flex-shrink:0;margin-top:2px}
 .item:hover .idel{opacity:1}
 .idel:hover{color:var(--coral)}
@@ -691,7 +691,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
         <div id="peopleList"><div class="empty"><div class="empty-icon">⏳</div>Loading…</div></div>
       </div>
     </div>
-    <div class="admin-section">
+    <div class="admin-section" id="assignSection">
       <div class="admin-title">Manager teams</div>
       <div class="admin-card">
         <div class="admin-card-sub">Assign members to managers. Select a manager then select their direct reports.</div>
@@ -720,7 +720,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
     <!-- Quick actions -->
     <div class="you-section-title">Account</div>
     <div class="you-menu">
-      <button class="you-menu-item" onclick="switchToOrgPanel()">
+      <button class="you-menu-item" id="orgMenuBtn" onclick="switchToOrgPanel()">
         <span>🏢 Organisation & team</span><span class="you-arrow">›</span>
       </button>
       <button class="you-menu-item" onclick="switchTab('settings')">
@@ -1391,7 +1391,7 @@ function addItem(key) {
     inp.focus(); return;
   }
   const now = new Date();
-  const ts = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+  const ts = now.toLocaleDateString('en-IN', { day:'numeric', month:'short' }) + ' · ' + now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
   const isPriority = text.startsWith('*');
   const cleanText = isPriority ? text.slice(1).trim() : text;
   const isAnon = key === 'issues' && isAnonymous();
@@ -1468,6 +1468,7 @@ function switchTab(tab) {
 }
 
 function switchToOrgPanel() {
+  if (profile?.role !== 'super_admin') return; // guard
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-org').classList.add('active');
   renderOrg();
@@ -1522,7 +1523,7 @@ function addTodayItem() {
   }
   const key = todayActiveSection;
   const now = new Date();
-  const ts = now.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit', hour12:true });
+  const ts = now.toLocaleDateString('en-IN', { day:'numeric', month:'short' }) + ' · ' + now.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit', hour12:true });
   const isPriority = text.startsWith('*');
   const cleanText = isPriority ? text.slice(1).trim() : text;
   const isAnon = key === 'issues' && document.getElementById('todayAnonToggle')?.checked;
@@ -1643,6 +1644,9 @@ function renderYouPanel() {
     const isDark = document.body.classList.contains('dark-mode') || (!document.body.classList.contains('light-mode') && window.matchMedia('(prefers-color-scheme: dark)').matches);
     tl.textContent = isDark ? '☀ Switch to light mode' : '🌙 Switch to dark mode';
   }
+  // Only super_admin sees Org management
+  const orgBtn = document.getElementById('orgMenuBtn');
+  if (orgBtn) orgBtn.style.display = profile?.role === 'super_admin' ? '' : 'none';
 }
 
 function renderSamAlerts() {
@@ -1777,7 +1781,7 @@ async function delegateTask(memberId, memberEmail) {
   const isPriority = text.startsWith('*');
   const cleanText = isPriority ? text.slice(1).trim() : text;
   const now = new Date();
-  const ts = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+  const ts = now.toLocaleDateString('en-IN', { day:'numeric', month:'short' }) + ' · ' + now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
 
   try {
     // Call the Supabase RPC function which bypasses RLS
@@ -1826,11 +1830,15 @@ let orgPeople = [];
 
 async function renderOrg() {
   document.getElementById('orgCodeDisplay').textContent = profile?.org_code || '—';
-  if (!SB_URL) {
-    document.getElementById('peopleList').innerHTML = '<div class="empty">Set up Supabase to manage your org.</div>';
-    document.getElementById('assignCard').innerHTML = '<div class="empty">Set up Supabase to manage your org.</div>';
-    return;
-  }
+
+  // Only super_admin can manage people and assignments
+  const isSuperAdmin = profile?.role === 'super_admin';
+  const peopleCard = document.getElementById('peopleCard');
+  const assignSection = document.getElementById('assignSection');
+  if (peopleCard) peopleCard.style.display = isSuperAdmin ? '' : 'none';
+  if (assignSection) assignSection.style.display = isSuperAdmin ? '' : 'none';
+
+  if (!SB_URL || !isSuperAdmin) return;
   try {
     orgPeople = await sbGet(`user_profiles?org_id=eq.${profile.org_id}&select=user_id,email,role,manager_id`);
     renderPeopleTable();
@@ -2252,7 +2260,7 @@ function loadTemplateToday() {
   const templates = getTemplates();
   if (!templates.length) { alert('No template tasks saved yet.'); return; }
   const now = new Date();
-  const ts = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+  const ts = now.toLocaleDateString('en-IN', { day:'numeric', month:'short' }) + ' · ' + now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
   const d = dayData(viewDate);
   let added = 0;
   templates.forEach((text, i) => {
