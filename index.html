@@ -1304,7 +1304,7 @@ function renderList(key, items) {
       const missLabel = item.issueMiss ? '⚡ Unresolved issue' : '○ Incomplete task';
       const hasComment = item.comment && item.comment.trim();
       const commentVal = esc(item.comment || '');
-      const onchange = 'saveMissComment(' + JSON.stringify(viewDate) + ',' + i + ',this.value)';
+      const onchange = 'saveMissComment(' + JSON.stringify(useDateKey) + ',' + i + ',this.value)';
       return '<div class="item miss-item"><div class="idot dm"></div><div style="flex:1">' +
         '<div class="item-text">' + esc(item.text) + '</div>' +
         '<div class="item-meta">' + missLabel + ' · ' + fmtDate(item.missedFrom) + '</div>' +
@@ -1562,21 +1562,31 @@ function addTodayItem() {
   runCarryOver(); renderToday(); render(); save(viewDate);
 }
 
+function getPrevWeekdayKey() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1);
+  return dateKey(d);
+}
+
 function renderToday() {
   const d = dayData(viewDate);
+  // For misses: if viewing today, show previous weekday's misses so rep can comment
+  const missKey = (viewDate === todayKey()) ? getPrevWeekdayKey() : viewDate;
+  const missData = dayData(missKey);
   const sections = [
-    { key:'tasks', listId:'today-list-tasks', countId:'today-tasks-count', secId:'today-tasks-section' },
-    { key:'issues', listId:'today-list-issues', countId:'today-issues-count', secId:'today-issues-section' },
-    { key:'wins', listId:'today-list-wins', countId:'today-wins-count', secId:'today-wins-section' },
-    { key:'misses', listId:'today-list-misses', countId:'today-misses-count', secId:'today-misses-section' },
+    { key:'tasks', listId:'today-list-tasks', countId:'today-tasks-count', secId:'today-tasks-section', dateKey: viewDate },
+    { key:'issues', listId:'today-list-issues', countId:'today-issues-count', secId:'today-issues-section', dateKey: viewDate },
+    { key:'wins', listId:'today-list-wins', countId:'today-wins-count', secId:'today-wins-section', dateKey: viewDate },
+    { key:'misses', listId:'today-list-misses', countId:'today-misses-count', secId:'today-misses-section', dateKey: missKey },
   ];
   sections.forEach(s => {
     const listEl = document.getElementById(s.listId);
     const countEl = document.getElementById(s.countId);
-    const items = d[s.key] || [];
+    const items = s.key === 'misses' ? (missData.misses || []) : (d[s.key] || []);
     // For misses pill on today: show previous weekday miss count as hint
     if (countEl) countEl.textContent = items.length ? '(' + items.length + ')' : '';
-    if (listEl) listEl.innerHTML = renderListHTML(s.key, items);
+    if (listEl) listEl.innerHTML = renderListHTML(s.key, items, s.dateKey);
     const secEl = document.getElementById(s.secId);
     if (secEl) {
       // Show only the active section; always visible even if empty
@@ -1587,7 +1597,7 @@ function renderToday() {
           tasks: 'No tasks yet — add what you must get done today',
           issues: 'No issues logged today',
           wins: 'No wins yet — complete a task or add one',
-          misses: 'No misses on this date. Navigate to a past date in the calendar to see and comment on misses.'
+          misses: 'No misses — you\'re all clear!'
         };
         listEl.innerHTML = '<div class="empty-msg" style="padding:20px 0;color:var(--text3);font-size:14px;text-align:center">' + (emptyMsgs[s.key]||'Nothing here') + '</div>';
       }
@@ -1602,8 +1612,9 @@ function renderToday() {
 
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-function renderListHTML(key, items) {
+function renderListHTML(key, items, dayKeyOverride) {
   if (!items.length) return '<div class="empty-msg">Nothing logged yet</div>';
+  const useDateKey = dayKeyOverride || viewDate;
   return items.map((item, i) => {
     if (key === 'tasks') {
       const isPriority = item.priority === true || (item.text||'').startsWith('*');
