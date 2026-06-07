@@ -1304,7 +1304,7 @@ function renderList(key, items) {
       const missLabel = item.issueMiss ? '⚡ Unresolved issue' : '○ Incomplete task';
       const hasComment = item.comment && item.comment.trim();
       const commentVal = esc(item.comment || '');
-      const onchange = 'saveMissComment(' + JSON.stringify(viewDate) + ',' + i + ',this.value)';
+      const onchange = "saveMissComment('" + viewDate + "'," + i + ",this.value)";
       return '<div class="item miss-item"><div class="idot dm"></div><div style="flex:1">' +
         '<div class="item-text">' + esc(item.text) + '</div>' +
         '<div class="item-meta">' + missLabel + ' · ' + fmtDate(item.missedFrom) + '</div>' +
