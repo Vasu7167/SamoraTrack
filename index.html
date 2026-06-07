@@ -489,14 +489,16 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 
   <!-- ── TODAY (unified home) ── -->
   <div class="panel active" id="panel-today">
-    <!-- Priority add box -->
+    <!-- Section pill nav — always visible -->
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button class="today-section-btn active" id="tsb-tasks" onclick="setTodaySection('tasks')">✦ Tasks</button>
+      <button class="today-section-btn" id="tsb-issues" onclick="setTodaySection('issues')">⚡ Issues</button>
+      <button class="today-section-btn" id="tsb-wins" onclick="setTodaySection('wins')">★ Wins</button>
+      <button class="today-section-btn" id="tsb-misses" onclick="setTodaySection('misses')">○ Misses</button>
+    </div>
+
+    <!-- Add box — hidden for misses -->
     <div class="add-box" id="today-add-box">
-      <div style="display:flex;gap:8px;margin-bottom:10px">
-        <button class="today-section-btn active" id="tsb-tasks" onclick="setTodaySection('tasks')">✦ Tasks</button>
-        <button class="today-section-btn" id="tsb-issues" onclick="setTodaySection('issues')">⚡ Issues</button>
-        <button class="today-section-btn" id="tsb-wins" onclick="setTodaySection('wins')">★ Wins</button>
-        <button class="today-section-btn" id="tsb-misses" onclick="setTodaySection('misses')">○ Misses</button>
-      </div>
       <!-- Anonymous toggle (issues only) -->
       <div id="today-anon-row" style="display:none;margin-bottom:8px">
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--text2)">
@@ -1357,9 +1359,11 @@ function renderCalStrip() {
     strip.appendChild(div);
     if (isActive) activeEl = div;
   });
-  // Scroll strip horizontally to centre active day — don't use scrollIntoView (scrolls page)
+  // Centre active day — defer until after layout is painted
   if (activeEl) {
-    strip.scrollLeft = activeEl.offsetLeft - (strip.offsetWidth / 2) + (activeEl.offsetWidth / 2);
+    requestAnimationFrame(function() {
+      strip.scrollLeft = activeEl.offsetLeft - (strip.clientWidth / 2) + (activeEl.clientWidth / 2);
+    });
   }
 }
 
