@@ -135,7 +135,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 .spill span{color:var(--text);font-weight:500}
 
 /* ── CAL STRIP ── */
-.cal-strip{display:flex;gap:5px;overflow-x:auto;padding-bottom:4px;margin-bottom:16px;scrollbar-width:none}
+.cal-strip{display:flex;gap:5px;overflow-x:auto;padding-bottom:4px;margin-bottom:16px;scrollbar-width:none;min-width:0;width:100%}
 .cal-strip::-webkit-scrollbar{display:none}
 .cal-d{flex-shrink:0;width:42px;text-align:center;padding:7px 4px;border-radius:10px;border:1px solid transparent;cursor:pointer;transition:all 0.15s}
 .cal-d:hover{background:var(--surface2)}
@@ -1129,8 +1129,8 @@ function launchApp() {
   // Render everything — cal strip renders after a frame so layout is complete
   _lastCalDate = null;
   render();
-  // Force cal strip re-render after browser has painted (fixes desktop Chrome)
-  requestAnimationFrame(() => { _lastCalDate = null; renderCalStrip(); });
+  // Force cal strip re-render after browser paints — 200ms ensures layout is done
+  setTimeout(function() { _lastCalDate = null; renderCalStrip(); }, 200);
   if (SB_URL && SB_KEY) {
     syncDown().then(() => { runCarryOver(); _lastCalDate = null; render(); });
   }
@@ -1468,7 +1468,10 @@ function switchTab(tab) {
     if (tab !== 'misses') setTodaySection(tab);
     renderToday();
   }
-  if (tab === 'today') { setTodaySection('tasks'); renderToday(); }
+  if (tab === 'today') {
+    setTodaySection('tasks'); renderToday();
+    setTimeout(function() { _lastCalDate = null; renderCalStrip(); }, 50);
+  }
   if (tab === 'settings') renderSettings();
   if (tab === 'you') renderYouPanel();
   if (tab === 'review') renderSummary();
@@ -2317,6 +2320,7 @@ function isAnonymous() {
     if (document.visibilityState === 'visible' && currentUser?.token) {
       await syncDown();
       runCarryOver();
+      _lastCalDate = null;
       render();
     }
   });
