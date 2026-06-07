@@ -78,8 +78,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 .divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--border)}
 
 /* ── MAIN APP ── */
-#appScreen{flex-direction:column;background:var(--bg)}
-.app{max-width:780px;margin:0 auto;padding:0 24px 100px;width:100%}
+#appScreen{flex-direction:column;background:var(--bg);min-height:100vh}
+.app{max-width:780px;margin:0 auto;padding:0 24px 100px;width:100%;flex:1}
 
 /* ── HEADER ── */
 .header{padding:52px 0 22px;border-bottom:1px solid var(--border);margin-bottom:24px}
@@ -553,7 +553,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
   </div>
 
   <!-- ── Tasks ── -->
-  <div class="panel active" id="panel-tasks">
+  <div class="panel" id="panel-tasks">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <span style="font-size:12px;color:var(--text3)">Your tasks for today</span>
       <button class="template-btn" onclick="openTemplateManager()" title="Manage your task templates">📋 Templates</button>
@@ -1119,10 +1119,7 @@ function launchApp() {
   }
 
   loadLocal(); runCarryOver();
-  // Activate today panel first so cal strip is in the DOM
-  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  const todayPanel = document.getElementById('panel-today');
-  if (todayPanel) todayPanel.classList.add('active');
+  // panel-today is active by default in HTML — just activate nav and render
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   const todayNav = document.getElementById('nav-today');
   if (todayNav) todayNav.classList.add('active');
