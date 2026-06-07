@@ -522,7 +522,6 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
     <div id="today-tasks-section" class="today-section">
       <div class="today-sec-header">
         <span class="today-sec-title">✦ Tasks</span>
-        <span class="today-sec-count" id="today-tasks-count"></span>
       </div>
       <div class="items" id="today-list-tasks"></div>
     </div>
@@ -530,7 +529,6 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
     <div id="today-issues-section" class="today-section">
       <div class="today-sec-header">
         <span class="today-sec-title">⚡ Issues</span>
-        <span class="today-sec-count" id="today-issues-count"></span>
       </div>
       <div class="items" id="today-list-issues"></div>
     </div>
@@ -538,7 +536,6 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
     <div id="today-wins-section" class="today-section">
       <div class="today-sec-header">
         <span class="today-sec-title">★ Wins</span>
-        <span class="today-sec-count" id="today-wins-count"></span>
       </div>
       <div class="items" id="today-list-wins"></div>
     </div>
@@ -546,7 +543,6 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
     <div id="today-misses-section" class="today-section">
       <div class="today-sec-header">
         <span class="today-sec-title">○ Misses</span>
-        <span class="today-sec-count" id="today-misses-count"></span>
       </div>
       <div class="items" id="today-list-misses"></div>
     </div>
@@ -1245,6 +1241,7 @@ function render() {
   if (_lastCalDate !== viewDate) { _lastCalDate = viewDate; renderCalStrip(); }
   renderSummary(); renderMomentum();
   renderToday();
+  updateSectionPillCounts();
   const tdi = document.getElementById('teamDateInput');
   if (tdi) tdi.value = viewDate;
 }
@@ -1292,8 +1289,7 @@ function renderList(key, items) {
       const missLabel = item.issueMiss ? '⚡ Unresolved issue' : '○ Incomplete task';
       const hasComment = item.comment && item.comment.trim();
       const commentVal = esc(item.comment || '');
-      const missDay = dateKey_override || viewDate;
-      const onchange = 'saveMissComment(' + JSON.stringify(missDay) + ',' + i + ',this.value)';
+      const onchange = 'saveMissComment(' + JSON.stringify(viewDate) + ',' + i + ',this.value)';
       return '<div class="item miss-item"><div class="idot dm"></div><div style="flex:1">' +
         '<div class="item-text">' + esc(item.text) + '</div>' +
         '<div class="item-meta">' + missLabel + ' · ' + fmtDate(item.missedFrom) + '</div>' +
@@ -1326,8 +1322,7 @@ function updateHeader() {
   const pct = total ? Math.round(done/total*100) : 0;
   document.getElementById('progFill').style.width = pct + '%';
   document.getElementById('progLbl').textContent = total ? done + ' of ' + total + ' done' : 'No tasks yet';
-  const ti = d.tasks.length + d.issues.length + d.wins.length + d.misses.length;
-  document.getElementById('streakRow').innerHTML = ti ? `<div class="spill">✦ <span>${pct}%</span> done</div><div class="spill">⚡ <span>${d.issues.length}</span> issues</div><div class="spill">★ <span>${d.wins.length}</span> wins</div><div class="spill">○ <span>${d.misses.length}</span> misses</div>` : '';
+  // Counts live in section pills — no duplicate summary row needed
 }
 
 function updateBadges() {
@@ -1554,13 +1549,6 @@ function addTodayItem() {
 
 function renderToday() {
   const d = dayData(viewDate);
-  // For misses when viewing today: show yesterday's misses so they can be commented on
-  const prevWeekday = (() => {
-    const pd = new Date(parseDate(viewDate));
-    pd.setDate(pd.getDate() - 1);
-    while (pd.getDay() === 0 || pd.getDay() === 6) pd.setDate(pd.getDate() - 1);
-    return dateKey(pd);
-  })();
   const sections = [
     { key:'tasks', listId:'today-list-tasks', countId:'today-tasks-count', secId:'today-tasks-section' },
     { key:'issues', listId:'today-list-issues', countId:'today-issues-count', secId:'today-issues-section' },
@@ -1570,12 +1558,10 @@ function renderToday() {
   sections.forEach(s => {
     const listEl = document.getElementById(s.listId);
     const countEl = document.getElementById(s.countId);
-    // For misses on today: pull from previous weekday's data
-    const missDateKey = (s.key === 'misses' && viewDate === todayKey()) ? prevWeekday : viewDate;
-    const missD = dayData(missDateKey);
-    const items = s.key === 'misses' && viewDate === todayKey() ? (missD.misses || []) : (d[s.key] || []);
+    const items = d[s.key] || [];
+    // For misses pill on today: show previous weekday miss count as hint
     if (countEl) countEl.textContent = items.length ? '(' + items.length + ')' : '';
-    if (listEl) listEl.innerHTML = renderListHTML(s.key, items, s.key === 'misses' && viewDate === todayKey() ? prevWeekday : null);
+    if (listEl) listEl.innerHTML = renderListHTML(s.key, items);
     const secEl = document.getElementById(s.secId);
     if (secEl) {
       // Show only the active section; always visible even if empty
@@ -1586,7 +1572,7 @@ function renderToday() {
           tasks: 'No tasks yet — add what you must get done today',
           issues: 'No issues logged today',
           wins: 'No wins yet — complete a task or add one',
-          misses: viewDate === todayKey() ? 'No misses from yesterday — great work! Navigate to a past date to see and comment on misses.' : 'No misses on this date.'
+          misses: 'No misses on this date. Navigate to a past date in the calendar to see and comment on misses.'
         };
         listEl.innerHTML = '<div class="empty-msg" style="padding:20px 0;color:var(--text3);font-size:14px;text-align:center">' + (emptyMsgs[s.key]||'Nothing here') + '</div>';
       }
@@ -1595,11 +1581,13 @@ function renderToday() {
   // Keep add box hidden for misses
   const addBox = document.getElementById('today-add-box');
   if (addBox) addBox.style.display = todayActiveSection === 'misses' ? 'none' : '';
+  // Update pill counts
+  updateSectionPillCounts();
 }
 
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-function renderListHTML(key, items, dateKey_override) {
+function renderListHTML(key, items) {
   if (!items.length) return '<div class="empty-msg">Nothing logged yet</div>';
   return items.map((item, i) => {
     if (key === 'tasks') {
@@ -2319,6 +2307,29 @@ document.addEventListener('click', e => {
   const modal = document.getElementById('templateModal');
   if (modal && e.target === modal) closeTemplateManager();
 });
+
+// ══════════════════════════════════════════════════════════
+// SECTION PILL COUNTS
+// ══════════════════════════════════════════════════════════
+function updateSectionPillCounts() {
+  const d = dayData(viewDate);
+  const counts = {
+    tasks: d.tasks?.length || 0,
+    issues: d.issues?.length || 0,
+    wins: d.wins?.length || 0,
+    misses: d.misses?.length || 0
+  };
+  const labels = {
+    tasks: '✦ Tasks',
+    issues: '⚡ Issues',
+    wins: '★ Wins',
+    misses: '○ Misses'
+  };
+  Object.keys(counts).forEach(k => {
+    const btn = document.getElementById('tsb-' + k);
+    if (btn) btn.textContent = labels[k] + (counts[k] ? ' (' + counts[k] + ')' : '');
+  });
+}
 
 // ══════════════════════════════════════════════════════════
 // MISS COMMENTS
