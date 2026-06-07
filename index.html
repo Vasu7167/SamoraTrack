@@ -1620,7 +1620,20 @@ function renderListHTML(key, items) {
     }
     if (key === 'misses') {
       const missLabel = item.issueMiss ? '\u26a1 Unresolved issue' : '\u25cb Incomplete task';
-      return '<div class="item miss-item"><div class="idot dm"></div><div style="flex:1"><div class="item-text">' + esc(item.text) + '</div><div class="item-meta">' + missLabel + ' from ' + fmtDate(item.missedFrom) + '</div></div></div>';
+      const hasComment = item.comment && item.comment.trim();
+      const commentVal = esc(item.comment || '');
+      const onchange = "saveMissComment('" + viewDate + "'," + i + ",this.value)";
+      return '<div class="item miss-item"><div class="idot dm"></div><div style="flex:1">' +
+        '<div class="item-text">' + esc(item.text) + '</div>' +
+        '<div class="item-meta">' + missLabel + ' from ' + fmtDate(item.missedFrom) + '</div>' +
+        '<div class="miss-comment-row">' +
+          '<input class="miss-comment-input" placeholder="Add reason\u2026" maxlength="200"' +
+          ' value="' + commentVal + '"' +
+          ' onchange="' + onchange + '"' +
+          ' onblur="' + onchange + '"/>' +
+          (hasComment ? '<span class="miss-comment-badge">\u2713</span>' : '') +
+        '</div>' +
+      '</div></div>';
     }
     const issueTs = item.addedAt ? '<div class="item-meta">' + (item.anonymous?'\uD83D\uDD12 Anonymous \u00b7 ':'') + 'Logged ' + item.addedAt + '</div>' : (item.anonymous ? '<div class="item-meta">\uD83D\uDD12 Anonymous</div>' : '');
     const anonBadge = item.anonymous ? '<span style="font-size:10px;background:rgba(160,117,42,0.15);color:var(--gold);border-radius:4px;padding:1px 6px;margin-left:6px;font-weight:600">Anon</span>' : '';
