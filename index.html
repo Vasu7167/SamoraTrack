@@ -795,7 +795,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
       <span class="nav-icon">★</span>
       <span class="nav-label">Review</span>
     </button>
-    <button class="nav-btn" onclick="switchTab('team')" id="nav-team">
+    <button class="nav-btn" onclick="switchTab('team')" id="nav-team" style="display:none">
       <span class="nav-icon">👥</span>
       <span class="nav-label">Team</span>
     </button>
@@ -1108,23 +1108,20 @@ function launchApp() {
   rp.textContent = labels[role]; rp.className = 'role-pill ' + cls[role];
   document.getElementById('uOrg').textContent = profile?.org_name || '';
 
-  // Show role-gated nav items
+  // Show Team tab for manager and super_admin only
   if (role === 'super_admin' || role === 'manager') {
-    document.getElementById('tab-team').style.display = '';
-    document.getElementById('nav-team').style.display = '';
-  }
-  if (role === 'super_admin') {
-    document.getElementById('tab-org').style.display = '';
-    document.getElementById('nav-org').style.display = '';
+    const navTeam = document.getElementById('nav-team');
+    if (navTeam) navTeam.style.display = '';
   }
 
   loadLocal(); runCarryOver();
-  // panel-today is active by default in HTML — just activate nav and render
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   const todayNav = document.getElementById('nav-today');
   if (todayNav) todayNav.classList.add('active');
   _lastCalDate = null;
   render();
+  // Re-render cal strip after browser paints the flex layout (macrotask, not microtask)
+  setTimeout(function() { _lastCalDate = null; renderCalStrip(); }, 0);
   if (SB_URL && SB_KEY) {
     syncDown().then(() => { runCarryOver(); _lastCalDate = null; render(); });
   }
