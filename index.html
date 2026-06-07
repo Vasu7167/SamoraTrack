@@ -148,7 +148,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 .cal-d.today-m .cal-num{color:var(--text)}
 
 /* ── TABS ── */
-.tabs{display:flex;gap:5px;margin-bottom:16px;flex-wrap:wrap}
+.tabs{display:none!important}
 .tab{flex:1;min-width:60px;padding:10px 8px;border-radius:var(--radius-sm);border:1px solid var(--border);background:transparent;color:var(--text2);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;transition:all 0.2s;position:relative}
 .tab:hover{border-color:var(--border2);color:var(--text);background:var(--surface)}
 .tab.active{color:var(--text);border-color:var(--border2);background:var(--surface)}
@@ -231,6 +231,9 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 .today-sec-title{font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em}
 .today-sec-count{font-size:12px;color:var(--text3)}
 
+
+.sam-icon{font-family:'EB Garamond',Georgia,serif!important;font-size:20px!important;font-weight:600;color:var(--gold)!important;line-height:1;letter-spacing:-0.02em}
+.nav-btn.active .sam-icon{color:var(--gold)!important}
 /* ── SAM PANEL ── */
 .sam-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;margin-bottom:12px;transition:all 0.2s}
 .sam-card.buying{border-color:rgba(74,140,92,0.35);background:rgba(74,140,92,0.05)}
@@ -450,7 +453,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
   <div class="cal-strip" id="calStrip"></div>
 
   <!-- Tabs (role-based visibility handled in JS) -->
-  <div class="tabs" id="mainTabs">
+  <div class="tabs" id="mainTabs" style="display:none">
     <button class="tab active" onclick="switchTab('tasks')" id="tab-tasks">
       <span class="dot dot-p"></span>Tasks<span class="tbadge" id="b-tasks">0</span>
       <div class="ttip">Set & complete today's priorities</div>
@@ -629,7 +632,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
   </div>
 
   <!-- ── SAM Agent ── -->
-  <div class="panel" id="panel-signals">
+  <div class="panel" id="panel-signals" style="padding-bottom:100px">
     <!-- Proactive signal alerts -->
     <div id="samAlerts" style="margin-bottom:16px"></div>
 
@@ -674,7 +677,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
     <!-- Rufus-style chat input -->
     <div class="sam-chat-bar">
       <input class="sam-chat-input" id="samChatInput" placeholder="Ask SAM — check signals for Ferrero, who needs follow-up…" onkeydown="if(event.key==='Enter')runSamQuery()"/>
-      <button class="sam-chat-btn" onclick="runSamQuery()">⚡</button>
+      <button class="sam-chat-btn" onclick="runSamQuery()" style="font-family:'EB Garamond',Georgia,serif;font-size:18px;font-weight:600;letter-spacing:-0.02em">S</button>
     </div>
     <div id="samChatOutput" style="margin-top:12px"></div>
   </div>
@@ -805,7 +808,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
       <span class="nav-label">Today</span>
     </button>
     <button class="nav-btn" onclick="switchTab('signals')" id="nav-signals">
-      <span class="nav-icon">⚡</span>
+      <span class="nav-icon sam-icon">S</span>
       <span class="nav-label">SAM</span>
     </button>
     <button class="nav-btn" onclick="switchTab('review')" id="nav-review">
@@ -1345,7 +1348,7 @@ function renderCalStrip() {
     const hd = allData[k] && (allData[k].tasks?.length || allData[k].issues?.length);
     return `<div class="cal-d ${isActive?'active':''} ${isToday?'today-m':''} ${hd&&!isActive?'has-d':''}" onclick="gotoDate('${k}')"><div class="cal-dow">${dow[d.getDay()]}</div><div class="cal-num">${d.getDate()}</div></div>`;
   }).join('');
-  setTimeout(() => { const a = strip.querySelector('.cal-d.active'); if(a) a.scrollIntoView({inline:'center',behavior:'smooth',block:'nearest'}); }, 50);
+  setTimeout(() => { const a = strip.querySelector('.cal-d.active'); if(a) a.scrollIntoView({inline:'center',block:'nearest'}); }, 0);
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1455,8 +1458,9 @@ function switchTab(tab) {
   if (tab === 'review') renderSummary();
   if (tab === 'signals') renderSamAlerts();
   if (tab === 'team') {
-    document.getElementById('teamDateInput').value = viewDate;
-    if (currentUser?.refresh_token) { refreshToken().then(() => renderTeam()); } else { renderTeam(); }
+    const tdi = document.getElementById('teamDateInput');
+    if (tdi) tdi.value = viewDate;
+    renderTeam();
   }
   if (tab === 'org') {
     if (currentUser?.refresh_token) { refreshToken().then(() => renderOrg()); } else { renderOrg(); }
@@ -1476,6 +1480,11 @@ function setTodaySection(section) {
   document.querySelectorAll('.today-section-btn').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById('tsb-' + section);
   if (btn) btn.classList.add('active');
+  // Scroll to section after short delay to let render complete
+  setTimeout(() => {
+    const secEl = document.getElementById('today-' + section + '-section');
+    if (secEl) secEl.scrollIntoView({behavior:'smooth', block:'start'});
+  }, 80);
   const input = document.getElementById('todayInput');
   const addBtn = document.getElementById('todayAddBtn');
   const anonRow = document.getElementById('today-anon-row');
@@ -1651,6 +1660,57 @@ async function runSamQuery() {
 }
 
 
+
+async function renderTeam() {
+  const tl = document.getElementById('teamList');
+  if (!tl) return;
+  const teamDateEl = document.getElementById('teamDateInput');
+  const selectedDate = (teamDateEl && teamDateEl.value) ? teamDateEl.value : todayKey();
+  tl.innerHTML = '<div class="empty"><div class="empty-icon">⏳</div>Loading team data…</div>';
+  if (!SB_URL || !SB_KEY) { tl.innerHTML = '<div class="empty"><div class="empty-icon">☁</div>Set up Supabase in Settings to see team data.</div>'; return; }
+  if (!currentUser?.token) { tl.innerHTML = '<div class="empty"><div class="empty-icon">🔒</div>Session expired — please sign out and sign back in.</div>'; return; }
+  try {
+    let q;
+    if (profile?.role === 'super_admin') {
+      q = 'user_profiles?org_id=eq.' + profile.org_id + '&select=user_id,email,role,manager_id';
+    } else {
+      q = 'user_profiles?org_id=eq.' + profile.org_id + '&manager_id=eq.' + currentUser.id + '&select=user_id,email,role,manager_id';
+    }
+    const members = await sbGet(q);
+    const others = (members || []).filter(m => m.user_id !== currentUser.id);
+    if (!others.length) { tl.innerHTML = '<div class="empty"><div class="empty-icon">👥</div>No team members found. Share your org code for members to join.</div>'; return; }
+    const uids = others.map(m => m.user_id);
+    const rows = await sbGet('daytrack?day_key=eq.' + selectedDate + '&user_id=in.(' + uids.join(',') + ')&select=user_id,data');
+    const dataMap = {};
+    (rows || []).forEach(r => { dataMap[r.user_id] = r.data; });
+    const roleCls = { super_admin:'role-super', manager:'role-manager', member:'role-member' };
+    const roleLabel = { super_admin:'Super Admin', manager:'Manager', member:'Member' };
+    tl.innerHTML = others.map((m, idx) => {
+      const d = dataMap[m.user_id] || { tasks:[], issues:[], wins:[], misses:[] };
+      const total = d.tasks?.length||0, done = (d.tasks||[]).filter(t=>t.done).length;
+      const pct = total ? Math.round(done/total*100) : 0;
+      return '<div class="member-card">' +
+        '<div class="member-hdr" onclick="toggleMember(' + idx + ')">' +
+          '<div class="m-avatar">' + m.email[0].toUpperCase() + '</div>' +
+          '<div class="m-info">' +
+            '<div class="m-name">' + esc(m.email) + ' <span class="role-pill ' + (roleCls[m.role]||'role-member') + '" style="font-size:10px">' + (roleLabel[m.role]||'Member') + '</span></div>' +
+            '<div class="m-stats">' +
+              '<div class="mst">Tasks <span>' + total + '</span></div>' +
+              '<div class="mst">Done <span>' + done + '</span></div>' +
+              '<div class="mst">Issues <span>' + (d.issues?.length||0) + '</span></div>' +
+              '<div class="mst">Wins <span>' + (d.wins?.length||0) + '</span></div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="m-pct"><div class="m-pct-num">' + pct + '%</div><div class="m-pct-lbl">complete</div></div>' +
+          '<div class="m-toggle" id="mtog-' + idx + '">▾</div>' +
+        '</div>' +
+        '<div class="member-detail" id="mdet-' + idx + '">' + renderMemberDetail(d) + '</div>' +
+      '</div>';
+    }).join('');
+  } catch(e) {
+    tl.innerHTML = '<div class="empty"><div class="empty-icon">⚠</div>Error loading team: ' + esc(e.message) + '</div>';
+  }
+}
 
 function renderMemberDetail(d, memberId, memberEmail) {
   const canDelegate = profile?.role === 'manager' || profile?.role === 'super_admin';
