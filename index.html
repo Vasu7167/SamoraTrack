@@ -1139,9 +1139,16 @@ function launchApp() {
   }
 
   loadLocal(); runCarryOver();
-  renderCalStrip(); // render calendar first — instant, no network needed
+  // Activate today panel first so cal strip is in the DOM
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  const todayPanel = document.getElementById('panel-today');
+  if (todayPanel) todayPanel.classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  const todayNav = document.getElementById('nav-today');
+  if (todayNav) todayNav.classList.add('active');
+  // Render everything synchronously
+  _lastCalDate = null;
   render();
-  switchTab('today');
   if (SB_URL && SB_KEY) {
     syncDown().then(() => { runCarryOver(); _lastCalDate = null; render(); });
   }
@@ -1227,23 +1234,20 @@ function runCarryOver() {
           d.wins.push({ text: t.text, fromTask: true, done: false, completedAt: t.completedAt || null, priority: t.priority || false, delegatedBy: t.delegatedBy || null });
       }
     });
-    // Incomplete past task → miss next day
+    // Incomplete past task → miss on SAME day (not carried forward)
     if (k < today) {
-      const nd = new Date(parseDate(k)); nd.setDate(nd.getDate() + 1);
-      const nk = dateKey(nd);
+      if (!d.misses) d.misses = [];
       d.tasks.forEach(t => {
         if (!t.done && !t.addedToMisses) {
           t.addedToMisses = true;
-          const next = dayData(nk);
-          if (!next.misses.find(m => m.text === t.text && m.missedFrom === k))
-            next.misses.push({ text: t.text, missedFrom: k, done: false });
+          if (!d.misses.find(m => m.text === t.text && m.missedFrom === k))
+            d.misses.push({ text: t.text, missedFrom: k, done: false });
         }
       });
-      // Unresolved issues → also added as misses on SAME day
+      // Unresolved issues → miss on SAME day
       d.issues.forEach(issue => {
         if (!issue.addedToMisses) {
           issue.addedToMisses = true;
-          if (!d.misses) d.misses = [];
           if (!d.misses.find(m => m.text === issue.text && m.issueMiss))
             d.misses.push({ text: issue.text, missedFrom: k, issueMiss: true, done: false });
         }
@@ -1571,7 +1575,10 @@ function renderToday() {
     if (countEl) countEl.textContent = items.length ? '(' + items.length + ')' : '';
     if (listEl) listEl.innerHTML = renderListHTML(s.key, items);
     const secEl = document.getElementById(s.secId);
-    if (secEl && s.key !== 'tasks') secEl.style.display = items.length ? '' : 'none';
+    if (secEl) {
+      // Tasks always visible; others only when they have data
+      secEl.style.display = (s.key === 'tasks' || items.length > 0) ? '' : 'none';
+    }
   });
 }
 
