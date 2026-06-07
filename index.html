@@ -223,6 +223,50 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 .slbl{font-size:12px;color:var(--text2);margin-top:5px}
 .snum.purple{color:var(--gold)}.snum.green{color:var(--green)}.snum.coral{color:var(--coral)}.snum.miss{color:var(--miss)}
 .ai-card{background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);overflow:hidden;margin-bottom:14px}
+/* ── TODAY PANEL ── */
+.today-section-btn{flex:1;padding:8px;border-radius:var(--radius-sm);border:1px solid var(--border);background:transparent;color:var(--text3);font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer;transition:all 0.2s;font-weight:500}
+.today-section-btn.active{border-color:var(--gold);color:var(--gold);background:rgba(160,117,42,0.08)}
+.today-section{margin-bottom:8px}
+.today-sec-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 8px;border-bottom:1px solid var(--border);margin-bottom:8px}
+.today-sec-title{font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em}
+.today-sec-count{font-size:12px;color:var(--text3)}
+
+/* ── SAM PANEL ── */
+.sam-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;margin-bottom:12px;transition:all 0.2s}
+.sam-card.buying{border-color:rgba(74,140,92,0.35);background:rgba(74,140,92,0.05)}
+.sam-card.dying{border-color:rgba(192,82,63,0.35);background:rgba(192,82,63,0.05)}
+.sam-card.neutral{border-color:var(--border2)}
+.sam-card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.sam-tag{font-size:11px;font-weight:600;padding:3px 8px;border-radius:20px;letter-spacing:0.03em}
+.sam-tag.buying{background:rgba(74,140,92,0.15);color:var(--green)}
+.sam-tag.dying{background:rgba(192,82,63,0.15);color:var(--coral)}
+.sam-tag.neutral{background:var(--surface2);color:var(--text3)}
+.sam-time{font-size:12px;color:var(--text3)}
+.sam-account{font-family:'EB Garamond',Georgia,serif;font-size:17px;font-weight:500;color:var(--text);margin-bottom:6px}
+.sam-body{font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:10px}
+.sam-action{font-size:12px;color:var(--green);background:rgba(74,140,92,0.08);border-radius:6px;padding:6px 10px}
+.dying-action{color:var(--coral);background:rgba(192,82,63,0.08)}
+.sam-coming-soon{background:var(--surface2);border:1px dashed var(--border2);border-radius:var(--radius);padding:16px;margin-top:4px;text-align:center;margin-bottom:80px}
+.sam-chat-bar{position:sticky;bottom:72px;left:0;right:0;background:var(--bg);padding:12px 0 4px;display:flex;gap:8px;z-index:50}
+.sam-chat-input{flex:1;background:var(--surface);border:1px solid var(--border2);border-radius:24px;padding:12px 18px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;outline:none;transition:border-color 0.2s}
+.sam-chat-input:focus{border-color:var(--gold)}
+.sam-chat-input::placeholder{color:var(--text3)}
+.sam-chat-btn{width:44px;height:44px;border-radius:50%;background:var(--gold);border:none;color:#18160F;font-size:18px;cursor:pointer;flex-shrink:0;transition:opacity 0.2s;display:flex;align-items:center;justify-content:center}
+.sam-chat-btn:hover{opacity:0.85}
+.sam-chat-response{background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:16px;font-size:14px;color:var(--text2);line-height:1.7;margin-bottom:80px}
+
+/* ── YOU PANEL ── */
+.you-profile-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;display:flex;align-items:center;gap:16px;margin-bottom:20px}
+.you-avatar{width:52px;height:52px;border-radius:50%;background:rgba(160,117,42,0.2);border:2px solid var(--gold);display:flex;align-items:center;justify-content:center;font-family:'EB Garamond',Georgia,serif;font-size:22px;color:var(--gold-lt);flex-shrink:0}
+.you-email{font-size:14px;font-weight:500;color:var(--text)}
+.you-section-title{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;font-weight:600;margin-bottom:8px}
+.you-menu{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
+.you-menu-item{width:100%;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;background:transparent;border:none;border-bottom:1px solid var(--border);color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;cursor:pointer;transition:background 0.15s;text-align:left}
+.you-menu-item:last-child{border-bottom:none}
+.you-menu-item:hover{background:var(--surface2)}
+.you-menu-item.danger{color:var(--coral)}
+.you-arrow{color:var(--text3);font-size:16px}
+
 .signal-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:10px;transition:border-color 0.2s}
 .signal-card:hover{border-color:var(--border2)}
 .signal-card.dying{border-color:rgba(192,82,63,0.3);background:rgba(192,82,63,0.04)}
@@ -383,8 +427,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
           <span class="user-email" id="uEmail"></span>
           <span class="role-pill" id="uRole"></span>
           <span class="org-pill" id="uOrg"></span>
-          <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle dark/light mode">⬡</button>
-          <button class="logout-btn" onclick="doLogout()">Sign out</button>
+          <button class="logout-btn" style="display:none" onclick="doLogout()">Sign out</button>
         </div>
       </div>
       <div class="date-nav">
@@ -439,6 +482,68 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
     <button class="tab" onclick="switchTab('settings')" id="tab-settings">
       ⚙ Settings<div class="ttip">API keys & sync</div>
     </button>
+  </div>
+
+  <!-- ── TODAY (unified home) ── -->
+  <div class="panel active" id="panel-today">
+    <!-- Priority add box -->
+    <div class="add-box" id="today-add-box">
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <button class="today-section-btn active" id="tsb-tasks" onclick="setTodaySection('tasks')">✦ Tasks</button>
+        <button class="today-section-btn" id="tsb-issues" onclick="setTodaySection('issues')">⚡ Issues</button>
+        <button class="today-section-btn" id="tsb-wins" onclick="setTodaySection('wins')">★ Wins</button>
+      </div>
+      <!-- Anonymous toggle (issues only) -->
+      <div id="today-anon-row" style="display:none;margin-bottom:8px">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--text2)">
+          <input type="checkbox" id="todayAnonToggle" style="accent-color:var(--gold);width:15px;height:15px">
+          Log anonymously
+        </label>
+      </div>
+      <div class="ab-row">
+        <input id="todayInput" placeholder="Add a task (min 25 chars)…" oninput="updateTodayBar()" onkeydown="if(event.key==='Enter')addTodayItem()" maxlength="300"/>
+        <button class="mic-btn" id="mic-today" onclick="toggleVoice('todayInput','mic-today')" title="Voice input">🎙</button>
+        <button id="todayAddBtn" onclick="addTodayItem()">+</button>
+      </div>
+      <div class="char-hint" id="ch-today"></div>
+      <!-- Template button for tasks -->
+      <div id="today-template-row" style="display:flex;justify-content:flex-end;margin-top:8px">
+        <button class="template-btn" onclick="openTemplateManager()">📋 Templates</button>
+      </div>
+    </div>
+
+    <!-- Unified day view -->
+    <div id="today-tasks-section" class="today-section">
+      <div class="today-sec-header">
+        <span class="today-sec-title">✦ Tasks</span>
+        <span class="today-sec-count" id="today-tasks-count"></span>
+      </div>
+      <div class="items" id="today-list-tasks"></div>
+    </div>
+
+    <div id="today-issues-section" class="today-section">
+      <div class="today-sec-header">
+        <span class="today-sec-title">⚡ Issues</span>
+        <span class="today-sec-count" id="today-issues-count"></span>
+      </div>
+      <div class="items" id="today-list-issues"></div>
+    </div>
+
+    <div id="today-wins-section" class="today-section">
+      <div class="today-sec-header">
+        <span class="today-sec-title">★ Wins</span>
+        <span class="today-sec-count" id="today-wins-count"></span>
+      </div>
+      <div class="items" id="today-list-wins"></div>
+    </div>
+
+    <div id="today-misses-section" class="today-section">
+      <div class="today-sec-header">
+        <span class="today-sec-title">○ Misses</span>
+        <span class="today-sec-count" id="today-misses-count"></span>
+      </div>
+      <div class="items" id="today-list-misses"></div>
+    </div>
   </div>
 
   <!-- ── Tasks ── -->
@@ -523,37 +628,57 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
     </div>
   </div>
 
-  <!-- ── SAM Signals ── -->
+  <!-- ── SAM Agent ── -->
   <div class="panel" id="panel-signals">
-    <div class="sum-card" style="margin-bottom:16px">
-      <div class="sum-title">⚡ Agent SAM — Today's Signals</div>
-      <div style="font-size:13px;color:var(--text3);margin-bottom:16px">What SAM has captured across your accounts today. Coming soon: live feed from calls, emails and LinkedIn.</div>
-      <div id="samSignalsList">
-        <div class="signal-card">
-          <div class="signal-header"><span class="signal-type call">📞 Call</span><span class="signal-time">09:15 AM</span></div>
-          <div class="signal-account">TotalEnergies France</div>
-          <div class="signal-body">Connected with Sanjay. Discussed Q3 pilot timeline. Positive intent signal — requested proposal by Friday.</div>
-          <div class="signal-action">💡 Suggested next step: Send proposal draft today</div>
+    <!-- Proactive signal alerts -->
+    <div id="samAlerts" style="margin-bottom:16px"></div>
+
+    <!-- Signal cards feed -->
+    <div id="samFeed">
+      <div class="sam-card buying">
+        <div class="sam-card-header">
+          <span class="sam-tag buying">📞 Buying signal</span>
+          <span class="sam-time">Today</span>
         </div>
-        <div class="signal-card">
-          <div class="signal-header"><span class="signal-type email">✉ Email</span><span class="signal-time">11:32 AM</span></div>
-          <div class="signal-account">Ferrero — Centre of Excellence</div>
-          <div class="signal-body">Reply received from procurement. Budget approved for Q3. Decision timeline moved to end of June.</div>
-          <div class="signal-action">💡 Suggested next step: Schedule closing call this week</div>
+        <div class="sam-account">TotalEnergies France</div>
+        <div class="sam-body">Sanjay confirmed budget approval in last call. Decision timeline end of June. Proposal requested by Friday.</div>
+        <div class="sam-action">💡 Send proposal today — window is open</div>
+      </div>
+
+      <div class="sam-card dying">
+        <div class="sam-card-header">
+          <span class="sam-tag dying">⚠ Dying signal</span>
+          <span class="sam-time">3 days ago</span>
         </div>
-        <div class="signal-card dying">
-          <div class="signal-header"><span class="signal-type linkedin">in LinkedIn</span><span class="signal-time">2 days ago</span></div>
-          <div class="signal-account">BlueStar Foods</div>
-          <div class="signal-body">No engagement in 8 days. Last message unread. Champion may have changed roles.</div>
-          <div class="signal-action dying-action">⚠ Dying signal — re-engage or mark at risk</div>
+        <div class="sam-account">BlueStar Foods</div>
+        <div class="sam-body">No email reply in 12 days. Last LinkedIn message unread. Champion may have changed role.</div>
+        <div class="sam-action dying-action">Re-engage or mark at risk</div>
+      </div>
+
+      <div class="sam-card neutral">
+        <div class="sam-card-header">
+          <span class="sam-tag neutral">✉ Email signal</span>
+          <span class="sam-time">2 days ago</span>
         </div>
-        <div class="sam-coming-soon">
-          <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:4px">🔗 Full Agent SAM integration coming soon</div>
-          <div style="font-size:12px;color:var(--text3)">Live signals from your calls, emails, LinkedIn and meetings will appear here automatically — no logging required.</div>
-        </div>
+        <div class="sam-account">Ferrero India</div>
+        <div class="sam-body">Meeting happened 13 May. No follow-up sent. Laxmiprasad Behera still waiting on next steps.</div>
+        <div class="sam-action">💡 Follow up on meeting outcome now</div>
+      </div>
+
+      <div class="sam-coming-soon">
+        <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:4px">🔗 Live signals coming soon</div>
+        <div style="font-size:12px;color:var(--text3)">Calls, emails and LinkedIn signals will appear here automatically when Agent SAM is fully connected.</div>
       </div>
     </div>
+
+    <!-- Rufus-style chat input -->
+    <div class="sam-chat-bar">
+      <input class="sam-chat-input" id="samChatInput" placeholder="Ask SAM — check signals for Ferrero, who needs follow-up…" onkeydown="if(event.key==='Enter')runSamQuery()"/>
+      <button class="sam-chat-btn" onclick="runSamQuery()">⚡</button>
+    </div>
+    <div id="samChatOutput" style="margin-top:12px"></div>
   </div>
+
 
   <!-- ── Team (Manager + Super Admin) ── -->
   <div class="panel" id="panel-team">
@@ -592,7 +717,53 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
     </div>
   </div>
 
-  <!-- ── Settings ── -->
+  <!-- ── You ── -->
+  <div class="panel" id="panel-you">
+    <!-- Profile card -->
+    <div class="you-profile-card">
+      <div class="you-avatar" id="youAvatar"></div>
+      <div>
+        <div class="you-email" id="youEmailDisplay"></div>
+        <div style="display:flex;gap:6px;margin-top:4px">
+          <span class="role-pill" id="youRolePill"></span>
+          <span class="org-pill" id="youOrgPill"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Streak & momentum -->
+    <div class="momentum-row" id="youMomentumRow" style="margin-bottom:16px"></div>
+
+    <!-- Quick actions -->
+    <div class="you-section-title">Account</div>
+    <div class="you-menu">
+      <button class="you-menu-item" onclick="switchToOrgPanel()">
+        <span>🏢 Organisation & team</span><span class="you-arrow">›</span>
+      </button>
+      <button class="you-menu-item" onclick="switchTab('settings')">
+        <span>⚙ Settings & API keys</span><span class="you-arrow">›</span>
+      </button>
+      <button class="you-menu-item" onclick="toggleTheme()">
+        <span id="themeMenuLabel">🌙 Switch to light mode</span><span class="you-arrow">›</span>
+      </button>
+    </div>
+
+    <div class="you-section-title" style="margin-top:16px">Your templates</div>
+    <div class="you-menu">
+      <button class="you-menu-item" onclick="openTemplateManager()">
+        <span>📋 Manage task templates</span><span class="you-arrow">›</span>
+      </button>
+    </div>
+
+    <div class="you-section-title" style="margin-top:16px">Session</div>
+    <div class="you-menu">
+      <button class="you-menu-item danger" onclick="doLogout()">
+        <span>Sign out</span><span class="you-arrow">›</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Settings (accessed from You tab) ── -->
   <div class="panel" id="panel-settings">
     <div class="admin-section">
       <div class="admin-title">Anthropic API key</div>
@@ -629,15 +800,26 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 
 <div class="bottom-nav">
   <div class="nav-inner" id="bottomNav">
-    <button class="nav-btn active" onclick="switchTab('tasks')" id="nav-tasks"><span class="nav-icon">☑</span><span class="nav-label">Tasks</span><div class="nav-tip">Today's tasks</div></button>
-    <button class="nav-btn" onclick="switchTab('issues')" id="nav-issues"><span class="nav-icon">⚡</span><span class="nav-label">Issues</span><div class="nav-tip">Log blockers</div></button>
-    <button class="nav-btn" onclick="switchTab('wins')" id="nav-wins"><span class="nav-icon">★</span><span class="nav-label">Wins</span><div class="nav-tip">Your wins</div></button>
-    <button class="nav-btn" onclick="switchTab('misses')" id="nav-misses"><span class="nav-icon">○</span><span class="nav-label">Misses</span><div class="nav-tip">Missed tasks</div></button>
-    <button class="nav-btn" onclick="switchTab('review')" id="nav-review"><span class="nav-icon">✦</span><span class="nav-label">Review</span><div class="nav-tip">AI summary</div></button>
-    <button class="nav-btn" onclick="switchTab('signals')" id="nav-signals"><span class="nav-icon">⚡</span><span class="nav-label">SAM</span><div class="nav-tip">Agent SAM signals</div></button>
-    <button class="nav-btn" id="nav-team" style="display:none" onclick="switchTab('team')"><span class="nav-icon">👥</span><span class="nav-label">Team</span><div class="nav-tip">Team view</div></button>
-    <button class="nav-btn" id="nav-org" style="display:none" onclick="switchTab('org')"><span class="nav-icon">🏢</span><span class="nav-label">Org</span><div class="nav-tip">Manage org</div></button>
-    <button class="nav-btn" onclick="switchTab('settings')" id="nav-settings"><span class="nav-icon">⚙</span><span class="nav-label">Settings</span><div class="nav-tip">Keys & sync</div></button>
+    <button class="nav-btn active" onclick="switchTab('today')" id="nav-today">
+      <span class="nav-icon">✦</span>
+      <span class="nav-label">Today</span>
+    </button>
+    <button class="nav-btn" onclick="switchTab('signals')" id="nav-signals">
+      <span class="nav-icon">⚡</span>
+      <span class="nav-label">SAM</span>
+    </button>
+    <button class="nav-btn" onclick="switchTab('review')" id="nav-review">
+      <span class="nav-icon">★</span>
+      <span class="nav-label">Review</span>
+    </button>
+    <button class="nav-btn" onclick="switchTab('team')" id="nav-team">
+      <span class="nav-icon">👥</span>
+      <span class="nav-label">Team</span>
+    </button>
+    <button class="nav-btn" onclick="switchTab('you')" id="nav-you">
+      <span class="nav-icon">◎</span>
+      <span class="nav-label">You</span>
+    </button>
   </div>
 </div>
 </div>
@@ -948,6 +1130,7 @@ function launchApp() {
   }
 
   loadLocal(); runCarryOver(); render();
+  switchTab('today');
   if (SB_URL && SB_KEY) {
     syncDown().then(() => { runCarryOver(); render(); });
   }
@@ -1066,7 +1249,7 @@ function render() {
   renderList('wins', d.wins);
   renderList('misses', d.misses);
   updateHeader(); updateBadges(); renderCalStrip(); renderSummary(); renderMomentum();
-  // Keep team date input in sync with main date navigation
+  renderToday();
   const tdi = document.getElementById('teamDateInput');
   if (tdi) tdi.value = viewDate;
 }
@@ -1251,103 +1434,223 @@ function updateCBar(t) {
 // TAB SWITCHING
 // ══════════════════════════════════════════════════════════
 function switchTab(tab) {
+  currentTab = tab;
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById('panel-'+tab).classList.add('active');
-  const te = document.getElementById('tab-'+tab); if(te) te.classList.add('active');
-  const ne = document.getElementById('nav-'+tab); if(ne) ne.classList.add('active');
+  const panelMap = { tasks:'today', issues:'today', wins:'today', misses:'today', settings:'you', org:'you' };
+  const actualPanel = panelMap[tab] || tab;
+  const panel = document.getElementById('panel-' + actualPanel);
+  if (panel) panel.classList.add('active');
+  const navMap = { tasks:'today', issues:'today', wins:'today', misses:'today', settings:'you', org:'you' };
+  const navId = navMap[tab] || tab;
+  const navBtn = document.getElementById('nav-' + navId);
+  if (navBtn) navBtn.classList.add('active');
+  if (['tasks','issues','wins','misses'].includes(tab)) {
+    if (tab !== 'misses') setTodaySection(tab);
+    renderToday();
+  }
+  if (tab === 'today') { setTodaySection('tasks'); renderToday(); }
   if (tab === 'settings') renderSettings();
+  if (tab === 'you') renderYouPanel();
   if (tab === 'review') renderSummary();
-  if (tab === 'signals') {} // static for now, will connect to Agent SAM API
+  if (tab === 'signals') renderSamAlerts();
   if (tab === 'team') {
     document.getElementById('teamDateInput').value = viewDate;
-    // Refresh token before loading team data
-    if (currentUser?.refresh_token) {
-      refreshToken().then(() => renderTeam());
-    } else {
-      renderTeam();
-    }
+    if (currentUser?.refresh_token) { refreshToken().then(() => renderTeam()); } else { renderTeam(); }
   }
   if (tab === 'org') {
-    if (currentUser?.refresh_token) {
-      refreshToken().then(() => renderOrg());
-    } else {
-      renderOrg();
-    }
+    if (currentUser?.refresh_token) { refreshToken().then(() => renderOrg()); } else { renderOrg(); }
   }
 }
 
-// ══════════════════════════════════════════════════════════
-// TEAM VIEW (Manager + Super Admin)
-// ══════════════════════════════════════════════════════════
-async function renderTeam() {
-  const tl = document.getElementById('teamList');
-  // Convert MM/DD/YYYY or YYYY-MM-DD to YYYY-MM-DD
-  const rawDate = document.getElementById('teamDateInput').value || todayKey();
-  let selectedDate = rawDate;
-  if (rawDate.includes('/')) {
-    const parts = rawDate.split('/');
-    if (parts.length === 3) {
-      // MM/DD/YYYY → YYYY-MM-DD
-      selectedDate = `${parts[2]}-${parts[0].padStart(2,'0')}-${parts[1].padStart(2,'0')}`;
-    }
+function switchToOrgPanel() {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-org').classList.add('active');
+  renderOrg();
+}
+
+let todayActiveSection = 'tasks';
+
+function setTodaySection(section) {
+  todayActiveSection = section;
+  document.querySelectorAll('.today-section-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('tsb-' + section);
+  if (btn) btn.classList.add('active');
+  const input = document.getElementById('todayInput');
+  const addBtn = document.getElementById('todayAddBtn');
+  const anonRow = document.getElementById('today-anon-row');
+  const tmplRow = document.getElementById('today-template-row');
+  if (input) {
+    const ph = { tasks:'Add a task (min 25 chars)…', issues:'Describe the issue (min 25 chars)…', wins:'Log a win (min 25 chars)…' };
+    input.placeholder = ph[section] || 'Add…';
   }
-  tl.innerHTML = '<div class="empty"><div class="empty-icon">⏳</div>Loading team data…</div>';
+  if (addBtn) {
+    const bg = { tasks:'var(--gold)', issues:'var(--coral)', wins:'var(--green)' };
+    addBtn.style.background = bg[section] || 'var(--gold)';
+    addBtn.style.color = section === 'wins' ? '#0f0f13' : '#18160F';
+  }
+  if (anonRow) anonRow.style.display = section === 'issues' ? 'block' : 'none';
+  if (tmplRow) tmplRow.style.display = section === 'tasks' ? 'flex' : 'none';
+}
 
-  if (!SB_URL) { tl.innerHTML = '<div class="empty"><div class="empty-icon">☁</div>Set up Supabase in Settings to see team data.</div>'; return; }
+function updateTodayBar() {
+  updateCBar({ tasks:'p', issues:'i', wins:'a' }[todayActiveSection] || 'p');
+}
 
+function addTodayItem() {
+  const inp = document.getElementById('todayInput');
+  if (!inp) return;
+  const text = inp.value.trim();
+  if (text.length < MIN) {
+    const hint = document.getElementById('ch-today');
+    if (hint) { hint.classList.add('show'); setTimeout(() => hint.classList.remove('show'), 2500); }
+    inp.focus(); return;
+  }
+  const key = todayActiveSection;
+  const now = new Date();
+  const ts = now.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit', hour12:true });
+  const isPriority = text.startsWith('*');
+  const cleanText = isPriority ? text.slice(1).trim() : text;
+  const isAnon = key === 'issues' && document.getElementById('todayAnonToggle')?.checked;
+  if (isPriority && key === 'tasks') {
+    dayData(viewDate)[key].push({ text: cleanText, done: false, addedAt: ts, priority: true });
+  } else if (isAnon) {
+    dayData(viewDate)[key].push({ text, done: false, addedAt: ts, anonymous: true });
+  } else {
+    dayData(viewDate)[key].push({ text, done: false, addedAt: ts });
+  }
+  inp.value = '';
+  runCarryOver(); renderToday(); render(); save(viewDate);
+}
+
+function renderToday() {
+  const d = dayData(viewDate);
+  const sections = [
+    { key:'tasks', listId:'today-list-tasks', countId:'today-tasks-count', secId:'today-tasks-section' },
+    { key:'issues', listId:'today-list-issues', countId:'today-issues-count', secId:'today-issues-section' },
+    { key:'wins', listId:'today-list-wins', countId:'today-wins-count', secId:'today-wins-section' },
+    { key:'misses', listId:'today-list-misses', countId:'today-misses-count', secId:'today-misses-section' },
+  ];
+  sections.forEach(s => {
+    const listEl = document.getElementById(s.listId);
+    const countEl = document.getElementById(s.countId);
+    const items = d[s.key] || [];
+    if (countEl) countEl.textContent = items.length ? '(' + items.length + ')' : '';
+    if (listEl) listEl.innerHTML = renderListHTML(s.key, items);
+    const secEl = document.getElementById(s.secId);
+    if (secEl && s.key !== 'tasks') secEl.style.display = items.length ? '' : 'none';
+  });
+}
+
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function renderListHTML(key, items) {
+  if (!items.length) return '<div class="empty-msg">Nothing logged yet</div>';
+  return items.map((item, i) => {
+    if (key === 'tasks') {
+      const isPriority = item.priority === true || (item.text||'').startsWith('*');
+      const displayText = (item.text||'').startsWith('*') ? item.text.slice(1).trim() : (item.text||'');
+      const priorityBadge = isPriority ? '<span class="priority-badge">Priority</span>' : '';
+      const delegatedBadge = item.delegatedBy ? '<span class="delegated-badge">\u2193 ' + esc(item.delegatedBy.split('@')[0]) + '</span>' : '';
+      const tsMeta = item.addedAt ? '<div class="item-meta">' + (item.delegatedBy?'Delegated ':'Added ') + item.addedAt + (item.completedAt?' \u00b7 Completed '+item.completedAt:'') + '</div>' : '';
+      return '<div class="item ' + (item.done?'done':'') + ' ' + (isPriority?'priority-task':'') + '" onclick="toggleFromToday(' + i + ')"><div class="chk ' + (item.done?'on':'') + '"></div><div style="flex:1"><div class="item-text">' + esc(displayText) + ' ' + priorityBadge + delegatedBadge + '</div>' + tsMeta + '</div><button class="idel" onclick="event.stopPropagation();delFromToday(\'tasks\',' + i + ')">✕</button></div>';
+    }
+    if (key === 'wins') {
+      const isPriority = item.priority === true || (item.text||'').startsWith('*');
+      const isDelegated = !!item.delegatedBy;
+      const displayText = (item.text||'').startsWith('*') ? item.text.slice(1).trim() : (item.text||'');
+      const extraClass = isPriority ? 'priority-task' : isDelegated ? 'delegated-win' : '';
+      const priorityBadge = isPriority ? '<span class="priority-badge">Priority</span>' : '';
+      const delegatedBadge = isDelegated ? '<span class="delegated-badge">\u2193 ' + esc(item.delegatedBy.split('@')[0]) + '</span>' : '';
+      const winTs = item.completedAt ? '<div class="item-meta">' + (item.fromTask?'\u2726 completed \u00b7 ':isDelegated?'\u2193 delegated \u00b7 ':'') + item.completedAt + '</div>' : (item.fromTask ? '<div class="item-meta">\u2726 from completed task</div>' : '');
+      return '<div class="item win-item ' + extraClass + '"><div class="idot dg"></div><div style="flex:1"><div class="item-text">' + esc(displayText) + ' ' + priorityBadge + delegatedBadge + '</div>' + winTs + '</div><button class="idel" onclick="delFromToday(\'wins\',' + i + ')">✕</button></div>';
+    }
+    if (key === 'misses') {
+      const missLabel = item.issueMiss ? '\u26a1 Unresolved issue' : '\u25cb Incomplete task';
+      return '<div class="item miss-item"><div class="idot dm"></div><div style="flex:1"><div class="item-text">' + esc(item.text) + '</div><div class="item-meta">' + missLabel + ' from ' + fmtDate(item.missedFrom) + '</div></div></div>';
+    }
+    const issueTs = item.addedAt ? '<div class="item-meta">' + (item.anonymous?'\uD83D\uDD12 Anonymous \u00b7 ':'') + 'Logged ' + item.addedAt + '</div>' : (item.anonymous ? '<div class="item-meta">\uD83D\uDD12 Anonymous</div>' : '');
+    const anonBadge = item.anonymous ? '<span style="font-size:10px;background:rgba(160,117,42,0.15);color:var(--gold);border-radius:4px;padding:1px 6px;margin-left:6px;font-weight:600">Anon</span>' : '';
+    return '<div class="item"><div class="idot dc"></div><div style="flex:1"><div class="item-text">' + esc(item.text) + anonBadge + '</div>' + issueTs + '</div><button class="idel" onclick="delFromToday(\'issues\',' + i + ')">✕</button></div>';
+  }).join('');
+}
+
+function toggleFromToday(i) {
+  const t = dayData(viewDate).tasks[i];
+  t.done = !t.done; t.addedToWins = false;
+  if (t.done) {
+    const now = new Date();
+    t.completedAt = now.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit', hour12:true });
+    dayData(viewDate).wins = dayData(viewDate).wins.filter(w => !(w.text===t.text && w.fromTask));
+  } else { t.completedAt = null; }
+  runCarryOver(); renderToday(); render(); save(viewDate);
+}
+
+function delFromToday(key, i) {
+  dayData(viewDate)[key].splice(i, 1);
+  runCarryOver(); renderToday(); render(); save(viewDate);
+}
+
+function renderYouPanel() {
+  const email = currentUser?.email || '';
+  const initials = email.substring(0,2).toUpperCase();
+  const av = document.getElementById('youAvatar');
+  if (av) av.textContent = initials;
+  const em = document.getElementById('youEmailDisplay');
+  if (em) em.textContent = email;
+  const rp = document.getElementById('youRolePill');
+  if (rp) { rp.textContent = (profile?.role||'').replace('_',' '); rp.className = 'role-pill rp-'+(profile?.role||''); }
+  const op = document.getElementById('youOrgPill');
+  if (op) op.textContent = profile?.org_code || profile?.org_name || '';
+  const mr = document.getElementById('youMomentumRow');
+  if (mr) {
+    const streak = calcStreak(); const momentum = calcMomentum();
+    const fire = streak>=7?'🔥':streak>=3?'⚡':'✦';
+    mr.innerHTML = '<div class="streak-badge"><div class="streak-fire">'+fire+'</div><div class="streak-info"><div class="streak-num">'+streak+'</div><div class="streak-lbl">'+(streak===1?'1 day streak':streak+' day streak')+' (weekdays)</div></div></div><div class="momentum-bar-wrap"><div class="momentum-lbl"><span>5-day momentum</span><span style="color:var(--gold);font-weight:600">'+momentum+'%</span></div><div class="momentum-bar"><div class="momentum-fill" style="width:'+momentum+'%"></div></div></div>';
+  }
+  const tl = document.getElementById('themeMenuLabel');
+  if (tl) {
+    const isDark = document.body.classList.contains('dark-mode') || (!document.body.classList.contains('light-mode') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    tl.textContent = isDark ? '☀ Switch to light mode' : '🌙 Switch to dark mode';
+  }
+}
+
+function renderSamAlerts() {
+  const alerts = document.getElementById('samAlerts');
+  if (!alerts) return;
+  const d = dayData(viewDate);
+  const incomplete = (d.tasks||[]).filter(t => !t.done);
+  if (incomplete.length > 0) {
+    alerts.innerHTML = '<div style="background:rgba(160,117,42,0.1);border:1px solid var(--border2);border-radius:var(--radius);padding:12px 16px;margin-bottom:8px;font-size:13px;color:var(--text2)">⚡ <strong style="color:var(--gold)">'+incomplete.length+' task'+(incomplete.length>1?'s':'')+' pending today</strong> — log your progress in Today tab</div>';
+  } else { alerts.innerHTML = ''; }
+}
+
+async function runSamQuery() {
+  const inp = document.getElementById('samChatInput');
+  const out = document.getElementById('samChatOutput');
+  const query = inp?.value?.trim();
+  if (!query || !out) return;
+  inp.value = '';
+  out.innerHTML = '<div class="sam-chat-response"><div class="ldots"><span></span><span></span><span></span></div></div>';
+  if (!API_KEY) {
+    out.innerHTML = '<div class="sam-chat-response" style="color:var(--text3)">Add your Anthropic API key in Settings to activate SAM chat.</div>';
+    return;
+  }
   try {
-    let membersQuery;
-    if (profile.role === 'super_admin') {
-      // Super admin sees everyone in org
-      membersQuery = `user_profiles?org_id=eq.${profile.org_id}&select=user_id,email,role,manager_id`;
-    } else {
-      // Manager sees only their direct reports
-      membersQuery = `user_profiles?org_id=eq.${profile.org_id}&manager_id=eq.${currentUser.id}&select=user_id,email,role,manager_id`;
-    }
-    const members = await sbGet(membersQuery);
-    const others = (members || []).filter(m => m.user_id !== currentUser.id);
-    if (!others.length) { tl.innerHTML = '<div class="empty"><div class="empty-icon">👥</div>No team members found for your view.</div>'; return; }
-
-    const uids = others.map(m => m.user_id);
-    // Always fetch fresh from Supabase, no cache
-    const r = await sbFetchWithRefresh(SB_URL + '/rest/v1/daytrack?day_key=eq.' + selectedDate + '&user_id=in.(' + uids.join(',') + ')&select=user_id,data', {
-      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token, 'Cache-Control': 'no-cache' }
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':API_KEY,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:400,messages:[{role:'user',content:'You are SAM, a sharp B2B sales intelligence agent. User asks: "'+query+'". Their tasks today: '+JSON.stringify((dayData(viewDate).tasks||[]).map(t=>t.text))+'. Give a sharp 2-3 sentence response. No fluff.'}]})
     });
-    if (!r) return;
-    const rows = await r.json();
-    const dataMap = {};
-    (rows || []).forEach(r => { dataMap[r.user_id] = r.data; });
-
-    tl.innerHTML = others.map((m, idx) => {
-      const d = dataMap[m.user_id] || { tasks:[], issues:[], wins:[], misses:[] };
-      const total = d.tasks?.length||0, done = (d.tasks||[]).filter(t=>t.done).length;
-      const pct = total ? Math.round(done/total*100) : 0;
-      const roleCls = { super_admin:'role-super', manager:'role-manager', member:'role-member' };
-      const roleLabel = { super_admin:'Super Admin', manager:'Manager', member:'Member' };
-      return `<div class="member-card">
-        <div class="member-hdr" onclick="toggleMember(${idx})">
-          <div class="m-avatar">${m.email[0].toUpperCase()}</div>
-          <div class="m-info">
-            <div class="m-name">${esc(m.email)} <span class="role-pill ${roleCls[m.role]||'role-member'}" style="font-size:10px">${roleLabel[m.role]||'Member'}</span></div>
-            <div class="m-stats">
-              <div class="mst">Tasks <span>${total}</span></div>
-              <div class="mst">Done <span>${done}</span></div>
-              <div class="mst">Issues <span>${d.issues?.length||0}</span></div>
-              <div class="mst">Wins <span>${d.wins?.length||0}</span></div>
-            </div>
-          </div>
-          <div class="m-pct"><div class="m-pct-num">${pct}%</div><div class="m-pct-lbl">complete</div></div>
-          <div class="m-toggle" id="mtog-${idx}">▾</div>
-        </div>
-        <div class="member-detail" id="mdet-${idx}">${renderMemberDetail(d, m.user_id, m.email)}</div>
-      </div>`;
-    }).join('');
+    const data = await r.json();
+    const text = data.content?.[0]?.text || 'No response.';
+    out.innerHTML = '<div class="sam-chat-response">'+esc(text)+'</div>';
   } catch(e) {
-    tl.innerHTML = `<div class="empty"><div class="empty-icon">⚠</div>Error: ${e.message}</div>`;
+    out.innerHTML = '<div class="sam-chat-response" style="color:var(--coral)">Error: '+esc(e.message)+'</div>';
   }
 }
+
+
 
 function renderMemberDetail(d, memberId, memberEmail) {
   const canDelegate = profile?.role === 'manager' || profile?.role === 'super_admin';
