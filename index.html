@@ -1290,7 +1290,20 @@ function renderList(key, items) {
     }
     if (key === 'misses') {
       const missLabel = item.issueMiss ? '⚡ Unresolved issue' : '○ Incomplete task';
-      return `<div class="item miss-item"><div class="idot dm"></div><div style="flex:1"><div class="item-text">${esc(item.text)}</div><div class="item-meta">${missLabel} from ${fmtDate(item.missedFrom)}</div></div></div>`;
+      const hasComment = item.comment && item.comment.trim();
+      const commentVal = esc(item.comment || '');
+      const onchange = 'saveMissComment(' + JSON.stringify(viewDate) + ',' + i + ',this.value)';
+      return '<div class="item miss-item"><div class="idot dm"></div><div style="flex:1">' +
+        '<div class="item-text">' + esc(item.text) + '</div>' +
+        '<div class="item-meta">' + missLabel + ' · ' + fmtDate(item.missedFrom) + '</div>' +
+        '<div class="miss-comment-row">' +
+          '<input class="miss-comment-input" placeholder="Add reason…" maxlength="200"' +
+          ' value="' + commentVal + '"' +
+          ' onchange="' + onchange + '"' +
+          ' onblur="' + onchange + '"/>' +
+          (hasComment ? '<span class="miss-comment-badge">✓</span>' : '') +
+        '</div>' +
+      '</div></div>';
     }
     // issues
     const issueTs = item.addedAt ? `<div class="item-meta">${item.anonymous?'🔒 Anonymous · ':''}Logged ${item.addedAt}</div>` : (item.anonymous ? '<div class="item-meta">🔒 Anonymous</div>' : '');
@@ -1769,7 +1782,17 @@ function renderMemberDetail(d, memberId, memberEmail) {
           onclick="delegateTask('${memberId}','${memberEmail}')">Send ↗</button>
       </div>
     </div>` : '';
-  return taskSection + issueSection + winSection + delegateSection;
+  const missSection = '<div class="det-sec"><div class="det-lbl">Misses</div>' + (
+    (d.misses||[]).length ? (d.misses||[]).map(it => {
+      const label = it.issueMiss ? '⚡' : '○';
+      const comment = it.comment ? '<div class="det-miss-comment">💬 ' + esc(it.comment) + '</div>' : '<div class="det-miss-comment" style="color:var(--text3);font-style:italic">No reason given</div>';
+      return '<div class="det-item" style="flex-direction:column;align-items:flex-start;gap:4px">' +
+        '<div style="display:flex;align-items:center;gap:6px"><span class="di-dot" style="background:var(--miss)"></span><span>' + label + ' ' + esc(it.text) + '</span></div>' +
+        comment +
+      '</div>';
+    }).join('') : '<div class="m-empty">No misses</div>'
+  ) + '</div>';
+  return taskSection + issueSection + winSection + missSection + delegateSection;
 }
 
 async function delegateTask(memberId, memberEmail) {
@@ -2285,6 +2308,18 @@ document.addEventListener('click', e => {
   const modal = document.getElementById('templateModal');
   if (modal && e.target === modal) closeTemplateManager();
 });
+
+// ══════════════════════════════════════════════════════════
+// MISS COMMENTS
+// ══════════════════════════════════════════════════════════
+function saveMissComment(dayKey, idx, comment) {
+  const d = dayData(dayKey);
+  if (!d.misses[idx]) return;
+  d.misses[idx].comment = comment.trim();
+  save(dayKey);
+  // Update badge without full re-render
+  renderToday();
+}
 
 // ══════════════════════════════════════════════════════════
 // FEATURE 8: ANONYMOUS ISSUE FLAGGING
