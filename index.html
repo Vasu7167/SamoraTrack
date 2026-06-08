@@ -1759,21 +1759,53 @@ function renderSignalCards(signals) {
 }
 
 function connectGmail() {
-  if (!GOOGLE_CLIENT_ID_SAM) {
-    alert('Google OAuth not configured yet. See SETUP.md for instructions to add your Google Client ID.');
-    return;
-  }
   const scope = encodeURIComponent('https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/userinfo.email');
-  const state = encodeURIComponent(JSON.stringify({ userId: currentUser?.id, token: currentUser?.token }));
+  const redirectUri = 'https://samoratrack.vercel.app/gmail-callback.html';
   const url = 'https://accounts.google.com/o/oauth2/v2/auth' +
     '?client_id=' + GOOGLE_CLIENT_ID_SAM +
-    '&redirect_uri=' + encodeURIComponent(GOOGLE_REDIRECT_URI) +
+    '&redirect_uri=' + encodeURIComponent(redirectUri) +
     '&response_type=code' +
     '&scope=' + scope +
     '&access_type=offline' +
-    '&prompt=consent' +
-    '&state=' + state;
-  window.location.href = url;
+    '&prompt=consent';
+
+  // Open in popup
+  const popup = window.open(url, 'gmail_oauth', 'width=500,height=600,left=200,top=100');
+
+  // Listen for callback message from popup
+  window.addEventListener('message', async function handler(e) {
+    if (e.origin !== 'https://samoratrack.vercel.app') return;
+    if (!e.data?.code) return;
+    window.removeEventListener('message', handler);
+    if (popup) popup.close();
+
+    // Exchange code via Edge Function
+    const btn = document.getElementById('samGmailBtn');
+    const label = document.getElementById('samGmailLabel');
+    if (btn) { btn.textContent = 'Connecting…'; btn.disabled = true; }
+    if (label) label.textContent = 'Connecting Gmail…';
+
+    try {
+      const r = await fetch(EDGE_FN_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
+        body: JSON.stringify({ action: 'connect_gmail', code: e.data.code, redirect_uri: redirectUri })
+      });
+      const data = await r.json();
+      if (data.success) {
+        if (label) label.textContent = '✓ Gmail connected — ' + data.email;
+        const sub = document.getElementById('samGmailSub');
+        if (sub) sub.textContent = 'Signals loading…';
+        if (btn) { btn.textContent = 'Refresh'; btn.disabled = false; btn.onclick = loadSamSignals; }
+        loadSamSignals();
+      } else {
+        throw new Error(data.error || 'Connection failed');
+      }
+    } catch(err) {
+      if (label) label.textContent = 'Connection failed: ' + err.message;
+      if (btn) { btn.textContent = 'Try again'; btn.disabled = false; btn.onclick = connectGmail; }
+    }
+  });
 }
 
 async function runSamAccountSearch() {
