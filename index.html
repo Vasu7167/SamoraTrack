@@ -1699,8 +1699,12 @@ async function loadSamSignals() {
     });
     const data = await r.json();
 
-    if (!data.connected) {
-      // Gmail not connected
+    // Handle both response formats
+    if (data.error && data.error.includes('No Gmail connection')) {
+      renderGmailNotConnected();
+      return;
+    }
+    if (data.error) {
       renderGmailNotConnected();
       return;
     }
@@ -1709,16 +1713,25 @@ async function loadSamSignals() {
     const label = document.getElementById('samGmailLabel');
     const sub = document.getElementById('samGmailSub');
     const btn = document.getElementById('samGmailBtn');
-    if (label) label.textContent = '✓ Gmail connected — ' + (data.gmailEmail || '');
-    if (sub) sub.textContent = 'Signals refresh automatically from your sent folder';
+    if (label) label.textContent = '✓ Gmail connected';
+    if (sub) sub.textContent = 'Signals refreshed from your sent folder';
     if (btn) { btn.textContent = 'Refresh'; btn.onclick = loadSamSignals; }
 
-    if (!data.signals || !data.signals.length) {
-      feed.innerHTML = '<div style="text-align:center;padding:32px 20px;color:var(--text3);font-size:13px">No strong signals found today — your pipeline looks healthy ✓</div>';
+    // Handle signals from AI-generated function format
+    const signals = data.signals ?? data.analysis?.signals ?? [];
+    const rawAnalysis = data.analysis;
+
+    if (!signals || !signals.length) {
+      // Show raw Gemini analysis if no structured signals
+      if (rawAnalysis?.summary) {
+        feed.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;font-size:14px;color:var(--text2);line-height:1.7"><div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">⚡ SAM Analysis</div>' + esc(rawAnalysis.summary) + '</div>';
+      } else {
+        feed.innerHTML = '<div style="text-align:center;padding:32px 20px;color:var(--text3);font-size:13px">No strong signals found — your pipeline looks healthy ✓</div>';
+      }
       return;
     }
 
-    renderSignalCards(data.signals);
+    renderSignalCards(signals);
 
   } catch(e) {
     renderGmailNotConnected();
@@ -1791,11 +1804,11 @@ function connectGmail() {
       const r = await fetch(EDGE_FN_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
-        body: JSON.stringify({ action: 'connect_gmail', code: e.data.code, redirect_uri: redirectUri })
+        body: JSON.stringify({ action: 'connect_gmail', code: e.data.code, redirect_uri: redirectUri, email: '' })
       });
       const data = await r.json();
-      if (data.success) {
-        if (label) label.textContent = '✓ Gmail connected — ' + data.email;
+      if (data.ok || data.success) {
+        if (label) label.textContent = '✓ Gmail connected — ' + (data.email || '');
         const sub = document.getElementById('samGmailSub');
         if (sub) sub.textContent = 'Signals loading…';
         if (btn) { btn.textContent = 'Refresh'; btn.disabled = false; btn.onclick = loadSamSignals; }
