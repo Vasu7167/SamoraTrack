@@ -1764,7 +1764,7 @@ async function renderTeam() {
           '<div class="m-pct"><div class="m-pct-num">' + pct + '%</div><div class="m-pct-lbl">complete</div></div>' +
           '<div class="m-toggle" id="mtog-' + idx + '">▾</div>' +
         '</div>' +
-        '<div class="member-detail" id="mdet-' + idx + '">' + renderMemberDetail(d) + '</div>' +
+        '<div class="member-detail" id="mdet-' + idx + '">' + renderMemberDetail(d, m.user_id, m.email) + '</div>' +
       '</div>';
     }).join('');
   } catch(e) {
