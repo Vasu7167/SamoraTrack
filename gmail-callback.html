@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Connecting Gmail…</title>
+<style>
+  body { font-family: sans-serif; background: #18160F; color: #FAF8F4; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; flex-direction: column; gap: 12px; }
+  .msg { font-size: 16px; }
+  .sub { font-size: 13px; color: #78716C; }
+</style>
+</head>
+<body>
+<div class="msg">⚡ Connecting Gmail…</div>
+<div class="sub">You can close this window</div>
+<script>
+  // Extract code from URL
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+  const error = params.get('error');
+
+  if (code) {
+    // Send code back to parent window
+    if (window.opener) {
+      window.opener.postMessage({ code }, 'https://samoratrack.vercel.app');
+      document.querySelector('.msg').textContent = '✓ Gmail connected!';
+      document.querySelector('.sub').textContent = 'Closing…';
+      setTimeout(() => window.close(), 1000);
+    }
+  } else if (error) {
+    document.querySelector('.msg').textContent = '✗ ' + error;
+    document.querySelector('.sub').textContent = 'You can close this window';
+  }
+</script>
+</body>
+</html>
