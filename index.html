@@ -618,43 +618,32 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
     <!-- Proactive signal alerts -->
     <div id="samAlerts" style="margin-bottom:16px"></div>
 
-    <!-- Signal cards feed -->
-    <div id="samFeed">
-      <div class="sam-card buying">
-        <div class="sam-card-header">
-          <span class="sam-tag buying">📞 Buying signal</span>
-          <span class="sam-time">Today</span>
+    <!-- Gmail connection status -->
+    <div id="samGmailStatus" style="margin-bottom:16px;display:none">
+      <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <div>
+          <div style="font-size:13px;font-weight:500;color:var(--text)" id="samGmailLabel">Gmail not connected</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px" id="samGmailSub">Connect Gmail to see live email signals</div>
         </div>
-        <div class="sam-account">TotalEnergies France</div>
-        <div class="sam-body">Sanjay confirmed budget approval in last call. Decision timeline end of June. Proposal requested by Friday.</div>
-        <div class="sam-action">💡 Send proposal today — window is open</div>
-      </div>
-
-      <div class="sam-card dying">
-        <div class="sam-card-header">
-          <span class="sam-tag dying">⚠ Dying signal</span>
-          <span class="sam-time">3 days ago</span>
-        </div>
-        <div class="sam-account">BlueStar Foods</div>
-        <div class="sam-body">No email reply in 12 days. Last LinkedIn message unread. Champion may have changed role.</div>
-        <div class="sam-action dying-action">Re-engage or mark at risk</div>
-      </div>
-
-      <div class="sam-card neutral">
-        <div class="sam-card-header">
-          <span class="sam-tag neutral">✉ Email signal</span>
-          <span class="sam-time">2 days ago</span>
-        </div>
-        <div class="sam-account">Ferrero India</div>
-        <div class="sam-body">Meeting happened 13 May. No follow-up sent. Laxmiprasad Behera still waiting on next steps.</div>
-        <div class="sam-action">💡 Follow up on meeting outcome now</div>
-      </div>
-
-      <div class="sam-coming-soon">
-        <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:4px">🔗 Live signals coming soon</div>
-        <div style="font-size:12px;color:var(--text3)">Calls, emails and LinkedIn signals will appear here automatically when Agent SAM is fully connected.</div>
+        <button id="samGmailBtn" onclick="connectGmail()" style="padding:7px 14px;border-radius:var(--radius-sm);background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0">Connect Gmail</button>
       </div>
     </div>
+
+    <!-- Signal cards feed -->
+    <div id="samFeed">
+      <div style="text-align:center;padding:40px 20px;color:var(--text3)">
+        <div style="font-size:32px;margin-bottom:12px;opacity:0.4">⚡</div>
+        <div style="font-size:14px;font-weight:500;color:var(--text2);margin-bottom:6px">Loading signals…</div>
+        <div style="font-size:12px">Connect Gmail to see live email signals for your accounts</div>
+      </div>
+    </div>
+
+    <!-- Search bar -->
+    <div style="margin:16px 0;background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 14px;display:flex;gap:8px">
+      <input id="samSearchInput" placeholder="Search account — e.g. Ferrero, TotalEnergies…" style="flex:1;background:transparent;border:none;outline:none;font-family:var(--sans);font-size:14px;color:var(--text)" onkeydown="if(event.key==='Enter')runSamAccountSearch()"/>
+      <button onclick="runSamAccountSearch()" style="padding:6px 14px;border-radius:var(--radius-sm);background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Search</button>
+    </div>
+    <div id="samSearchOutput"></div>
 
     <!-- Rufus-style chat input -->
     <div class="sam-chat-bar">
@@ -1480,7 +1469,7 @@ function switchTab(tab) {
   if (tab === 'settings') renderSettings();
   if (tab === 'you') renderYouPanel();
   if (tab === 'review') renderSummary();
-  if (tab === 'signals') renderSamAlerts();
+  if (tab === 'signals') { renderSamAlerts(); loadSamSignals(); }
   if (tab === 'team') {
     const tdi = document.getElementById('teamDateInput');
     if (tdi) tdi.value = viewDate;
@@ -1682,6 +1671,137 @@ function renderYouPanel() {
   // Only super_admin sees Org management
   const orgBtn = document.getElementById('orgMenuBtn');
   if (orgBtn) orgBtn.style.display = profile?.role === 'super_admin' ? '' : 'none';
+}
+
+// ══════════════════════════════════════════════════════════
+// GMAIL INTEGRATION — SAM signals
+// ══════════════════════════════════════════════════════════
+
+async function loadSamSignals() {
+  if (!currentUser?.token) return;
+  const feed = document.getElementById('samFeed');
+  const statusEl = document.getElementById('samGmailStatus');
+  if (statusEl) statusEl.style.display = 'block';
+
+  try {
+    const r = await fetch(EDGE_FN_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + currentUser.token,
+        'apikey': SB_KEY
+      },
+      body: JSON.stringify({ action: 'get_signals' })
+    });
+    const data = await r.json();
+
+    if (!data.connected) {
+      // Gmail not connected
+      renderGmailNotConnected();
+      return;
+    }
+
+    // Update status bar
+    const label = document.getElementById('samGmailLabel');
+    const sub = document.getElementById('samGmailSub');
+    const btn = document.getElementById('samGmailBtn');
+    if (label) label.textContent = '✓ Gmail connected — ' + (data.gmailEmail || '');
+    if (sub) sub.textContent = 'Signals refresh automatically from your sent folder';
+    if (btn) { btn.textContent = 'Refresh'; btn.onclick = loadSamSignals; }
+
+    if (!data.signals || !data.signals.length) {
+      feed.innerHTML = '<div style="text-align:center;padding:32px 20px;color:var(--text3);font-size:13px">No strong signals found today — your pipeline looks healthy ✓</div>';
+      return;
+    }
+
+    renderSignalCards(data.signals);
+
+  } catch(e) {
+    if (feed) feed.innerHTML = '<div style="padding:16px;font-size:13px;color:var(--text3)">Could not load signals. Edge Function not deployed yet — see setup guide.</div>';
+  }
+}
+
+function renderGmailNotConnected() {
+  const label = document.getElementById('samGmailLabel');
+  const sub = document.getElementById('samGmailSub');
+  if (label) label.textContent = 'Gmail not connected';
+  if (sub) sub.textContent = 'Connect your Gmail to see live email signals';
+  const feed = document.getElementById('samFeed');
+  if (feed) feed.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--text3)"><div style="font-size:32px;margin-bottom:12px;opacity:0.3">✉</div><div style="font-size:14px;color:var(--text2);margin-bottom:6px">Gmail not connected</div><div style="font-size:12px">Click Connect Gmail above to start seeing email signals</div></div>';
+}
+
+function renderSignalCards(signals) {
+  const typeMap = {
+    hot: { cls:'buying', icon:'🔥', label:'Hot signal' },
+    warm: { cls:'neutral', icon:'⚡', label:'Active account' },
+    cold: { cls:'dying', icon:'❄', label:'Going cold' },
+    no_followup: { cls:'dying', icon:'⚠', label:'No follow-up' },
+    at_risk: { cls:'dying', icon:'🚨', label:'At risk' }
+  };
+  const feed = document.getElementById('samFeed');
+  if (!feed) return;
+  feed.innerHTML = signals.map(s => {
+    const t = typeMap[s.type] || typeMap.warm;
+    const daysStr = s.daysAgo ? s.daysAgo + ' days ago' : 'Recent';
+    return '<div class="sam-card ' + t.cls + '">' +
+      '<div class="sam-card-header">' +
+        '<span class="sam-tag ' + t.cls + '">' + t.icon + ' ' + t.label + '</span>' +
+        '<span class="sam-time">' + daysStr + '</span>' +
+      '</div>' +
+      '<div class="sam-account">' + esc(s.account) + (s.taskLogged ? ' <span style="font-size:11px;background:rgba(160,117,42,0.15);color:var(--gold);border-radius:4px;padding:1px 6px;margin-left:6px">logged today</span>' : '') + '</div>' +
+      '<div class="sam-body">' + esc(s.body) + '</div>' +
+      '<div class="sam-action' + (t.cls==='dying'?' dying-action':'') + '">💡 ' + esc(s.action) + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function connectGmail() {
+  if (!GOOGLE_CLIENT_ID_SAM) {
+    alert('Google OAuth not configured yet. See SETUP.md for instructions to add your Google Client ID.');
+    return;
+  }
+  const scope = encodeURIComponent('https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/userinfo.email');
+  const state = encodeURIComponent(JSON.stringify({ userId: currentUser?.id, token: currentUser?.token }));
+  const url = 'https://accounts.google.com/o/oauth2/v2/auth' +
+    '?client_id=' + GOOGLE_CLIENT_ID_SAM +
+    '&redirect_uri=' + encodeURIComponent(GOOGLE_REDIRECT_URI) +
+    '&response_type=code' +
+    '&scope=' + scope +
+    '&access_type=offline' +
+    '&prompt=consent' +
+    '&state=' + state;
+  window.location.href = url;
+}
+
+async function runSamAccountSearch() {
+  const query = document.getElementById('samSearchInput')?.value?.trim();
+  if (!query || !currentUser?.token) return;
+  const out = document.getElementById('samSearchOutput');
+  if (out) out.innerHTML = '<div style="padding:12px;font-size:13px;color:var(--text3)">Scanning Gmail for ' + esc(query) + '…</div>';
+
+  try {
+    const r = await fetch(EDGE_FN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
+      body: JSON.stringify({ action: 'search_account', query })
+    });
+    const data = await r.json();
+    if (!data.connected) { if (out) out.innerHTML = '<div style="font-size:13px;color:var(--coral);padding:12px">Gmail not connected</div>'; return; }
+    if (!data.threads?.length) { if (out) out.innerHTML = '<div style="font-size:13px;color:var(--text3);padding:12px">No sent emails found for "' + esc(query) + '"</div>'; return; }
+
+    const a = data.analysis || {};
+    const signalColors = { hot:'var(--green)', warm:'var(--amber)', cold:'var(--coral)', none:'var(--text3)' };
+    const col = signalColors[a.signalStrength] || 'var(--text3)';
+    if (out) out.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-top:8px">' +
+      '<div style="font-size:16px;font-weight:500;margin-bottom:4px">' + esc(query) + '</div>' +
+      '<div style="font-size:13px;font-weight:500;color:' + col + ';margin-bottom:8px">' + esc(a.signalLabel || '') + '</div>' +
+      '<div style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:10px">' + esc(a.summary || '') + '</div>' +
+      (a.nextBestAction ? '<div style="font-size:12px;color:var(--gold);background:rgba(160,117,42,0.1);border-radius:6px;padding:8px 12px">💡 ' + esc(a.nextBestAction) + '</div>' : '') +
+      '<div style="font-size:11px;color:var(--text3);margin-top:10px">' + data.threads.length + ' threads found · ' + (a.daysSinceLastTouch != null ? a.daysSinceLastTouch + ' days since last touch' : '') + '</div>' +
+    '</div>';
+  } catch(e) {
+    if (out) out.innerHTML = '<div style="font-size:13px;color:var(--coral);padding:12px">Error: ' + esc(e.message) + '</div>';
+  }
 }
 
 function renderSamAlerts() {
