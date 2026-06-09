@@ -2177,7 +2177,110 @@ function renderMemberDetail(d, memberId, memberEmail) {
       '</div>';
     }).join('') : '<div class="m-empty">No misses</div>'
   ) + '</div>';
-  return taskSection + issueSection + winSection + missSection + delegateSection;
+  return taskSection + issueSection + winSection + missSection + delegateSection +
+    '<div class="det-sec" id="sam-check-' + (memberId||'') + '">' +
+      '<button onclick="runSamCheck(' + JSON.stringify(memberId) + ',' + JSON.stringify(memberEmail) + ')" style="width:100%;padding:9px;border-radius:var(--radius-sm);background:var(--surface2);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s">⚡ Check SAM signals</button>' +
+      '<div id="sam-result-' + (memberId||'') + '" style="margin-top:10px"></div>' +
+    '</div>';
+}
+
+async function runSamCheck(memberId, memberEmail) {
+  const resultEl = document.getElementById('sam-result-' + memberId);
+  const btn = document.querySelector('#sam-check-' + memberId + ' button');
+  if (!resultEl) return;
+
+  if (btn) { btn.textContent = '⚡ Scanning…'; btn.disabled = true; }
+  resultEl.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0">Checking Gmail signals…</div>';
+
+  try {
+    // Get today's tasks for this member
+    const today = todayKey();
+    const dtRes = await fetch(SB_URL + '/rest/v1/daytrack?user_id=eq.' + memberId + '&day_key=eq.' + today + '&select=data', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token }
+    });
+    const dtData = await dtRes.json();
+    const tasks = dtData?.[0]?.data?.tasks || dtData?.[0]?.data?.priorities || [];
+
+    // Check if this member has Gmail connected
+    const tokenRes = await fetch(SB_URL + '/rest/v1/gmail_tokens?user_id=eq.' + memberId + '&select=email,expires_at', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token }
+    });
+    const tokenData = await tokenRes.json();
+    const gmailConnected = tokenData && tokenData.length > 0;
+
+    // Extract account names from tasks
+    const stopWords = new Set(['the','and','for','with','to','from','on','at','in','a','an','of','call','email','send','follow','up','meeting','message','today','tomorrow','please','need','have','will','this','that']);
+    const accounts = [];
+    tasks.forEach(function(t) {
+      (t.text || '').split(/\s+/).forEach(function(w) {
+        const clean = w.replace(/[^a-zA-Z]/g, '');
+        if (clean.length > 3 && clean[0] === clean[0].toUpperCase() && clean[0] !== clean[0].toLowerCase() && !stopWords.has(clean.toLowerCase())) {
+          if (!accounts.includes(clean)) accounts.push(clean);
+        }
+      });
+    });
+
+    // Build signals from tasks only (no Gmail if not connected)
+    let html = '';
+
+    if (!gmailConnected) {
+      html += '<div style="font-size:12px;color:var(--text3);padding:6px 0">Gmail not connected for this rep — task analysis only</div>';
+    } else {
+      html += '<div style="font-size:11px;color:var(--green);margin-bottom:8px">✓ Gmail connected — ' + tokenData[0].email + '</div>';
+    }
+
+    if (!tasks.length) {
+      html += '<div style="font-size:12px;color:var(--text3)">No tasks logged today</div>';
+    } else {
+      // Cross-reference tasks with completion
+      const done = tasks.filter(function(t) { return t.done; });
+      const pending = tasks.filter(function(t) { return !t.done; });
+
+      html += '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Task vs Activity</div>';
+
+      // Pending tasks — flag any that mention accounts
+      pending.forEach(function(t) {
+        const text = t.text || '';
+        const mentionsAccount = accounts.some(function(a) { return text.toLowerCase().includes(a.toLowerCase()); });
+        const isOutreach = ['email','call','follow','send','reach','contact','message','meet'].some(function(k) { return text.toLowerCase().includes(k); });
+        if (isOutreach || mentionsAccount) {
+          html += '<div style="border-left:3px solid var(--amber);padding:6px 10px;margin-bottom:6px;background:var(--surface2);border-radius:0 6px 6px 0">' +
+            '<div style="font-size:12px;font-weight:500;color:var(--text)">⚡ ' + esc(text.slice(0, 60)) + '</div>' +
+            '<div style="font-size:11px;color:var(--amber);margin-top:2px">Pending outreach task — not yet completed</div>' +
+          '</div>';
+        }
+      });
+
+      // Completed tasks — positive signals
+      done.forEach(function(t) {
+        const text = t.text || '';
+        const isOutreach = ['email','call','follow','send','reach','contact','message','meet','proposal','demo'].some(function(k) { return text.toLowerCase().includes(k); });
+        if (isOutreach) {
+          html += '<div style="border-left:3px solid var(--green);padding:6px 10px;margin-bottom:6px;background:var(--surface2);border-radius:0 6px 6px 0">' +
+            '<div style="font-size:12px;font-weight:500;color:var(--text)">✓ ' + esc(text.slice(0, 60)) + '</div>' +
+            '<div style="font-size:11px;color:var(--green);margin-top:2px">Completed' + (t.completedAt ? ' · ' + t.completedAt : '') + '</div>' +
+          '</div>';
+        }
+      });
+
+      if (!pending.length && !done.length) {
+        html += '<div style="font-size:12px;color:var(--text3)">No outreach tasks found today</div>';
+      }
+
+      // If Gmail connected, run account signal check
+      if (gmailConnected && accounts.length > 0) {
+        html += '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin:10px 0 6px">Gmail signals for accounts</div>';
+        html += '<div style="font-size:12px;color:var(--text3)">Accounts mentioned: ' + accounts.slice(0,5).map(function(a) { return esc(a); }).join(', ') + '</div>';
+        html += '<div style="font-size:11px;color:var(--text3);margin-top:4px">Full Gmail cross-reference requires rep to be logged in. Manager view shows task signals only.</div>';
+      }
+    }
+
+    resultEl.innerHTML = html || '<div style="font-size:12px;color:var(--text3)">No signals found</div>';
+  } catch(e) {
+    resultEl.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>';
+  }
+
+  if (btn) { btn.textContent = '⚡ Check SAM signals'; btn.disabled = false; }
 }
 
 async function delegateTask(memberId, memberEmail) {
