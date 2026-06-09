@@ -1866,11 +1866,105 @@ async function runSamAccountSearch() {
 
     const totalFound = data.totalFound || threadCount;
     const lastEmail = a.lastEmail || null;
-    // Debug: show raw Gemini response
-    if (!summary && data.geminiRaw) { 
-      if (out) out.innerHTML = '<div style="padding:12px;font-size:12px;color:var(--text2);background:var(--surface);border-radius:var(--radius);margin-top:8px"><b>Gemini raw:</b><br>' + esc(data.geminiRaw.slice(0,500)) + '</div>'; 
-      return; 
+    const sentThreads = data.threads || [];
+    const inboxThreads = data.inboxThreads || [];
+
+    // ── Build signals from actual data ────────────────────────────────────────
+    const computedSignals = [];
+    const now = Date.now();
+    const days30 = 30 * 86400000;
+    const days7 = 7 * 86400000;
+
+    // Signal 1: Inbox replies from prospect — strong buying intent
+    if (inboxThreads.length > 0) {
+      const recentReplies = inboxThreads.filter(t => {
+        const d = new Date(t.date).getTime();
+        return !isNaN(d) && (now - d) < days30;
+      });
+      if (recentReplies.length > 0) {
+        const latest = recentReplies[0];
+        computedSignals.push({
+          type: 'hot',
+          icon: '🔥',
+          title: recentReplies.length + ' reply' + (recentReplies.length > 1 ? 'ies' : '') + ' received in last 30 days',
+          body: 'Most recent reply: "' + esc((latest.snippet || '').slice(0, 120)) + '"',
+          action: 'Respond to ' + esc(latest.from || 'prospect') + ' — active buying signal',
+          color: 'var(--green)'
+        });
+      }
     }
+
+    // Signal 2: Meeting keywords in sent emails
+    const meetingKeywords = ['meeting', 'call scheduled', 'calendar invite', 'demo', 'presentation', 'slot', 'connect on', 'zoom', 'teams', 'meet'];
+    const meetingEmails = sentThreads.filter(t => {
+      const text = ((t.subject || '') + ' ' + (t.body || '')).toLowerCase();
+      return meetingKeywords.some(k => text.includes(k));
+    });
+    if (meetingEmails.length > 0) {
+      const latest = meetingEmails[0];
+      computedSignals.push({
+        type: 'warm',
+        icon: '📅',
+        title: 'Meeting/demo discussed',
+        body: 'Subject: ' + esc(latest.subject || '') + ' — meeting or demo referenced in email thread.',
+        action: 'Follow up on meeting outcome and next steps',
+        color: 'var(--amber)'
+      });
+    }
+
+    // Signal 3: Proposal/pricing sent
+    const proposalKeywords = ['proposal', 'pricing', 'quote', 'commercial', 'offer', 'loi', 'agreement', 'contract', 'invoice'];
+    const proposalEmails = sentThreads.filter(t => {
+      const text = ((t.subject || '') + ' ' + (t.body || '')).toLowerCase();
+      return proposalKeywords.some(k => text.includes(k));
+    });
+    if (proposalEmails.length > 0) {
+      const hasReply = inboxThreads.length > 0;
+      computedSignals.push({
+        type: hasReply ? 'hot' : 'no_followup',
+        icon: hasReply ? '✅' : '⚠',
+        title: 'Proposal/commercial sent' + (hasReply ? ' — reply received' : ' — awaiting response'),
+        body: 'Subject: ' + esc(proposalEmails[0].subject || '') + (hasReply ? '. Prospect has replied — deal progressing.' : '. No reply received yet.'),
+        action: hasReply ? 'Move to next stage — schedule decision call' : 'Follow up on proposal — ask for feedback',
+        color: hasReply ? 'var(--green)' : 'var(--coral)'
+      });
+    }
+
+    // Signal 4: No contact in 14+ days
+    const lastSentDate = sentThreads.length > 0 ? new Date(sentThreads[0].date).getTime() : 0;
+    const daysSinceLastSent = lastSentDate ? Math.floor((now - lastSentDate) / 86400000) : null;
+    if (daysSinceLastSent !== null && daysSinceLastSent > 14 && inboxThreads.length === 0) {
+      computedSignals.push({
+        type: 'cold',
+        icon: '❄',
+        title: daysSinceLastSent + ' days since last email — going cold',
+        body: 'Last sent: ' + esc(sentThreads[0]?.subject || '') + '. No replies on record.',
+        action: 'Re-engage now — send a check-in or value-add email',
+        color: 'var(--coral)'
+      });
+    }
+
+    // Signal 5: Active recent outreach (positive signal)
+    const recentSent = sentThreads.filter(t => {
+      const d = new Date(t.date).getTime();
+      return !isNaN(d) && (now - d) < days7;
+    });
+    if (recentSent.length > 0 && computedSignals.length === 0) {
+      computedSignals.push({
+        type: 'warm',
+        icon: '⚡',
+        title: recentSent.length + ' email' + (recentSent.length > 1 ? 's' : '') + ' sent this week',
+        body: 'Active outreach underway. Most recent: ' + esc(recentSent[0].subject || ''),
+        action: 'Monitor for reply — follow up if no response in 3 days',
+        color: 'var(--amber)'
+      });
+    }
+
+    // Build summary from signals
+    const autoSummary = computedSignals.length > 0
+      ? totalFound + ' emails sent to ' + query + '. ' + computedSignals.map(s => s.title).join('. ') + (inboxThreads.length > 0 ? '. ' + inboxThreads.length + ' reply(ies) received.' : '. No inbox replies found.')
+      : summary || (totalFound + ' emails sent to ' + query + '. No strong signals detected.');
+
     const keyContacts = a.keyContacts || [];
     const dealStage = a.dealStage || '';
     const sentiment = a.sentiment || '';
@@ -1902,16 +1996,30 @@ async function runSamAccountSearch() {
     }
 
     // Signal cards
-    if (signals.length) {
-      html += signals.map(function(s) {
-        const typeColors = { hot:'var(--green)', warm:'var(--amber)', cold:'var(--coral)', no_followup:'var(--coral)' };
-        const col = typeColors[s.type] || 'var(--text3)';
+    // Show computed data-driven signals
+    const allSignals = computedSignals.length > 0 ? computedSignals : signals;
+    if (allSignals.length) {
+      html += allSignals.map(function(s) {
+        const col = s.color || ({ hot:'var(--green)', warm:'var(--amber)', cold:'var(--coral)', no_followup:'var(--coral)' }[s.type] || 'var(--text3)');
         return '<div style="border-left:3px solid ' + col + ';padding:10px 14px;margin-bottom:8px;background:var(--surface2);border-radius:0 var(--radius) var(--radius) 0">' +
-          '<div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:3px">' + esc(s.title || '') + '</div>' +
+          '<div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:3px">' + (s.icon ? s.icon + ' ' : '') + esc(s.title || '') + '</div>' +
           '<div style="font-size:12px;color:var(--text2);margin-bottom:4px;line-height:1.5">' + esc(s.body || '') + '</div>' +
           (s.action ? '<div style="font-size:12px;color:var(--gold)">💡 ' + esc(s.action) + '</div>' : '') +
         '</div>';
       }).join('');
+    }
+
+    // Show inbox replies section
+    if (inboxThreads.length > 0) {
+      html += '<div style="margin-top:12px"><div style="font-size:10px;font-weight:600;color:var(--green);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">📥 ' + inboxThreads.length + ' reply(ies) from prospect</div>';
+      html += inboxThreads.slice(0,3).map(function(t) {
+        return '<div style="background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);border-radius:var(--radius);padding:8px 12px;margin-bottom:6px">' +
+          '<div style="font-size:12px;font-weight:500;color:var(--text)">' + esc(t.subject || '') + '</div>' +
+          '<div style="font-size:11px;color:var(--text3);margin:2px 0">From: ' + esc(t.from || '') + ' · ' + esc(t.date || '') + '</div>' +
+          '<div style="font-size:12px;color:var(--text2);margin-top:4px">' + esc((t.snippet || '').slice(0,150)) + '</div>' +
+        '</div>';
+      }).join('');
+      html += '</div>';
     }
 
     // Key contacts
