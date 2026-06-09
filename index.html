@@ -1864,29 +1864,72 @@ async function runSamAccountSearch() {
     const signals = a.signals || [];
     const threadCount = data.threads?.length || 0;
 
+    const totalFound = data.totalFound || threadCount;
+    const lastEmail = a.lastEmail || null;
+    // Debug: show raw Gemini response
+    if (!summary && data.geminiRaw) { 
+      if (out) out.innerHTML = '<div style="padding:12px;font-size:12px;color:var(--text2);background:var(--surface);border-radius:var(--radius);margin-top:8px"><b>Gemini raw:</b><br>' + esc(data.geminiRaw.slice(0,500)) + '</div>'; 
+      return; 
+    }
+    const keyContacts = a.keyContacts || [];
+    const dealStage = a.dealStage || '';
+    const sentiment = a.sentiment || '';
+    const lastTouchDays = a.lastTouchDays;
+    const sentimentColor = { positive:'var(--green)', neutral:'var(--amber)', negative:'var(--coral)' }[sentiment] || 'var(--text3)';
+    const stageLabels = { prospecting:'Prospecting', qualification:'Qualification', proposal:'Proposal', negotiation:'Negotiation', closed_won:'Closed Won', closed_lost:'Closed Lost', unknown:'Unknown' };
+
     let html = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:16px;margin-top:8px">';
-    html += '<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px">';
-    html += '<div style="font-family:var(--serif);font-size:18px;font-weight:500">' + esc(query) + '</div>';
+
+    // Header
+    html += '<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px">';
+    html += '<div style="font-family:var(--serif);font-size:20px;font-weight:500">' + esc(query) + '</div>';
     html += '<div style="font-size:11px;color:var(--text3)">' + (samSearchPeriod === 'all' ? 'All time' : 'Last ' + samSearchPeriod + ' days') + '</div>';
     html += '</div>';
-    html += '<div style="font-size:12px;color:var(--text3);margin-bottom:12px">⚡ ' + threadCount + ' emails found in sent folder</div>';
 
-    // Show summary if present, otherwise show raw analysis
-    const displaySummary = summary || (typeof a === 'object' ? JSON.stringify(a).slice(0, 200) : '');
-    if (displaySummary) {
-      html += '<div style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:12px;padding:10px 14px;background:var(--surface2);border-radius:var(--radius)">' + esc(displaySummary) + '</div>';
+    // Meta row
+    html += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">';
+    html += '<span style="font-size:12px;color:var(--text3)">⚡ ' + totalFound + ' emails</span>';
+    if (lastTouchDays != null) html += '<span style="font-size:12px;color:var(--text3)">· ' + lastTouchDays + ' days since last touch</span>';
+    if (sentiment) html += '<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:rgba(0,0,0,0.1);color:' + sentimentColor + ';font-weight:500">' + sentiment + '</span>';
+    if (dealStage && dealStage !== 'unknown') html += '<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:rgba(160,117,42,0.1);color:var(--gold);font-weight:500">' + (stageLabels[dealStage]||dealStage) + '</span>';
+    html += '</div>';
+
+    // SAM summary
+    if (summary) {
+      html += '<div style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:14px;padding:12px 14px;background:var(--surface2);border-radius:var(--radius);border-left:3px solid var(--gold)">';
+      html += '<div style="font-size:10px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">⚡ SAM Analysis</div>';
+      html += esc(summary) + '</div>';
     }
 
+    // Signal cards
     if (signals.length) {
       html += signals.map(function(s) {
         const typeColors = { hot:'var(--green)', warm:'var(--amber)', cold:'var(--coral)', no_followup:'var(--coral)' };
         const col = typeColors[s.type] || 'var(--text3)';
-        return '<div style="border-left:3px solid ' + col + ';padding:8px 12px;margin-bottom:8px;background:var(--surface2);border-radius:0 var(--radius) var(--radius) 0">' +
-          '<div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:2px">' + esc(s.account || '') + ' — ' + esc(s.title || '') + '</div>' +
-          '<div style="font-size:12px;color:var(--text3)">' + esc(s.body || '') + '</div>' +
-          (s.action ? '<div style="font-size:12px;color:var(--gold);margin-top:4px">💡 ' + esc(s.action) + '</div>' : '') +
+        return '<div style="border-left:3px solid ' + col + ';padding:10px 14px;margin-bottom:8px;background:var(--surface2);border-radius:0 var(--radius) var(--radius) 0">' +
+          '<div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:3px">' + esc(s.title || '') + '</div>' +
+          '<div style="font-size:12px;color:var(--text2);margin-bottom:4px;line-height:1.5">' + esc(s.body || '') + '</div>' +
+          (s.action ? '<div style="font-size:12px;color:var(--gold)">💡 ' + esc(s.action) + '</div>' : '') +
         '</div>';
       }).join('');
+    }
+
+    // Key contacts
+    if (keyContacts.length) {
+      html += '<div style="margin-top:12px"><div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Key contacts</div>';
+      html += '<div style="display:flex;gap:6px;flex-wrap:wrap">' + keyContacts.map(function(c) {
+        return '<span style="font-size:12px;padding:3px 10px;border-radius:20px;background:var(--surface2);color:var(--text2)">' + esc(c) + '</span>';
+      }).join('') + '</div></div>';
+    }
+
+    // Last email full content
+    if (lastEmail) {
+      html += '<div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px">';
+      html += '<div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Last sent email</div>';
+      html += '<div style="font-size:12px;color:var(--text3);margin-bottom:2px">To: ' + esc(lastEmail.to || '') + '</div>';
+      html += '<div style="font-size:12px;color:var(--text3);margin-bottom:6px">Subject: ' + esc(lastEmail.subject || '') + ' · ' + esc(lastEmail.date || '') + '</div>';
+      html += '<div style="font-size:13px;color:var(--text2);line-height:1.6;background:var(--surface2);border-radius:var(--radius);padding:10px 12px;max-height:200px;overflow-y:auto;white-space:pre-wrap">' + esc((lastEmail.body || '').slice(0, 1000)) + '</div>';
+      html += '</div>';
     }
 
     html += '</div>';
