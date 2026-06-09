@@ -1840,7 +1840,7 @@ async function runSamAccountSearch() {
     if (!data.threads?.length) { if (out) out.innerHTML = '<div style="font-size:13px;color:var(--text3);padding:12px">No sent emails found for "' + esc(query) + '"</div>'; return; }
 
     const a = data.analysis || {};
-    const summary = a.summary || a.signalLabel || '';
+    const summary = a.summary || a.signalLabel || data.debug_analysis || '';
     const signals = a.signals || [];
     const threadCount = data.threads?.length || 0;
 
