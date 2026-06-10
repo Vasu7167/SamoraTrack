@@ -1691,7 +1691,6 @@ function renderToday() {
   const addBox = document.getElementById('today-add-box');
   if (addBox) addBox.style.display = todayActiveSection === 'misses' ? 'none' : '';
   updateSectionPillCounts();
-  setTimeout(initTaskDrag, 0);
 }
 
 
@@ -1932,116 +1931,110 @@ function connectGmail() {
   });
 }
 
-// ── Drag and drop for tasks ──────────────────────────────────────────────────
-let _dragSrc = null;
-let _touchSrc = null;
-let _touchClone = null;
+// ── Drag and drop — attached once to document, survives innerHTML changes ────
+// Runs once on app load
+(function setupTaskDrag() {
+  let src = null, touchSrc = null, clone = null;
 
-function reorderTask(fromIdx, toIdx) {
-  const d = dayData(viewDate);
-  const moved = d.tasks.splice(fromIdx, 1)[0];
-  d.tasks.splice(toIdx, 0, moved);
-  save(viewDate);
-  render();
-}
-
-function initTaskDrag() {
-  const old = document.getElementById('today-list-tasks');
-  if (!old) return;
-  // Replace node to clear any previous listeners
-  const list = old.cloneNode(true);
-  old.parentNode.replaceChild(list, old);
-
-  // Only make item draggable when handle is pressed
-  list.addEventListener('mousedown', function(e) {
-    if (!e.target.closest('.drag-handle')) return;
-    const item = e.target.closest('[data-task-idx]');
-    if (item) item.setAttribute('draggable', 'true');
-  });
-  list.addEventListener('mouseup', function() {
-    list.querySelectorAll('[data-task-idx]').forEach(el => el.removeAttribute('draggable'));
-  });
-
-  // Drag events
-  list.addEventListener('dragstart', function(e) {
-    _dragSrc = e.target.closest('[data-task-idx]');
-    if (!_dragSrc) return;
-    e.dataTransfer.effectAllowed = 'move';
-    setTimeout(() => _dragSrc && _dragSrc.classList.add('dragging'), 0);
-  });
-  list.addEventListener('dragover', function(e) {
-    e.preventDefault();
-    const t = e.target.closest('[data-task-idx]');
-    list.querySelectorAll('[data-task-idx]').forEach(el => el.classList.remove('drag-over'));
-    if (t && t !== _dragSrc) t.classList.add('drag-over');
-  });
-  list.addEventListener('drop', function(e) {
-    e.preventDefault();
-    const t = e.target.closest('[data-task-idx]');
-    if (!t || !_dragSrc || t === _dragSrc) return;
-    const from = parseInt(_dragSrc.getAttribute('data-task-idx'));
-    const to = parseInt(t.getAttribute('data-task-idx'));
-    if (!isNaN(from) && !isNaN(to)) reorderTask(from, to);
-  });
-  list.addEventListener('dragend', function() {
-    list.querySelectorAll('[data-task-idx]').forEach(el => {
-      el.classList.remove('dragging');
-      el.classList.remove('drag-over');
+  function getItem(el) {
+    return el ? el.closest('[data-task-idx]') : null;
+  }
+  function reorder(fromIdx, toIdx) {
+    const d = dayData(viewDate);
+    const moved = d.tasks.splice(fromIdx, 1)[0];
+    d.tasks.splice(toIdx, 0, moved);
+    save(viewDate);
+    render();
+  }
+  function clearDrag() {
+    document.querySelectorAll('[data-task-idx]').forEach(el => {
+      el.classList.remove('dragging', 'drag-over');
       el.removeAttribute('draggable');
     });
-    _dragSrc = null;
+  }
+
+  // DESKTOP — activate draggable only on handle mousedown
+  document.addEventListener('mousedown', function(e) {
+    if (!e.target.closest('.drag-handle')) return;
+    const item = getItem(e.target);
+    if (item) item.setAttribute('draggable', 'true');
   });
-
-  // Touch drag
-  list.addEventListener('touchstart', function(e) {
-    const handle = e.target.closest('.drag-handle');
-    if (!handle) return;
-    _touchSrc = handle.closest('[data-task-idx]');
-    if (!_touchSrc) return;
+  document.addEventListener('dragstart', function(e) {
+    src = getItem(e.target);
+    if (!src) return;
+    e.dataTransfer.effectAllowed = 'move';
+    setTimeout(() => src && src.classList.add('dragging'), 0);
+  });
+  document.addEventListener('dragover', function(e) {
+    const item = getItem(e.target);
+    if (!item || !src) return;
     e.preventDefault();
-    _touchSrc.classList.add('dragging');
-    const r = _touchSrc.getBoundingClientRect();
+    document.querySelectorAll('[data-task-idx]').forEach(el => el.classList.remove('drag-over'));
+    if (item !== src) item.classList.add('drag-over');
+  });
+  document.addEventListener('drop', function(e) {
+    const target = getItem(e.target);
+    if (!target || !src || target === src) return;
+    e.preventDefault();
+    reorder(
+      parseInt(src.getAttribute('data-task-idx')),
+      parseInt(target.getAttribute('data-task-idx'))
+    );
+    src = null;
+  });
+  document.addEventListener('dragend', function() { clearDrag(); src = null; });
+
+  // MOBILE — touch from handle
+  document.addEventListener('touchstart', function(e) {
+    if (!e.target.closest('.drag-handle')) return;
+    touchSrc = getItem(e.target);
+    if (!touchSrc) return;
+    e.preventDefault();
+    touchSrc.classList.add('dragging');
+    const r = touchSrc.getBoundingClientRect();
     const t = e.touches[0];
-    _touchClone = _touchSrc.cloneNode(true);
-    Object.assign(_touchClone.style, {
-      position:'fixed', pointerEvents:'none', zIndex:'9999', opacity:'0.85',
-      width:r.width+'px', top:(t.clientY-r.height/2)+'px', left:r.left+'px',
-      background:'var(--surface)', border:'1px solid var(--gold)', borderRadius:'10px', boxShadow:'0 8px 24px rgba(0,0,0,0.4)'
+    clone = touchSrc.cloneNode(true);
+    Object.assign(clone.style, {
+      position:'fixed', pointerEvents:'none', zIndex:'9999', opacity:'0.9',
+      width: r.width+'px', left: r.left+'px', top: (t.clientY - r.height/2)+'px',
+      background:'var(--surface)', border:'1px solid var(--gold)', borderRadius:'10px'
     });
-    document.body.appendChild(_touchClone);
+    document.body.appendChild(clone);
   }, {passive:false});
 
-  list.addEventListener('touchmove', function(e) {
-    if (!_touchSrc || !_touchClone) return;
+  document.addEventListener('touchmove', function(e) {
+    if (!touchSrc || !clone) return;
     e.preventDefault();
     const t = e.touches[0];
-    _touchClone.style.top = (t.clientY - _touchClone.offsetHeight/2) + 'px';
-    _touchClone.style.left = (t.clientX - _touchClone.offsetWidth/2) + 'px';
-    _touchClone.style.visibility = 'hidden';
-    const over = document.elementFromPoint(t.clientX, t.clientY);
-    _touchClone.style.visibility = '';
-    list.querySelectorAll('[data-task-idx]').forEach(el => el.classList.remove('drag-over'));
-    const target = over ? over.closest('[data-task-idx]') : null;
-    if (target && target !== _touchSrc) target.classList.add('drag-over');
+    clone.style.top = (t.clientY - clone.offsetHeight/2)+'px';
+    clone.style.left = (t.clientX - clone.offsetWidth/2)+'px';
+    clone.style.visibility = 'hidden';
+    const below = document.elementFromPoint(t.clientX, t.clientY);
+    clone.style.visibility = '';
+    document.querySelectorAll('[data-task-idx]').forEach(el => el.classList.remove('drag-over'));
+    const target = getItem(below);
+    if (target && target !== touchSrc) target.classList.add('drag-over');
   }, {passive:false});
 
-  list.addEventListener('touchend', function(e) {
-    if (!_touchSrc) return;
+  document.addEventListener('touchend', function(e) {
+    if (!touchSrc) return;
     const t = e.changedTouches[0];
-    if (_touchClone) { _touchClone.remove(); _touchClone = null; }
-    list.querySelectorAll('[data-task-idx]').forEach(el => el.classList.remove('drag-over'));
-    _touchClone && _touchClone.remove();
-    const over = document.elementFromPoint(t.clientX, t.clientY);
-    const target = over ? over.closest('[data-task-idx]') : null;
-    if (target && target !== _touchSrc) {
-      const from = parseInt(_touchSrc.getAttribute('data-task-idx'));
-      const to = parseInt(target.getAttribute('data-task-idx'));
-      if (!isNaN(from) && !isNaN(to)) reorderTask(from, to);
+    if (clone) { clone.remove(); clone = null; }
+    const below = document.elementFromPoint(t.clientX, t.clientY);
+    const target = getItem(below);
+    if (target && target !== touchSrc) {
+      reorder(
+        parseInt(touchSrc.getAttribute('data-task-idx')),
+        parseInt(target.getAttribute('data-task-idx'))
+      );
     }
-    _touchSrc.classList.remove('dragging');
-    _touchSrc = null;
+    clearDrag();
+    touchSrc = null;
   }, {passive:false});
-}
+})();
+
+// kept for compatibility — no longer needed but harmless
+function initTaskDrag() {}
 
 let samSearchPeriod = 'all';
 
