@@ -188,11 +188,13 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 .items{display:flex;flex-direction:column;gap:8px}
 .item{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;display:flex;align-items:flex-start;gap:12px;transition:all 0.2s;animation:slideIn 0.18s ease}
 .item:hover{border-color:var(--border2);transform:translateY(-1px)}
-.item.dragging{opacity:0.4;border:1px dashed var(--gold)!important}
-.item.drag-over{border-color:var(--gold)!important;transform:translateY(-2px)}
-.drag-handle{width:22px;flex-shrink:0;cursor:grab;text-align:center;color:var(--gold);font-size:18px;user-select:none;line-height:1;padding-top:1px}.drag-handle:hover{opacity:0.8;color:var(--gold)}
-.drag-handle:hover{opacity:1;color:var(--gold)}
+
+
+.drag-handle{width:20px;flex-shrink:0;cursor:grab;text-align:center;color:var(--gold-lt);font-size:16px;user-select:none;opacity:0.7}.drag-handle:hover{opacity:1}.drag-handle:hover{opacity:0.8;color:var(--gold)}
+
 .item.done{opacity:0.4}
+.sortable-ghost{opacity:0.3;background:var(--surface2)!important}
+.sortable-chosen{border-color:var(--gold)!important}
 .item.done .item-text{text-decoration:line-through}
 .item.win-item{border-left:2px solid var(--green)}
 .item.priority-task{background:rgba(192,82,63,0.18) !important;border-color:rgba(192,82,63,0.5) !important;border-left:3px solid var(--coral) !important}
@@ -395,6 +397,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 
 @media(max-width:420px){.sum-grid{grid-template-columns:repeat(2,1fr)}.tabs{gap:4px}.tab{font-size:10px;padding:7px 4px}}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
 </head>
 <body>
 
@@ -1369,7 +1372,7 @@ function renderList(key, items) {
       const priorityBadge = isPriority ? '<span class="priority-badge">Priority</span>' : '';
       const delegatedBadge = item.delegatedBy ? `<span class="delegated-badge">↓ from ${item.delegatedBy.split('@')[0]}</span>` : '';
       const tsMeta = item.addedAt ? `<div class="item-meta">${item.delegatedBy ? 'Delegated ' : 'Added '}${item.addedAt}${item.completedAt ? ' · Completed ' + item.completedAt : ''}</div>` : '';
-      return `<div class="item ${item.done?'done':''} ${isPriority?'priority-task':''}" data-task-idx="${i}"><div class="drag-handle" title="Drag to reorder">≡</div><div class="chk ${item.done?'on':''}" onclick="toggle(${i})"></div><div style="flex:1"><div class="item-text">${esc(displayText)} ${priorityBadge}${delegatedBadge}</div>${tsMeta}</div><button class="idel" onclick="del('tasks',${i})">✕</button></div>`;
+      return `<div class="item ${item.done?'done':''} ${isPriority?'priority-task':''}" data-task-idx="${i}"><div class="drag-handle">⠿</div><div class="chk ${item.done?'on':''}" onclick="toggle(${i})"></div><div style="flex:1"><div class="item-text">${esc(displayText)} ${priorityBadge}${delegatedBadge}</div>${tsMeta}</div><button class="idel" onclick="del('tasks',${i})">✕</button></div>`;
     }
     if (key === 'wins') {
       // Determine win type — priority, delegated, or normal
@@ -1691,6 +1694,7 @@ function renderToday() {
   const addBox = document.getElementById('today-add-box');
   if (addBox) addBox.style.display = todayActiveSection === 'misses' ? 'none' : '';
   updateSectionPillCounts();
+  initSortable();
 }
 
 
@@ -1931,110 +1935,26 @@ function connectGmail() {
   });
 }
 
-// ── Drag and drop — attached once to document, survives innerHTML changes ────
-// Runs once on app load
-(function setupTaskDrag() {
-  let src = null, touchSrc = null, clone = null;
 
-  function getItem(el) {
-    return el ? el.closest('[data-task-idx]') : null;
-  }
-  function reorder(fromIdx, toIdx) {
-    const d = dayData(viewDate);
-    const moved = d.tasks.splice(fromIdx, 1)[0];
-    d.tasks.splice(toIdx, 0, moved);
-    save(viewDate);
-    render();
-  }
-  function clearDrag() {
-    document.querySelectorAll('[data-task-idx]').forEach(el => {
-      el.classList.remove('dragging', 'drag-over');
-      el.removeAttribute('draggable');
-    });
-  }
-
-  // DESKTOP — activate draggable only on handle mousedown
-  document.addEventListener('mousedown', function(e) {
-    if (!e.target.closest('.drag-handle')) return;
-    const item = getItem(e.target);
-    if (item) item.setAttribute('draggable', 'true');
-  });
-  document.addEventListener('dragstart', function(e) {
-    src = getItem(e.target);
-    if (!src) return;
-    e.dataTransfer.effectAllowed = 'move';
-    setTimeout(() => src && src.classList.add('dragging'), 0);
-  });
-  document.addEventListener('dragover', function(e) {
-    const item = getItem(e.target);
-    if (!item || !src) return;
-    e.preventDefault();
-    document.querySelectorAll('[data-task-idx]').forEach(el => el.classList.remove('drag-over'));
-    if (item !== src) item.classList.add('drag-over');
-  });
-  document.addEventListener('drop', function(e) {
-    const target = getItem(e.target);
-    if (!target || !src || target === src) return;
-    e.preventDefault();
-    reorder(
-      parseInt(src.getAttribute('data-task-idx')),
-      parseInt(target.getAttribute('data-task-idx'))
-    );
-    src = null;
-  });
-  document.addEventListener('dragend', function() { clearDrag(); src = null; });
-
-  // MOBILE — touch from handle
-  document.addEventListener('touchstart', function(e) {
-    if (!e.target.closest('.drag-handle')) return;
-    touchSrc = getItem(e.target);
-    if (!touchSrc) return;
-    e.preventDefault();
-    touchSrc.classList.add('dragging');
-    const r = touchSrc.getBoundingClientRect();
-    const t = e.touches[0];
-    clone = touchSrc.cloneNode(true);
-    Object.assign(clone.style, {
-      position:'fixed', pointerEvents:'none', zIndex:'9999', opacity:'0.9',
-      width: r.width+'px', left: r.left+'px', top: (t.clientY - r.height/2)+'px',
-      background:'var(--surface)', border:'1px solid var(--gold)', borderRadius:'10px'
-    });
-    document.body.appendChild(clone);
-  }, {passive:false});
-
-  document.addEventListener('touchmove', function(e) {
-    if (!touchSrc || !clone) return;
-    e.preventDefault();
-    const t = e.touches[0];
-    clone.style.top = (t.clientY - clone.offsetHeight/2)+'px';
-    clone.style.left = (t.clientX - clone.offsetWidth/2)+'px';
-    clone.style.visibility = 'hidden';
-    const below = document.elementFromPoint(t.clientX, t.clientY);
-    clone.style.visibility = '';
-    document.querySelectorAll('[data-task-idx]').forEach(el => el.classList.remove('drag-over'));
-    const target = getItem(below);
-    if (target && target !== touchSrc) target.classList.add('drag-over');
-  }, {passive:false});
-
-  document.addEventListener('touchend', function(e) {
-    if (!touchSrc) return;
-    const t = e.changedTouches[0];
-    if (clone) { clone.remove(); clone = null; }
-    const below = document.elementFromPoint(t.clientX, t.clientY);
-    const target = getItem(below);
-    if (target && target !== touchSrc) {
-      reorder(
-        parseInt(touchSrc.getAttribute('data-task-idx')),
-        parseInt(target.getAttribute('data-task-idx'))
-      );
+let _sortable = null;
+function initSortable() {
+  const el = document.getElementById('today-list-tasks');
+  if (!el || typeof Sortable === 'undefined') return;
+  if (_sortable) _sortable.destroy();
+  _sortable = Sortable.create(el, {
+    animation: 150,
+    handle: '.drag-handle',
+    ghostClass: 'sortable-ghost',
+    chosenClass: 'sortable-chosen',
+    onEnd: function(evt) {
+      const d = dayData(viewDate);
+      const moved = d.tasks.splice(evt.oldIndex, 1)[0];
+      d.tasks.splice(evt.newIndex, 0, moved);
+      save(viewDate);
+      render();
     }
-    clearDrag();
-    touchSrc = null;
-  }, {passive:false});
-})();
-
-// kept for compatibility — no longer needed but harmless
-function initTaskDrag() {}
+  });
+}
 
 let samSearchPeriod = 'all';
 
