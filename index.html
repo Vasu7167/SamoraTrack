@@ -646,12 +646,20 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
         <input id="samSearchInput" placeholder="Search account — e.g. Ferrero, Marico…" style="flex:1;background:transparent;border:none;outline:none;font-family:var(--sans);font-size:14px;color:var(--text)" onkeydown="if(event.key==='Enter')runSamAccountSearch()"/>
         <button onclick="runSamAccountSearch()" style="padding:6px 14px;border-radius:var(--radius-sm);background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Search</button>
       </div>
-      <div style="display:flex;gap:6px">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
         <span style="font-size:11px;color:var(--text3);align-self:center">Period:</span>
         <button class="sam-period-btn active" id="period-all" onclick="setSamPeriod('all',this)">All time</button>
         <button class="sam-period-btn" id="period-90" onclick="setSamPeriod('90',this)">90 days</button>
         <button class="sam-period-btn" id="period-60" onclick="setSamPeriod('60',this)">60 days</button>
         <button class="sam-period-btn" id="period-30" onclick="setSamPeriod('30',this)">30 days</button>
+        <button class="sam-period-btn" id="period-custom" onclick="setSamPeriod('custom',this)">Custom</button>
+      </div>
+      <div id="samCustomRange" style="display:none;flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:11px;color:var(--text3)">From:</span>
+        <input type="date" id="samDateFrom" style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none"/>
+        <span style="font-size:11px;color:var(--text3)">To:</span>
+        <input type="date" id="samDateTo" style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none"/>
+        <button onclick="runSamAccountSearch()" style="padding:5px 12px;border-radius:var(--radius-sm);background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Apply</button>
       </div>
     </div>
     <div id="samSearchOutput"></div>
@@ -678,12 +686,20 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
         <input id="mgrSearchInput" placeholder="Search account — Ferrero, Marico…" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none" onkeydown="if(event.key==='Enter')runManagerSearch()"/>
         <button onclick="runManagerSearch()" style="padding:7px 14px;border-radius:var(--radius-sm);background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0">Search</button>
       </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
         <span style="font-size:11px;color:var(--text3);align-self:center">Period:</span>
         <button class="sam-period-btn active" id="mgr-period-all" onclick="setMgrPeriod('all',this)">All time</button>
         <button class="sam-period-btn" id="mgr-period-30" onclick="setMgrPeriod('30',this)">30 days</button>
         <button class="sam-period-btn" id="mgr-period-7" onclick="setMgrPeriod('7',this)">This week</button>
         <button class="sam-period-btn" id="mgr-period-today" onclick="setMgrPeriod('today',this)">Today</button>
+        <button class="sam-period-btn" id="mgr-period-custom" onclick="setMgrPeriod('custom',this)">Custom range</button>
+      </div>
+      <div id="mgrCustomRange" style="display:none;display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:4px">
+        <span style="font-size:11px;color:var(--text3)">From:</span>
+        <input type="date" id="mgrDateFrom" style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none"/>
+        <span style="font-size:11px;color:var(--text3)">To:</span>
+        <input type="date" id="mgrDateTo" style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none"/>
+        <button onclick="runManagerSearch()" style="padding:5px 12px;border-radius:var(--radius-sm);background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Apply</button>
       </div>
       <div id="mgrSearchOutput" style="margin-top:10px"></div>
     </div>
@@ -1861,20 +1877,44 @@ function setSamPeriod(period, btn) {
   samSearchPeriod = period;
   document.querySelectorAll('.sam-period-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
+  const customRange = document.getElementById('samCustomRange');
+  if (customRange) customRange.style.display = period === 'custom' ? 'flex' : 'none';
+  if (period === 'custom') {
+    const to = new Date();
+    const from = new Date(); from.setDate(from.getDate() - 30);
+    const fmt = d => d.toISOString().split('T')[0];
+    const fromEl = document.getElementById('samDateFrom');
+    const toEl = document.getElementById('samDateTo');
+    if (fromEl && !fromEl.value) fromEl.value = fmt(from);
+    if (toEl && !toEl.value) toEl.value = fmt(to);
+  }
 }
 
 async function runSamAccountSearch() {
   const query = document.getElementById('samSearchInput')?.value?.trim();
   if (!query || !currentUser?.token) return;
   const out = document.getElementById('samSearchOutput');
-  const periodLabel = samSearchPeriod === 'all' ? 'all time' : 'last ' + samSearchPeriod + ' days';
+  const periodLabel = samSearchPeriod === 'all' ? 'all time' : samSearchPeriod === 'custom' ? 'custom range' : 'last ' + samSearchPeriod + ' days';
   if (out) out.innerHTML = '<div style="padding:12px;font-size:13px;color:var(--text3)">Scanning Gmail for ' + esc(query) + ' (' + periodLabel + ')…</div>';
+
+  // Build date params
+  let days = samSearchPeriod === 'all' ? 0 : samSearchPeriod === 'custom' ? 0 : parseInt(samSearchPeriod);
+  let dateFrom = '';
+  let dateTo = '';
+  if (samSearchPeriod === 'custom') {
+    dateFrom = document.getElementById('samDateFrom')?.value || '';
+    dateTo = document.getElementById('samDateTo')?.value || '';
+    if (!dateFrom || !dateTo) {
+      if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral);padding:8px 0">Please select both From and To dates</div>';
+      return;
+    }
+  }
 
   try {
     const r = await fetch(EDGE_FN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
-      body: JSON.stringify({ action: 'search_account', query, days: samSearchPeriod === 'all' ? 0 : parseInt(samSearchPeriod) })
+      body: JSON.stringify({ action: 'search_account', query, days: samSearchPeriod === 'all' ? 0 : parseInt(samSearchPeriod), date_from: dateFrom, date_to: dateTo })
     });
     const data = await r.json();
     if (!data.connected) { if (out) out.innerHTML = '<div style="font-size:13px;color:var(--coral);padding:12px">Gmail not connected</div>'; return; }
@@ -2399,8 +2439,20 @@ let mgrSearchPeriod = 'all';
 
 function setMgrPeriod(period, btn) {
   mgrSearchPeriod = period;
-  document.querySelectorAll('#mgr-period-all,#mgr-period-30,#mgr-period-7,#mgr-period-today').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#mgr-period-all,#mgr-period-30,#mgr-period-7,#mgr-period-today,#mgr-period-custom').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
+  const customRange = document.getElementById('mgrCustomRange');
+  if (customRange) customRange.style.display = period === 'custom' ? 'flex' : 'none';
+  // Set default dates for custom range
+  if (period === 'custom') {
+    const to = new Date();
+    const from = new Date(); from.setDate(from.getDate() - 30);
+    const fmt = d => d.toISOString().split('T')[0];
+    const fromEl = document.getElementById('mgrDateFrom');
+    const toEl = document.getElementById('mgrDateTo');
+    if (fromEl && !fromEl.value) fromEl.value = fmt(from);
+    if (toEl && !toEl.value) toEl.value = fmt(to);
+  }
 }
 
 function populateMgrRepSelect(members) {
@@ -2417,8 +2469,24 @@ async function runManagerSearch() {
   if (!query) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Please enter an account name</div>'; return; }
   if (!out) return;
 
-  const days = mgrSearchPeriod === 'all' ? 0 : mgrSearchPeriod === 'today' ? 1 : parseInt(mgrSearchPeriod);
-  const periodLabel = mgrSearchPeriod === 'all' ? 'All time' : mgrSearchPeriod === 'today' ? 'Today' : 'Last ' + mgrSearchPeriod + ' days';
+  const days = mgrSearchPeriod === 'all' ? 0 : mgrSearchPeriod === 'today' ? 1 : mgrSearchPeriod === 'custom' ? 0 : parseInt(mgrSearchPeriod);
+
+  // Build period label and date filter
+  let periodLabel = 'All time';
+  let dateFrom = '';
+  let dateTo = '';
+
+  if (mgrSearchPeriod === 'custom') {
+    dateFrom = document.getElementById('mgrDateFrom')?.value || '';
+    dateTo = document.getElementById('mgrDateTo')?.value || '';
+    if (!dateFrom || !dateTo) {
+      out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Please select both From and To dates</div>';
+      return;
+    }
+    periodLabel = dateFrom + ' → ' + dateTo;
+  } else {
+    periodLabel = mgrSearchPeriod === 'all' ? 'All time' : mgrSearchPeriod === 'today' ? 'Today' : 'Last ' + mgrSearchPeriod + ' days';
+  }
 
   out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0">Scanning ' + esc(query) + ' across ' + (repId ? 'selected rep' : 'all reps') + ' Gmail (' + periodLabel + ')…</div>';
 
@@ -2451,7 +2519,7 @@ async function runManagerSearch() {
       const r = await fetch(EDGE_FN_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
-        body: JSON.stringify({ action: 'get_rep_signals', rep_user_id: rep.user_id, query, days })
+        body: JSON.stringify({ action: 'get_rep_signals', rep_user_id: rep.user_id, query, days, date_from: dateFrom, date_to: dateTo })
       });
       const data = await r.json();
 
