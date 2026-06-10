@@ -631,6 +631,17 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
       </div>
     </div>
 
+    <!-- Account Coverage Signal -->
+    <div id="samCoverageSection" style="margin-bottom:16px;display:none">
+      <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em">⚡ Account Coverage</div>
+          <button onclick="runCoverageCheck()" id="coverageCheckBtn" style="padding:5px 12px;border-radius:20px;background:rgba(160,117,42,0.1);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Check today</button>
+        </div>
+        <div id="samCoverageOutput"></div>
+      </div>
+    </div>
+
     <!-- Signal cards feed -->
     <div id="samFeed">
       <div style="text-align:center;padding:40px 20px;color:var(--text3)">
@@ -1519,7 +1530,11 @@ function switchTab(tab) {
   if (tab === 'settings') renderSettings();
   if (tab === 'you') renderYouPanel();
   if (tab === 'review') renderSummary();
-  if (tab === 'signals') { renderSamAlerts(); loadSamSignals(); }
+  if (tab === 'signals') {
+    renderSamAlerts(); loadSamSignals();
+    const covSec = document.getElementById('samCoverageSection');
+    if (covSec) covSec.style.display = 'block';
+  }
   if (tab === 'team') {
     const tdi = document.getElementById('teamDateInput');
     if (tdi) tdi.value = viewDate;
@@ -2164,6 +2179,97 @@ function renderSamAlerts() {
   } else { alerts.innerHTML = ''; }
 }
 
+async function runCoverageCheck(repId, repEmail, resultElId) {
+  // repId/repEmail = for manager view; undefined = own view
+  const isManager = !!repId;
+  const targetId = repId || currentUser?.id;
+  const btnId = isManager ? null : 'coverageCheckBtn';
+  const outputId = resultElId || 'samCoverageOutput';
+
+  const btn = btnId ? document.getElementById(btnId) : null;
+  const out = document.getElementById(outputId);
+  if (!out) return;
+
+  const teamDateEl = document.getElementById('teamDateInput');
+  const checkDate = isManager
+    ? ((teamDateEl && teamDateEl.value) ? teamDateEl.value : todayKey())
+    : todayKey();
+
+  if (btn) { btn.textContent = 'Scanning…'; btn.disabled = true; }
+  out.innerHTML = '<div style="font-size:12px;color:var(--text3)">Checking account coverage for ' + checkDate + '…</div>';
+
+  try {
+    const r = await fetch(EDGE_FN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
+      body: JSON.stringify({ action: 'account_coverage', rep_user_id: isManager ? targetId : null, day_key: checkDate })
+    });
+    const data = await r.json();
+
+    if (!data.connected) {
+      out.innerHTML = '<div style="font-size:12px;color:var(--text3)">Gmail not connected' + (isManager ? ' for this rep' : ' — connect Gmail in the status bar above') + '</div>';
+      if (btn) { btn.textContent = 'Check today'; btn.disabled = false; }
+      return;
+    }
+
+    const s = data.summary || {};
+    if (!s.total) {
+      out.innerHTML = '<div style="font-size:12px;color:var(--text3)">No accounts found in tasks for ' + checkDate + '</div>';
+      if (btn) { btn.textContent = 'Check today'; btn.disabled = false; }
+      return;
+    }
+
+    // Summary bar
+    const pct = s.coverageRate || 0;
+    const barColor = pct >= 80 ? 'var(--green)' : pct >= 50 ? 'var(--amber)' : 'var(--coral)';
+    let html = '<div style="margin-bottom:12px">';
+    html += '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">';
+    html += '<span style="color:var(--text2)">' + s.covered + '/' + s.total + ' accounts emailed</span>';
+    html += '<span style="color:' + barColor + ';font-weight:600">' + pct + '%</span></div>';
+    html += '<div style="height:5px;background:var(--surface2);border-radius:3px;overflow:hidden">';
+    html += '<div style="height:100%;width:' + pct + '%;background:' + barColor + ';border-radius:3px;transition:width 0.4s"></div></div>';
+    html += '</div>';
+
+    // Gap accounts — highest priority
+    if (data.gap && data.gap.length) {
+      html += '<div style="margin-bottom:10px">';
+      html += '<div style="font-size:10px;font-weight:600;color:var(--coral);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">🚨 Not actioned (' + data.gap.length + ')</div>';
+      data.gap.forEach(function(a) {
+        html += '<div style="border-left:3px solid var(--coral);padding:7px 10px;margin-bottom:5px;background:rgba(192,82,63,0.06);border-radius:0 6px 6px 0">' +
+          '<div style="font-size:12px;font-weight:500;color:var(--text)">' + esc(a.account) + '</div>' +
+          '<div style="font-size:11px;color:var(--text3);margin-top:2px">' + esc((a.tasks[0]||'').slice(0,70)) + '</div>' +
+          '<div style="font-size:11px;color:var(--coral);margin-top:2px">No email sent in last 7 days</div>' +
+        '</div>';
+      });
+      html += '</div>';
+    }
+
+    // Covered accounts
+    if (data.covered && data.covered.length) {
+      html += '<div>';
+      html += '<div style="font-size:10px;font-weight:600;color:var(--green);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">✓ Actioned (' + data.covered.length + ')</div>';
+      data.covered.forEach(function(a) {
+        const sigColor = a.signal === 'hot' ? 'var(--green)' : a.signal === 'warm' ? 'var(--amber)' : 'var(--text3)';
+        const sigIcon = a.signal === 'hot' ? '🔥' : a.signal === 'warm' ? '⚡' : '○';
+        html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;margin-bottom:4px;background:var(--surface2);border-radius:6px">' +
+          '<div>' +
+            '<div style="font-size:12px;font-weight:500;color:var(--text)">' + esc(a.account) + '</div>' +
+            '<div style="font-size:11px;color:var(--text3)">' + a.emailsSent + ' sent' + (a.repliesReceived > 0 ? ' · ' + a.repliesReceived + ' reply' : '') + '</div>' +
+          '</div>' +
+          '<span style="font-size:12px;color:' + sigColor + '">' + sigIcon + '</span>' +
+        '</div>';
+      });
+      html += '</div>';
+    }
+
+    out.innerHTML = html;
+  } catch(e) {
+    out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>';
+  }
+
+  if (btn) { btn.textContent = 'Refresh'; btn.disabled = false; }
+}
+
 async function runSamQuery() {
   const inp = document.getElementById('samChatInput');
   const out = document.getElementById('samChatOutput');
@@ -2236,8 +2342,12 @@ async function renderTeam() {
           '<div class="m-toggle" id="mtog-' + idx + '">▾</div>' +
         '</div>' +
         '<div style="padding:8px 16px;border-top:1px solid var(--border)">' +
-          '<button id="sam-btn-' + m.user_id + '" onclick="event.stopPropagation();runSamCheck(\'' + m.user_id + '\',\'' + m.email + '\')" style="width:100%;padding:8px;border-radius:var(--radius-sm);background:rgba(160,117,42,0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">⚡ Check SAM signals</button>' +
+          '<div style="display:flex;gap:6px">' +
+            '<button id="sam-btn-' + m.user_id + '" onclick="event.stopPropagation();runSamCheck(\'' + m.user_id + '\',\'' + m.email + '\')" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(160,117,42,0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">⚡ SAM Signals</button>' +
+            '<button onclick="event.stopPropagation();runCoverageCheck(\'' + m.user_id + '\',\'' + m.email + '\',\'cov-' + m.user_id + '\')" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(160,117,42,0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">📊 Coverage</button>' +
+          '</div>' +
           '<div id="sam-result-' + m.user_id + '" style="margin-top:8px"></div>' +
+          '<div id="cov-' + m.user_id + '" style="margin-top:6px"></div>' +
         '</div>' +
         '<div class="member-detail" id="mdet-' + idx + '">' + renderMemberDetail(d, m.user_id, m.email) + '</div>' +
       '</div>';
