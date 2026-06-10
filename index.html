@@ -2190,25 +2190,19 @@ async function runSamCheck(memberId, memberEmail) {
   if (!resultEl) return;
 
   if (btn) { btn.textContent = '⚡ Scanning…'; btn.disabled = true; }
-  resultEl.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0">Checking Gmail signals…</div>';
+  resultEl.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0">Reading ' + esc(memberEmail.split('@')[0]) + ' Gmail + SamoraTrack…</div>';
 
   try {
-    // Get today's tasks for this member
     const today = todayKey();
+
+    // 1. Get today's tasks for this rep
     const dtRes = await fetch(SB_URL + '/rest/v1/daytrack?user_id=eq.' + memberId + '&day_key=eq.' + today + '&select=data', {
       headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token }
     });
     const dtData = await dtRes.json();
     const tasks = dtData?.[0]?.data?.tasks || dtData?.[0]?.data?.priorities || [];
 
-    // Check if this member has Gmail connected
-    const tokenRes = await fetch(SB_URL + '/rest/v1/gmail_tokens?user_id=eq.' + memberId + '&select=email,expires_at', {
-      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token }
-    });
-    const tokenData = await tokenRes.json();
-    const gmailConnected = tokenData && tokenData.length > 0;
-
-    // Extract account names from tasks
+    // 2. Extract account names from tasks
     const stopWords = new Set(['the','and','for','with','to','from','on','at','in','a','an','of','call','email','send','follow','up','meeting','message','today','tomorrow','please','need','have','will','this','that']);
     const accounts = [];
     tasks.forEach(function(t) {
@@ -2220,67 +2214,118 @@ async function runSamCheck(memberId, memberEmail) {
       });
     });
 
-    // Build signals from tasks only (no Gmail if not connected)
-    let html = '';
+    // 3. Fetch rep's Gmail signals via Edge Function
+    const gmailData = {};
+    let gmailConnected = false;
+    let gmailEmail = '';
 
-    if (!gmailConnected) {
-      html += '<div style="font-size:12px;color:var(--text3);padding:6px 0">Gmail not connected for this rep — task analysis only</div>';
-    } else {
-      html += '<div style="font-size:11px;color:var(--green);margin-bottom:8px">✓ Gmail connected — ' + tokenData[0].email + '</div>';
+    const repRes = await fetch(EDGE_FN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
+      body: JSON.stringify({ action: 'get_rep_signals', rep_user_id: memberId, query: accounts[0] || '', days: 30 })
+    });
+    const repData = await repRes.json();
+    if (repData.connected) {
+      gmailConnected = true;
+      gmailEmail = repData.gmailEmail || '';
+      gmailData.threads = repData.threads || [];
+      gmailData.inboxThreads = repData.inboxThreads || [];
+      gmailData.totalFound = repData.totalFound || 0;
     }
 
-    if (!tasks.length) {
-      html += '<div style="font-size:12px;color:var(--text3)">No tasks logged today</div>';
+    // 4. Build HTML output
+    let html = '';
+
+    // Header
+    html += '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">⚡ SAM Signal Report — ' + new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short'}) + '</div>';
+
+    // Gmail status
+    if (gmailConnected) {
+      html += '<div style="font-size:11px;color:var(--green);margin-bottom:12px;display:flex;align-items:center;gap:6px"><span style="width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block"></span>Gmail connected — ' + esc(gmailEmail) + '</div>';
     } else {
-      // Cross-reference tasks with completion
+      html += '<div style="font-size:11px;color:var(--text3);margin-bottom:12px">Gmail not connected for this rep</div>';
+    }
+
+    // Task signals
+    html += '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Task Activity Cross-check<div>';
+
+    if (!tasks.length) {
+      html += '<div style="font-size:12px;color:var(--text3);margin-bottom:12px">No tasks logged today</div>';
+    } else {
       const done = tasks.filter(function(t) { return t.done; });
       const pending = tasks.filter(function(t) { return !t.done; });
+      const outreachKw = ['email','call','follow','send','reach','contact','message','meet','proposal','demo','linkedin'];
 
-      html += '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Task vs Activity</div>';
-
-      // Pending tasks — flag any that mention accounts
-      pending.forEach(function(t) {
-        const text = t.text || '';
-        const mentionsAccount = accounts.some(function(a) { return text.toLowerCase().includes(a.toLowerCase()); });
-        const isOutreach = ['email','call','follow','send','reach','contact','message','meet'].some(function(k) { return text.toLowerCase().includes(k); });
-        if (isOutreach || mentionsAccount) {
-          html += '<div style="border-left:3px solid var(--amber);padding:6px 10px;margin-bottom:6px;background:var(--surface2);border-radius:0 6px 6px 0">' +
-            '<div style="font-size:12px;font-weight:500;color:var(--text)">⚡ ' + esc(text.slice(0, 60)) + '</div>' +
-            '<div style="font-size:11px;color:var(--amber);margin-top:2px">Pending outreach task — not yet completed</div>' +
-          '</div>';
-        }
+      pending.filter(function(t) {
+        return outreachKw.some(function(k) { return (t.text||'').toLowerCase().includes(k); });
+      }).forEach(function(t) {
+        html += '<div style="border-left:3px solid var(--amber);padding:6px 10px;margin-bottom:6px;background:var(--surface2);border-radius:0 6px 6px 0">' +
+          '<div style="font-size:12px;font-weight:500;color:var(--text)">⚡ ' + esc((t.text||'').slice(0,80)) + '</div>' +
+          '<div style="font-size:11px;color:var(--amber);margin-top:2px">Pending — not yet done</div>' +
+        '</div>';
       });
 
-      // Completed tasks — positive signals
-      done.forEach(function(t) {
-        const text = t.text || '';
-        const isOutreach = ['email','call','follow','send','reach','contact','message','meet','proposal','demo'].some(function(k) { return text.toLowerCase().includes(k); });
-        if (isOutreach) {
-          html += '<div style="border-left:3px solid var(--green);padding:6px 10px;margin-bottom:6px;background:var(--surface2);border-radius:0 6px 6px 0">' +
-            '<div style="font-size:12px;font-weight:500;color:var(--text)">✓ ' + esc(text.slice(0, 60)) + '</div>' +
-            '<div style="font-size:11px;color:var(--green);margin-top:2px">Completed' + (t.completedAt ? ' · ' + t.completedAt : '') + '</div>' +
-          '</div>';
-        }
+      done.filter(function(t) {
+        return outreachKw.some(function(k) { return (t.text||'').toLowerCase().includes(k); });
+      }).forEach(function(t) {
+        html += '<div style="border-left:3px solid var(--green);padding:6px 10px;margin-bottom:6px;background:var(--surface2);border-radius:0 6px 6px 0">' +
+          '<div style="font-size:12px;font-weight:500;color:var(--text)">✓ ' + esc((t.text||'').slice(0,80)) + '</div>' +
+          '<div style="font-size:11px;color:var(--green);margin-top:2px">Completed' + (t.completedAt ? ' · ' + t.completedAt : '') + '</div>' +
+        '</div>';
       });
 
-      if (!pending.length && !done.length) {
-        html += '<div style="font-size:12px;color:var(--text3)">No outreach tasks found today</div>';
+      if (accounts.length) {
+        html += '<div style="font-size:11px;color:var(--text3);margin-top:4px;margin-bottom:12px">Accounts mentioned: ' + accounts.slice(0,5).map(function(a){return esc(a);}).join(', ') + '</div>';
+      }
+    }
+
+    // Gmail signals
+    if (gmailConnected && gmailData.threads) {
+      const now = Date.now();
+      const sentThreads = gmailData.threads;
+      const inboxThreads = gmailData.inboxThreads || [];
+
+      html += '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin:12px 0 8px">Gmail signals' + (accounts[0] ? ' — ' + esc(accounts[0]) : '') + '</div>';
+      html += '<div style="font-size:11px;color:var(--text3);margin-bottom:8px">' + gmailData.totalFound + ' sent emails found (last 30 days)</div>';
+
+      // Inbox replies — strongest signal
+      if (inboxThreads.length > 0) {
+        html += '<div style="border-left:3px solid var(--green);padding:8px 12px;margin-bottom:8px;background:rgba(74,140,92,0.08);border-radius:0 6px 6px 0">' +
+          '<div style="font-size:12px;font-weight:500;color:var(--green)">🔥 ' + inboxThreads.length + ' reply(ies) received from prospect</div>';
+        inboxThreads.slice(0,2).forEach(function(t) {
+          html += '<div style="margin-top:6px;font-size:11px;color:var(--text2)"><strong>' + esc(t.subject||'') + '</strong><br>' +
+            'From: ' + esc(t.from||'') + ' · ' + esc(t.date||'') + '<br>' +
+            '<span style="color:var(--text3)">' + esc((t.snippet||'').slice(0,150)) + '</span></div>';
+        });
+        html += '</div>';
       }
 
-      // If Gmail connected, run account signal check
-      if (gmailConnected && accounts.length > 0) {
-        html += '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin:10px 0 6px">Gmail signals for accounts</div>';
-        html += '<div style="font-size:12px;color:var(--text3)">Accounts mentioned: ' + accounts.slice(0,5).map(function(a) { return esc(a); }).join(', ') + '</div>';
-        html += '<div style="font-size:11px;color:var(--text3);margin-top:4px">Full Gmail cross-reference requires rep to be logged in. Manager view shows task signals only.</div>';
+      // Most recent sent email
+      if (sentThreads.length > 0) {
+        const last = sentThreads[0];
+        html += '<div style="margin-bottom:8px"><div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:6px">Last sent email</div>';
+        html += '<div style="background:var(--surface2);border-radius:6px;padding:10px 12px">' +
+          '<div style="font-size:12px;font-weight:500;color:var(--text);margin-bottom:2px">' + esc(last.subject||'') + '</div>' +
+          '<div style="font-size:11px;color:var(--text3);margin-bottom:6px">To: ' + esc(last.to||'') + ' · ' + esc(last.date||'') + '</div>' +
+          '<div style="font-size:12px;color:var(--text2);line-height:1.6;max-height:120px;overflow-y:auto;white-space:pre-wrap">' + esc((last.body||'').slice(0,600)) + '</div>' +
+        '</div></div>';
+      }
+
+      // No activity signal
+      if (!sentThreads.length && !inboxThreads.length) {
+        html += '<div style="border-left:3px solid var(--coral);padding:8px 12px;background:rgba(192,82,63,0.08);border-radius:0 6px 6px 0">' +
+          '<div style="font-size:12px;font-weight:500;color:var(--coral)">❄ No email activity found for this account in last 30 days</div>' +
+        '</div>';
       }
     }
 
     resultEl.innerHTML = html || '<div style="font-size:12px;color:var(--text3)">No signals found</div>';
+
   } catch(e) {
     resultEl.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>';
   }
 
-  if (btn) { btn.textContent = '⚡ Check SAM signals'; btn.disabled = false; }
+  if (btn) { btn.textContent = '⚡ Refresh SAM signals'; btn.disabled = false; }
 }
 
 async function delegateTask(memberId, memberEmail) {
