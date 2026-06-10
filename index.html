@@ -190,7 +190,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 .item:hover{border-color:var(--border2);transform:translateY(-1px)}
 .item.dragging{opacity:0.4;border:1px dashed var(--gold)!important}
 .item.drag-over{border-color:var(--gold)!important;transform:translateY(-2px)}
-.drag-handle{width:24px;height:24px;flex-shrink:0;cursor:grab;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:18px;user-select:none;opacity:0.6;margin-top:1px}.drag-handle:hover{opacity:0.8;color:var(--gold)}
+.drag-handle{width:22px;flex-shrink:0;cursor:grab;text-align:center;color:var(--gold);font-size:18px;user-select:none;line-height:1;padding-top:1px}.drag-handle:hover{opacity:0.8;color:var(--gold)}
 .drag-handle:hover{opacity:1;color:var(--gold)}
 .item.done{opacity:0.4}
 .item.done .item-text{text-decoration:line-through}
@@ -1369,7 +1369,7 @@ function renderList(key, items) {
       const priorityBadge = isPriority ? '<span class="priority-badge">Priority</span>' : '';
       const delegatedBadge = item.delegatedBy ? `<span class="delegated-badge">↓ from ${item.delegatedBy.split('@')[0]}</span>` : '';
       const tsMeta = item.addedAt ? `<div class="item-meta">${item.delegatedBy ? 'Delegated ' : 'Added '}${item.addedAt}${item.completedAt ? ' · Completed ' + item.completedAt : ''}</div>` : '';
-      return `<div class="item ${item.done?'done':''} ${isPriority?'priority-task':''}" draggable="true" data-task-idx="${i}"><div class="drag-handle" title="Drag to reorder">≡</div><div class="chk ${item.done?'on':''}" onclick="toggle(${i})"></div><div style="flex:1"><div class="item-text">${esc(displayText)} ${priorityBadge}${delegatedBadge}</div>${tsMeta}</div><button class="idel" onclick="del('tasks',${i})">✕</button></div>`;
+      return `<div class="item ${item.done?'done':''} ${isPriority?'priority-task':''}" data-task-idx="${i}"><div class="drag-handle" title="Drag to reorder">≡</div><div class="chk ${item.done?'on':''}" onclick="toggle(${i})"></div><div style="flex:1"><div class="item-text">${esc(displayText)} ${priorityBadge}${delegatedBadge}</div>${tsMeta}</div><button class="idel" onclick="del('tasks',${i})">✕</button></div>`;
     }
     if (key === 'wins') {
       // Determine win type — priority, delegated, or normal
@@ -1932,9 +1932,9 @@ function connectGmail() {
 }
 
 // ── Drag and drop for tasks ──────────────────────────────────────────────────
-let dragSrcIdx = null;
-let touchDragIdx = null;
-let touchClone = null;
+let _dragSrc = null;
+let _touchSrc = null;
+let _touchClone = null;
 
 function reorderTask(fromIdx, toIdx) {
   const d = dayData(viewDate);
@@ -1949,91 +1949,95 @@ function initTaskDrag() {
   if (!list || list._dragInit) return;
   list._dragInit = true;
 
-  // ── Desktop HTML5 drag ──────────────────────────────────────────────────
-  list.addEventListener('dragstart', function(e) {
+  // Only make item draggable when handle is pressed
+  list.addEventListener('mousedown', function(e) {
+    if (!e.target.closest('.drag-handle')) return;
     const item = e.target.closest('[data-task-idx]');
-    if (!item) return;
-    dragSrcIdx = parseInt(item.getAttribute('data-task-idx'));
-    item.setAttribute('draggable', 'true');
-    setTimeout(() => item.classList.add('dragging'), 0);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', String(dragSrcIdx));
+    if (item) item.setAttribute('draggable', 'true');
+  });
+  list.addEventListener('mouseup', function() {
+    list.querySelectorAll('[data-task-idx]').forEach(el => el.removeAttribute('draggable'));
   });
 
+  // Drag events
+  list.addEventListener('dragstart', function(e) {
+    _dragSrc = e.target.closest('[data-task-idx]');
+    if (!_dragSrc) return;
+    e.dataTransfer.effectAllowed = 'move';
+    setTimeout(() => _dragSrc && _dragSrc.classList.add('dragging'), 0);
+  });
   list.addEventListener('dragover', function(e) {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    const item = e.target.closest('[data-task-idx]');
+    const t = e.target.closest('[data-task-idx]');
     list.querySelectorAll('[data-task-idx]').forEach(el => el.classList.remove('drag-over'));
-    if (item) item.classList.add('drag-over');
+    if (t && t !== _dragSrc) t.classList.add('drag-over');
   });
-
   list.addEventListener('drop', function(e) {
     e.preventDefault();
-    const item = e.target.closest('[data-task-idx]');
-    if (!item || dragSrcIdx === null) return;
-    const dropIdx = parseInt(item.getAttribute('data-task-idx'));
-    if (!isNaN(dropIdx) && dropIdx !== dragSrcIdx) reorderTask(dragSrcIdx, dropIdx);
-    dragSrcIdx = null;
+    const t = e.target.closest('[data-task-idx]');
+    if (!t || !_dragSrc || t === _dragSrc) return;
+    const from = parseInt(_dragSrc.getAttribute('data-task-idx'));
+    const to = parseInt(t.getAttribute('data-task-idx'));
+    if (!isNaN(from) && !isNaN(to)) reorderTask(from, to);
   });
-
   list.addEventListener('dragend', function() {
     list.querySelectorAll('[data-task-idx]').forEach(el => {
       el.classList.remove('dragging');
       el.classList.remove('drag-over');
+      el.removeAttribute('draggable');
     });
-    dragSrcIdx = null;
+    _dragSrc = null;
   });
 
-  // ── Mobile touch drag ───────────────────────────────────────────────────
+  // Touch drag
   list.addEventListener('touchstart', function(e) {
     const handle = e.target.closest('.drag-handle');
     if (!handle) return;
-    const item = handle.closest('[data-task-idx]');
-    if (!item) return;
-    touchDragIdx = parseInt(item.getAttribute('data-task-idx'));
+    _touchSrc = handle.closest('[data-task-idx]');
+    if (!_touchSrc) return;
     e.preventDefault();
-    item.classList.add('dragging');
-    const r = item.getBoundingClientRect();
-    touchClone = item.cloneNode(true);
-    Object.assign(touchClone.style, {
-      position:'fixed', opacity:'0.9', pointerEvents:'none', zIndex:'9999',
-      width: r.width + 'px', left: r.left + 'px', top: r.top + 'px',
-      background:'var(--surface2)', border:'1px solid var(--gold)', borderRadius:'10px'
+    _touchSrc.classList.add('dragging');
+    const r = _touchSrc.getBoundingClientRect();
+    const t = e.touches[0];
+    _touchClone = _touchSrc.cloneNode(true);
+    Object.assign(_touchClone.style, {
+      position:'fixed', pointerEvents:'none', zIndex:'9999', opacity:'0.85',
+      width:r.width+'px', top:(t.clientY-r.height/2)+'px', left:r.left+'px',
+      background:'var(--surface)', border:'1px solid var(--gold)', borderRadius:'10px', boxShadow:'0 8px 24px rgba(0,0,0,0.4)'
     });
-    document.body.appendChild(touchClone);
-  }, { passive: false });
+    document.body.appendChild(_touchClone);
+  }, {passive:false});
 
   list.addEventListener('touchmove', function(e) {
-    if (touchDragIdx === null || !touchClone) return;
+    if (!_touchSrc || !_touchClone) return;
     e.preventDefault();
     const t = e.touches[0];
-    touchClone.style.left = (t.clientX - touchClone.offsetWidth / 2) + 'px';
-    touchClone.style.top = (t.clientY - 40) + 'px';
-    touchClone.style.display = 'none';
-    const el = document.elementFromPoint(t.clientX, t.clientY);
-    touchClone.style.display = '';
-    const target = el ? el.closest('[data-task-idx]') : null;
+    _touchClone.style.top = (t.clientY - _touchClone.offsetHeight/2) + 'px';
+    _touchClone.style.left = (t.clientX - _touchClone.offsetWidth/2) + 'px';
+    _touchClone.style.visibility = 'hidden';
+    const over = document.elementFromPoint(t.clientX, t.clientY);
+    _touchClone.style.visibility = '';
     list.querySelectorAll('[data-task-idx]').forEach(el => el.classList.remove('drag-over'));
-    if (target && target !== touchClone) target.classList.add('drag-over');
-  }, { passive: false });
+    const target = over ? over.closest('[data-task-idx]') : null;
+    if (target && target !== _touchSrc) target.classList.add('drag-over');
+  }, {passive:false});
 
   list.addEventListener('touchend', function(e) {
-    if (touchDragIdx === null) return;
+    if (!_touchSrc) return;
     const t = e.changedTouches[0];
-    if (touchClone) { touchClone.style.display = 'none'; }
-    const el = document.elementFromPoint(t.clientX, t.clientY);
-    const target = el ? el.closest('[data-task-idx]') : null;
-    if (target) {
-      const dropIdx = parseInt(target.getAttribute('data-task-idx'));
-      if (!isNaN(dropIdx) && dropIdx !== touchDragIdx) reorderTask(touchDragIdx, dropIdx);
+    if (_touchClone) { _touchClone.remove(); _touchClone = null; }
+    list.querySelectorAll('[data-task-idx]').forEach(el => el.classList.remove('drag-over'));
+    _touchClone && _touchClone.remove();
+    const over = document.elementFromPoint(t.clientX, t.clientY);
+    const target = over ? over.closest('[data-task-idx]') : null;
+    if (target && target !== _touchSrc) {
+      const from = parseInt(_touchSrc.getAttribute('data-task-idx'));
+      const to = parseInt(target.getAttribute('data-task-idx'));
+      if (!isNaN(from) && !isNaN(to)) reorderTask(from, to);
     }
-    if (touchClone) { touchClone.remove(); touchClone = null; }
-    list.querySelectorAll('[data-task-idx]').forEach(el => {
-      el.classList.remove('dragging'); el.classList.remove('drag-over');
-    });
-    touchDragIdx = null;
-  }, { passive: false });
+    _touchSrc.classList.remove('dragging');
+    _touchSrc = null;
+  }, {passive:false});
 }
 
 let samSearchPeriod = 'all';
