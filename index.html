@@ -524,10 +524,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
         <button id="todayAddBtn" onclick="addTodayItem()">+</button>
       </div>
       <div class="char-hint" id="ch-today"></div>
-      <div style="font-size:11px;color:var(--text3);margin-top:5px;display:flex;align-items:center;gap:4px">
-        <span style="background:rgba(160,117,42,0.15);color:var(--gold);font-weight:700;padding:1px 6px;border-radius:4px;font-family:monospace">*</span>
-        <span>Start with <strong style="color:var(--text2)">*</strong> to mark as high priority — e.g. <em style="color:var(--text3)">* Submit Ferrero proposal today</em></span>
-      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:3px">Tip: start with <span style="color:var(--gold);font-weight:600;font-family:monospace">*</span> to mark as priority</div>
       <!-- Template button for tasks -->
       <div id="today-template-row" style="display:flex;justify-content:flex-end;margin-top:8px">
         <button class="template-btn" onclick="openTemplateManager()">📋 Templates</button>
@@ -1370,10 +1367,9 @@ function renderList(key, items) {
       const isPriority = item.priority || item.text.startsWith('*');
       const displayText = item.text.startsWith('*') ? item.text.slice(1).trim() : item.text;
       const priorityBadge = isPriority ? '<span class="priority-badge">Priority</span>' : '';
-      const dragHandle = '<span class="drag-handle" title="Drag to reorder">⠿</span>';
       const delegatedBadge = item.delegatedBy ? `<span class="delegated-badge">↓ from ${item.delegatedBy.split('@')[0]}</span>` : '';
       const tsMeta = item.addedAt ? `<div class="item-meta">${item.delegatedBy ? 'Delegated ' : 'Added '}${item.addedAt}${item.completedAt ? ' · Completed ' + item.completedAt : ''}</div>` : '';
-      return `<div class="item ${item.done?'done':''} ${isPriority?'priority-task':''}" draggable="true" data-idx="${i}" ondragstart="onTaskDragStart(event,${i})" ondragover="onTaskDragOver(event)" ondrop="onTaskDrop(event,${i})" ondragend="onTaskDragEnd(event)">${dragHandle}<div class="chk ${item.done?'on':''}" onclick="toggle(${i})"></div><div style="flex:1"><div class="item-text">${esc(displayText)} ${priorityBadge}${delegatedBadge}</div>${tsMeta}</div><button class="idel" onclick="del('tasks',${i})">✕</button></div>`;
+      return `<div class="item ${item.done?'done':''} ${isPriority?'priority-task':''}" draggable="true" data-idx="${i}" ondragstart="onTaskDragStart(event,${i})" ondragover="onTaskDragOver(event)" ondrop="onTaskDrop(event,${i})" ondragend="onTaskDragEnd(event)"><div class="drag-handle" title="Drag to reorder">⠿</div><div class="chk ${item.done?'on':''}" onclick="toggle(${i})"></div><div style="flex:1"><div class="item-text">${esc(displayText)} ${priorityBadge}${delegatedBadge}</div>${tsMeta}</div><button class="idel" onclick="del('tasks',${i})">✕</button></div>`;
     }
     if (key === 'wins') {
       // Determine win type — priority, delegated, or normal
@@ -1935,34 +1931,32 @@ function connectGmail() {
   });
 }
 
-// ── Drag and drop for tasks ──────────────────────────────────────────────────
+// ── Drag and drop for tasks (desktop HTML5 + mobile touch) ──────────────────
 let dragSrcIdx = null;
 
+// Desktop drag handlers
 function onTaskDragStart(e, idx) {
   dragSrcIdx = idx;
-  e.target.closest('.item').classList.add('dragging');
+  setTimeout(() => { const el = e.target.closest('.item'); if(el) el.classList.add('dragging'); }, 0);
   e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', idx);
 }
 
 function onTaskDragOver(e) {
   e.preventDefault();
   e.dataTransfer.dropEffect = 'move';
-  const item = e.target.closest('.item');
+  const item = e.target.closest('.item[draggable]');
   if (item) {
-    document.querySelectorAll('.item').forEach(el => el.classList.remove('drag-over'));
+    document.querySelectorAll('.item[draggable]').forEach(el => el.classList.remove('drag-over'));
     item.classList.add('drag-over');
   }
 }
 
 function onTaskDrop(e, dropIdx) {
   e.preventDefault();
+  e.stopPropagation();
   if (dragSrcIdx === null || dragSrcIdx === dropIdx) return;
-  const d = dayData(viewDate);
-  const tasks = d.tasks;
-  const moved = tasks.splice(dragSrcIdx, 1)[0];
-  tasks.splice(dropIdx, 0, moved);
-  save(viewDate);
-  render();
+  reorderTask(dragSrcIdx, dropIdx);
   dragSrcIdx = null;
 }
 
@@ -1972,6 +1966,70 @@ function onTaskDragEnd(e) {
     el.classList.remove('drag-over');
   });
   dragSrcIdx = null;
+}
+
+function reorderTask(fromIdx, toIdx) {
+  const d = dayData(viewDate);
+  const moved = d.tasks.splice(fromIdx, 1)[0];
+  d.tasks.splice(toIdx, 0, moved);
+  save(viewDate);
+  render();
+}
+
+// Mobile touch-based drag
+let touchDragIdx = null;
+let touchClone = null;
+
+function initTouchDrag() {
+  // Delegate touch events on the task list
+  const lists = document.querySelectorAll('#today-list-tasks');
+  lists.forEach(list => {
+    if (list._touchDragInit) return;
+    list._touchDragInit = true;
+
+    list.addEventListener('touchstart', function(e) {
+      const handle = e.target.closest('.drag-handle');
+      if (!handle) return;
+      const item = handle.closest('.item[draggable]');
+      if (!item) return;
+      touchDragIdx = parseInt(item.getAttribute('data-idx'));
+      e.preventDefault();
+
+      // Create visual clone
+      touchClone = item.cloneNode(true);
+      touchClone.style.cssText = 'position:fixed;opacity:0.85;pointer-events:none;z-index:9999;width:' + item.offsetWidth + 'px;background:var(--surface2);border:1px solid var(--gold);border-radius:10px;';
+      document.body.appendChild(touchClone);
+      item.classList.add('dragging');
+    }, { passive: false });
+
+    list.addEventListener('touchmove', function(e) {
+      if (touchDragIdx === null || !touchClone) return;
+      e.preventDefault();
+      const touch = e.touches[0];
+      touchClone.style.left = (touch.clientX - touchClone.offsetWidth / 2) + 'px';
+      touchClone.style.top = (touch.clientY - 30) + 'px';
+
+      // Highlight item under finger
+      const els = document.elementsFromPoint(touch.clientX, touch.clientY);
+      const target = els.find(el => el.classList.contains('item') && el.hasAttribute('draggable') && el !== touchClone);
+      document.querySelectorAll('.item').forEach(el => el.classList.remove('drag-over'));
+      if (target) target.classList.add('drag-over');
+    }, { passive: false });
+
+    list.addEventListener('touchend', function(e) {
+      if (touchDragIdx === null) return;
+      const touch = e.changedTouches[0];
+      const els = document.elementsFromPoint(touch.clientX, touch.clientY);
+      const target = els.find(el => el.classList.contains('item') && el.hasAttribute('draggable'));
+      if (target) {
+        const dropIdx = parseInt(target.getAttribute('data-idx'));
+        if (!isNaN(dropIdx) && dropIdx !== touchDragIdx) reorderTask(touchDragIdx, dropIdx);
+      }
+      if (touchClone) { touchClone.remove(); touchClone = null; }
+      document.querySelectorAll('.item').forEach(el => { el.classList.remove('dragging'); el.classList.remove('drag-over'); });
+      touchDragIdx = null;
+    });
+  });
 }
 
 let samSearchPeriod = 'all';
