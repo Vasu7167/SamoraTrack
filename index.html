@@ -2128,7 +2128,7 @@ async function renderTeam() {
           '<div class="m-toggle" id="mtog-' + idx + '">▾</div>' +
         '</div>' +
         '<div style="padding:8px 16px;border-top:1px solid var(--border)">' +
-          '<button onclick="event.stopPropagation();runSamCheck(' + JSON.stringify(m.user_id) + ',' + JSON.stringify(m.email) + ')" style="width:100%;padding:8px;border-radius:var(--radius-sm);background:rgba(160,117,42,0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">⚡ Check SAM signals</button>' +
+          '<button id="sam-btn-' + m.user_id + '" onclick="event.stopPropagation();runSamCheck(' + JSON.stringify(m.user_id) + ',' + JSON.stringify(m.email) + ')" style="width:100%;padding:8px;border-radius:var(--radius-sm);background:rgba(160,117,42,0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">⚡ Check SAM signals</button>' +
           '<div id="sam-result-' + m.user_id + '" style="margin-top:8px"></div>' +
         '</div>' +
         '<div class="member-detail" id="mdet-' + idx + '">' + renderMemberDetail(d, m.user_id, m.email) + '</div>' +
@@ -2190,8 +2190,8 @@ function renderMemberDetail(d, memberId, memberEmail) {
 
 async function runSamCheck(memberId, memberEmail) {
   const resultEl = document.getElementById('sam-result-' + memberId);
-  const btn = document.querySelector('#sam-check-' + memberId + ' button');
-  if (!resultEl) return;
+  const btn = document.getElementById('sam-btn-' + memberId);
+  if (!resultEl) { alert('UI error: result container not found'); return; }
 
   if (btn) { btn.textContent = '⚡ Scanning…'; btn.disabled = true; }
   resultEl.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0">Reading ' + esc(memberEmail.split('@')[0]) + ' Gmail + SamoraTrack…</div>';
@@ -2331,7 +2331,6 @@ async function runSamCheck(memberId, memberEmail) {
 
   if (btn) { btn.textContent = '⚡ Refresh SAM signals'; btn.disabled = false; }
 }
-
 async function delegateTask(memberId, memberEmail) {
   const inp = document.getElementById('delegate-input-' + memberId);
   const text = inp.value.trim();
