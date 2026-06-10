@@ -1691,6 +1691,7 @@ function renderToday() {
   const addBox = document.getElementById('today-add-box');
   if (addBox) addBox.style.display = todayActiveSection === 'misses' ? 'none' : '';
   updateSectionPillCounts();
+  setTimeout(initTaskDrag, 0);
 }
 
 
@@ -1945,9 +1946,11 @@ function reorderTask(fromIdx, toIdx) {
 }
 
 function initTaskDrag() {
-  const list = document.getElementById('today-list-tasks');
-  if (!list || list._dragInit) return;
-  list._dragInit = true;
+  const old = document.getElementById('today-list-tasks');
+  if (!old) return;
+  // Replace node to clear any previous listeners
+  const list = old.cloneNode(true);
+  old.parentNode.replaceChild(list, old);
 
   // Only make item draggable when handle is pressed
   list.addEventListener('mousedown', function(e) {
