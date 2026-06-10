@@ -190,7 +190,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 .item:hover{border-color:var(--border2);transform:translateY(-1px)}
 .item.dragging{opacity:0.4;border:1px dashed var(--gold)!important}
 .item.drag-over{border-color:var(--gold)!important;transform:translateY(-2px)}
-.drag-handle{width:20px;flex-shrink:0;cursor:grab;display:flex;align-items:center;justify-content:center;color:var(--text3);opacity:0.35;font-size:14px;user-select:none;touch-action:none}.drag-handle:hover{opacity:0.8;color:var(--gold)}
+.drag-handle{width:24px;height:24px;flex-shrink:0;cursor:grab;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:18px;user-select:none;opacity:0.6;margin-top:1px}.drag-handle:hover{opacity:0.8;color:var(--gold)}
 .drag-handle:hover{opacity:1;color:var(--gold)}
 .item.done{opacity:0.4}
 .item.done .item-text{text-decoration:line-through}
@@ -1369,7 +1369,7 @@ function renderList(key, items) {
       const priorityBadge = isPriority ? '<span class="priority-badge">Priority</span>' : '';
       const delegatedBadge = item.delegatedBy ? `<span class="delegated-badge">↓ from ${item.delegatedBy.split('@')[0]}</span>` : '';
       const tsMeta = item.addedAt ? `<div class="item-meta">${item.delegatedBy ? 'Delegated ' : 'Added '}${item.addedAt}${item.completedAt ? ' · Completed ' + item.completedAt : ''}</div>` : '';
-      return `<div class="item ${item.done?'done':''} ${isPriority?'priority-task':''}" draggable="true" data-idx="${i}" ondragstart="onTaskDragStart(event,${i})" ondragover="onTaskDragOver(event)" ondrop="onTaskDrop(event,${i})" ondragend="onTaskDragEnd(event)"><div class="drag-handle" title="Drag to reorder">≡</div><div class="chk ${item.done?'on':''}" onclick="toggle(${i})"></div><div style="flex:1"><div class="item-text">${esc(displayText)} ${priorityBadge}${delegatedBadge}</div>${tsMeta}</div><button class="idel" onclick="del('tasks',${i})">✕</button></div>`;
+      return `<div class="item ${item.done?'done':''} ${isPriority?'priority-task':''}" draggable="true" data-task-idx="${i}"><div class="drag-handle" title="Drag to reorder">≡</div><div class="chk ${item.done?'on':''}" onclick="toggle(${i})"></div><div style="flex:1"><div class="item-text">${esc(displayText)} ${priorityBadge}${delegatedBadge}</div>${tsMeta}</div><button class="idel" onclick="del('tasks',${i})">✕</button></div>`;
     }
     if (key === 'wins') {
       // Determine win type — priority, delegated, or normal
@@ -1931,42 +1931,10 @@ function connectGmail() {
   });
 }
 
-// ── Drag and drop for tasks (desktop HTML5 + mobile touch) ──────────────────
+// ── Drag and drop for tasks ──────────────────────────────────────────────────
 let dragSrcIdx = null;
-
-// Desktop drag handlers
-function onTaskDragStart(e, idx) {
-  dragSrcIdx = idx;
-  setTimeout(() => { const el = e.target.closest('.item'); if(el) el.classList.add('dragging'); }, 0);
-  e.dataTransfer.effectAllowed = 'move';
-  e.dataTransfer.setData('text/plain', idx);
-}
-
-function onTaskDragOver(e) {
-  e.preventDefault();
-  e.dataTransfer.dropEffect = 'move';
-  const item = e.target.closest('.item[draggable]');
-  if (item) {
-    document.querySelectorAll('.item[draggable]').forEach(el => el.classList.remove('drag-over'));
-    item.classList.add('drag-over');
-  }
-}
-
-function onTaskDrop(e, dropIdx) {
-  e.preventDefault();
-  e.stopPropagation();
-  if (dragSrcIdx === null || dragSrcIdx === dropIdx) return;
-  reorderTask(dragSrcIdx, dropIdx);
-  dragSrcIdx = null;
-}
-
-function onTaskDragEnd(e) {
-  document.querySelectorAll('.item').forEach(el => {
-    el.classList.remove('dragging');
-    el.classList.remove('drag-over');
-  });
-  dragSrcIdx = null;
-}
+let touchDragIdx = null;
+let touchClone = null;
 
 function reorderTask(fromIdx, toIdx) {
   const d = dayData(viewDate);
@@ -1976,60 +1944,96 @@ function reorderTask(fromIdx, toIdx) {
   render();
 }
 
-// Mobile touch-based drag
-let touchDragIdx = null;
-let touchClone = null;
+function initTaskDrag() {
+  const list = document.getElementById('today-list-tasks');
+  if (!list || list._dragInit) return;
+  list._dragInit = true;
 
-function initTouchDrag() {
-  // Delegate touch events on the task list
-  const lists = document.querySelectorAll('#today-list-tasks');
-  lists.forEach(list => {
-    if (list._touchDragInit) return;
-    list._touchDragInit = true;
-
-    list.addEventListener('touchstart', function(e) {
-      const handle = e.target.closest('.drag-handle');
-      if (!handle) return;
-      const item = handle.closest('.item[draggable]');
-      if (!item) return;
-      touchDragIdx = parseInt(item.getAttribute('data-idx'));
-      e.preventDefault();
-
-      // Create visual clone
-      touchClone = item.cloneNode(true);
-      touchClone.style.cssText = 'position:fixed;opacity:0.85;pointer-events:none;z-index:9999;width:' + item.offsetWidth + 'px;background:var(--surface2);border:1px solid var(--gold);border-radius:10px;';
-      document.body.appendChild(touchClone);
-      item.classList.add('dragging');
-    }, { passive: false });
-
-    list.addEventListener('touchmove', function(e) {
-      if (touchDragIdx === null || !touchClone) return;
-      e.preventDefault();
-      const touch = e.touches[0];
-      touchClone.style.left = (touch.clientX - touchClone.offsetWidth / 2) + 'px';
-      touchClone.style.top = (touch.clientY - 30) + 'px';
-
-      // Highlight item under finger
-      const els = document.elementsFromPoint(touch.clientX, touch.clientY);
-      const target = els.find(el => el.classList.contains('item') && el.hasAttribute('draggable') && el !== touchClone);
-      document.querySelectorAll('.item').forEach(el => el.classList.remove('drag-over'));
-      if (target) target.classList.add('drag-over');
-    }, { passive: false });
-
-    list.addEventListener('touchend', function(e) {
-      if (touchDragIdx === null) return;
-      const touch = e.changedTouches[0];
-      const els = document.elementsFromPoint(touch.clientX, touch.clientY);
-      const target = els.find(el => el.classList.contains('item') && el.hasAttribute('draggable'));
-      if (target) {
-        const dropIdx = parseInt(target.getAttribute('data-idx'));
-        if (!isNaN(dropIdx) && dropIdx !== touchDragIdx) reorderTask(touchDragIdx, dropIdx);
-      }
-      if (touchClone) { touchClone.remove(); touchClone = null; }
-      document.querySelectorAll('.item').forEach(el => { el.classList.remove('dragging'); el.classList.remove('drag-over'); });
-      touchDragIdx = null;
-    });
+  // ── Desktop HTML5 drag ──────────────────────────────────────────────────
+  list.addEventListener('dragstart', function(e) {
+    const item = e.target.closest('[data-task-idx]');
+    if (!item) return;
+    dragSrcIdx = parseInt(item.getAttribute('data-task-idx'));
+    item.setAttribute('draggable', 'true');
+    setTimeout(() => item.classList.add('dragging'), 0);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(dragSrcIdx));
   });
+
+  list.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const item = e.target.closest('[data-task-idx]');
+    list.querySelectorAll('[data-task-idx]').forEach(el => el.classList.remove('drag-over'));
+    if (item) item.classList.add('drag-over');
+  });
+
+  list.addEventListener('drop', function(e) {
+    e.preventDefault();
+    const item = e.target.closest('[data-task-idx]');
+    if (!item || dragSrcIdx === null) return;
+    const dropIdx = parseInt(item.getAttribute('data-task-idx'));
+    if (!isNaN(dropIdx) && dropIdx !== dragSrcIdx) reorderTask(dragSrcIdx, dropIdx);
+    dragSrcIdx = null;
+  });
+
+  list.addEventListener('dragend', function() {
+    list.querySelectorAll('[data-task-idx]').forEach(el => {
+      el.classList.remove('dragging');
+      el.classList.remove('drag-over');
+    });
+    dragSrcIdx = null;
+  });
+
+  // ── Mobile touch drag ───────────────────────────────────────────────────
+  list.addEventListener('touchstart', function(e) {
+    const handle = e.target.closest('.drag-handle');
+    if (!handle) return;
+    const item = handle.closest('[data-task-idx]');
+    if (!item) return;
+    touchDragIdx = parseInt(item.getAttribute('data-task-idx'));
+    e.preventDefault();
+    item.classList.add('dragging');
+    const r = item.getBoundingClientRect();
+    touchClone = item.cloneNode(true);
+    Object.assign(touchClone.style, {
+      position:'fixed', opacity:'0.9', pointerEvents:'none', zIndex:'9999',
+      width: r.width + 'px', left: r.left + 'px', top: r.top + 'px',
+      background:'var(--surface2)', border:'1px solid var(--gold)', borderRadius:'10px'
+    });
+    document.body.appendChild(touchClone);
+  }, { passive: false });
+
+  list.addEventListener('touchmove', function(e) {
+    if (touchDragIdx === null || !touchClone) return;
+    e.preventDefault();
+    const t = e.touches[0];
+    touchClone.style.left = (t.clientX - touchClone.offsetWidth / 2) + 'px';
+    touchClone.style.top = (t.clientY - 40) + 'px';
+    touchClone.style.display = 'none';
+    const el = document.elementFromPoint(t.clientX, t.clientY);
+    touchClone.style.display = '';
+    const target = el ? el.closest('[data-task-idx]') : null;
+    list.querySelectorAll('[data-task-idx]').forEach(el => el.classList.remove('drag-over'));
+    if (target && target !== touchClone) target.classList.add('drag-over');
+  }, { passive: false });
+
+  list.addEventListener('touchend', function(e) {
+    if (touchDragIdx === null) return;
+    const t = e.changedTouches[0];
+    if (touchClone) { touchClone.style.display = 'none'; }
+    const el = document.elementFromPoint(t.clientX, t.clientY);
+    const target = el ? el.closest('[data-task-idx]') : null;
+    if (target) {
+      const dropIdx = parseInt(target.getAttribute('data-task-idx'));
+      if (!isNaN(dropIdx) && dropIdx !== touchDragIdx) reorderTask(touchDragIdx, dropIdx);
+    }
+    if (touchClone) { touchClone.remove(); touchClone = null; }
+    list.querySelectorAll('[data-task-idx]').forEach(el => {
+      el.classList.remove('dragging'); el.classList.remove('drag-over');
+    });
+    touchDragIdx = null;
+  }, { passive: false });
 }
 
 let samSearchPeriod = 'all';
