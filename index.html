@@ -667,6 +667,27 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 
   <!-- ── Team (Manager + Super Admin) ── -->
   <div class="panel" id="panel-team">
+
+    <!-- Manager SAM Search -->
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">⚡ SAM Account Search</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <select id="mgrRepSelect" style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;flex:0 0 auto">
+          <option value="">All reps</option>
+        </select>
+        <input id="mgrSearchInput" placeholder="Search account — Ferrero, Marico…" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none" onkeydown="if(event.key==='Enter')runManagerSearch()"/>
+        <button onclick="runManagerSearch()" style="padding:7px 14px;border-radius:var(--radius-sm);background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0">Search</button>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <span style="font-size:11px;color:var(--text3);align-self:center">Period:</span>
+        <button class="sam-period-btn active" id="mgr-period-all" onclick="setMgrPeriod('all',this)">All time</button>
+        <button class="sam-period-btn" id="mgr-period-30" onclick="setMgrPeriod('30',this)">30 days</button>
+        <button class="sam-period-btn" id="mgr-period-7" onclick="setMgrPeriod('7',this)">This week</button>
+        <button class="sam-period-btn" id="mgr-period-today" onclick="setMgrPeriod('today',this)">Today</button>
+      </div>
+      <div id="mgrSearchOutput" style="margin-top:10px"></div>
+    </div>
+
     <div class="filter-row">
       <span class="filter-label">Viewing date:</span>
       <input type="date" class="date-input" id="teamDateInput" onchange="renderTeam()"/>
@@ -2102,6 +2123,7 @@ async function renderTeam() {
     const members = await sbGet(q);
     const others = (members || []).filter(m => m.user_id !== currentUser.id);
     if (!others.length) { tl.innerHTML = '<div class="empty"><div class="empty-icon">👥</div>No team members found. Share your org code for members to join.</div>'; return; }
+    populateMgrRepSelect(others);
     const uids = others.map(m => m.user_id);
     const rows = await sbGet('daytrack?day_key=eq.' + selectedDate + '&user_id=in.(' + uids.join(',') + ')&select=user_id,data');
     const dataMap = {};
@@ -2193,10 +2215,12 @@ async function runSamCheck(memberId, memberEmail) {
   resultEl.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0">Reading ' + esc(memberEmail.split('@')[0]) + ' Gmail + SamoraTrack…</div>';
 
   try {
-    const today = todayKey();
+    // Use the date selected in the team date picker, not just today
+    const teamDateEl = document.getElementById('teamDateInput');
+    const checkDate = (teamDateEl && teamDateEl.value) ? teamDateEl.value : todayKey();
 
-    // 1. Get today's tasks for this rep
-    const dtRes = await fetch(SB_URL + '/rest/v1/daytrack?user_id=eq.' + memberId + '&day_key=eq.' + today + '&select=data', {
+    // 1. Get tasks for this rep on the selected date
+    const dtRes = await fetch(SB_URL + '/rest/v1/daytrack?user_id=eq.' + memberId + '&day_key=eq.' + checkDate + '&select=data', {
       headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token }
     });
     const dtData = await dtRes.json();
@@ -2369,6 +2393,129 @@ async function delegateTask(memberId, memberEmail) {
   } catch(e) {
     alert('Failed to delegate: ' + e.message);
   }
+}
+
+let mgrSearchPeriod = 'all';
+
+function setMgrPeriod(period, btn) {
+  mgrSearchPeriod = period;
+  document.querySelectorAll('#mgr-period-all,#mgr-period-30,#mgr-period-7,#mgr-period-today').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function populateMgrRepSelect(members) {
+  const sel = document.getElementById('mgrRepSelect');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">All reps</option>' +
+    members.map(m => '<option value="' + m.user_id + '">' + esc(m.email.split('@')[0]) + '</option>').join('');
+}
+
+async function runManagerSearch() {
+  const query = document.getElementById('mgrSearchInput')?.value?.trim();
+  const repId = document.getElementById('mgrRepSelect')?.value;
+  const out = document.getElementById('mgrSearchOutput');
+  if (!query) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Please enter an account name</div>'; return; }
+  if (!out) return;
+
+  const days = mgrSearchPeriod === 'all' ? 0 : mgrSearchPeriod === 'today' ? 1 : parseInt(mgrSearchPeriod);
+  const periodLabel = mgrSearchPeriod === 'all' ? 'All time' : mgrSearchPeriod === 'today' ? 'Today' : 'Last ' + mgrSearchPeriod + ' days';
+
+  out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0">Scanning ' + esc(query) + ' across ' + (repId ? 'selected rep' : 'all reps') + ' Gmail (' + periodLabel + ')…</div>';
+
+  // Get list of reps to scan
+  let repsToScan = [];
+  try {
+    const q = profile?.role === 'super_admin'
+      ? 'user_profiles?org_id=eq.' + profile.org_id + '&select=user_id,email,role'
+      : 'user_profiles?org_id=eq.' + profile.org_id + '&manager_id=eq.' + currentUser.id + '&select=user_id,email,role';
+    const members = await sbGet(q);
+    repsToScan = repId ? members.filter(m => m.user_id === repId) : (members || []);
+  } catch(e) {
+    out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error loading team: ' + esc(e.message) + '</div>';
+    return;
+  }
+
+  if (!repsToScan.length) {
+    out.innerHTML = '<div style="font-size:12px;color:var(--text3)">No reps found</div>';
+    return;
+  }
+
+  // Scan each rep
+  let html = '<div style="margin-top:4px">';
+
+  for (const rep of repsToScan) {
+    html += '<div style="background:var(--surface2);border-radius:var(--radius);padding:12px 14px;margin-bottom:10px">';
+    html += '<div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:8px">👤 ' + esc(rep.email.split('@')[0]) + ' <span style="font-size:11px;color:var(--text3)">(' + esc(rep.email) + ')</span></div>';
+
+    try {
+      const r = await fetch(EDGE_FN_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
+        body: JSON.stringify({ action: 'get_rep_signals', rep_user_id: rep.user_id, query, days })
+      });
+      const data = await r.json();
+
+      if (!data.connected) {
+        html += '<div style="font-size:12px;color:var(--text3)">Gmail not connected</div>';
+      } else {
+        const sent = data.threads || [];
+        const inbox = data.inboxThreads || [];
+        const total = data.totalFound || 0;
+
+        // Stats row — today / week / 30 days
+        const now = Date.now();
+        const todaySent = sent.filter(t => new Date(t.date).toISOString().split('T')[0] === todayKey()).length;
+        const weekSent = sent.filter(t => (now - new Date(t.date).getTime()) < 7*86400000).length;
+
+        html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">';
+        html += '<div style="background:var(--surface);border-radius:var(--radius-sm);padding:8px;text-align:center"><div style="font-size:18px;font-weight:500;color:var(--gold-lt)">' + total + '</div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em">' + periodLabel + '</div></div>';
+        html += '<div style="background:var(--surface);border-radius:var(--radius-sm);padding:8px;text-align:center"><div style="font-size:18px;font-weight:500;color:var(--gold-lt)">' + inbox.length + '</div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em">Replies</div></div>';
+        html += '<div style="background:var(--surface);border-radius:var(--radius-sm);padding:8px;text-align:center"><div style="font-size:18px;font-weight:500;color:' + (inbox.length > 0 ? 'var(--green)' : 'var(--text3)') + '">' + (inbox.length > 0 ? '🔥 Active' : '○ Quiet') + '</div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em">Signal</div></div>';
+        html += '</div>';
+
+        // Period breakdown
+        html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px">';
+        const todayCount = sent.filter(t => new Date(t.date).toISOString().split('T')[0] === todayKey()).length;
+        const weekCount = sent.filter(t => (now - new Date(t.date).getTime()) < 7*86400000).length;
+        const monthCount = sent.filter(t => (now - new Date(t.date).getTime()) < 30*86400000).length;
+        html += '<div style="font-size:11px;color:var(--text3);text-align:center">Today<br><span style="font-size:15px;color:var(--text);font-weight:500">' + todayCount + '</span></div>';
+        html += '<div style="font-size:11px;color:var(--text3);text-align:center">This week<br><span style="font-size:15px;color:var(--text);font-weight:500">' + weekCount + '</span></div>';
+        html += '<div style="font-size:11px;color:var(--text3);text-align:center">30 days<br><span style="font-size:15px;color:var(--text);font-weight:500">' + monthCount + '</span></div>';
+        html += '</div>';
+
+        // Follow-up detection (emails to same TO address)
+        const toMap = {};
+        sent.forEach(t => { const to = (t.to||'').toLowerCase(); toMap[to] = (toMap[to]||0)+1; });
+        const followUps = Object.entries(toMap).filter(([,v]) => v > 1);
+        if (followUps.length) {
+          html += '<div style="font-size:11px;color:var(--amber);margin-bottom:8px">↩ Follow-up chains: ' + followUps.map(([k,v]) => esc(k.split('<')[0].trim()||k) + ' ×' + v).join(', ') + '</div>';
+        }
+
+        // Inbox replies
+        if (inbox.length > 0) {
+          html += '<div style="border-left:3px solid var(--green);padding:6px 10px;margin-bottom:6px;background:rgba(74,140,92,0.08);border-radius:0 6px 6px 0">';
+          html += '<div style="font-size:12px;font-weight:500;color:var(--green)">🔥 ' + inbox.length + ' reply(ies) from prospect</div>';
+          inbox.slice(0,2).forEach(t => {
+            html += '<div style="font-size:11px;color:var(--text2);margin-top:4px">' + esc(t.subject||'') + ' · ' + esc((t.snippet||'').slice(0,100)) + '</div>';
+          });
+          html += '</div>';
+        }
+
+        // Last email
+        if (sent.length > 0) {
+          const last = sent[0];
+          html += '<div style="font-size:11px;color:var(--text3);margin-top:4px">Last sent: <span style="color:var(--text2)">' + esc(last.subject||'') + '</span> · ' + esc(last.date||'') + '</div>';
+        }
+      }
+    } catch(e) {
+      html += '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>';
+    }
+
+    html += '</div>';
+  }
+
+  html += '</div>';
+  out.innerHTML = html;
 }
 
 function toggleMember(idx) {
