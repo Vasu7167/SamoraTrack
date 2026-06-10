@@ -1220,6 +1220,7 @@ function launchApp() {
   render();
   // Re-render cal strip after browser paints the flex layout (macrotask, not microtask)
   setTimeout(function() { _lastCalDate = null; renderCalStrip(); }, 0);
+  setTimeout(initSortable, 200);
   if (SB_URL && SB_KEY) {
     syncDown().then(() => { runCarryOver(); _lastCalDate = null; render(); });
   }
@@ -1942,23 +1943,27 @@ let _sortable = null;
 function initSortable() {
   if (todayActiveSection !== 'tasks') return;
   const el = document.getElementById('today-list-tasks');
-  if (!el || typeof Sortable === 'undefined') return;
-  if (_sortable) _sortable.destroy();
-  _sortable = Sortable.create(el, {
-    animation: 150,
-    handle: '.drag-handle',
-    ghostClass: 'sortable-ghost',
-    chosenClass: 'sortable-chosen',
-    onEnd: function(evt) {
-      if (evt.oldIndex === evt.newIndex) return;
-      const d = dayData(viewDate);
-      const moved = d.tasks.splice(evt.oldIndex, 1)[0];
-      d.tasks.splice(evt.newIndex, 0, moved);
-      save(viewDate);
-      // Don't call render() — Sortable already moved the DOM node
-      updateBadges();
-    }
-  });
+  if (!el) return;
+  if (typeof Sortable === 'undefined') { console.error('Sortable not loaded'); return; }
+  try { if (_sortable) _sortable.destroy(); } catch(e) {}
+  _sortable = null;
+  try {
+    _sortable = Sortable.create(el, {
+      animation: 150,
+      handle: '.drag-handle',
+      ghostClass: 'sortable-ghost',
+      chosenClass: 'sortable-chosen',
+      onEnd: function(evt) {
+        if (evt.oldIndex === evt.newIndex) return;
+        const d = dayData(viewDate);
+        const moved = d.tasks.splice(evt.oldIndex, 1)[0];
+        d.tasks.splice(evt.newIndex, 0, moved);
+        save(viewDate);
+        updateBadges();
+        updateSectionPillCounts();
+      }
+    });
+  } catch(e) { console.error('Sortable init failed:', e); }
 }
 
 let samSearchPeriod = 'all';
