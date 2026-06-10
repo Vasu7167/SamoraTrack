@@ -2083,7 +2083,53 @@ async function runSamAccountSearch() {
       html += '</div>';
     }
 
-    // Key contacts
+    // Extract all unique prospect email addresses from sent threads
+    const allRecipients = {};
+    (data.threads || []).forEach(function(t) {
+      // Parse TO field — can be "Name <email>" or just "email"
+      const toRaw = t.to || '';
+      const emailMatches = toRaw.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g) || [];
+      emailMatches.forEach(function(email) {
+        const domain = email.split('@')[1] || '';
+        // Skip own domain
+        if (!allRecipients[email]) allRecipients[email] = { email, domain, count: 0, lastDate: '' };
+        allRecipients[email].count++;
+        if (!allRecipients[email].lastDate || t.date > allRecipients[email].lastDate) {
+          allRecipients[email].lastDate = t.date;
+        }
+      });
+      // Also parse CC
+      const ccRaw = t.cc || '';
+      const ccMatches = ccRaw.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g) || [];
+      ccMatches.forEach(function(email) {
+        if (!allRecipients[email]) allRecipients[email] = { email, domain: email.split('@')[1]||'', count: 0, lastDate: '' };
+        allRecipients[email].count++;
+      });
+    });
+
+    const recipientList = Object.values(allRecipients).sort(function(a, b) { return b.count - a.count; });
+
+    // Prospect email IDs section
+    if (recipientList.length > 0) {
+      html += '<div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px">';
+      html += '<div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">📧 Prospect email IDs contacted (' + recipientList.length + ')</div>';
+      html += '<div style="display:flex;flex-direction:column;gap:6px">';
+      recipientList.forEach(function(r) {
+        html += '<div style="display:flex;align-items:center;justify-content:space-between;background:var(--surface2);border-radius:6px;padding:7px 12px">' +
+          '<div>' +
+            '<div style="font-size:12px;color:var(--text);font-weight:500">' + esc(r.email) + '</div>' +
+            '<div style="font-size:10px;color:var(--text3);margin-top:1px">' + esc(r.domain) + '</div>' +
+          '</div>' +
+          '<div style="text-align:right">' +
+            '<div style="font-size:12px;font-weight:600;color:var(--gold-lt)">' + r.count + ' email' + (r.count > 1 ? 's' : '') + '</div>' +
+            (r.lastDate ? '<div style="font-size:10px;color:var(--text3)">Last: ' + esc(r.lastDate.slice(0,16)) + '</div>' : '') +
+          '</div>' +
+        '</div>';
+      });
+      html += '</div></div>';
+    }
+
+    // Key contacts from Gemini (if any)
     if (keyContacts.length) {
       html += '<div style="margin-top:12px"><div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Key contacts</div>';
       html += '<div style="display:flex;gap:6px;flex-wrap:wrap">' + keyContacts.map(function(c) {
