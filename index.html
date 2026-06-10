@@ -2639,6 +2639,31 @@ async function runManagerSearch() {
           const last = sent[0];
           html += '<div style="font-size:11px;color:var(--text3);margin-top:4px">Last sent: <span style="color:var(--text2)">' + esc(last.subject||'') + '</span> · ' + esc(last.date||'') + '</div>';
         }
+
+        // Prospect email IDs
+        const allRecipients = {};
+        sent.forEach(function(t) {
+          const toRaw = t.to || '';
+          const emailMatches = toRaw.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g) || [];
+          emailMatches.forEach(function(email) {
+            if (!allRecipients[email]) allRecipients[email] = { email, count: 0, lastDate: '' };
+            allRecipients[email].count++;
+            if (!allRecipients[email].lastDate || t.date > allRecipients[email].lastDate) allRecipients[email].lastDate = t.date;
+          });
+        });
+        const recipientList = Object.values(allRecipients).sort(function(a, b) { return b.count - a.count; });
+        if (recipientList.length > 0) {
+          html += '<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">';
+          html += '<div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">📧 Prospects contacted (' + recipientList.length + ')</div>';
+          html += '<div style="display:flex;flex-direction:column;gap:4px">';
+          recipientList.forEach(function(r) {
+            html += '<div style="display:flex;align-items:center;justify-content:space-between;background:var(--surface);border-radius:6px;padding:6px 10px">' +
+              '<div style="font-size:11px;color:var(--text)">' + esc(r.email) + '</div>' +
+              '<div style="font-size:11px;font-weight:600;color:var(--gold-lt)">' + r.count + '×' + (r.lastDate ? ' · ' + esc(r.lastDate.slice(0,16)) : '') + '</div>' +
+            '</div>';
+          });
+          html += '</div></div>';
+        }
       }
     } catch(e) {
       html += '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>';
