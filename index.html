@@ -188,6 +188,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 .items{display:flex;flex-direction:column;gap:8px}
 .item{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;display:flex;align-items:flex-start;gap:12px;transition:all 0.2s;animation:slideIn 0.18s ease}
 .item:hover{border-color:var(--border2);transform:translateY(-1px)}
+.item.dragging{opacity:0.4;border:1px dashed var(--gold)!important}
+.item.drag-over{border-color:var(--gold)!important;transform:translateY(-2px)}
+.drag-handle{font-size:16px;color:var(--text3);cursor:grab;margin-right:4px;flex-shrink:0;line-height:1;user-select:none;opacity:0.5}
+.drag-handle:hover{opacity:1;color:var(--gold)}
 .item.done{opacity:0.4}
 .item.done .item-text{text-decoration:line-through}
 .item.win-item{border-left:2px solid var(--green)}
@@ -520,6 +524,10 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
         <button id="todayAddBtn" onclick="addTodayItem()">+</button>
       </div>
       <div class="char-hint" id="ch-today"></div>
+      <div style="font-size:11px;color:var(--text3);margin-top:5px;display:flex;align-items:center;gap:4px">
+        <span style="background:rgba(160,117,42,0.15);color:var(--gold);font-weight:700;padding:1px 6px;border-radius:4px;font-family:monospace">*</span>
+        <span>Start with <strong style="color:var(--text2)">*</strong> to mark as high priority — e.g. <em style="color:var(--text3)">* Submit Ferrero proposal today</em></span>
+      </div>
       <!-- Template button for tasks -->
       <div id="today-template-row" style="display:flex;justify-content:flex-end;margin-top:8px">
         <button class="template-btn" onclick="openTemplateManager()">📋 Templates</button>
@@ -1362,9 +1370,10 @@ function renderList(key, items) {
       const isPriority = item.priority || item.text.startsWith('*');
       const displayText = item.text.startsWith('*') ? item.text.slice(1).trim() : item.text;
       const priorityBadge = isPriority ? '<span class="priority-badge">Priority</span>' : '';
+      const dragHandle = '<span class="drag-handle" title="Drag to reorder">⠿</span>';
       const delegatedBadge = item.delegatedBy ? `<span class="delegated-badge">↓ from ${item.delegatedBy.split('@')[0]}</span>` : '';
       const tsMeta = item.addedAt ? `<div class="item-meta">${item.delegatedBy ? 'Delegated ' : 'Added '}${item.addedAt}${item.completedAt ? ' · Completed ' + item.completedAt : ''}</div>` : '';
-      return `<div class="item ${item.done?'done':''} ${isPriority?'priority-task':''}"><div class="chk ${item.done?'on':''}" onclick="toggle(${i})"></div><div style="flex:1"><div class="item-text">${esc(displayText)} ${priorityBadge}${delegatedBadge}</div>${tsMeta}</div><button class="idel" onclick="del('tasks',${i})">✕</button></div>`;
+      return `<div class="item ${item.done?'done':''} ${isPriority?'priority-task':''}" draggable="true" data-idx="${i}" ondragstart="onTaskDragStart(event,${i})" ondragover="onTaskDragOver(event)" ondrop="onTaskDrop(event,${i})" ondragend="onTaskDragEnd(event)">${dragHandle}<div class="chk ${item.done?'on':''}" onclick="toggle(${i})"></div><div style="flex:1"><div class="item-text">${esc(displayText)} ${priorityBadge}${delegatedBadge}</div>${tsMeta}</div><button class="idel" onclick="del('tasks',${i})">✕</button></div>`;
     }
     if (key === 'wins') {
       // Determine win type — priority, delegated, or normal
@@ -1924,6 +1933,45 @@ function connectGmail() {
       if (btn) { btn.textContent = 'Try again'; btn.disabled = false; btn.onclick = connectGmail; }
     }
   });
+}
+
+// ── Drag and drop for tasks ──────────────────────────────────────────────────
+let dragSrcIdx = null;
+
+function onTaskDragStart(e, idx) {
+  dragSrcIdx = idx;
+  e.target.closest('.item').classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function onTaskDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const item = e.target.closest('.item');
+  if (item) {
+    document.querySelectorAll('.item').forEach(el => el.classList.remove('drag-over'));
+    item.classList.add('drag-over');
+  }
+}
+
+function onTaskDrop(e, dropIdx) {
+  e.preventDefault();
+  if (dragSrcIdx === null || dragSrcIdx === dropIdx) return;
+  const d = dayData(viewDate);
+  const tasks = d.tasks;
+  const moved = tasks.splice(dragSrcIdx, 1)[0];
+  tasks.splice(dropIdx, 0, moved);
+  save(viewDate);
+  render();
+  dragSrcIdx = null;
+}
+
+function onTaskDragEnd(e) {
+  document.querySelectorAll('.item').forEach(el => {
+    el.classList.remove('dragging');
+    el.classList.remove('drag-over');
+  });
+  dragSrcIdx = null;
 }
 
 let samSearchPeriod = 'all';
