@@ -1618,6 +1618,7 @@ function setTodaySection(section) {
   if (addBox) addBox.style.display = section === 'misses' ? 'none' : '';
   // Re-render today to apply filter
   renderToday();
+  if (section === 'tasks') setTimeout(initSortable, 50);
   const input = document.getElementById('todayInput');
   const addBtn = document.getElementById('todayAddBtn');
   const anonRow = document.getElementById('today-anon-row');
@@ -1939,6 +1940,7 @@ function connectGmail() {
 
 let _sortable = null;
 function initSortable() {
+  if (todayActiveSection !== 'tasks') return;
   const el = document.getElementById('today-list-tasks');
   if (!el || typeof Sortable === 'undefined') return;
   if (_sortable) _sortable.destroy();
