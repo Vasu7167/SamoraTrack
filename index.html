@@ -2181,11 +2181,7 @@ function renderMemberDetail(d, memberId, memberEmail) {
       '</div>';
     }).join('') : '<div class="m-empty">No misses</div>'
   ) + '</div>';
-  return taskSection + issueSection + winSection + missSection + delegateSection +
-    '<div class="det-sec" id="sam-check-' + (memberId||'') + '">' +
-      '<button onclick="event.stopPropagation();runSamCheck(\'' + (memberId||'') + '\',\'' + (memberEmail||'') + '\')" style="width:100%;padding:9px;border-radius:var(--radius-sm);background:var(--surface2);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s">⚡ Check SAM signals</button>' +
-      '<div id="sam-result-' + (memberId||'') + '" style="margin-top:10px"></div>' +
-    '</div>';
+  return taskSection + issueSection + winSection + missSection + delegateSection;
 }
 
 async function runSamCheck(memberId, memberEmail) {
