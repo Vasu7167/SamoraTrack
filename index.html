@@ -167,10 +167,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 @keyframes slideIn{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
 
 /* ── ADD BOX ── */
-.add-box{display:flex;flex-direction:column;gap:6px;margin-bottom:14px;background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 12px;transition:border-color 0.2s}
+.add-box{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
 .add-box:focus-within{border-color:var(--gold)}
-.ab-row{display:flex;gap:8px;align-items:center}
-.ab-row input{flex:1;background:transparent;border:none;outline:none;color:var(--text);font-family:'DM Sans',sans-serif;font-size:16px}
+.ab-row{display:flex;gap:0;align-items:center;background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:0;overflow:hidden;transition:border-color 0.2s}.ab-row:focus-within{border-color:var(--gold)}
+.ab-row input{flex:1;background:transparent;border:none;outline:none;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;padding:11px 14px}
 .ab-row input::placeholder{color:var(--text3)}
 .ab-row button{background:var(--gold);border:none;border-radius:8px;width:32px;height:32px;cursor:pointer;color:#0f0f13;font-size:22px;display:flex;align-items:center;justify-content:center;font-weight:300;transition:opacity 0.2s;flex-shrink:0}
 .mic-btn{background:var(--surface2) !important;border:1px solid var(--border2) !important;color:var(--text2) !important;font-size:16px !important}
@@ -190,7 +190,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 .item:hover{border-color:var(--border2);transform:translateY(-1px)}
 .item.dragging{opacity:0.4;border:1px dashed var(--gold)!important}
 .item.drag-over{border-color:var(--gold)!important;transform:translateY(-2px)}
-.drag-handle{font-size:16px;color:var(--text3);cursor:grab;margin-right:4px;flex-shrink:0;line-height:1;user-select:none;opacity:0.5}
+.drag-handle{width:20px;flex-shrink:0;cursor:grab;display:flex;align-items:center;justify-content:center;color:var(--text3);opacity:0.35;font-size:14px;user-select:none;touch-action:none}.drag-handle:hover{opacity:0.8;color:var(--gold)}
 .drag-handle:hover{opacity:1;color:var(--gold)}
 .item.done{opacity:0.4}
 .item.done .item-text{text-decoration:line-through}
@@ -524,7 +524,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
         <button id="todayAddBtn" onclick="addTodayItem()">+</button>
       </div>
       <div class="char-hint" id="ch-today"></div>
-      <div style="font-size:10px;color:var(--text3);margin-top:3px">Tip: start with <span style="color:var(--gold);font-weight:600;font-family:monospace">*</span> to mark as priority</div>
+      <div style="font-size:10px;color:var(--text3);padding:0 2px">Tip: start with <span style="color:var(--gold);font-weight:700">*</span> to flag as priority</div>
       <!-- Template button for tasks -->
       <div id="today-template-row" style="display:flex;justify-content:flex-end;margin-top:8px">
         <button class="template-btn" onclick="openTemplateManager()">📋 Templates</button>
@@ -1369,7 +1369,7 @@ function renderList(key, items) {
       const priorityBadge = isPriority ? '<span class="priority-badge">Priority</span>' : '';
       const delegatedBadge = item.delegatedBy ? `<span class="delegated-badge">↓ from ${item.delegatedBy.split('@')[0]}</span>` : '';
       const tsMeta = item.addedAt ? `<div class="item-meta">${item.delegatedBy ? 'Delegated ' : 'Added '}${item.addedAt}${item.completedAt ? ' · Completed ' + item.completedAt : ''}</div>` : '';
-      return `<div class="item ${item.done?'done':''} ${isPriority?'priority-task':''}" draggable="true" data-idx="${i}" ondragstart="onTaskDragStart(event,${i})" ondragover="onTaskDragOver(event)" ondrop="onTaskDrop(event,${i})" ondragend="onTaskDragEnd(event)"><div class="drag-handle" title="Drag to reorder">⠿</div><div class="chk ${item.done?'on':''}" onclick="toggle(${i})"></div><div style="flex:1"><div class="item-text">${esc(displayText)} ${priorityBadge}${delegatedBadge}</div>${tsMeta}</div><button class="idel" onclick="del('tasks',${i})">✕</button></div>`;
+      return `<div class="item ${item.done?'done':''} ${isPriority?'priority-task':''}" draggable="true" data-idx="${i}" ondragstart="onTaskDragStart(event,${i})" ondragover="onTaskDragOver(event)" ondrop="onTaskDrop(event,${i})" ondragend="onTaskDragEnd(event)"><div class="drag-handle" title="Drag to reorder">≡</div><div class="chk ${item.done?'on':''}" onclick="toggle(${i})"></div><div style="flex:1"><div class="item-text">${esc(displayText)} ${priorityBadge}${delegatedBadge}</div>${tsMeta}</div><button class="idel" onclick="del('tasks',${i})">✕</button></div>`;
     }
     if (key === 'wins') {
       // Determine win type — priority, delegated, or normal
