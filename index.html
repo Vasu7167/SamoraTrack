@@ -642,6 +642,22 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
       </div>
     </div>
 
+    <!-- Rep's own account list -->
+    <div id="samAccountListSection" style="margin-bottom:16px;display:none">
+      <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em">My Accounts</div>
+          <button onclick="toggleAddMyAccount()" style="font-size:11px;color:var(--gold);background:none;border:none;cursor:pointer;font-family:var(--sans)">+ Add account</button>
+        </div>
+        <div id="myAccountAddRow" style="display:none;gap:8px;margin-bottom:10px">
+          <input id="myAccountName" placeholder="Account name" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>
+          <input id="myAccountDomain" placeholder="domain.com" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>
+          <button onclick="addMyAccount()" style="padding:7px 12px;border-radius:6px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Add</button>
+        </div>
+        <div id="myAccountsList"></div>
+      </div>
+    </div>
+
     <!-- Signal cards feed -->
     <div id="samFeed">
       <div style="text-align:center;padding:40px 20px;color:var(--text3)">
@@ -741,6 +757,27 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
         <div id="peopleList"><div class="empty"><div class="empty-icon">⏳</div>Loading…</div></div>
       </div>
     </div>
+    <!-- Account Management per rep -->
+    <div class="admin-section" id="accountsSection">
+      <div class="admin-title">Rep Accounts</div>
+      <div class="admin-card">
+        <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Assign accounts to each rep. Coverage checks will run against these accounts only.</div>
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <select id="accountRepSelect" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none" onchange="loadRepAccounts()">
+            <option value="">Select a rep…</option>
+          </select>
+        </div>
+        <div id="repAccountsList" style="margin-bottom:12px"></div>
+        <div id="addAccountRow" style="display:none">
+          <div style="display:flex;gap:8px;margin-bottom:8px">
+            <input id="newAccountName" placeholder="Account name (e.g. Ferrero)" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none" onkeydown="if(event.key==='Enter')addRepAccount()"/>
+            <input id="newAccountDomain" placeholder="Domain (e.g. ferrero.com)" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none" onkeydown="if(event.key==='Enter')addRepAccount()"/>
+            <button onclick="addRepAccount()" style="padding:8px 14px;border-radius:var(--radius-sm);background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">Add</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="admin-section" id="assignSection">
       <div class="admin-title">Manager teams</div>
       <div class="admin-card">
@@ -1534,6 +1571,9 @@ function switchTab(tab) {
     renderSamAlerts(); loadSamSignals();
     const covSec = document.getElementById('samCoverageSection');
     if (covSec) covSec.style.display = 'block';
+    const accSec = document.getElementById('samAccountListSection');
+    if (accSec) accSec.style.display = 'block';
+    loadMyAccounts();
   }
   if (tab === 'team') {
     const tdi = document.getElementById('teamDateInput');
@@ -2179,6 +2219,65 @@ function renderSamAlerts() {
   } else { alerts.innerHTML = ''; }
 }
 
+async function loadMyAccounts() {
+  const list = document.getElementById('myAccountsList');
+  if (!list || !currentUser?.token || !profile?.org_id) return;
+  try {
+    const rows = await sbGet('org_accounts?user_id=eq.' + currentUser.id + '&org_id=eq.' + profile.org_id + '&select=id,account_name,domain&order=account_name');
+    if (!rows || !rows.length) {
+      list.innerHTML = '<div style="font-size:12px;color:var(--text3);font-style:italic">No accounts assigned yet. Ask your admin to add accounts, or add your own below.</div>';
+      return;
+    }
+    list.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
+      rows.map(r =>
+        '<div style="display:flex;align-items:center;gap:6px;padding:5px 10px;background:var(--surface2);border-radius:20px">' +
+          '<span style="font-size:12px;color:var(--text)">' + esc(r.account_name) + '</span>' +
+          (r.domain ? '<span style="font-size:10px;color:var(--text3)">' + esc(r.domain) + '</span>' : '') +
+          '<button onclick="removeMyAccount(\'' + r.id + '\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:0">✕</button>' +
+        '</div>'
+      ).join('') + '</div>';
+  } catch(e) {
+    list.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>';
+  }
+}
+
+function toggleAddMyAccount() {
+  const row = document.getElementById('myAccountAddRow');
+  if (row) row.style.display = row.style.display === 'none' ? 'flex' : 'none';
+}
+
+async function addMyAccount() {
+  const name = document.getElementById('myAccountName')?.value?.trim();
+  const domain = document.getElementById('myAccountDomain')?.value?.trim();
+  if (!name) return;
+  try {
+    const r = await fetch(SB_URL + '/rest/v1/org_accounts', {
+      method: 'POST',
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ org_id: profile.org_id, user_id: currentUser.id, account_name: name, domain: domain || null, added_by: currentUser.id })
+    });
+    if (!r.ok) throw new Error(await r.text());
+    document.getElementById('myAccountName').value = '';
+    document.getElementById('myAccountDomain').value = '';
+    toggleAddMyAccount();
+    loadMyAccounts();
+  } catch(e) {
+    if (e.message.includes('duplicate') || e.message.includes('unique')) {
+      alert(name + ' already in your list');
+    } else { alert('Error: ' + e.message); }
+  }
+}
+
+async function removeMyAccount(id) {
+  try {
+    await fetch(SB_URL + '/rest/v1/org_accounts?id=eq.' + id, {
+      method: 'DELETE',
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token }
+    });
+    loadMyAccounts();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
 async function runCoverageCheck(repId, repEmail, resultElId) {
   // repId/repEmail = for manager view; undefined = own view
   const isManager = !!repId;
@@ -2222,7 +2321,10 @@ async function runCoverageCheck(repId, repEmail, resultElId) {
     // Summary bar
     const pct = s.coverageRate || 0;
     const barColor = pct >= 80 ? 'var(--green)' : pct >= 50 ? 'var(--amber)' : 'var(--coral)';
-    let html = '<div style="margin-bottom:12px">';
+    const sourceLabel = data.usedOrgAccounts ? '✓ Using assigned account list' : '⚠ No accounts assigned — extracted from tasks';
+    const sourceLabelColor = data.usedOrgAccounts ? 'var(--green)' : 'var(--amber)';
+    let html = '<div style="font-size:10px;color:' + sourceLabelColor + ';margin-bottom:8px">' + sourceLabel + '</div>';
+    html += '<div style="margin-bottom:12px">';
     html += '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">';
     html += '<span style="color:var(--text2)">' + s.covered + '/' + s.total + ' accounts emailed</span>';
     html += '<span style="color:' + barColor + ';font-weight:600">' + pct + '%</span></div>';
@@ -2813,6 +2915,12 @@ async function renderOrg() {
     orgPeople = await sbGet(`user_profiles?org_id=eq.${profile.org_id}&select=user_id,email,role,manager_id`);
     renderPeopleTable();
     renderAssignCard();
+    // Populate rep account selector
+    const accountRepSel = document.getElementById('accountRepSelect');
+    if (accountRepSel) {
+      accountRepSel.innerHTML = '<option value="">Select a rep…</option>' +
+        orgPeople.map(p => '<option value="' + p.user_id + '">' + esc(p.email) + '</option>').join('');
+    }
   } catch(e) {
     document.getElementById('peopleList').innerHTML = `<div class="empty">Error: ${e.message}</div>`;
   }
@@ -2865,6 +2973,67 @@ async function assignToManager(managerId, memberId) {
     await sbPatch(`user_profiles?user_id=eq.${memberId}`, { manager_id: managerId });
     await renderOrg();
   } catch(e) { alert('Error assigning member: ' + e.message); }
+}
+
+// ── Rep Account Management ───────────────────────────────────────────────────
+async function loadRepAccounts() {
+  const repId = document.getElementById('accountRepSelect')?.value;
+  const list = document.getElementById('repAccountsList');
+  const addRow = document.getElementById('addAccountRow');
+  if (!repId) { if (list) list.innerHTML = ''; if (addRow) addRow.style.display = 'none'; return; }
+  if (addRow) addRow.style.display = 'flex';
+  if (list) list.innerHTML = '<div style="font-size:12px;color:var(--text3)">Loading…</div>';
+  try {
+    const rows = await sbGet('org_accounts?user_id=eq.' + repId + '&org_id=eq.' + profile.org_id + '&select=id,account_name,domain&order=account_name');
+    if (!rows || !rows.length) {
+      list.innerHTML = '<div style="font-size:12px;color:var(--text3);font-style:italic">No accounts assigned yet</div>';
+      return;
+    }
+    list.innerHTML = rows.map(r =>
+      '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--surface2);border-radius:6px;margin-bottom:5px">' +
+        '<div><div style="font-size:13px;color:var(--text)">' + esc(r.account_name) + '</div>' +
+        (r.domain ? '<div style="font-size:11px;color:var(--text3)">' + esc(r.domain) + '</div>' : '') + '</div>' +
+        '<button onclick="removeRepAccount(\'' + r.id + '\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px">✕</button>' +
+      '</div>'
+    ).join('');
+  } catch(e) {
+    list.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>';
+  }
+}
+
+async function addRepAccount() {
+  const repId = document.getElementById('accountRepSelect')?.value;
+  const name = document.getElementById('newAccountName')?.value?.trim();
+  const domain = document.getElementById('newAccountDomain')?.value?.trim();
+  if (!repId || !name) { alert('Select a rep and enter account name'); return; }
+  try {
+    const r = await fetch(SB_URL + '/rest/v1/org_accounts', {
+      method: 'POST',
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ org_id: profile.org_id, user_id: repId, account_name: name, domain: domain || null, added_by: currentUser.id })
+    });
+    if (!r.ok) throw new Error(await r.text());
+    document.getElementById('newAccountName').value = '';
+    document.getElementById('newAccountDomain').value = '';
+    loadRepAccounts();
+  } catch(e) {
+    if (e.message.includes('duplicate') || e.message.includes('unique')) {
+      alert(name + ' is already assigned to this rep');
+    } else {
+      alert('Error: ' + e.message);
+    }
+  }
+}
+
+async function removeRepAccount(id) {
+  if (!confirm('Remove this account?')) return;
+  try {
+    await fetch(SB_URL + '/rest/v1/org_accounts?id=eq.' + id, {
+      method: 'DELETE',
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token }
+    });
+    loadRepAccounts();
+  } catch(e) { alert('Error: ' + e.message); }
 }
 
 function copyOrgCode() {
