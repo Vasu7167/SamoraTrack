@@ -1901,7 +1901,7 @@ function renderSignalCards(signals) {
 }
 
 function connectGmail() {
-  const scope = encodeURIComponent('https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/userinfo.email');
+  const scope = encodeURIComponent('https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/userinfo.email');
   const redirectUri = 'https://samoratrack.vercel.app/gmail-callback.html';
   const url = 'https://accounts.google.com/o/oauth2/v2/auth' +
     '?client_id=' + GOOGLE_CLIENT_ID_SAM +
@@ -1935,7 +1935,7 @@ function connectGmail() {
       });
       const data = await r.json();
       if (data.ok || data.success) {
-        if (label) label.textContent = '✓ Gmail connected — ' + (data.email || '');
+        if (label) label.textContent = '✓ Gmail + Calendar connected — ' + (data.email || '');
         const sub = document.getElementById('samGmailSub');
         if (sub) sub.textContent = 'Signals loading…';
         if (btn) { btn.textContent = 'Refresh'; btn.disabled = false; btn.onclick = loadSamSignals; }
