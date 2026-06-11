@@ -667,6 +667,18 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
       </div>
     </div>
 
+    <!-- Intent vs Reality Signal -->
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div>
+          <div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em">⚡ Intent vs Reality</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">Your logged tasks vs what actually happened</div>
+        </div>
+        <button onclick="runIntentVsReality()" id="ivrBtn" style="padding:5px 12px;border-radius:20px;background:rgba(160,117,42,0.1);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap">Check this week</button>
+      </div>
+      <div id="ivrOutput"></div>
+    </div>
+
     <!-- Signal cards feed -->
     <div id="samFeed">
       <div style="text-align:center;padding:40px 20px;color:var(--text3)">
@@ -2318,6 +2330,110 @@ async function removeMyAccount(id) {
   } catch(e) { alert('Error: ' + e.message); }
 }
 
+async function runIntentVsReality(repId, outputId) {
+  const isManager = !!repId;
+  const out = document.getElementById(outputId || 'ivrOutput');
+  const btn = document.getElementById('ivrBtn');
+  if (!out) return;
+
+  if (btn && !isManager) { btn.textContent = 'Scanning…'; btn.disabled = true; }
+  out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0">Checking intent vs reality for this week…</div>';
+
+  // Date range — this week
+  const today = todayKey();
+  const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
+  const dateFrom = weekAgo.toISOString().split('T')[0];
+
+  try {
+    const r = await fetch(EDGE_FN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
+      body: JSON.stringify({ action: 'intent_vs_reality', rep_user_id: isManager ? repId : null, date_from: dateFrom, date_to: today })
+    });
+    const data = await r.json();
+
+    if (!data.connected) {
+      out.innerHTML = '<div style="font-size:12px;color:var(--text3)">Gmail not connected' + (isManager ? ' for this rep' : '') + '</div>';
+      if (btn && !isManager) { btn.textContent = 'Check this week'; btn.disabled = false; }
+      return;
+    }
+
+    const s = data.summary || {};
+    const results = data.results || [];
+
+    if (!results.length) {
+      out.innerHTML = '<div style="font-size:12px;color:var(--text3)">No outreach tasks found for this period</div>';
+      if (btn && !isManager) { btn.textContent = 'Check this week'; btn.disabled = false; }
+      return;
+    }
+
+    // Summary bar
+    const pct = s.verificationRate || 0;
+    const barColor = pct >= 80 ? 'var(--green)' : pct >= 50 ? 'var(--amber)' : 'var(--coral)';
+
+    let html = '';
+
+    // Stats row
+    html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px">';
+    html += '<div style="background:var(--surface2);border-radius:6px;padding:8px;text-align:center"><div style="font-size:18px;font-weight:500;color:var(--text)">' + s.total + '</div><div style="font-size:10px;color:var(--text3)">Tasks</div></div>';
+    html += '<div style="background:var(--surface2);border-radius:6px;padding:8px;text-align:center"><div style="font-size:18px;font-weight:500;color:var(--green)">' + s.verified + '</div><div style="font-size:10px;color:var(--text3)">Verified</div></div>';
+    html += '<div style="background:var(--surface2);border-radius:6px;padding:8px;text-align:center"><div style="font-size:18px;font-weight:500;color:var(--coral)">' + s.gaps + '</div><div style="font-size:10px;color:var(--text3)">Gaps</div></div>';
+    html += '<div style="background:var(--surface2);border-radius:6px;padding:8px;text-align:center"><div style="font-size:18px;font-weight:500;color:var(--amber)">' + s.unverified + '</div><div style="font-size:10px;color:var(--text3)">Unverified</div></div>';
+    html += '</div>';
+
+    // Verification rate bar
+    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">';
+    html += '<div style="flex:1;height:5px;background:var(--surface2);border-radius:3px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + barColor + ';border-radius:3px"></div></div>';
+    html += '<div style="font-size:12px;font-weight:600;color:' + barColor + '">' + pct + '% verified</div>';
+    html += '</div>';
+
+    // Signal definitions
+    const signalConfig = {
+      gap:           { icon:'🚨', label:'Not actioned',       color:'var(--coral)',  bg:'rgba(192,82,63,0.08)' },
+      unverified:    { icon:'⚠',  label:'No email evidence',  color:'var(--amber)',  bg:'rgba(160,117,42,0.08)' },
+      verified:      { icon:'✓',  label:'Actioned',           color:'var(--green)',  bg:'rgba(74,140,92,0.08)' },
+      verified_hot:  { icon:'🔥', label:'Actioned + Reply',   color:'var(--green)',  bg:'rgba(74,140,92,0.12)' },
+      done_not_logged:{ icon:'💡', label:'Done, not logged',  color:'var(--text3)',  bg:'var(--surface2)' },
+      unknown:       { icon:'○',  label:'No account found',   color:'var(--text3)',  bg:'var(--surface2)' }
+    };
+
+    // Group by signal type — gaps first
+    const order = ['gap','unverified','done_not_logged','verified_hot','verified','unknown'];
+    const grouped = {};
+    order.forEach(k => { grouped[k] = results.filter(r => r.signal === k); });
+
+    order.forEach(function(sig) {
+      const items = grouped[sig];
+      if (!items || !items.length) return;
+      const cfg = signalConfig[sig];
+      html += '<div style="margin-bottom:10px">';
+      html += '<div style="font-size:10px;font-weight:600;color:' + cfg.color + ';text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">' + cfg.icon + ' ' + cfg.label + ' (' + items.length + ')</div>';
+      items.forEach(function(r) {
+        html += '<div style="background:' + cfg.bg + ';border-left:3px solid ' + cfg.color + ';border-radius:0 6px 6px 0;padding:8px 12px;margin-bottom:5px">';
+        html += '<div style="display:flex;align-items:baseline;justify-content:space-between">';
+        html += '<div style="font-size:12px;font-weight:500;color:var(--text)">' + esc(r.text || '') + '</div>';
+        html += '<div style="font-size:10px;color:var(--text3);flex-shrink:0;margin-left:8px">' + esc(r.date || '') + (r.priority ? ' ⭐' : '') + '</div>';
+        html += '</div>';
+        if (r.emailSubject) {
+          html += '<div style="font-size:11px;color:var(--text3);margin-top:3px">📧 ' + esc(r.emailSubject.slice(0,60)) + (r.emailTo ? ' → ' + esc(r.emailTo.split('<')[0].trim().slice(0,30)) : '') + '</div>';
+        }
+        if (r.replyEvidence) {
+          html += '<div style="font-size:11px;color:var(--green);margin-top:2px">↩ Reply received</div>';
+        }
+        html += '</div>';
+      });
+      html += '</div>';
+    });
+
+    out.innerHTML = html;
+
+  } catch(e) {
+    out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>';
+  }
+
+  if (btn && !isManager) { btn.textContent = 'Refresh'; btn.disabled = false; }
+}
+
 async function runCoverageCheck(repId, repEmail, resultElId) {
   // repId/repEmail = for manager view; undefined = own view
   const isManager = !!repId;
@@ -2484,12 +2600,14 @@ async function renderTeam() {
           '<div class="m-toggle" id="mtog-' + idx + '">▾</div>' +
         '</div>' +
         '<div style="padding:8px 16px;border-top:1px solid var(--border)">' +
-          '<div style="display:flex;gap:6px">' +
-            '<button id="sam-btn-' + m.user_id + '" onclick="event.stopPropagation();runSamCheck(\'' + m.user_id + '\',\'' + m.email + '\')" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(160,117,42,0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">⚡ SAM Signals</button>' +
-            '<button onclick="event.stopPropagation();runCoverageCheck(\'' + m.user_id + '\',\'' + m.email + '\',\'cov-' + m.user_id + '\')" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(160,117,42,0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">📊 Coverage</button>' +
+          '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+            '<button id="sam-btn-' + m.user_id + '" onclick="event.stopPropagation();runSamCheck(\'' + m.user_id + '\',\'' + m.email + '\')" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(160,117,42,0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">⚡ SAM Signals</button>' +
+            '<button onclick="event.stopPropagation();runCoverageCheck(\'' + m.user_id + '\',\'' + m.email + '\',\'cov-' + m.user_id + '\')" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(160,117,42,0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">📊 Coverage</button>' +
+            '<button onclick="event.stopPropagation();runIntentVsReality(\'' + m.user_id + '\',\'ivr-' + m.user_id + '\')" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(160,117,42,0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">🎯 Intent vs Reality</button>' +
           '</div>' +
           '<div id="sam-result-' + m.user_id + '" style="margin-top:8px"></div>' +
           '<div id="cov-' + m.user_id + '" style="margin-top:6px"></div>' +
+          '<div id="ivr-' + m.user_id + '" style="margin-top:6px"></div>' +
         '</div>' +
         '<div class="member-detail" id="mdet-' + idx + '">' + renderMemberDetail(d, m.user_id, m.email) + '</div>' +
       '</div>';
