@@ -186,6 +186,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 
 /* ── ITEMS ── */
 .items{display:flex;flex-direction:column;gap:8px}
+.score-ring{position:relative;width:72px;height:72px;flex-shrink:0}
+.score-ring svg{transform:rotate(-90deg)}
+.score-ring .score-num{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:18px;font-weight:600;color:var(--text);line-height:1}
+.score-ring .score-lbl{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;white-space:nowrap}
+.day-bar{height:4px;border-radius:2px;background:var(--surface2);overflow:hidden;margin-top:4px}
+.day-bar-fill{height:100%;border-radius:2px;transition:width 0.5s}
 .item{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;display:flex;align-items:flex-start;gap:12px;transition:all 0.2s;animation:slideIn 0.18s ease}
 .item:hover{border-color:var(--border2);transform:translateY(-1px)}
 
@@ -2050,6 +2056,173 @@ function initSortable() {
   } catch(e) { console.error('Sortable init failed:', e); }
 }
 
+// ── Productivity Score ───────────────────────────────────────────────────────
+function calcDayScore(tasks) {
+  if (!tasks || !tasks.length) return { score: 0, completion: 0, rhythm: 0, breakdown: [] };
+
+  let completionPts = 0;
+  let rhythmPts = 0;
+  const maxCompletion = 60;
+  const maxRhythm = 40;
+  const breakdown = [];
+
+  const outreachKw = ['email','call','follow','send','reach','contact','proposal','demo','meeting','linkedin'];
+  const now = new Date();
+  const hour = now.getHours();
+
+  tasks.forEach(function(t) {
+    const isPriority = t.priority || (t.text||'').startsWith('*');
+    const isOutreach = outreachKw.some(function(k) { return (t.text||'').toLowerCase().includes(k); });
+    const basePoints = isPriority ? 2 : 1;
+
+    if (t.done) {
+      // Completion points
+      completionPts += basePoints;
+
+      // Rhythm points — when was it completed?
+      let rhythmMultiplier = 1.0;
+      let rhythmLabel = 'On time';
+
+      if (t.completedAt) {
+        const completedHour = parseInt((t.completedAt || '').split(':')[0]) || 12;
+        if (completedHour < 12) { rhythmMultiplier = 1.5; rhythmLabel = 'Before noon 🌟'; }
+        else if (completedHour < 15) { rhythmMultiplier = 1.2; rhythmLabel = 'Before 3pm ✓'; }
+        else if (completedHour < 18) { rhythmMultiplier = 1.0; rhythmLabel = 'Before 6pm'; }
+        else { rhythmMultiplier = 0.7; rhythmLabel = 'After 6pm'; }
+      }
+      rhythmPts += basePoints * rhythmMultiplier;
+      breakdown.push({ text: (t.text||'').slice(0,40), done: true, rhythmLabel, priority: isPriority });
+    } else {
+      breakdown.push({ text: (t.text||'').slice(0,40), done: false, rhythmLabel: 'Not done', priority: isPriority });
+    }
+  });
+
+  // Normalise to 100
+  const maxPossibleCompletion = tasks.length * 2; // all priority
+  const maxPossibleRhythm = tasks.length * 2 * 1.5;
+  const completionScore = Math.round((completionPts / Math.max(maxPossibleCompletion, 1)) * maxCompletion);
+  const rhythmScore = Math.round((rhythmPts / Math.max(maxPossibleRhythm, 1)) * maxRhythm);
+  const total = Math.min(100, completionScore + rhythmScore);
+
+  return { score: total, completion: completionScore, rhythm: rhythmScore, breakdown };
+}
+
+function calcWeekScore(dateScores) {
+  // dateScores = [{date, score}] Mon-Fri
+  if (!dateScores.length) return 0;
+  const weights = { 1:1.2, 2:1.1, 3:1.0, 4:1.0, 5:0.9 }; // Mon=1 higher weight
+  let total = 0, totalWeight = 0;
+  dateScores.forEach(function(d) {
+    const day = new Date(d.date).getDay() || 7; // 1=Mon...5=Fri
+    const w = weights[day] || 1;
+    total += d.score * w;
+    totalWeight += w;
+  });
+  return Math.round(total / Math.max(totalWeight, 1));
+}
+
+function scoreColor(score) {
+  if (score >= 80) return '#4A8C5C';
+  if (score >= 60) return '#C9973E';
+  return '#C0523F';
+}
+
+function scoreLabel(score) {
+  if (score >= 80) return 'On track';
+  if (score >= 60) return 'Getting there';
+  if (score >= 40) return 'Needs focus';
+  return 'Behind';
+}
+
+function renderProductivityBanner(tasks) {
+  const banner = document.getElementById('productivityBanner');
+  if (!banner) return;
+
+  const { score, completion, rhythm, breakdown } = calcDayScore(tasks);
+  const col = scoreColor(score);
+  const label = scoreLabel(score);
+  const pending = tasks.filter(function(t) { return !t.done; }).length;
+  const done = tasks.filter(function(t) { return t.done; }).length;
+  const hour = new Date().getHours();
+
+  // Ring SVG
+  const r = 28, cx = 36, cy = 36;
+  const circ = 2 * Math.PI * r;
+  const filled = circ * (score / 100);
+  const ringHtml = '<svg width="72" height="72" viewBox="0 0 72 72">' +
+    '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="var(--surface2)" stroke-width="6"/>' +
+    '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + col + '" stroke-width="6" ' +
+    'stroke-dasharray="' + filled + ' ' + (circ - filled) + '" stroke-linecap="round" style="transition:stroke-dasharray 0.5s"/>' +
+    '</svg>';
+
+  // Week bars
+  const weekDates = [];
+  const today = new Date();
+  for (let i = 4; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const key = d.toISOString().split('T')[0];
+    const dayData_ = dayData(key);
+    const dayTasks = dayData_?.tasks || [];
+    const dayScore = dayTasks.length ? calcDayScore(dayTasks).score : null;
+    weekDates.push({ date: key, score: dayScore, isToday: i === 0, label: ['M','T','W','T','F','S','S'][d.getDay() === 0 ? 6 : d.getDay()-1] });
+  }
+  const weekScore = calcWeekScore(weekDates.filter(function(d) { return d.score !== null; }).map(function(d) { return { date: d.date, score: d.score }; }));
+
+  // Nudge text
+  let nudge = '';
+  if (pending > 0) {
+    if (hour < 12) nudge = pending + ' task' + (pending > 1 ? 's' : '') + ' open — finish by noon for a perfect score';
+    else if (hour < 15) nudge = pending + ' task' + (pending > 1 ? 's' : '') + ' open — close them before 3pm';
+    else if (hour < 18) nudge = pending + ' task' + (pending > 1 ? 's' : '') + ' remaining — finish before 6pm';
+    else nudge = pending + ' task' + (pending > 1 ? 's' : '') + ' still open — complete them now';
+  } else if (tasks.length > 0) {
+    nudge = 'All done! Great work today 🎉';
+  }
+
+  banner.style.display = 'block';
+  banner.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:12px 14px">' +
+    '<div style="display:flex;align-items:center;gap:12px">' +
+
+    // Score ring
+    '<div class="score-ring">' + ringHtml +
+      '<div class="score-num" style="color:' + col + '">' + score + '</div>' +
+    '</div>' +
+
+    // Right side
+    '<div style="flex:1;min-width:0">' +
+      '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:2px">' +
+        '<div style="font-size:13px;font-weight:600;color:' + col + '">' + label + '</div>' +
+        '<div style="font-size:11px;color:var(--text3)">' + done + '/' + tasks.length + ' tasks done</div>' +
+      '</div>' +
+
+      // Score breakdown
+      '<div style="display:flex;gap:10px;margin-bottom:8px">' +
+        '<div style="font-size:11px;color:var(--text3)">Completion <span style="color:var(--text2);font-weight:500">' + completion + '</span></div>' +
+        '<div style="font-size:11px;color:var(--text3)">Rhythm <span style="color:var(--text2);font-weight:500">' + rhythm + '</span></div>' +
+        '<div style="font-size:11px;color:var(--text3)">Week avg <span style="color:var(--text2);font-weight:500">' + weekScore + '</span></div>' +
+      '</div>' +
+
+      // Week mini bars
+      '<div style="display:flex;gap:4px;align-items:flex-end;margin-bottom:6px">' +
+        weekDates.map(function(d) {
+          const h = d.score !== null ? Math.max(4, Math.round((d.score / 100) * 24)) : 4;
+          const bc = d.score !== null ? scoreColor(d.score) : 'var(--surface2)';
+          const opacity = d.isToday ? '1' : '0.5';
+          return '<div style="flex:1;text-align:center">' +
+            '<div style="height:' + h + 'px;background:' + bc + ';border-radius:2px;opacity:' + opacity + ';margin-bottom:2px"></div>' +
+            '<div style="font-size:9px;color:' + (d.isToday ? 'var(--gold)' : 'var(--text3)') + '">' + d.label + '</div>' +
+          '</div>';
+        }).join('') +
+      '</div>' +
+
+      // Nudge
+      (nudge ? '<div style="font-size:11px;color:var(--text3);font-style:italic">' + esc(nudge) + '</div>' : '') +
+    '</div>' +
+    '</div>' +
+  '</div>';
+}
+
 let samSearchPeriod = 'all';
 
 function setSamPeriod(period, btn) {
@@ -2732,6 +2905,7 @@ async function renderTeam() {
               '<div class="mst">Done <span>' + done + '</span></div>' +
               '<div class="mst">Issues <span>' + (d.issues?.length||0) + '</span></div>' +
               '<div class="mst">Wins <span>' + (d.wins?.length||0) + '</span></div>' +
+              (function() { const sc = calcDayScore(d.tasks||[]); return '<div class="mst">Score <span style="color:' + scoreColor(sc.score) + '">' + sc.score + '</span></div>'; })() +
             '</div>' +
           '</div>' +
           '<div class="m-pct"><div class="m-pct-num">' + pct + '%</div><div class="m-pct-lbl">complete</div></div>' +
@@ -3259,6 +3433,20 @@ async function sendWeeklyDigest() {
     if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral);padding:8px 0">Error: ' + esc(e.message) + '</div>';
     if (btn) { btn.textContent = 'Send now'; btn.disabled = false; }
   }
+}
+
+function showNudgeBanner(tasks) {
+  const banner = document.getElementById('nudgeBanner');
+  const text = document.getElementById('nudgeText');
+  if (!banner || !text) return;
+  const hour = new Date().getHours();
+  const pending = (tasks || []).filter(function(t) { return !t.done; }).length;
+  if (pending === 0 || hour < 9) { banner.style.display = 'none'; return; }
+  let msg = '';
+  if (hour >= 11 && hour < 13) msg = '⏰ Almost noon — ' + pending + ' task' + (pending > 1 ? 's' : '') + ' still open. Finish before 12 for max rhythm score.';
+  else if (hour >= 16 && hour < 18) msg = '⏰ Last push — ' + pending + ' task' + (pending > 1 ? 's' : '') + ' to go. Complete before 6pm to stay on track.';
+  if (msg) { text.textContent = msg; banner.style.display = 'block'; }
+  else banner.style.display = 'none';
 }
 
 function toggleMember(idx) {
