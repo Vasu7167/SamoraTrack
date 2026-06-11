@@ -3154,6 +3154,7 @@ async function sendWeeklyDigest() {
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
       body: bodyPayload
     });
+    const data = await r.json();
     if (data.success) {
       if (out) out.innerHTML = '<div style="font-size:12px;color:var(--green);padding:8px 0">✓ Digest sent to ' + data.sent + ' people for ' + data.weekLabel + '</div>';
       if (btn) { btn.textContent = '✓ Sent'; setTimeout(() => { btn.textContent = 'Send now'; btn.disabled = false; }, 3000); }
