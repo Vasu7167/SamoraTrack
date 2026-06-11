@@ -16,14 +16,26 @@
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#18160F;--surface:#231F17;--surface2:#2C2720;
-  --border:rgba(160,117,42,0.15);--border2:rgba(160,117,42,0.3);
-  --text:#FAF8F4;--text2:#D6CFC4;--text3:#78716C;
+  /* Surfaces — elevation via lightness not shadow */
+  --bg:#18160F;--surface:#231F17;--surface2:#2C2720;--surface3:#332E28;
+  /* Borders */
+  --border:rgba(201,151,62,0.12);--border2:rgba(201,151,62,0.25);
+  /* Text — 3 levels of hierarchy */
+  --text:#FAF8F4;--text2:#C4BAA8;--text3:#6B6459;
+  /* Brand gold — 3 weights */
   --gold:#A0752A;--gold-lt:#C9973E;--gold-pl:#E8C97A;
-  --coral:#C0523F;--green:#6B9E6B;--amber:#C9973E;--miss:#B8860B;
-  --purple:#A0752A;
-  --radius:12px;--radius-sm:6px;
+  /* Semantic colours */
+  --green:#4A8C5C;--green-lt:rgba(74,140,92,0.12);
+  --coral:#C0523F;--coral-lt:rgba(192,82,63,0.1);
+  --amber:#C9973E;--amber-lt:rgba(201,151,62,0.1);
+  --miss:#B8860B;
+  /* Radius — consistent scale */
+  --radius-sm:6px;--radius:10px;--radius-lg:14px;--radius-xl:20px;
+  /* Typography */
   --serif:'EB Garamond',Georgia,serif;
+  --sans:'DM Sans','Inter',system-ui,sans-serif;
+  /* Motion */
+  --ease:cubic-bezier(0.4,0,0.2,1);
 }
 
 /* Light mode — follows system preference */
@@ -170,7 +182,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 .add-box{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
 .add-box:focus-within{border-color:var(--gold)}
 .ab-row{display:flex;gap:0;align-items:center;background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:0;overflow:hidden;transition:border-color 0.2s}.ab-row:focus-within{border-color:var(--gold)}
-.ab-row input{flex:1;background:transparent;border:none;outline:none;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;padding:11px 14px}
+.ab-row input{flex:1;background:transparent;border:none;outline:none;color:var(--text);font-family:var(--sans);font-size:14px;padding:12px 14px;letter-spacing:-0.01em}
 .ab-row input::placeholder{color:var(--text3)}
 .ab-row button{background:var(--gold);border:none;border-radius:8px;width:32px;height:32px;cursor:pointer;color:#0f0f13;font-size:22px;display:flex;align-items:center;justify-content:center;font-weight:300;transition:opacity 0.2s;flex-shrink:0}
 .mic-btn{background:var(--surface2) !important;border:1px solid var(--border2) !important;color:var(--text2) !important;font-size:16px !important}
@@ -192,13 +204,13 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 .score-ring .score-lbl{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;white-space:nowrap}
 .day-bar{height:4px;border-radius:2px;background:var(--surface2);overflow:hidden;margin-top:4px}
 .day-bar-fill{height:100%;border-radius:2px;transition:width 0.5s}
-.item{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;display:flex;align-items:flex-start;gap:12px;transition:all 0.2s;animation:slideIn 0.18s ease}
+.item{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;display:flex;align-items:flex-start;gap:10px;transition:border-color 0.15s var(--ease);animation:slideIn 0.15s var(--ease)}
 .item:hover{border-color:var(--border2);transform:translateY(-1px)}
 
 
 .drag-handle{width:20px;flex-shrink:0;cursor:grab;text-align:center;color:var(--gold-lt);font-size:16px;user-select:none;opacity:0.7}.drag-handle:hover{opacity:1}.drag-handle:hover{opacity:0.8;color:var(--gold)}
 
-.item.done{opacity:0.4}
+.item.done{opacity:0.35;filter:grayscale(0.3)}
 .sortable-ghost{opacity:0.3;background:var(--surface2)!important}
 .sortable-chosen{border-color:var(--gold)!important}
 .item.done .item-text{text-decoration:line-through}
@@ -511,6 +523,8 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 
   <!-- ── TODAY (unified home) ── -->
   <div class="panel active" id="panel-today">
+    <div id="productivityBanner" style="margin-bottom:12px"></div>
+    <div id="nudgeBanner" style="display:none;background:rgba(160,117,42,0.08);border:1px solid rgba(160,117,42,0.25);border-radius:var(--radius);padding:10px 14px;margin-bottom:12px"><div style="display:flex;align-items:center;justify-content:space-between"><div id="nudgeText" style="font-size:12px;color:var(--text2)"></div><button onclick="this.parentElement.parentElement.style.display='none'" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:0 0 0 8px">✕</button></div></div>
     <!-- Section pill nav — always visible -->
     <div style="display:flex;gap:8px;margin-bottom:12px">
       <button class="today-section-btn active" id="tsb-tasks" onclick="setTodaySection('tasks')">✦ Tasks</button>
@@ -657,26 +671,6 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
       </div>
     </div>
 
-    <!-- Notetaker webhook setup -->
-    <div id="samNotetakerSection" style="margin-bottom:16px;display:none">
-      <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-          <div>
-            <div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em">🎙 Notetaker Integration</div>
-            <div style="font-size:11px;color:var(--text3);margin-top:2px">Paste this URL into your notetaker's webhook settings</div>
-          </div>
-          <button onclick="loadMeetingLog()" style="font-size:11px;color:var(--gold);background:none;border:none;cursor:pointer;font-family:var(--sans)">View log</button>
-        </div>
-        <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
-          <div id="webhookUrlDisplay" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:11px;font-family:monospace;color:var(--text2);word-break:break-all"></div>
-          <button onclick="copyWebhookUrl()" style="padding:7px 12px;border-radius:6px;background:rgba(160,117,42,0.1);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap">Copy</button>
-        </div>
-        <div style="font-size:11px;color:var(--text3);line-height:1.6">
-          Works with: <span style="color:var(--text2)">Fireflies · Fathom · Otter · tl;dv · any webhook-enabled notetaker</span>
-        </div>
-        <div id="meetingLogOutput" style="margin-top:10px"></div>
-      </div>
-    </div>
 
     <!-- Rep's own account list -->
     <div id="samAccountListSection" style="margin-bottom:16px;display:none">
@@ -1667,13 +1661,7 @@ function switchTab(tab) {
     const accSec = document.getElementById('samAccountListSection');
     if (accSec) accSec.style.display = 'block';
     loadMyAccounts();
-    const ntSec = document.getElementById('samNotetakerSection');
-    if (ntSec) ntSec.style.display = 'block';
-    // Set webhook URL
-    const webhookEl = document.getElementById('webhookUrlDisplay');
-    if (webhookEl && currentUser) {
-      webhookEl.textContent = 'https://gowpuicpmrwsohongosf.supabase.co/functions/v1/notetaker-webhook?user_id=' + currentUser.id;
-    }
+
   }
   if (tab === 'team') {
     const tdi = document.getElementById('teamDateInput');
@@ -2216,8 +2204,14 @@ function renderProductivityBanner(tasks) {
         }).join('') +
       '</div>' +
 
-      // Nudge
-      (nudge ? '<div style="font-size:11px;color:var(--text3);font-style:italic">' + esc(nudge) + '</div>' : '') +
+      // Nudge + rhythm legend
+      (nudge ? '<div style="font-size:11px;color:var(--text3);font-style:italic;margin-bottom:6px">' + esc(nudge) + '</div>' : '') +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+        '<div style="font-size:10px;color:var(--green)">● Before noon = 1.5×</div>' +
+        '<div style="font-size:10px;color:var(--amber)">● Before 3pm = 1.2×</div>' +
+        '<div style="font-size:10px;color:var(--text3)">● Before 6pm = 1×</div>' +
+        '<div style="font-size:10px;color:var(--coral)">● After 6pm = 0.7×</div>' +
+      '</div>' +
     '</div>' +
     '</div>' +
   '</div>';
@@ -2516,41 +2510,7 @@ function renderSamAlerts() {
   } else { alerts.innerHTML = ''; }
 }
 
-function copyWebhookUrl() {
-  const el = document.getElementById('webhookUrlDisplay');
-  if (!el) return;
-  navigator.clipboard.writeText(el.textContent).then(() => {
-    const btn = el.nextElementSibling;
-    if (btn) { btn.textContent = '✓ Copied'; setTimeout(() => btn.textContent = 'Copy', 2000); }
-  });
-}
 
-async function loadMeetingLog() {
-  const out = document.getElementById('meetingLogOutput');
-  if (!out || !currentUser?.token) return;
-  out.innerHTML = '<div style="font-size:12px;color:var(--text3)">Loading meeting log…</div>';
-  try {
-    const rows = await sbGet('meeting_transcripts?user_id=eq.' + currentUser.id + '&select=title,account_name,meeting_date,source,summary,action_items&order=meeting_date.desc&limit=10');
-    if (!rows || !rows.length) {
-      out.innerHTML = '<div style="font-size:12px;color:var(--text3);font-style:italic">No meetings received yet. Paste your webhook URL into your notetaker settings.</div>';
-      return;
-    }
-    out.innerHTML = rows.map(function(m) {
-      const actions = Array.isArray(m.action_items) ? m.action_items : [];
-      return '<div style="background:var(--surface2);border-radius:6px;padding:10px 12px;margin-bottom:6px">' +
-        '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">' +
-          '<div style="font-size:12px;font-weight:500;color:var(--text)">' + esc(m.title || 'Untitled meeting') + '</div>' +
-          '<div style="font-size:10px;color:var(--text3)">' + esc(m.meeting_date || '') + ' · ' + esc(m.source || '') + '</div>' +
-        '</div>' +
-        (m.account_name ? '<div style="font-size:11px;color:var(--gold);margin-bottom:4px">@ ' + esc(m.account_name) + '</div>' : '') +
-        (m.summary ? '<div style="font-size:11px;color:var(--text2);line-height:1.5;margin-bottom:4px">' + esc(m.summary.slice(0,150)) + '</div>' : '') +
-        (actions.length ? '<div style="font-size:11px;color:var(--text3)">✓ ' + actions.length + ' action item' + (actions.length > 1 ? 's' : '') + '</div>' : '') +
-      '</div>';
-    }).join('');
-  } catch(e) {
-    out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>';
-  }
-}
 
 async function loadMyAccounts() {
   const list = document.getElementById('myAccountsList');
