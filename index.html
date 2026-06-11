@@ -651,6 +651,27 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
       </div>
     </div>
 
+    <!-- Notetaker webhook setup -->
+    <div id="samNotetakerSection" style="margin-bottom:16px;display:none">
+      <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div>
+            <div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em">🎙 Notetaker Integration</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">Paste this URL into your notetaker's webhook settings</div>
+          </div>
+          <button onclick="loadMeetingLog()" style="font-size:11px;color:var(--gold);background:none;border:none;cursor:pointer;font-family:var(--sans)">View log</button>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+          <div id="webhookUrlDisplay" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:11px;font-family:monospace;color:var(--text2);word-break:break-all"></div>
+          <button onclick="copyWebhookUrl()" style="padding:7px 12px;border-radius:6px;background:rgba(160,117,42,0.1);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap">Copy</button>
+        </div>
+        <div style="font-size:11px;color:var(--text3);line-height:1.6">
+          Works with: <span style="color:var(--text2)">Fireflies · Fathom · Otter · tl;dv · any webhook-enabled notetaker</span>
+        </div>
+        <div id="meetingLogOutput" style="margin-top:10px"></div>
+      </div>
+    </div>
+
     <!-- Rep's own account list -->
     <div id="samAccountListSection" style="margin-bottom:16px;display:none">
       <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px">
@@ -1640,6 +1661,13 @@ function switchTab(tab) {
     const accSec = document.getElementById('samAccountListSection');
     if (accSec) accSec.style.display = 'block';
     loadMyAccounts();
+    const ntSec = document.getElementById('samNotetakerSection');
+    if (ntSec) ntSec.style.display = 'block';
+    // Set webhook URL
+    const webhookEl = document.getElementById('webhookUrlDisplay');
+    if (webhookEl && currentUser) {
+      webhookEl.textContent = 'https://gowpuicpmrwsohongosf.supabase.co/functions/v1/notetaker-webhook?user_id=' + currentUser.id;
+    }
   }
   if (tab === 'team') {
     const tdi = document.getElementById('teamDateInput');
@@ -2315,6 +2343,42 @@ function renderSamAlerts() {
   } else { alerts.innerHTML = ''; }
 }
 
+function copyWebhookUrl() {
+  const el = document.getElementById('webhookUrlDisplay');
+  if (!el) return;
+  navigator.clipboard.writeText(el.textContent).then(() => {
+    const btn = el.nextElementSibling;
+    if (btn) { btn.textContent = '✓ Copied'; setTimeout(() => btn.textContent = 'Copy', 2000); }
+  });
+}
+
+async function loadMeetingLog() {
+  const out = document.getElementById('meetingLogOutput');
+  if (!out || !currentUser?.token) return;
+  out.innerHTML = '<div style="font-size:12px;color:var(--text3)">Loading meeting log…</div>';
+  try {
+    const rows = await sbGet('meeting_transcripts?user_id=eq.' + currentUser.id + '&select=title,account_name,meeting_date,source,summary,action_items&order=meeting_date.desc&limit=10');
+    if (!rows || !rows.length) {
+      out.innerHTML = '<div style="font-size:12px;color:var(--text3);font-style:italic">No meetings received yet. Paste your webhook URL into your notetaker settings.</div>';
+      return;
+    }
+    out.innerHTML = rows.map(function(m) {
+      const actions = Array.isArray(m.action_items) ? m.action_items : [];
+      return '<div style="background:var(--surface2);border-radius:6px;padding:10px 12px;margin-bottom:6px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">' +
+          '<div style="font-size:12px;font-weight:500;color:var(--text)">' + esc(m.title || 'Untitled meeting') + '</div>' +
+          '<div style="font-size:10px;color:var(--text3)">' + esc(m.meeting_date || '') + ' · ' + esc(m.source || '') + '</div>' +
+        '</div>' +
+        (m.account_name ? '<div style="font-size:11px;color:var(--gold);margin-bottom:4px">@ ' + esc(m.account_name) + '</div>' : '') +
+        (m.summary ? '<div style="font-size:11px;color:var(--text2);line-height:1.5;margin-bottom:4px">' + esc(m.summary.slice(0,150)) + '</div>' : '') +
+        (actions.length ? '<div style="font-size:11px;color:var(--text3)">✓ ' + actions.length + ' action item' + (actions.length > 1 ? 's' : '') + '</div>' : '') +
+      '</div>';
+    }).join('');
+  } catch(e) {
+    out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>';
+  }
+}
+
 async function loadMyAccounts() {
   const list = document.getElementById('myAccountsList');
   if (!list || !currentUser?.token || !profile?.org_id) return;
@@ -2459,7 +2523,37 @@ async function runIntentVsReality(repId, outputId) {
         html += '<div style="font-size:10px;color:var(--text3);flex-shrink:0;margin-left:8px">' + esc(r.date || '') + (r.priority ? ' ⭐' : '') + '</div>';
         html += '</div>';
         if (r.emailSubject) {
-          html += '<div style="font-size:11px;color:var(--text3);margin-top:3px">📧 ' + esc(r.emailSubject.slice(0,60)) + (r.emailTo ? ' → ' + esc(r.emailTo.split('<')[0].trim().slice(0,30)) : '') + '</div>';
+          const isMeetingVerified = r.emailSubject.startsWith('🎙') || r.emailSubject.startsWith('📅');
+          html += '<div style="font-size:11px;color:var(--text3);margin-top:3px">' + esc(r.emailSubject.slice(0,80)) + '</div>';
+
+          // Try to parse meeting intel from emailTo field
+          if (isMeetingVerified && r.emailTo) {
+            try {
+              const intel = JSON.parse(r.emailTo);
+              if (intel.summary || intel.participants?.length || intel.actionItems?.length) {
+                html += '<div style="margin-top:6px;background:rgba(74,140,92,0.06);border:1px solid rgba(74,140,92,0.2);border-radius:6px;padding:8px 10px">';
+                if (intel.source) html += '<div style="font-size:10px;color:var(--text3);margin-bottom:4px">via ' + esc(intel.source) + '</div>';
+                if (intel.summary) html += '<div style="font-size:12px;color:var(--text2);line-height:1.5;margin-bottom:5px">' + esc(intel.summary) + '</div>';
+                if (intel.participants?.length) {
+                  html += '<div style="font-size:11px;color:var(--text3);margin-bottom:3px">👥 ' + intel.participants.map(function(p){return esc(p);}).join(', ') + '</div>';
+                }
+                if (intel.actionItems?.length) {
+                  html += '<div style="font-size:11px;color:var(--text3);margin-bottom:3px">✓ Action items: ' + intel.actionItems.slice(0,3).map(function(a){return esc(a);}).join(' · ') + '</div>';
+                }
+                if (intel.nextSteps) {
+                  html += '<div style="font-size:11px;color:var(--gold)">→ ' + esc(intel.nextSteps) + '</div>';
+                }
+                html += '</div>';
+              }
+            } catch(e) {
+              // Not JSON, just show as text
+              if (r.emailTo && !r.emailTo.includes('<')) {
+                html += '<div style="font-size:11px;color:var(--text3)">→ ' + esc(r.emailTo.slice(0,60)) + '</div>';
+              }
+            }
+          } else if (r.emailTo && !r.emailTo.startsWith('{')) {
+            html += '<div style="font-size:11px;color:var(--text3)">→ ' + esc(r.emailTo.split('<')[0].trim().slice(0,40)) + '</div>';
+          }
         }
         if (r.replyEvidence) {
           html += '<div style="font-size:11px;color:var(--green);margin-top:2px">↩ Reply received</div>';
