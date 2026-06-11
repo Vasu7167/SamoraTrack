@@ -749,7 +749,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
       </div>
 
       <!-- Recipients toggle -->
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
         <span style="font-size:11px;color:var(--text3)">Send to:</span>
         <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
           <input type="checkbox" id="digestToManager" checked style="accent-color:var(--gold)"/>
@@ -757,9 +757,14 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
         </label>
         <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
           <input type="checkbox" id="digestToReps" checked style="accent-color:var(--gold)"/>
-          <span style="font-size:12px;color:var(--text2)">All reps (individual summary)</span>
+          <span style="font-size:12px;color:var(--text2)">All reps</span>
         </label>
       </div>
+      <!-- Additional email IDs -->
+      <div style="display:flex;gap:8px;align-items:center">
+        <input id="digestExtraEmails" placeholder="Add email IDs (comma separated) e.g. vasu@gmail.com, ceo@co.com" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none;transition:border-color 0.2s" onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor=''"/>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:4px">Until domain is verified in Resend, only send to your own verified email address</div>
     </div>
     <div id="digestOutput" style="margin-bottom:12px"></div>
 
@@ -3142,12 +3147,13 @@ async function sendWeeklyDigest() {
   const toReps = document.getElementById('digestToReps')?.checked !== false;
 
   try {
+    const extraEmails = (document.getElementById('digestExtraEmails')?.value || '').split(',').map(function(e){return e.trim();}).filter(function(e){return e.includes('@');});
+    const bodyPayload = JSON.stringify({ action: 'weekly_digest', date_from: from, date_to: to, send_to_manager: toManager, send_to_reps: toReps, extra_emails: extraEmails });
     const r = await fetch(EDGE_FN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
-      body: JSON.stringify({ action: 'weekly_digest', date_from: from, date_to: to, send_to_manager: toManager, send_to_reps: toReps })
-    });
-    const data = await r.json();
+      body: bodyPayload
+    });;son();
     if (data.success) {
       if (out) out.innerHTML = '<div style="font-size:12px;color:var(--green);padding:8px 0">✓ Digest sent to ' + data.sent + ' people for ' + data.weekLabel + '</div>';
       if (btn) { btn.textContent = '✓ Sent'; setTimeout(() => { btn.textContent = 'Send now'; btn.disabled = false; }, 3000); }
