@@ -743,6 +743,16 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 
 
   <!-- ── Team (Manager + Super Admin) ── -->
+  <!-- ── Executive Pulse Panel ── -->
+  <div class="panel" id="panel-exec" style="padding-bottom:100px">
+    <div id="execDashboard">
+      <div style="text-align:center;padding:40px 20px;color:var(--text3)">
+        <div style="font-size:32px;margin-bottom:12px">◈</div>
+        <div style="font-size:14px;color:var(--text2)">Loading Pulse…</div>
+      </div>
+    </div>
+  </div>
+
   <div class="panel" id="panel-team">
 
     <!-- Digest Scheduler -->
@@ -971,6 +981,10 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
     <button class="nav-btn" onclick="switchTab('team')" id="nav-team" style="display:none">
       <span class="nav-icon">👥</span>
       <span class="nav-label">Team</span>
+    </button>
+    <button class="nav-btn" onclick="switchTab('exec')" id="nav-exec" style="display:none">
+      <span class="nav-icon">◈</span>
+      <span class="nav-label">Pulse</span>
     </button>
     <button class="nav-btn" onclick="switchTab('you')" id="nav-you">
       <span class="nav-icon">◎</span>
@@ -1287,6 +1301,12 @@ function launchApp() {
   if (role === 'super_admin' || role === 'manager') {
     const navTeam = document.getElementById('nav-team');
     if (navTeam) navTeam.style.display = '';
+    // Show Pulse tab for director/executive/admin
+    const navExec = document.getElementById('nav-exec');
+    if (navExec) navExec.style.display = ['director','executive','admin','super_admin'].includes(profile.role) ? '' : 'none';
+    // Show Org tab only for admin
+    const navOrg = document.getElementById('nav-org');
+    if (navOrg) navOrg.style.display = ['admin','super_admin'].includes(profile.role) ? '' : 'none';
   }
 
   loadLocal(); runCarryOver();
@@ -1654,6 +1674,7 @@ function switchTab(tab) {
   if (tab === 'settings') renderSettings();
   if (tab === 'you') renderYouPanel();
   if (tab === 'review') renderSummary();
+  if (tab === 'exec') { loadExecDashboard(); }
   if (tab === 'signals') {
     renderSamAlerts(); loadSamSignals();
     const covSec = document.getElementById('samCoverageSection');
@@ -3467,6 +3488,168 @@ function showNudgeBanner(tasks) {
   else if (hour >= 16 && hour < 18) msg = '⏰ Last push — ' + pending + ' task' + (pending > 1 ? 's' : '') + ' to go. Complete before 6pm to stay on track.';
   if (msg) { text.textContent = msg; banner.style.display = 'block'; }
   else banner.style.display = 'none';
+}
+
+// ── Executive Pulse Dashboard ────────────────────────────────────────────────
+async function loadExecDashboard() {
+  const container = document.getElementById('execDashboard');
+  if (!container || !currentUser?.token || !profile?.org_id) return;
+
+  container.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text3);font-size:13px">Loading org pulse…</div>';
+
+  try {
+    // Get all org members
+    const members = await sbGet('user_profiles?org_id=eq.' + profile.org_id + '&select=user_id,email,role');
+    if (!members?.length) { container.innerHTML = '<div style="padding:20px;color:var(--text3)">No team members found</div>'; return; }
+
+    const reps = members.filter(function(m) { return m.role === 'member' || m.role === 'manager'; });
+    const today = todayKey();
+
+    // Get today's daytrack for all reps
+    const repData = [];
+    for (const rep of reps) {
+      const dt = await sbGet('daytrack?user_id=eq.' + rep.user_id + '&day_key=eq.' + today + '&select=data');
+      const d = dt?.[0]?.data || {};
+      const tasks = d.tasks || [];
+      const score = calcDayScore(tasks);
+      const done = tasks.filter(function(t) { return t.done; }).length;
+      const pending = tasks.filter(function(t) { return !t.done; }).length;
+      const wins = (d.wins || []).length;
+      const issues = (d.issues || []).length;
+
+      // Gmail connected?
+      const gt = await sbGet('gmail_tokens?user_id=eq.' + rep.user_id + '&select=email');
+      const gmailConnected = gt?.length > 0;
+
+      repData.push({
+        email: rep.email,
+        role: rep.role,
+        score: score.score,
+        completion: score.completion,
+        rhythm: score.rhythm,
+        tasks: tasks.length,
+        done, pending, wins, issues,
+        gmailConnected
+      });
+    }
+
+    // ── Compute org-level KPIs ────────────────────────────────────────────────
+    const avgScore = repData.length ? Math.round(repData.reduce(function(s,r){return s+r.score;},0) / repData.length) : 0;
+    const avgCompletion = repData.length ? Math.round(repData.reduce(function(s,r){return s+r.completion;},0) / repData.length) : 0;
+    const totalTasks = repData.reduce(function(s,r){return s+r.tasks;},0);
+    const totalDone = repData.reduce(function(s,r){return s+r.done;},0);
+    const totalWins = repData.reduce(function(s,r){return s+r.wins;},0);
+    const totalIssues = repData.reduce(function(s,r){return s+r.issues;},0);
+    const gmailConnected = repData.filter(function(r){return r.gmailConnected;}).length;
+    const orgCompletionRate = totalTasks ? Math.round((totalDone/totalTasks)*100) : 0;
+
+    // Risk flags
+    const atRisk = repData.filter(function(r) { return r.score < 40 && r.tasks > 0; });
+    const onTrack = repData.filter(function(r) { return r.score >= 70; });
+    const noActivity = repData.filter(function(r) { return r.tasks === 0; });
+
+    // Predictability score — how much of the team has Gmail connected and tasks logged
+    const predictability = Math.round(((gmailConnected / Math.max(reps.length,1)) * 0.5 + (orgCompletionRate/100) * 0.5) * 100);
+
+    const col = scoreColor(avgScore);
+
+    // ── Build dashboard HTML ──────────────────────────────────────────────────
+    let html = '';
+
+    // Header
+    html += '<div style="margin-bottom:20px">';
+    html += '<div style="font-family:var(--serif);font-size:22px;color:var(--text);margin-bottom:2px">Org Pulse</div>';
+    html += '<div style="font-size:12px;color:var(--text3)">' + today + ' · ' + reps.length + ' reps active</div>';
+    html += '</div>';
+
+    // ── 5 KPI cards ──────────────────────────────────────────────────────────
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">';
+
+    const kpis = [
+      { label:'Org Score', value: avgScore, suffix:'', color: scoreColor(avgScore), sub: scoreLabel(avgScore) },
+      { label:'Completion', value: orgCompletionRate, suffix:'%', color: orgCompletionRate >= 70 ? 'var(--green)' : orgCompletionRate >= 50 ? 'var(--amber)' : 'var(--coral)', sub: totalDone + '/' + totalTasks + ' tasks done' },
+      { label:'Wins today', value: totalWins, suffix:'', color: totalWins > 0 ? 'var(--green)' : 'var(--text3)', sub: totalWins > 0 ? 'Across team' : 'None logged yet' },
+      { label:'Predictability', value: predictability, suffix:'%', color: predictability >= 70 ? 'var(--green)' : predictability >= 50 ? 'var(--amber)' : 'var(--coral)', sub: gmailConnected + '/' + reps.length + ' Gmail connected' }
+    ];
+
+    kpis.forEach(function(k) {
+      html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px">' +
+        '<div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">' + k.label + '</div>' +
+        '<div style="font-size:28px;font-weight:500;color:' + k.color + ';line-height:1;margin-bottom:4px">' + k.value + k.suffix + '</div>' +
+        '<div style="font-size:11px;color:var(--text3)">' + k.sub + '</div>' +
+      '</div>';
+    });
+    html += '</div>';
+
+    // ── Rep score bar chart ───────────────────────────────────────────────────
+    html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-bottom:12px">';
+    html += '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px">Team scores today</div>';
+    const sorted = repData.slice().sort(function(a,b){return b.score-a.score;});
+    sorted.forEach(function(r) {
+      const bc = scoreColor(r.score);
+      const w = r.tasks > 0 ? r.score : 0;
+      html += '<div style="margin-bottom:8px">' +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:3px">' +
+          '<span style="font-size:12px;color:var(--text2)">' + esc(r.email.split('@')[0]) + '</span>' +
+          '<span style="font-size:12px;font-weight:600;color:' + bc + '">' + (r.tasks > 0 ? r.score : '—') + '</span>' +
+        '</div>' +
+        '<div style="height:4px;background:var(--surface2);border-radius:2px;overflow:hidden">' +
+          '<div style="height:100%;width:' + w + '%;background:' + bc + ';border-radius:2px;transition:width 0.5s"></div>' +
+        '</div>' +
+      '</div>';
+    });
+    html += '</div>';
+
+    // ── Risks & Priorities ────────────────────────────────────────────────────
+    html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-bottom:12px">';
+    html += '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Priorities & Risks</div>';
+
+    if (atRisk.length === 0 && noActivity.length === 0 && totalIssues === 0) {
+      html += '<div style="font-size:13px;color:var(--green)">✓ No red flags today — team is on track</div>';
+    }
+    if (atRisk.length > 0) {
+      html += '<div style="border-left:3px solid var(--coral);padding:8px 12px;background:var(--coral-lt);border-radius:0 6px 6px 0;margin-bottom:8px">';
+      html += '<div style="font-size:12px;font-weight:500;color:var(--coral);margin-bottom:4px">🚨 Low score — needs attention (' + atRisk.length + ')</div>';
+      atRisk.forEach(function(r) {
+        html += '<div style="font-size:12px;color:var(--text2)">' + esc(r.email.split('@')[0]) + ' — score ' + r.score + ' · ' + r.pending + ' tasks pending</div>';
+      });
+      html += '</div>';
+    }
+    if (noActivity.length > 0) {
+      html += '<div style="border-left:3px solid var(--amber);padding:8px 12px;background:var(--amber-lt);border-radius:0 6px 6px 0;margin-bottom:8px">';
+      html += '<div style="font-size:12px;font-weight:500;color:var(--amber);margin-bottom:4px">⚠ No tasks logged today (' + noActivity.length + ')</div>';
+      noActivity.forEach(function(r) {
+        html += '<div style="font-size:12px;color:var(--text2)">' + esc(r.email.split('@')[0]) + '</div>';
+      });
+      html += '</div>';
+    }
+    if (totalIssues > 0) {
+      html += '<div style="border-left:3px solid var(--amber);padding:8px 12px;background:var(--amber-lt);border-radius:0 6px 6px 0;margin-bottom:8px">';
+      html += '<div style="font-size:12px;font-weight:500;color:var(--amber)">' + totalIssues + ' issue' + (totalIssues>1?'s':'') + ' flagged across team today</div>';
+      html += '</div>';
+    }
+    html += '</div>';
+
+    // ── Predictability note ───────────────────────────────────────────────────
+    html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px">';
+    html += '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Pipeline Predictability</div>';
+    html += '<div style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:8px">';
+    if (predictability >= 70) {
+      html += '✓ High predictability — ' + gmailConnected + ' of ' + reps.length + ' reps have Gmail connected and are actively logging. Signals are reliable.';
+    } else if (predictability >= 40) {
+      html += '⚠ Moderate predictability — ' + (reps.length - gmailConnected) + ' rep' + (reps.length-gmailConnected>1?'s':'') + ' not connected to Gmail. Signal coverage is partial.';
+    } else {
+      html += '🚨 Low predictability — most reps are not connected. Forecasting is based on logged tasks only, not verified activity.';
+    }
+    html += '</div>';
+    html += '<button onclick="loadExecDashboard()" style="font-size:11px;color:var(--gold);background:none;border:none;cursor:pointer;font-family:var(--sans);padding:0">↻ Refresh</button>';
+    html += '</div>';
+
+    container.innerHTML = html;
+
+  } catch(e) {
+    container.innerHTML = '<div style="padding:20px;font-size:13px;color:var(--coral)">Error loading dashboard: ' + esc(e.message) + '</div>';
+  }
 }
 
 function toggleMember(idx) {
