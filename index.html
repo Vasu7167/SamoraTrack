@@ -1292,8 +1292,8 @@ function launchApp() {
   const role = profile?.role || 'member';
   document.getElementById('uEmail').textContent = currentUser.email;
   const rp = document.getElementById('uRole');
-  const labels = { super_admin: 'Super Admin', manager: 'Manager', member: 'Member' };
-  const cls = { super_admin: 'role-super', manager: 'role-manager', member: 'role-member' };
+  const labels = { super_admin:'Admin', admin:'Admin', manager:'Manager', director:'Director', executive:'Executive', member:'Member' };
+  const cls = { super_admin:'role-super', admin:'role-super', manager:'role-manager', director:'role-director', executive:'role-executive', member:'role-member' };
   rp.textContent = labels[role]; rp.className = 'role-pill ' + cls[role];
   document.getElementById('uOrg').textContent = profile?.org_name || '';
 
@@ -2870,8 +2870,8 @@ async function renderTeam() {
     const rows = await sbGet('daytrack?day_key=eq.' + selectedDate + '&user_id=in.(' + uids.join(',') + ')&select=user_id,data');
     const dataMap = {};
     (rows || []).forEach(r => { dataMap[r.user_id] = r.data; });
-    const roleCls = { super_admin:'role-super', manager:'role-manager', member:'role-member' };
-    const roleLabel = { super_admin:'Super Admin', manager:'Manager', member:'Member' };
+    const roleCls = { super_admin:'role-super', admin:'role-super', manager:'role-manager', director:'role-director', executive:'role-executive', member:'role-member' };
+    const roleLabel = { super_admin:'Admin', admin:'Admin', manager:'Manager', director:'Director', executive:'Executive', member:'Member' };
     tl.innerHTML = others.map((m, idx) => {
       const d = dataMap[m.user_id] || { tasks:[], issues:[], wins:[], misses:[] };
       const taskArr = d.tasks?.length ? d.tasks : (d.priorities || []); const total = taskArr.length, done = taskArr.filter(t=>t.done).length;
@@ -3693,8 +3693,8 @@ async function renderOrg() {
 function renderPeopleTable() {
   if (!orgPeople?.length) { document.getElementById('peopleList').innerHTML = '<div class="empty">No members yet.</div>'; return; }
   const rows = orgPeople.map(p => {
-    const roleOpts = ['super_admin','manager','member'].map(r =>
-      `<option value="${r}" ${p.role===r?'selected':''}>${{super_admin:'Super Admin',manager:'Manager',member:'Member'}[r]}</option>`
+    const roleOpts = ['member','manager','director','executive','admin'].map(r =>
+      `<option value="${r}" ${p.role===r?'selected':''}>${{member:'Member',manager:'Manager',director:'Director',executive:'Executive',admin:'Admin',super_admin:'Admin'}[r]||r}</option>`
     ).join('');
     return `<tr>
       <td>${esc(p.email)}</td>
