@@ -2857,7 +2857,8 @@ async function renderTeam() {
   if (!currentUser?.token) { tl.innerHTML = '<div class="empty"><div class="empty-icon">🔒</div>Session expired — please sign out and sign back in.</div>'; return; }
   try {
     let q;
-    if (profile?.role === 'super_admin') {
+    const seeAll = ['super_admin','admin','director','executive'].includes(profile?.role);
+    if (seeAll) {
       q = 'user_profiles?org_id=eq.' + profile.org_id + '&select=user_id,email,role,manager_id';
     } else {
       q = 'user_profiles?org_id=eq.' + profile.org_id + '&manager_id=eq.' + currentUser.id + '&select=user_id,email,role,manager_id';
@@ -3705,14 +3706,17 @@ function renderPeopleTable() {
 }
 
 function renderAssignCard() {
-  const managers = orgPeople.filter(p => p.role === 'manager');
-  const members = orgPeople.filter(p => p.role === 'member');
-  if (!managers.length) { document.getElementById('assignCard').innerHTML = '<div class="m-empty">No managers yet. Promote a member to Manager role above first.</div>'; return; }
+  // Anyone with role > member can be a reporting manager
+  const seniorRoles = ['manager','director','executive','admin','super_admin'];
+  const managers = orgPeople.filter(p => seniorRoles.includes(p.role));
+  const reportees = orgPeople.filter(p => p.role === 'member' || p.role === 'manager');
+  if (!managers.length) { document.getElementById('assignCard').innerHTML = '<div class="m-empty">No senior members yet. Assign a Manager, Director or Executive role first.</div>'; return; }
   const html = managers.map(mgr => {
-    const mgrMembers = members.filter(m => m.manager_id === mgr.user_id);
-    const unassigned = members.filter(m => !m.manager_id || m.manager_id !== mgr.user_id);
+    const mgrMembers = reportees.filter(m => m.manager_id === mgr.user_id);
+    const unassigned = reportees.filter(m => !m.manager_id || m.manager_id !== mgr.user_id);
+    const roleLabel_ = {manager:'Manager',director:'Director',executive:'Executive',admin:'Admin',super_admin:'Admin'}[mgr.role]||mgr.role;
     return `<div style="margin-bottom:16px">
-      <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:8px">${esc(mgr.email)}</div>
+      <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:8px">${esc(mgr.email)} <span style="font-size:10px;color:var(--text3)">${roleLabel_}</span></div>
       <div style="font-size:12px;color:var(--text3);margin-bottom:6px">Current team: ${mgrMembers.length ? mgrMembers.map(m=>`<span style="color:var(--green)">${esc(m.email)}</span>`).join(', ') : 'none'}</div>
       <select class="role-select" style="width:100%;padding:8px;font-size:13px" onchange="assignToManager('${mgr.user_id}', this.value); this.value=''">
         <option value="">+ Assign a member…</option>
