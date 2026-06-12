@@ -743,12 +743,29 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 
 
   <!-- ── Team (Manager + Super Admin) ── -->
-  <!-- ── Executive Pulse Panel ── -->
+  <!-- ── SAMagic Panel ── -->
   <div class="panel" id="panel-exec" style="padding-bottom:100px">
+    <!-- Date filter -->
+    <div style="margin-bottom:14px">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+        <span style="font-size:11px;color:var(--text3)">Period:</span>
+        <button class="sam-period-btn active" id="exec-period-today" onclick="setExecPeriod('today',this)">Today</button>
+        <button class="sam-period-btn" id="exec-period-wtd" onclick="setExecPeriod('wtd',this)">Week to date</button>
+        <button class="sam-period-btn" id="exec-period-mtd" onclick="setExecPeriod('mtd',this)">Month to date</button>
+        <button class="sam-period-btn" id="exec-period-custom" onclick="setExecPeriod('custom',this)">Custom</button>
+      </div>
+      <div id="execCustomRange" style="display:none;gap:8px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:11px;color:var(--text3)">From:</span>
+        <input type="date" id="execDateFrom" style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none"/>
+        <span style="font-size:11px;color:var(--text3)">To:</span>
+        <input type="date" id="execDateTo" style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none"/>
+        <button onclick="loadExecDashboard()" style="padding:5px 12px;border-radius:var(--radius-sm);background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Apply</button>
+      </div>
+    </div>
     <div id="execDashboard">
       <div style="text-align:center;padding:40px 20px;color:var(--text3)">
-        <div style="font-size:32px;margin-bottom:12px">◈</div>
-        <div style="font-size:14px;color:var(--text2)">Loading Pulse…</div>
+        <div style="font-size:32px;margin-bottom:12px">✦</div>
+        <div style="font-size:14px;color:var(--text2)">Loading SAMagic…</div>
       </div>
     </div>
   </div>
@@ -984,7 +1001,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
     </button>
     <button class="nav-btn" onclick="switchTab('exec')" id="nav-exec" style="display:none">
       <span class="nav-icon">◈</span>
-      <span class="nav-label">Pulse</span>
+      <span class="nav-label">SAMagic</span>
     </button>
     <button class="nav-btn" onclick="switchTab('you')" id="nav-you">
       <span class="nav-icon">◎</span>
@@ -1301,7 +1318,7 @@ function launchApp() {
   if (role === 'super_admin' || role === 'manager') {
     const navTeam = document.getElementById('nav-team');
     if (navTeam) navTeam.style.display = '';
-    // Show Pulse tab for director/executive/admin
+    // Show SAMagic tab for director/executive/admin
     const navExec = document.getElementById('nav-exec');
     if (navExec) navExec.style.display = ['director','executive','admin','super_admin'].includes(profile.role) ? '' : 'none';
     // Show Org tab only for admin
@@ -3491,7 +3508,47 @@ function showNudgeBanner(tasks) {
   else banner.style.display = 'none';
 }
 
-// ── Executive Pulse Dashboard ────────────────────────────────────────────────
+// ── Executive SAMagic ────────────────────────────────────────────────
+let execPeriod = 'today';
+
+function setExecPeriod(period, btn) {
+  execPeriod = period;
+  document.querySelectorAll('#exec-period-today,#exec-period-wtd,#exec-period-mtd,#exec-period-custom').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const cr = document.getElementById('execCustomRange');
+  if (cr) cr.style.display = period === 'custom' ? 'flex' : 'none';
+  if (period === 'custom') {
+    const fmt = d => d.toISOString().split('T')[0];
+    const from = new Date(); from.setDate(from.getDate() - 30);
+    const fromEl = document.getElementById('execDateFrom');
+    const toEl = document.getElementById('execDateTo');
+    if (fromEl && !fromEl.value) fromEl.value = fmt(from);
+    if (toEl && !toEl.value) toEl.value = fmt(new Date());
+    return; // wait for Apply
+  }
+  loadExecDashboard();
+}
+
+function getExecDateRange() {
+  const today = todayKey();
+  if (execPeriod === 'today') return { from: today, to: today, label: 'Today' };
+  if (execPeriod === 'wtd') {
+    const d = new Date(); const day = d.getDay();
+    const monday = new Date(d); monday.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+    return { from: monday.toISOString().split('T')[0], to: today, label: 'Week to date' };
+  }
+  if (execPeriod === 'mtd') {
+    const d = new Date();
+    return { from: d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-01', to: today, label: 'Month to date' };
+  }
+  if (execPeriod === 'custom') {
+    const from = document.getElementById('execDateFrom')?.value || today;
+    const to = document.getElementById('execDateTo')?.value || today;
+    return { from, to, label: from + ' → ' + to };
+  }
+  return { from: today, to: today, label: 'Today' };
+}
+
 async function loadExecDashboard() {
   const container = document.getElementById('execDashboard');
   if (!container || !currentUser?.token || !profile?.org_id) return;
@@ -3504,19 +3561,28 @@ async function loadExecDashboard() {
     if (!members?.length) { container.innerHTML = '<div style="padding:20px;color:var(--text3)">No team members found</div>'; return; }
 
     const reps = members.filter(function(m) { return m.role === 'member' || m.role === 'manager'; });
-    const today = todayKey();
+    const { from: dateFrom, to: dateTo, label: dateLabel } = getExecDateRange();
 
-    // Get today's daytrack for all reps
+    // Get daytrack for all reps across date range
     const repData = [];
     for (const rep of reps) {
-      const dt = await sbGet('daytrack?user_id=eq.' + rep.user_id + '&day_key=eq.' + today + '&select=data');
-      const d = dt?.[0]?.data || {};
+      const dt = await sbGet('daytrack?user_id=eq.' + rep.user_id + '&day_key=gte.' + dateFrom + '&day_key=lte.' + dateTo + '&select=day_key,data&order=day_key.desc');
+      // Merge all tasks across date range
+      const allTasks = [];
+      const allWins = [];
+      const allIssues = [];
+      (dt || []).forEach(function(row) {
+        (row.data?.tasks || []).forEach(function(t) { allTasks.push({...t, date: row.day_key}); });
+        (row.data?.wins || []).forEach(function(w) { allWins.push(w); });
+        (row.data?.issues || []).forEach(function(i) { allIssues.push(i); });
+      });
+      const d = { tasks: allTasks, wins: allWins, issues: allIssues };
       const tasks = d.tasks || [];
       const score = calcDayScore(tasks);
       const done = tasks.filter(function(t) { return t.done; }).length;
       const pending = tasks.filter(function(t) { return !t.done; }).length;
-      const wins = (d.wins || []).length;
-      const issues = (d.issues || []).length;
+      const wins = allWins.length;
+      const issues = allIssues.length;
 
       // Gmail connected?
       const gt = await sbGet('gmail_tokens?user_id=eq.' + rep.user_id + '&select=email');
@@ -3559,8 +3625,8 @@ async function loadExecDashboard() {
 
     // Header
     html += '<div style="margin-bottom:20px">';
-    html += '<div style="font-family:var(--serif);font-size:22px;color:var(--text);margin-bottom:2px">Org Pulse</div>';
-    html += '<div style="font-size:12px;color:var(--text3)">' + today + ' · ' + reps.length + ' reps active</div>';
+    html += '<div style="font-family:var(--serif);font-size:22px;color:var(--text);margin-bottom:2px">SAMagic</div>';
+    html += '<div style="font-size:12px;color:var(--text3)">' + dateLabel + ' · ' + reps.length + ' reps</div>';
     html += '</div>';
 
     // ── 5 KPI cards ──────────────────────────────────────────────────────────
