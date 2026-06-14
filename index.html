@@ -452,6 +452,21 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
       <label class="field-label">Organisation code</label>
       <div class="field-hint">Leave blank to create a new organisation (you'll become Super Admin)</div>
       <input class="auth-input" id="aOrgCode" placeholder="e.g. ORG-XXXX — leave blank to create new"/>
+
+      <div id="rolePickerWrap" style="display:none;margin-top:12px">
+        <label class="field-label">Your role</label>
+        <div class="field-hint">This shapes your daily coaching and task framing</div>
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <button type="button" id="rolePickSDR" onclick="pickSignupRole('sdr')" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text2);cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;transition:all .2s">
+            <div style="font-weight:600;margin-bottom:2px">SDR</div>
+            <div style="font-size:11px;opacity:0.7">Coverage · Outreach · Pipeline build</div>
+          </button>
+          <button type="button" id="rolePickAE" onclick="pickSignupRole('ae')" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text2);cursor:pointer;font-family:'DM Sans',sans-serif;font-size:13px;transition:all .2s">
+            <div style="font-weight:600;margin-bottom:2px">AE</div>
+            <div style="font-size:11px;opacity:0.7">Deal quality · Proposals · Closes</div>
+          </button>
+        </div>
+      </div>
     </div>
 
     <button class="auth-btn" id="authBtn" onclick="doAuth()">Sign in</button>
@@ -555,7 +570,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
         <button id="todayAddBtn" onclick="addTodayItem()">+</button>
       </div>
       <div class="char-hint" id="ch-today"></div>
-      <div style="font-size:10px;color:var(--text3);padding:0 2px">Tip: start with <span style="color:var(--gold);font-weight:700">*</span> to flag as priority</div>
+      <div style="font-size:10px;color:var(--text3);padding:0 2px" id="roleTipToday"></div>
       <!-- Template button for tasks -->
       <div id="today-template-row" style="display:flex;justify-content:flex-end;margin-top:8px">
         <button class="template-btn" onclick="openTemplateManager()">📋 Templates</button>
@@ -1130,11 +1145,26 @@ async function sbPatch(path, body, token) {
 // ══════════════════════════════════════════════════════════
 // AUTH
 // ══════════════════════════════════════════════════════════
+let signupRole = 'sdr'; // default
+function pickSignupRole(r) {
+  signupRole = r;
+  ['sdr','ae'].forEach(role => {
+    const btn = document.getElementById('rolePick' + role.toUpperCase());
+    if (btn) {
+      btn.style.borderColor = role === r ? 'var(--gold)' : 'var(--border)';
+      btn.style.background = role === r ? 'rgba(160,117,42,0.1)' : 'var(--surface2)';
+      btn.style.color = role === r ? 'var(--gold)' : 'var(--text2)';
+    }
+  });
+}
 function setMode(m) {
   authMode = m;
   document.querySelectorAll('.auth-tab').forEach((t,i) => t.classList.toggle('active', i === (m==='login'?0:1)));
   document.getElementById('authBtn').textContent = m === 'login' ? 'Sign in' : 'Create account';
   document.getElementById('signupFields').style.display = m === 'signup' ? 'block' : 'none';
+  const rp = document.getElementById('rolePickerWrap');
+  if (rp) rp.style.display = m === 'signup' ? 'block' : 'none';
+  if (m === 'signup') pickSignupRole('sdr'); // reset to default
   showMsg('');
 }
 
@@ -1206,7 +1236,7 @@ function localAuth(email, pass) {
     if (orgCode) {
       // Try join existing local org
       const orgs = JSON.parse(localStorage.getItem('dt-local-orgs') || '{}');
-      if (orgs[orgCode]) { orgId = orgs[orgCode].id; orgName = orgs[orgCode].name; role = 'member'; }
+      if (orgs[orgCode]) { orgId = orgs[orgCode].id; orgName = orgs[orgCode].name; role = signupRole || 'sdr'; }
       else { showMsg('Org code not found. Creating new org.', false); orgId = 'org-' + Date.now(); }
     } else { orgId = 'org-' + Date.now(); }
     if (!orgCode || role === 'super_admin') {
@@ -1250,7 +1280,7 @@ async function setupProfile(orgCode) {
       });
       const rows = await r.json();
       if (rows && rows.length) {
-        orgId = rows[0].id; orgName = rows[0].name; finalCode = rows[0].org_code; role = 'member';
+        orgId = rows[0].id; orgName = rows[0].name; finalCode = rows[0].org_code; role = signupRole || 'sdr';
       } else {
         showMsg('Org code not found. Please check and try again.', true);
         throw new Error('Org code not found');
@@ -1309,6 +1339,13 @@ function doLogout() {
 // ══════════════════════════════════════════════════════════
 // LAUNCH
 // ══════════════════════════════════════════════════════════
+// Helper: returns true for any frontline rep role
+function isRepRole(r) { return r === 'member' || r === 'sdr' || r === 'ae'; }
+// SDR = coverage-first (outreach volume, new accounts, sequences)
+function isSDR(r) { return r === 'sdr'; }
+// AE = deal-quality (pipeline depth, deal progression, qualitative signals)
+function isAE(r) { return r === 'ae' || r === 'member'; }
+
 function launchApp() {
   document.getElementById('authScreen').classList.remove('active');
   document.getElementById('appScreen').classList.add('active');
@@ -1316,8 +1353,8 @@ function launchApp() {
   const role = profile?.role || 'member';
   document.getElementById('uEmail').textContent = currentUser.email;
   const rp = document.getElementById('uRole');
-  const labels = { super_admin:'Admin', admin:'Admin', manager:'Manager', director:'Director', executive:'Executive', member:'Member' };
-  const cls = { super_admin:'role-super', admin:'role-super', manager:'role-manager', director:'role-director', executive:'role-executive', member:'role-member' };
+  const labels = { super_admin:'Admin', admin:'Admin', manager:'Manager', director:'Director', executive:'Executive', member:'Member', sdr:'SDR', ae:'AE' };
+  const cls = { super_admin:'role-super', admin:'role-super', manager:'role-manager', director:'role-director', executive:'role-executive', member:'role-member', sdr:'role-member', ae:'role-member' };
   rp.textContent = labels[role]; rp.className = 'role-pill ' + cls[role];
   document.getElementById('uOrg').textContent = profile?.org_name || '';
 
@@ -1343,7 +1380,6 @@ function launchApp() {
   setTimeout(function() { _lastCalDate = null; renderCalStrip(); }, 0);
   setTimeout(initSortable, 200);
   if (SB_URL && SB_KEY) {
-    syncTemplatesDown();
     syncDown().then(() => { runCarryOver(); _lastCalDate = null; render(); });
   }
 }
@@ -1752,7 +1788,22 @@ function setTodaySection(section) {
   const anonRow = document.getElementById('today-anon-row');
   const tmplRow = document.getElementById('today-template-row');
   if (input) {
-    const ph = { tasks:'Add a task (min 25 chars)…', issues:'Describe the issue (min 25 chars)…', wins:'Log a win (min 25 chars)…' };
+    const myRole = profile?.role || 'member';
+    const isSDRRole = myRole === 'sdr';
+    const ph = {
+      tasks: isSDRRole ? 'Log outreach or coverage task (min 25 chars)…' : 'Log a deal or meeting task (min 25 chars)…',
+      issues: 'Describe the blocker (min 25 chars)…',
+      wins: isSDRRole ? 'Log a connection, reply or meeting booked…' : 'Log a deal advance, proposal sent or close…'
+    };
+    // Update role tip
+    const roleTipEl = document.getElementById('roleTipToday');
+    if (roleTipEl) {
+      if (isSDRRole) {
+        roleTipEl.innerHTML = 'SDR focus: coverage · outreach · connections · meetings booked · <span style="color:var(--gold);font-weight:700">*</span> for priority';
+      } else {
+        roleTipEl.innerHTML = 'AE focus: deal quality · pipeline movement · proposals · closes · <span style="color:var(--gold);font-weight:700">*</span> for priority';
+      }
+    }
     input.placeholder = ph[section] || 'Add…';
   }
   if (addBtn) {
@@ -2929,8 +2980,8 @@ async function renderTeam() {
     const rows = await sbGet('daytrack?day_key=eq.' + selectedDate + '&user_id=in.(' + uids.join(',') + ')&select=user_id,data');
     const dataMap = {};
     (rows || []).forEach(r => { dataMap[r.user_id] = r.data; });
-    const roleCls = { super_admin:'role-super', admin:'role-super', manager:'role-manager', director:'role-director', executive:'role-executive', member:'role-member' };
-    const roleLabel = { super_admin:'Admin', admin:'Admin', manager:'Manager', director:'Director', executive:'Executive', member:'Member' };
+    const roleCls = { super_admin:'role-super', admin:'role-super', manager:'role-manager', director:'role-director', executive:'role-executive', member:'role-member', sdr:'role-member', ae:'role-member' };
+    const roleLabel = { super_admin:'Admin', admin:'Admin', manager:'Manager', director:'Director', executive:'Executive', member:'Member', sdr:'SDR', ae:'AE' };
     tl.innerHTML = others.map((m, idx) => {
       const d = dataMap[m.user_id] || { tasks:[], issues:[], wins:[], misses:[] };
       const taskArr = d.tasks?.length ? d.tasks : (d.priorities || []); const total = taskArr.length, done = taskArr.filter(t=>t.done).length;
@@ -3601,7 +3652,7 @@ async function loadExecDashboard() {
     const members = await sbGet('user_profiles?org_id=eq.' + profile.org_id + '&select=user_id,email,role');
     if (!members?.length) { container.innerHTML = '<div style="padding:20px;color:var(--text3)">No team members found</div>'; return; }
 
-    const reps = members.filter(function(m) { return m.role === 'member' || m.role === 'manager'; });
+    const reps = members.filter(function(m) { return m.role === 'member' || m.role === 'sdr' || m.role === 'ae' || m.role === 'manager'; });
     const { from: dateFrom, to: dateTo, label: dateLabel } = getExecDateRange();
 
     // Get daytrack for all reps across date range
@@ -3801,8 +3852,8 @@ async function renderOrg() {
 function renderPeopleTable() {
   if (!orgPeople?.length) { document.getElementById('peopleList').innerHTML = '<div class="empty">No members yet.</div>'; return; }
   const rows = orgPeople.map(p => {
-    const roleOpts = ['member','manager','director','executive','admin'].map(r =>
-      `<option value="${r}" ${p.role===r?'selected':''}>${{member:'Member',manager:'Manager',director:'Director',executive:'Executive',admin:'Admin',super_admin:'Admin'}[r]||r}</option>`
+    const roleOpts = ['sdr','ae','manager','director','executive','admin'].map(r =>
+      `<option value="${r}" ${p.role===r?'selected':''}>${{sdr:'SDR',ae:'AE',member:'Member',manager:'Manager',director:'Director',executive:'Executive',admin:'Admin',super_admin:'Admin'}[r]||r}</option>`
     ).join('');
     return `<tr>
       <td>${esc(p.email)}</td>
@@ -3816,7 +3867,7 @@ function renderAssignCard() {
   // Anyone with role > member can be a reporting manager
   const seniorRoles = ['manager','director','executive','admin','super_admin'];
   const managers = orgPeople.filter(p => seniorRoles.includes(p.role));
-  const reportees = orgPeople.filter(p => p.role === 'member' || p.role === 'manager');
+  const reportees = orgPeople.filter(p => p.role === 'member' || p.role === 'sdr' || p.role === 'ae' || p.role === 'manager');
   if (!managers.length) { document.getElementById('assignCard').innerHTML = '<div class="m-empty">No senior members yet. Assign a Manager, Director or Executive role first.</div>'; return; }
   const html = managers.map(mgr => {
     const mgrMembers = reportees.filter(m => m.manager_id === mgr.user_id);
@@ -4007,6 +4058,11 @@ async function runReview() {
   if (!pd.totalTasks && !pd.totalIssues && !pd.totalWins) { body.textContent = 'Nothing logged for this period yet.'; return; }
   body.innerHTML = '<div class="ldots"><span></span><span></span><span></span></div>';
   document.getElementById('aiHints').style.display = 'none';
+  const myRole = profile?.role || 'member';
+  const isSDRRole = myRole === 'sdr';
+  const roleContext = isSDRRole
+    ? 'This person is an SDR. Their focus is coverage: outreach volume, new account connections, meetings booked, sequences running. Coach them on pipeline top-of-funnel activity and prospecting discipline.'
+    : 'This person is an AE. Their focus is deal quality: pipeline progression, proposal advancement, objection handling, closings. Coach them on deal movement and qualitative signals.';
   let prompt;
   if (reviewPeriod === 'daily') {
     const pList = d.tasks.map(t=>`- ${t.text} (${t.done?'done':'pending'})`).join('\n')||'None';
@@ -4014,16 +4070,9 @@ async function runReview() {
     const aList = d.wins.filter(w=>!w.fromTask).map(a=>`- ${a.text}`).join('\n')||'None';
     prompt = viewDate > todayKey()
       ? `Tasks planned for ${viewDate}:\n${pList}\n\nGive a short encouraging planning note in 2-3 sentences.`
-      : `You are a warm productivity coach for the Samora intelligence platform. Review this day (${viewDate}) in 3 short flowing paragraphs, no bullets, under 110 words.\n\nTasks (${done}/${total}):\n${pList}\nIssues:\n${iList}\nExtra wins:\n${aList}`;
+      : `You are a warm productivity coach for the Samora intelligence platform. ${roleContext}\n\nReview this day (${viewDate}) in 3 short flowing paragraphs, no bullets, under 110 words.\n\nTasks (${done}/${total}):\n${pList}\nIssues:\n${iList}\nExtra wins:\n${aList}`;
   } else {
-    prompt = `You are a strategic productivity coach for the Samora intelligence platform. Give a ${reviewPeriod} performance review covering ${pd.days.length} days.
-
-Period stats: ${pd.totalTasks} tasks set, ${pd.doneTasks} completed (${pct}%), ${pd.totalIssues} issues, ${pd.totalWins} wins, ${pd.totalMisses} misses.
-Sample tasks: ${pd.taskTexts.slice(0,5).join('; ')||'none'}
-Sample issues: ${pd.issueTexts.slice(0,3).join('; ')||'none'}
-Sample wins: ${pd.winTexts.slice(0,3).join('; ')||'none'}
-
-Write a ${reviewPeriod} review in 4 short paragraphs: (1) overall performance, (2) patterns in the work, (3) what went well, (4) 2-3 recommendations for the coming ${reviewPeriod==='weekly'?'week':'month'}. Warm, specific, under 180 words. No bullets.`;
+    prompt = `You are a strategic productivity coach for the Samora intelligence platform. ${roleContext}\n\nGive a ${reviewPeriod} performance review covering ${pd.days.length} days.\n\nPeriod stats: ${pd.totalTasks} tasks set, ${pd.doneTasks} completed (${pct}%), ${pd.totalIssues} issues, ${pd.totalWins} wins, ${pd.totalMisses} misses.\nSample tasks: ${pd.taskTexts.slice(0,5).join('; ')||'none'}\nSample issues: ${pd.issueTexts.slice(0,3).join('; ')||'none'}\nSample wins: ${pd.winTexts.slice(0,3).join('; ')||'none'}\n\nWrite a ${reviewPeriod} review in 4 short paragraphs: (1) overall performance, (2) patterns in the work, (3) what went well, (4) 2-3 recommendations for the coming ${reviewPeriod==='weekly'?'week':'month'}. Warm, specific, under 180 words. No bullets.`;
   }
   try {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
@@ -4210,15 +4259,18 @@ function renderMomentum() {
 // FEATURE 6: DAILY TEMPLATE — proper implementation
 // ══════════════════════════════════════════════════════════
 function tmplKey() {
+  // Always use a real user ID — never fall through to 'dt-tmpl-undefined'
   const uid = currentUser?.id;
   if (!uid) return null;
-  // Migrate any legacy data saved under 'dt-tmpl-undefined'
+  // One-time migration: if data was saved under 'dt-tmpl-undefined', move it over
   const legacyKey = 'dt-tmpl-undefined';
   const legacyData = localStorage.getItem(legacyKey);
   if (legacyData && legacyData !== '[]') {
     try {
       const existing = JSON.parse(localStorage.getItem('dt-tmpl-' + uid) || '[]');
-      if (!existing.length) localStorage.setItem('dt-tmpl-' + uid, legacyData);
+      if (!existing.length) {
+        localStorage.setItem('dt-tmpl-' + uid, legacyData);
+      }
     } catch {}
     localStorage.removeItem(legacyKey);
   }
@@ -4231,50 +4283,8 @@ function getTemplates() {
 }
 function saveTemplates(list) {
   const k = tmplKey();
-  if (!k) return;
-  // Save to localStorage immediately (fast, works offline)
+  if (!k) { console.warn('Cannot save templates — user not logged in'); return; }
   localStorage.setItem(k, JSON.stringify(list));
-  // Also persist to Supabase so templates survive across devices and browser clears
-  if (SB_URL && currentUser?.token) {
-    const payload = { user_id: currentUser.id, day_key: '__templates__', data: { templates: list }, org_id: profile?.org_id || null };
-    fetch(SB_URL + '/rest/v1/daytrack?user_id=eq.' + currentUser.id + '&day_key=eq.__templates__&select=id', {
-      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token }
-    }).then(r => r.json()).then(existing => {
-      if (existing && existing.length > 0) {
-        return fetch(SB_URL + '/rest/v1/daytrack?user_id=eq.' + currentUser.id + '&day_key=eq.__templates__', {
-          method: 'PATCH',
-          headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ data: { templates: list } })
-        });
-      } else {
-        return fetch(SB_URL + '/rest/v1/daytrack', {
-          method: 'POST',
-          headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token, 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-      }
-    }).catch(e => console.warn('Template sync error:', e));
-  }
-}
-// Load templates from Supabase on login and populate localStorage
-async function syncTemplatesDown() {
-  if (!SB_URL || !currentUser?.token) return;
-  try {
-    const r = await fetch(SB_URL + '/rest/v1/daytrack?user_id=eq.' + currentUser.id + '&day_key=eq.__templates__&select=data', {
-      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token }
-    });
-    const rows = await r.json();
-    if (rows && rows.length > 0 && rows[0].data?.templates?.length) {
-      const k = tmplKey();
-      if (k) {
-        const local = getTemplates();
-        // Supabase wins if local is empty, merge otherwise (Supabase is source of truth)
-        if (!local.length) {
-          localStorage.setItem(k, JSON.stringify(rows[0].data.templates));
-        }
-      }
-    }
-  } catch(e) { console.warn('Template sync down error:', e); }
 }
 
 function openTemplateManager() {
