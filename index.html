@@ -1837,8 +1837,9 @@ function renderListHTML(key, items) {
       const displayText = (item.text||'').startsWith('*') ? item.text.slice(1).trim() : (item.text||'');
       const priorityBadge = isPriority ? '<span class="priority-badge">Priority</span>' : '';
       const delegatedBadge = item.delegatedBy ? '<span class="delegated-badge">\u2193 ' + esc(item.delegatedBy.split('@')[0]) + '</span>' : '';
-      const tsMeta = item.addedAt ? '<div class="item-meta">' + (item.delegatedBy?'Delegated ':'Added ') + item.addedAt + (item.completedAt?' \u00b7 Completed '+item.completedAt:'') + '</div>' : '';
-      return '<div class="item ' + (item.done?'done':'') + ' ' + (isPriority?'priority-task':'') + '" data-task-idx="' + i + '" data-carry-text="' + esc(displayText) + '"><div class="drag-handle"><svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="4" cy="3" r="1.5"/><circle cx="8" cy="3" r="1.5"/><circle cx="4" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="4" cy="13" r="1.5"/><circle cx="8" cy="13" r="1.5"/></svg></div><div class="chk ' + (item.done?'on':'') + '" onclick="toggleFromToday(' + i + ')"></div><div style="flex:1"><div class="item-text">' + esc(displayText) + ' ' + priorityBadge + delegatedBadge + '</div>' + tsMeta + '<button class="icarry" onclick="window._doCarry(event)">&#x2197; Move</button></div><button class="idel" onclick="delFromToday(\'tasks\',' + i + ')">✕</button></div>';
+      const carryMeta = item.carriedFrom ? '<div class="item-meta" style="color:var(--gold)">↗ Carried from ' + fmtDate(item.carriedFrom) + (item.carryReason ? ' · ' + item.carryReason : '') + '</div>' : (item.carriedTo ? '<div class="item-meta" style="color:var(--text3)">⟶ Moved to ' + (item.carriedToLabel||item.carriedTo) + '</div>' : '');
+      const tsMeta = (item.addedAt ? '<div class="item-meta">' + (item.delegatedBy?'Delegated ':'Added ') + item.addedAt + (item.completedAt?' \u00b7 Completed '+item.completedAt:'') + '</div>' : '') + carryMeta;
+      return '<div class="item ' + (item.done?'done':'') + ' ' + (isPriority?'priority-task':'') + '" data-task-idx="' + i + '" data-carry-text="' + esc(displayText) + '"><div class="drag-handle"><svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="4" cy="3" r="1.5"/><circle cx="8" cy="3" r="1.5"/><circle cx="4" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="4" cy="13" r="1.5"/><circle cx="8" cy="13" r="1.5"/></svg></div><div class="chk ' + (item.done?'on':'') + '" onclick="' + (item.carriedTo ? '' : 'toggleFromToday(' + i + ')') + '"' + (item.carriedTo ? ' title="Task moved forward — cannot modify"' : '') + '></div><div style="flex:1"><div class="item-text">' + esc(displayText) + ' ' + priorityBadge + delegatedBadge + '</div>' + tsMeta + '<button class="icarry" onclick="window._doCarry(event)">&#x2197; Move</button></div><button class="idel" onclick="delFromToday(\'tasks\',' + i + ')">✕</button></div>';
     }
     if (key === 'wins') {
       const isPriority = item.priority === true || (item.text||'').startsWith('*');
@@ -1875,14 +1876,34 @@ function renderListHTML(key, items) {
 
 function toggleFromToday(i) {
   const t = dayData(viewDate).tasks[i];
-  t.done = !t.done; t.addedToWins = false;
-  if (t.done) {
-    const now = new Date();
-    t.completedAt = now.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit', hour12:true });
-    dayData(viewDate).wins = dayData(viewDate).wins.filter(w => !(w.text===t.text && w.fromTask));
-  } else { t.completedAt = null; }
+  if (t.carriedTo) return; // locked — moved forward
+  if (!t.done) {
+    // Show confirmation modal before marking done
+    window._confirmDoneIdx = i;
+    document.getElementById('doneConfirmText').textContent = t.text;
+    document.getElementById('doneConfirmComment').value = '';
+    document.getElementById('doneConfirmModal').style.display = 'flex';
+    return;
+  }
+  // Unchecking — allow directly
+  t.done = false; t.completedAt = null; t.addedToWins = false;
   runCarryOver(); renderToday(); render(); save(viewDate);
 }
+window._confirmDone = function() {
+  var i = window._confirmDoneIdx;
+  var t = dayData(viewDate).tasks[i];
+  var comment = document.getElementById('doneConfirmComment').value.trim();
+  t.done = true; t.addedToWins = false;
+  var now = new Date();
+  t.completedAt = now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
+  if (comment) t.completionNote = comment;
+  dayData(viewDate).wins = dayData(viewDate).wins.filter(function(w){ return !(w.text===t.text && w.fromTask); });
+  document.getElementById('doneConfirmModal').style.display = 'none';
+  runCarryOver(); renderToday(); render(); save(viewDate);
+};
+window._cancelDone = function() {
+  document.getElementById('doneConfirmModal').style.display = 'none';
+};
 
 function delFromToday(key, i) {
   dayData(viewDate)[key].splice(i, 1);
@@ -4623,6 +4644,25 @@ window.confirmCarryForward = function() {
     d.tasks.push({text:taskText, done:false, addedAt:ts, priority:false, carriedFrom:viewDate, carryReason:reason||null});
     save(targetDate);
   }
+  // Mark source task as carried (lock it)
+  var srcDay = dayData(viewDate);
+  if (srcDay.tasks && window._pendingCarryIdx != null) {
+    var srcTask = srcDay.tasks[window._pendingCarryIdx];
+    if (srcTask) {
+      srcTask.carriedTo = targetDate;
+      srcTask.carriedToLabel = new Date(targetDate+'T12:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
+      srcTask.done = false; // keep undone, locked
+      save(viewDate);
+    }
+  }
+  // Log to issues of the same day
+  if (!srcDay.issues) srcDay.issues = [];
+  srcDay.issues.push({
+    text: 'Task moved forward: "' + taskText + '" — moved to ' + new Date(targetDate+'T12:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}) + (reason ? ' · Reason: ' + reason : ''),
+    addedAt: new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short'}) + ' · ' + new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}),
+    isCarryLog: true
+  });
+  save(viewDate);
   var lbl = new Date(targetDate+'T12:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
   document.getElementById('carryFwdModal').style.display = 'none';
   runCarryOver(); render();
@@ -4641,5 +4681,17 @@ document.addEventListener('click', function(e) {
   if (m && e.target === m) m.style.display = 'none';
 });
 </script>
+
+<div id="doneConfirmModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:700;align-items:center;justify-content:center;padding:20px">
+  <div style="background:var(--surface);border:1px solid var(--border2);border-radius:16px;width:100%;max-width:380px;padding:24px">
+    <div style="font-family:'EB Garamond',Georgia,serif;font-size:18px;color:var(--text);margin-bottom:8px">Mark as done?</div>
+    <div id="doneConfirmText" style="font-size:14px;color:var(--text2);margin-bottom:16px;padding:10px 12px;background:var(--surface2);border-radius:8px;border-left:3px solid var(--gold)"></div>
+    <textarea id="doneConfirmComment" placeholder="Add a completion note (optional)..." maxlength="200" style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;outline:none;resize:none;height:64px;line-height:1.5;margin-bottom:16px"></textarea>
+    <div style="display:flex;gap:10px">
+      <button onclick="window._cancelDone()" style="flex:1;padding:11px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-family:'DM Sans',sans-serif;font-size:14px;cursor:pointer">Cancel</button>
+      <button onclick="window._confirmDone()" style="flex:2;padding:11px;background:var(--gold);border:none;border-radius:8px;color:#18160F;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer">✓ Mark Done</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
