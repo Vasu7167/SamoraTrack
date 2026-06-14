@@ -233,8 +233,8 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 .miss-actions{display:flex;gap:6px;margin-top:6px}
 .miss-carry-btn{background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:11px;color:var(--gold);cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s}
 .miss-carry-btn:hover{background:rgba(160,117,42,0.1);border-color:var(--gold)}
-.icarry{background:rgba(160,117,42,0.12);border:1px solid rgba(160,117,42,0.35);border-radius:5px;cursor:pointer;color:var(--gold-lt);font-size:12px;padding:3px 8px;opacity:1;transition:all 0.15s;flex-shrink:0;font-family:'DM Sans',sans-serif;white-space:nowrap;margin-right:4px}
-.icarry:hover,.icarry:active{background:rgba(160,117,42,0.25);border-color:var(--gold)}
+.icarry{background:var(--gold);border:none;border-radius:4px;cursor:pointer;color:#18160F;font-size:11px;font-weight:600;padding:3px 8px;opacity:1;flex-shrink:0;font-family:'DM Sans',sans-serif;white-space:nowrap;margin-right:4px}
+.icarry:active{opacity:0.8}
 .det-miss-comment{font-size:11px;color:var(--text2);background:var(--surface2);border-radius:5px;padding:3px 8px;margin-left:14px;font-style:italic}
 .chk{width:22px;height:22px;border-radius:6px;border:1.5px solid var(--border2);cursor:pointer;flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center;transition:all 0.15s}
 .chk.on{background:var(--gold);border-color:var(--gold)}
@@ -1494,7 +1494,7 @@ function renderList(key, items) {
       const priorityBadge = isPriority ? '<span class="priority-badge">Priority</span>' : '';
       const delegatedBadge = item.delegatedBy ? `<span class="delegated-badge">↓ from ${item.delegatedBy.split('@')[0]}</span>` : '';
       const tsMeta = item.addedAt ? `<div class="item-meta">${item.delegatedBy ? 'Delegated ' : 'Added '}${item.addedAt}${item.completedAt ? ' · Completed ' + item.completedAt : ''}</div>` : '';
-      return `<div class="item ${item.done?'done':''} ${isPriority?'priority-task':''}" data-task-idx="${i}"><div class="drag-handle"><svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor" opacity="0.5"><circle cx="4" cy="3" r="1.5"/><circle cx="8" cy="3" r="1.5"/><circle cx="4" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="4" cy="13" r="1.5"/><circle cx="8" cy="13" r="1.5"/></svg></div><div class="chk ${item.done?'on':''}" onclick="toggle(${i})"></div><div style="flex:1"><div class="item-text">${esc(displayText)} ${priorityBadge}${delegatedBadge}</div>${tsMeta}</div><button class="icarry" data-taskidx="${i}" data-tasktext="${esc(displayText)}" onclick="openCarryFromTask(this)" title="Carry forward">↗</button><button class="idel" onclick="del('tasks',${i})">✕</button></div>`;
+      return `<div class="item ${item.done?'done':''} ${isPriority?'priority-task':''}" data-task-idx="${i}"><div class="drag-handle"><svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor" opacity="0.5"><circle cx="4" cy="3" r="1.5"/><circle cx="8" cy="3" r="1.5"/><circle cx="4" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="4" cy="13" r="1.5"/><circle cx="8" cy="13" r="1.5"/></svg></div><div class="chk ${item.done?'on':''}" onclick="toggle(${i})"></div><div style="flex:1"><div class="item-text">${esc(displayText)} ${priorityBadge}${delegatedBadge}</div>${tsMeta}</div><button class="icarry" data-taskidx="${i}" data-tasktext="${esc(displayText)}" onclick="openCarryFromTask(this)">Move</button><button class="idel" onclick="del('tasks',${i})">&#x2715;</button></div>`;
     }
     if (key === 'wins') {
       // Determine win type — priority, delegated, or normal
