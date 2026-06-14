@@ -1839,7 +1839,7 @@ function renderListHTML(key, items) {
       const delegatedBadge = item.delegatedBy ? '<span class="delegated-badge">\u2193 ' + esc(item.delegatedBy.split('@')[0]) + '</span>' : '';
       const carryMeta = item.carriedFrom ? '<div class="item-meta" style="color:var(--gold)">↗ Carried from ' + fmtDate(item.carriedFrom) + (item.carryReason ? ' · ' + item.carryReason : '') + '</div>' : (item.carriedTo ? '<div class="item-meta" style="color:var(--text3)">⟶ Moved to ' + (item.carriedToLabel||item.carriedTo) + '</div>' : '');
       const tsMeta = (item.addedAt ? '<div class="item-meta">' + (item.delegatedBy?'Delegated ':'Added ') + item.addedAt + (item.completedAt?' \u00b7 Completed '+item.completedAt:'') + '</div>' : '') + carryMeta;
-      return '<div class="item ' + (item.done?'done':'') + ' ' + (isPriority?'priority-task':'') + '" data-task-idx="' + i + '" data-carry-text="' + esc(displayText) + '"><div class="drag-handle"><svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="4" cy="3" r="1.5"/><circle cx="8" cy="3" r="1.5"/><circle cx="4" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="4" cy="13" r="1.5"/><circle cx="8" cy="13" r="1.5"/></svg></div><div class="chk ' + (item.done?'on':'') + '" onclick="' + (item.carriedTo ? '' : 'toggleFromToday(' + i + ')') + '"' + (item.carriedTo ? ' title="Task moved forward — cannot modify"' : '') + '></div><div style="flex:1"><div class="item-text">' + esc(displayText) + ' ' + priorityBadge + delegatedBadge + '</div>' + tsMeta + '<button class="icarry" onclick="window._doCarry(event)">&#x2197; Move</button></div><button class="idel" onclick="delFromToday(\'tasks\',' + i + ')">✕</button></div>';
+      return '<div class="item ' + (item.done?'done':'') + ' ' + (isPriority?'priority-task':'') + '" data-task-idx="' + i + '" data-carry-text="' + esc(displayText) + '"' + (item.carriedTo ? ' style="opacity:0.5"' : '') + '><div class="drag-handle"><svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="4" cy="3" r="1.5"/><circle cx="8" cy="3" r="1.5"/><circle cx="4" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="4" cy="13" r="1.5"/><circle cx="8" cy="13" r="1.5"/></svg></div><div class="chk ' + (item.done?'on':'') + '" onclick="' + (item.carriedTo ? '' : 'toggleFromToday(' + i + ')') + '"' + (item.carriedTo ? ' title="Task moved forward — cannot modify"' : '') + '></div><div style="flex:1"><div class="item-text">' + esc(displayText) + ' ' + priorityBadge + delegatedBadge + '</div>' + tsMeta + '<button class="icarry" onclick="window._doCarry(event)">&#x2197; Move</button></div><button class="idel" onclick="delFromToday(\'tasks\',' + i + ')">✕</button></div>';
     }
     if (key === 'wins') {
       const isPriority = item.priority === true || (item.text||'').startsWith('*');
@@ -4635,37 +4635,42 @@ window.confirmCarryForward = function() {
   if (!targetDate) { alert('Please choose a date'); return; }
   var today = new Date().toISOString().split('T')[0];
   if (targetDate <= today) { alert('Please choose a future date'); return; }
-  // Add task to target date using existing dayData/save functions
+
+  var now = new Date();
+  var ts = now.toLocaleDateString('en-IN',{day:'numeric',month:'short'}) + ' · ' + now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
+  var targetLbl = new Date(targetDate+'T12:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
+
+  // 1. Add task to target date
   var d = dayData(targetDate);
   if (!d.tasks) d.tasks = [];
   if (!d.tasks.find(function(t){ return t.text === taskText; })) {
-    var now = new Date();
-    var ts = now.toLocaleDateString('en-IN',{day:'numeric',month:'short'}) + ' · ' + now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
     d.tasks.push({text:taskText, done:false, addedAt:ts, priority:false, carriedFrom:viewDate, carryReason:reason||null});
-    save(targetDate);
   }
-  // Mark source task as carried (lock it)
+  save(targetDate);
+
+  // 2. Lock the source task — find by text to be safe
   var srcDay = dayData(viewDate);
-  if (srcDay.tasks && window._pendingCarryIdx != null) {
-    var srcTask = srcDay.tasks[window._pendingCarryIdx];
-    if (srcTask) {
-      srcTask.carriedTo = targetDate;
-      srcTask.carriedToLabel = new Date(targetDate+'T12:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
-      srcTask.done = false; // keep undone, locked
-      save(viewDate);
-    }
+  if (!srcDay.tasks) srcDay.tasks = [];
+  var srcTask = null;
+  // Try by index first, fall back to text match
+  if (window._pendingCarryIdx != null) srcTask = srcDay.tasks[window._pendingCarryIdx];
+  if (!srcTask || srcTask.text !== taskText) srcTask = srcDay.tasks.find(function(t){ return t.text === taskText; });
+  if (srcTask) {
+    srcTask.carriedTo = targetDate;
+    srcTask.carriedToLabel = targetLbl;
+    srcTask.done = false;
+    srcTask.addedToMisses = true;
   }
-  // Log to issues of the same day
+
+  // 3. Log to issues — guaranteed
   if (!srcDay.issues) srcDay.issues = [];
-  srcDay.issues.push({
-    text: 'Task moved forward: "' + taskText + '" — moved to ' + new Date(targetDate+'T12:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}) + (reason ? ' · Reason: ' + reason : ''),
-    addedAt: new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short'}) + ' · ' + new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}),
-    isCarryLog: true
-  });
+  var issueText = 'Moved forward: "' + taskText + '" to ' + targetLbl + (reason ? '. Reason: ' + reason : '');
+  srcDay.issues.push({ text: issueText, addedAt: ts, isCarryLog: true, addedToMisses: true });
   save(viewDate);
-  var lbl = new Date(targetDate+'T12:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
+
+  var lbl = targetLbl;
   document.getElementById('carryFwdModal').style.display = 'none';
-  runCarryOver(); render();
+  runCarryOver(); renderToday(); render();
   // Show toast
   var t = document.createElement('div');
   t.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#231F17;border:1px solid #A0752A;padding:10px 18px;border-radius:8px;font-size:13px;color:#D6CFC4;z-index:9999;font-family:"DM Sans",sans-serif;white-space:nowrap';
