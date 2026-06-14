@@ -1358,8 +1358,9 @@ function launchApp() {
   rp.textContent = labels[role]; rp.className = 'role-pill ' + cls[role];
   document.getElementById('uOrg').textContent = profile?.org_name || '';
 
-  // Show Team tab for manager and super_admin only
-  if (role === 'super_admin' || role === 'manager') {
+  // Show Team tab for all senior roles
+  const seniorRole = ['super_admin','admin','manager','director','executive'].includes(role);
+  if (seniorRole) {
     const navTeam = document.getElementById('nav-team');
     if (navTeam) navTeam.style.display = '';
     // Show SAMagic tab for director/executive/admin
@@ -1759,7 +1760,7 @@ function switchTab(tab) {
 }
 
 function switchToOrgPanel() {
-  if (profile?.role !== 'super_admin') return; // guard
+  if (!['super_admin','admin'].includes(profile?.role)) return; // guard
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-org').classList.add('active');
   renderOrg();
