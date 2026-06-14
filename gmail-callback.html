@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Connecting Gmail…</title>
+  <style>
+    body { margin: 0; background: #18160F; display: flex; align-items: center; justify-content: center; min-height: 100vh; font-family: 'DM Sans', sans-serif; }
+    .wrap { text-align: center; color: #D6CFC4; }
+    .logo { font-family: Georgia, serif; font-size: 1.4rem; color: #C9973E; margin-bottom: 1rem; letter-spacing: .1em; }
+    .msg { font-size: .95rem; color: #78716C; }
+    .spinner { width: 28px; height: 28px; border: 2px solid #3A3428; border-top-color: #A0752A; border-radius: 50%; animation: spin .8s linear infinite; margin: 1rem auto; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="logo">SAMORA</div>
+    <div class="spinner"></div>
+    <div class="msg" id="msg">Completing Gmail connection…</div>
+  </div>
+  <script>
+    (function() {
+      var params = new URLSearchParams(window.location.search);
+      var code = params.get('code');
+      var error = params.get('error');
+
+      if (error) {
+        document.getElementById('msg').textContent = 'Connection cancelled.';
+        setTimeout(function() { window.close(); }, 1500);
+        return;
+      }
+
+      if (code) {
+        // Post code back to the opener (SamoraTrack main window)
+        if (window.opener) {
+          window.opener.postMessage({ code: code }, 'https://samoratrack.vercel.app');
+          document.getElementById('msg').textContent = 'Connected. Closing…';
+          setTimeout(function() { window.close(); }, 800);
+        } else {
+          // Opener closed — redirect back with code in hash for fallback
+          document.getElementById('msg').textContent = 'Almost done…';
+          window.location.href = 'https://samoratrack.vercel.app/?gmail_code=' + encodeURIComponent(code);
+        }
+      } else {
+        document.getElementById('msg').textContent = 'No authorisation code received.';
+        setTimeout(function() { window.close(); }, 2000);
+      }
+    })();
+  </script>
+</body>
+</html>
