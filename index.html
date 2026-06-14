@@ -4520,6 +4520,13 @@ document.addEventListener('click', e => { const m = document.getElementById('car
     document.body.appendChild(b);
     setTimeout(() => { if (b.parentNode) b.remove(); }, 12000);
   }
+
+// Expose carry forward functions globally
+window.openCarryForward = openCarryForward;
+window.openCarryFromTask = openCarryFromTask;
+window.closeCarryForward = closeCarryForward;
+window.confirmCarryForward = confirmCarryForward;
+window.selectCarryDate = selectCarryDate;
 })();
 </script>
 
