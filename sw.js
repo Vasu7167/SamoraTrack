@@ -1,7 +1,7 @@
 // ── SamoraTrack Service Worker ──────────────────────────────────────
 // BUMP THIS VERSION NUMBER every time you push an update.
 // That's all you need to do. The rest is automatic.
-const VERSION = 'v1.0.6';
+const VERSION = 'v1.0.7';
 const CACHE = `samoratrack-${VERSION}`;
 
 // Files to cache for offline use
