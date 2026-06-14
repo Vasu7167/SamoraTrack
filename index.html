@@ -1049,7 +1049,7 @@ let viewDate = dateKey(new Date());
 let dpMonth = new Date();
 let authMode = 'login';
 const MIN = 25;
-const ROLES = { super_admin: 0, admin: 0, director: 1, executive: 1, manager: 2, sdr: 3, ae: 3, member: 3 };
+const ROLES = { super_admin: 0, manager: 1, member: 2 };
 
 // ══════════════════════════════════════════════════════════
 // DATE UTILS
@@ -1359,14 +1359,13 @@ function launchApp() {
   document.getElementById('uOrg').textContent = profile?.org_name || '';
 
   // Show Team tab for manager and super_admin only
-  const seniorRole = ['super_admin','admin','manager','director','executive'].includes(role);
-  if (seniorRole) {
+  if (role === 'super_admin' || role === 'manager') {
     const navTeam = document.getElementById('nav-team');
     if (navTeam) navTeam.style.display = '';
     // Show SAMagic tab for director/executive/admin
     const navExec = document.getElementById('nav-exec');
     if (navExec) navExec.style.display = ['director','executive','admin','super_admin'].includes(profile.role) ? '' : 'none';
-    // Show Org tab for admin/super_admin
+    // Show Org tab only for admin
     const navOrg = document.getElementById('nav-org');
     if (navOrg) navOrg.style.display = ['admin','super_admin'].includes(profile.role) ? '' : 'none';
   }
@@ -1987,7 +1986,7 @@ function renderYouPanel() {
   }
   // Only super_admin sees Org management
   const orgBtn = document.getElementById('orgMenuBtn');
-  if (orgBtn) orgBtn.style.display = profile?.role === 'super_admin' ? '' : 'none';
+  if (orgBtn) orgBtn.style.display = ['super_admin','admin'].includes(profile?.role) ? '' : 'none';
 }
 
 // ══════════════════════════════════════════════════════════
@@ -3022,7 +3021,7 @@ async function renderTeam() {
 }
 
 function renderMemberDetail(d, memberId, memberEmail) {
-  const canDelegate = profile?.role === 'manager' || profile?.role === 'super_admin';
+  const canDelegate = ['manager','super_admin','admin'].includes(profile?.role);
   const taskSection = `<div class="det-sec"><div class="det-lbl">Tasks</div>${
     (d.tasks||[]).length ? (d.tasks||[]).map(it => {
       const isPri = it.priority || it.text?.startsWith('*');
@@ -3373,7 +3372,7 @@ async function runManagerSearch() {
   // Get list of reps to scan
   let repsToScan = [];
   try {
-    const q = profile?.role === 'super_admin'
+    const q = ['super_admin','admin'].includes(profile?.role)
       ? 'user_profiles?org_id=eq.' + profile.org_id + '&select=user_id,email,role'
       : 'user_profiles?org_id=eq.' + profile.org_id + '&manager_id=eq.' + currentUser.id + '&select=user_id,email,role';
     const members = await sbGet(q);
@@ -3828,7 +3827,7 @@ async function renderOrg() {
   document.getElementById('orgCodeDisplay').textContent = profile?.org_code || '—';
 
   // Only super_admin can manage people and assignments
-  const isSuperAdmin = profile?.role === 'super_admin';
+  const isSuperAdmin = ['super_admin','admin'].includes(profile?.role);
   const peopleCard = document.getElementById('peopleCard');
   const assignSection = document.getElementById('assignSection');
   if (peopleCard) peopleCard.style.display = isSuperAdmin ? '' : 'none';
