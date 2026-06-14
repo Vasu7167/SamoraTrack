@@ -1053,7 +1053,7 @@ function dayData(k) {
   ['tasks','issues','wins','misses'].forEach(f => { if (!d[f]) d[f] = []; });
   return d;
 }
-function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
 // ══════════════════════════════════════════════════════════
 // SUPABASE HELPERS
@@ -1826,7 +1826,7 @@ function renderToday() {
 }
 
 
-function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
 function renderListHTML(key, items) {
   if (!items.length) return '<div class="empty-msg">Nothing logged yet</div>';
@@ -4393,8 +4393,10 @@ let _cfTaskIdx = null;
 
 function openCarryFromTask(btn) {
   const idx = parseInt(btn.dataset.taskidx);
-  const text = btn.dataset.tasktext;
-  openCarryForward(null, text, 'tasks', idx);
+  // Decode HTML entities that esc() applied to the data attribute
+  const raw = btn.dataset.tasktext || '';
+  const txt = raw.replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>');
+  openCarryForward(null, txt, 'tasks', idx);
 }
 function openCarryForward(missIdx, taskText, taskKey, taskIdx) {
   _cfMissIdx = missIdx != null ? missIdx : null;
