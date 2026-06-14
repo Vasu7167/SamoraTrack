@@ -1343,6 +1343,7 @@ function launchApp() {
   setTimeout(function() { _lastCalDate = null; renderCalStrip(); }, 0);
   setTimeout(initSortable, 200);
   if (SB_URL && SB_KEY) {
+    syncTemplatesDown();
     syncDown().then(() => { runCarryOver(); _lastCalDate = null; render(); });
   }
 }
@@ -4209,18 +4210,15 @@ function renderMomentum() {
 // FEATURE 6: DAILY TEMPLATE — proper implementation
 // ══════════════════════════════════════════════════════════
 function tmplKey() {
-  // Always use a real user ID — never fall through to 'dt-tmpl-undefined'
   const uid = currentUser?.id;
   if (!uid) return null;
-  // One-time migration: if data was saved under 'dt-tmpl-undefined', move it over
+  // Migrate any legacy data saved under 'dt-tmpl-undefined'
   const legacyKey = 'dt-tmpl-undefined';
   const legacyData = localStorage.getItem(legacyKey);
   if (legacyData && legacyData !== '[]') {
     try {
       const existing = JSON.parse(localStorage.getItem('dt-tmpl-' + uid) || '[]');
-      if (!existing.length) {
-        localStorage.setItem('dt-tmpl-' + uid, legacyData);
-      }
+      if (!existing.length) localStorage.setItem('dt-tmpl-' + uid, legacyData);
     } catch {}
     localStorage.removeItem(legacyKey);
   }
@@ -4233,8 +4231,50 @@ function getTemplates() {
 }
 function saveTemplates(list) {
   const k = tmplKey();
-  if (!k) { console.warn('Cannot save templates — user not logged in'); return; }
+  if (!k) return;
+  // Save to localStorage immediately (fast, works offline)
   localStorage.setItem(k, JSON.stringify(list));
+  // Also persist to Supabase so templates survive across devices and browser clears
+  if (SB_URL && currentUser?.token) {
+    const payload = { user_id: currentUser.id, day_key: '__templates__', data: { templates: list }, org_id: profile?.org_id || null };
+    fetch(SB_URL + '/rest/v1/daytrack?user_id=eq.' + currentUser.id + '&day_key=eq.__templates__&select=id', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token }
+    }).then(r => r.json()).then(existing => {
+      if (existing && existing.length > 0) {
+        return fetch(SB_URL + '/rest/v1/daytrack?user_id=eq.' + currentUser.id + '&day_key=eq.__templates__', {
+          method: 'PATCH',
+          headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: { templates: list } })
+        });
+      } else {
+        return fetch(SB_URL + '/rest/v1/daytrack', {
+          method: 'POST',
+          headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token, 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      }
+    }).catch(e => console.warn('Template sync error:', e));
+  }
+}
+// Load templates from Supabase on login and populate localStorage
+async function syncTemplatesDown() {
+  if (!SB_URL || !currentUser?.token) return;
+  try {
+    const r = await fetch(SB_URL + '/rest/v1/daytrack?user_id=eq.' + currentUser.id + '&day_key=eq.__templates__&select=data', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token }
+    });
+    const rows = await r.json();
+    if (rows && rows.length > 0 && rows[0].data?.templates?.length) {
+      const k = tmplKey();
+      if (k) {
+        const local = getTemplates();
+        // Supabase wins if local is empty, merge otherwise (Supabase is source of truth)
+        if (!local.length) {
+          localStorage.setItem(k, JSON.stringify(rows[0].data.templates));
+        }
+      }
+    }
+  } catch(e) { console.warn('Template sync down error:', e); }
 }
 
 function openTemplateManager() {
