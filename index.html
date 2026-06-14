@@ -2725,11 +2725,20 @@ async function runIntentVsReality(repId, outputId) {
         html += '<div style="font-size:10px;color:var(--text3);flex-shrink:0;margin-left:8px">' + esc(r.date || '') + (r.priority ? ' ⭐' : '') + '</div>';
         html += '</div>';
         if (r.emailSubject) {
-          const isMeetingVerified = r.emailSubject.startsWith('🎙') || r.emailSubject.startsWith('📅');
-          html += '<div style="font-size:11px;color:var(--text3);margin-top:3px">' + esc(r.emailSubject.slice(0,80)) + '</div>';
+          const isMeetingVerified2 = r.emailSubject.startsWith('🎙') || r.emailSubject.startsWith('📅');
+          const cleanSubj = r.emailSubject.replace(/^[🎙📅]\s*/, '');
+          const mailIcon = '<svg width="12" height="10" viewBox="0 0 12 10" fill="none" style="vertical-align:middle;margin-right:4px"><rect x="0.5" y="0.5" width="11" height="9" rx="1.5" stroke="currentColor"/><path d="M0.5 2L6 5.5L11.5 2" stroke="currentColor"/></svg>';
+          const micIcon  = '<svg width="10" height="13" viewBox="0 0 10 13" fill="none" style="vertical-align:middle;margin-right:4px"><rect x="2.5" y="0.5" width="5" height="7" rx="2.5" stroke="currentColor"/><path d="M1 6.5C1 8.985 2.791 11 5 11C7.209 11 9 8.985 9 6.5" stroke="currentColor" stroke-linecap="round"/><line x1="5" y1="11" x2="5" y2="13" stroke="currentColor"/></svg>';
+          const calIcon  = '<svg width="11" height="11" viewBox="0 0 11 11" fill="none" style="vertical-align:middle;margin-right:4px"><rect x="0.5" y="1.5" width="10" height="9" rx="1.5" stroke="currentColor"/><line x1="0.5" y1="4.5" x2="10.5" y2="4.5" stroke="currentColor"/><line x1="3" y1="0.5" x2="3" y2="3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="8" y1="0.5" x2="8" y2="3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
+          const srcIcon = r.emailSubject.startsWith('🎙')
+            ? '<span style="color:#A78BFA;font-size:10px;font-weight:600;letter-spacing:0.04em;margin-right:5px">' + micIcon + 'NOTETAKER</span>'
+            : r.emailSubject.startsWith('📅')
+            ? '<span style="color:var(--gold);font-size:10px;font-weight:600;letter-spacing:0.04em;margin-right:5px">' + calIcon + 'CALENDAR</span>'
+            : '<span style="color:var(--green);font-size:10px;font-weight:600;letter-spacing:0.04em;margin-right:5px">' + mailIcon + 'EMAIL</span>';
+          html += '<div style="font-size:11px;color:var(--text3);margin-top:5px;display:flex;align-items:center">' + srcIcon + esc(cleanSubj.slice(0,65)) + '</div>';
 
           // Try to parse meeting intel from emailTo field
-          if (isMeetingVerified && r.emailTo) {
+          if (isMeetingVerified2 && r.emailTo) {
             try {
               const intel = JSON.parse(r.emailTo);
               if (intel.summary || intel.participants?.length || intel.actionItems?.length) {
@@ -2758,7 +2767,7 @@ async function runIntentVsReality(repId, outputId) {
           }
         }
         if (r.replyEvidence) {
-          html += '<div style="font-size:11px;color:var(--green);margin-top:2px">↩ Reply received</div>';
+          html += '<div style="font-size:11px;color:var(--green);margin-top:2px"><svg width="13" height="11" viewBox="0 0 13 11" fill="none" style="vertical-align:middle;margin-right:4px"><path d="M5 1L1 5L5 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M1 5H8.5C10.433 5 12 6.567 12 8.5V10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>Reply received</div>';
         }
         html += '</div>';
       });
