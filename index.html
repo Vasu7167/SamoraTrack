@@ -937,7 +937,8 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
     </div>
   </div>
 
-  <!-- ── Org (Super Admin only) ── -->\n  <div class="panel" id="panel-org">
+  <!-- ── Org (Super Admin only) ── -->
+  <div class="panel" id="panel-org">
     <div class="admin-section">
       <div class="admin-title">Organisation</div>
       <div class="admin-card">
@@ -1431,9 +1432,10 @@ function launchApp() {
     // Show Org tab only for admin
     const navOrg = document.getElementById('nav-org');
     if (navOrg) navOrg.style.display = ['admin','super_admin'].includes(profile.role) ? '' : 'none';
-    const navIntel = document.getElementById('tab-intel');
-    if (navIntel) navIntel.style.display = '';
   }
+  // Intel tab visible to all logged-in users
+  const navIntel = document.getElementById('tab-intel');
+  if (navIntel) navIntel.style.display = '';
 
   loadLocal(); runCarryOver();
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -1787,11 +1789,11 @@ function switchTab(tab) {
   currentTab = tab;
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  const panelMap = { tasks:'today', issues:'today', wins:'today', misses:'today', settings:'you', org:'you' };
+  const panelMap = { tasks:'today', issues:'today', wins:'today', misses:'today', settings:'you', org:'you', intel:'intel' };
   const actualPanel = panelMap[tab] || tab;
   const panel = document.getElementById('panel-' + actualPanel);
   if (panel) panel.classList.add('active');
-  const navMap = { tasks:'today', issues:'today', wins:'today', misses:'today', settings:'you', org:'you' };
+  const navMap = { tasks:'today', issues:'today', wins:'today', misses:'today', settings:'you', org:'you', intel:'intel' };
   const navId = navMap[tab] || tab;
   const navBtn = document.getElementById('nav-' + navId);
   if (navBtn) navBtn.classList.add('active');
