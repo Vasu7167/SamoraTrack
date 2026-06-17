@@ -4664,7 +4664,11 @@ window._doCarry = function(e) {
   e.stopPropagation();
   var item = e.target.closest('[data-task-idx]');
   var idx = parseInt(item.getAttribute('data-task-idx'));
-  var text = item.getAttribute('data-carry-text') || item.querySelector('.item-text').textContent.trim();
+  // Decode HTML entities from data-carry-text back to raw text
+  var rawText = item.getAttribute('data-carry-text') || '';
+  var tmp = document.createElement('textarea');
+  tmp.innerHTML = rawText;
+  var text = tmp.value || item.querySelector('.item-text').textContent.trim();
   var modal = document.getElementById('carryFwdModal');
   if (!modal) { alert('Modal not found'); return; }
   document.getElementById('carryFwdTaskText').textContent = text;
@@ -4730,7 +4734,21 @@ window.confirmCarryForward = function() {
 
   var lbl = targetLbl;
   document.getElementById('carryFwdModal').style.display = 'none';
-  runCarryOver(); renderToday(); render();
+
+  // Save both days to Supabase NOW before runCarryOver can interfere
+  save(viewDate);
+  save(targetDate);
+
+  // Switch to issues tab so user sees the carry log immediately
+  setTodaySection('issues');
+
+  // Defer runCarryOver so saves complete first, then re-render
+  setTimeout(function() {
+    runCarryOver();
+    renderToday();
+    render();
+  }, 100);
+
   // Show toast
   var t = document.createElement('div');
   t.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#231F17;border:1px solid #A0752A;padding:10px 18px;border-radius:8px;font-size:13px;color:#D6CFC4;z-index:9999;font-family:"DM Sans",sans-serif;white-space:nowrap';
