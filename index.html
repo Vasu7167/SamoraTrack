@@ -1825,7 +1825,7 @@ function switchTab(tab) {
     loadMyAccounts();
 
   }
-  if (tab === 'intel') { if (!_intelData) loadIntelligence(); else renderIntelFeed(); }
+ if (tab === 'intel') { loadIntelligence(); }
   if (tab === 'team') {
     const tdi = document.getElementById('teamDateInput');
     if (tdi) tdi.value = viewDate;
