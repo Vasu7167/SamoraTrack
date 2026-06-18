@@ -4680,6 +4680,11 @@ document.addEventListener('click', e => { const m = document.getElementById('car
   }
 
 // ── Expose carry-forward functions to global scope ──
+window.refreshIntelligence = typeof refreshIntelligence !== 'undefined' ? refreshIntelligence : function(){};
+window.renderIntelligence = typeof renderIntelligence !== 'undefined' ? renderIntelligence : function(){};
+window.setIntelType = typeof setIntelType !== 'undefined' ? setIntelType : function(){};
+window.renderIntelFeed = typeof renderIntelFeed !== 'undefined' ? renderIntelFeed : function(){};
+window.loadIntelligence = typeof loadIntelligence !== 'undefined' ? loadIntelligence : function(){};
 window.openCarryForward = typeof openCarryForward !== 'undefined' ? openCarryForward : function(){};
 window.openCarryFromTask = typeof openCarryFromTask !== 'undefined' ? openCarryFromTask : function(){};
 window.closeCarryForward = typeof closeCarryForward !== 'undefined' ? closeCarryForward : function(){};
