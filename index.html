@@ -4680,16 +4680,131 @@ document.addEventListener('click', e => { const m = document.getElementById('car
   }
 
 // ── Expose carry-forward functions to global scope ──
-window.refreshIntelligence = typeof refreshIntelligence !== 'undefined' ? refreshIntelligence : function(){};
-window.renderIntelligence = typeof renderIntelligence !== 'undefined' ? renderIntelligence : function(){};
-window.setIntelType = typeof setIntelType !== 'undefined' ? setIntelType : function(){};
-window.renderIntelFeed = typeof renderIntelFeed !== 'undefined' ? renderIntelFeed : function(){};
-window.loadIntelligence = typeof loadIntelligence !== 'undefined' ? loadIntelligence : function(){};
-window.openCarryForward = typeof openCarryForward !== 'undefined' ? openCarryForward : function(){};
-window.openCarryFromTask = typeof openCarryFromTask !== 'undefined' ? openCarryFromTask : function(){};
-window.closeCarryForward = typeof closeCarryForward !== 'undefined' ? closeCarryForward : function(){};
-window.confirmCarryForward = typeof confirmCarryForward !== 'undefined' ? confirmCarryForward : function(){};
-window.selectCarryDate = typeof selectCarryDate !== 'undefined' ? selectCarryDate : function(){};
+let _intelData = null;
+let _intelType = 'all';
+
+async function refreshIntelligence() {
+  const btn = document.getElementById('intelRefreshBtn');
+  const feed = document.getElementById('intelFeed');
+  if (btn) { btn.textContent = '↻ Extracting…'; btn.disabled = true; }
+  if (feed) feed.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">Scanning notetaker emails for your named accounts…</div>';
+  try {
+    const r = await fetch(EDGE_FN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
+      body: JSON.stringify({ action: 'extract_intelligence', days_back: parseInt(document.getElementById('intelDaysFilter')?.value || '30') })
+    });
+    const data = await r.json();
+    if (!data.ok) throw new Error(data.error || 'Extraction failed');
+    if (data.processed === 0) {
+      if (feed) feed.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">No notetaker emails found for your named accounts.<br><span style="font-size:12px">Make sure you have accounts assigned in Org → Rep Accounts</span></div>';
+      if (btn) { btn.textContent = '↻ Refresh'; btn.disabled = false; }
+      return;
+    }
+    await loadIntelligence();
+  } catch(e) {
+    if (feed) feed.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--coral);font-size:13px">Error: ' + esc(e.message) + '</div>';
+  }
+  if (btn) { btn.textContent = '↻ Refresh'; btn.disabled = false; }
+}
+
+async function loadIntelligence() {
+  const feed = document.getElementById('intelFeed');
+  const isManager = ['manager','super_admin','admin','director','executive'].includes(profile?.role);
+  const days = parseInt(document.getElementById('intelDaysFilter')?.value || '30');
+  try {
+    const r = await fetch(EDGE_FN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
+      body: JSON.stringify({ action: 'get_intelligence', days_back: days, view: isManager ? 'feed' : 'accounts' })
+    });
+    const data = await r.json();
+    _intelData = data;
+    renderIntelFeed();
+  } catch(e) {
+    if (feed) feed.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--coral);font-size:13px">Error loading intelligence: ' + esc(e.message) + '</div>';
+  }
+}
+
+function setIntelType(type, btn) {
+  _intelType = type;
+  document.querySelectorAll('.intel-tab').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderIntelFeed();
+}
+
+function renderIntelligence() { loadIntelligence(); }
+
+function renderIntelFeed() {
+  const feed = document.getElementById('intelFeed');
+  const stats = document.getElementById('intelStats');
+  if (!feed || !_intelData) return;
+  const isManager = ['manager','super_admin','admin','director','executive'].includes(profile?.role);
+
+  if (isManager && _intelData.view === 'feed') {
+    const f = _intelData.feed || {};
+    const allSignals = {
+      product_feedback: f.product_feedback || [],
+      pricing_signals: f.pricing_signals || [],
+      competitor_mentions: f.competitor_mentions || [],
+      expansion_signals: f.expansion_signals || [],
+      risk_signals: f.risk_signals || []
+    };
+    if (stats) {
+      stats.innerHTML = [
+        { label:'Product', key:'product_feedback', color:'rgba(99,102,241,.8)' },
+        { label:'Pricing', key:'pricing_signals', color:'var(--coral)' },
+        { label:'Competitors', key:'competitor_mentions', color:'var(--amber)' },
+        { label:'Expansion', key:'expansion_signals', color:'var(--green)' },
+        { label:'Risk', key:'risk_signals', color:'var(--coral)' }
+      ].map(s => `<div class="intel-stat-card"><div class="intel-stat-n" style="color:${s.color}">${allSignals[s.key].length}</div><div class="intel-stat-l">${s.label}</div></div>`).join('');
+    }
+    let items = [];
+    if (_intelType === 'all') {
+      Object.entries(allSignals).forEach(([type, signals]) => {
+        (signals as any[]).forEach(s => items.push({ ...s, _type: type }));
+      });
+    } else {
+      items = (allSignals[_intelType] || []).map((s: any) => ({ ...s, _type: _intelType }));
+    }
+    if (!items.length) {
+      feed.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">No signals found for this filter.<br><span style="font-size:12px">Click ↻ Refresh to extract from notetaker emails.</span></div>';
+      return;
+    }
+    const typeConfig: Record<string, any> = {
+      product_feedback: { icon:'🔧', label:'Product', cls:'intel-sig--product', tagColor:'rgba(99,102,241,.6)' },
+      pricing_signals: { icon:'💰', label:'Pricing', cls:'intel-sig--pricing', tagColor:'rgba(239,68,68,.5)' },
+      competitor_mentions: { icon:'⚔', label:'Competitor', cls:'intel-sig--competitor', tagColor:'rgba(245,158,11,.5)' },
+      expansion_signals: { icon:'📈', label:'Expansion', cls:'intel-sig--expansion', tagColor:'rgba(74,222,128,.5)' },
+      risk_signals: { icon:'⚠', label:'Risk', cls:'intel-sig--risk', tagColor:'rgba(239,68,68,.5)' }
+    };
+    feed.innerHTML = items.map((item: any) => {
+      const cfg = typeConfig[item._type] || { icon:'○', label:'Signal', cls:'', tagColor:'var(--border)' };
+      return `<div class="intel-card" style="margin-bottom:10px">
+        <div class="intel-card-head">
+          <span class="intel-card-acct">${esc(item.account || '')}</span>
+          <span class="intel-card-meta">${esc(item.date || '')} · ${esc(item.subject || '')}</span>
+        </div>
+        <div class="intel-card-body">
+          <div class="intel-signal ${cfg.cls}">
+            <span class="intel-signal-icon">${cfg.icon}</span>
+            <span class="intel-signal-text">${esc(item.quote || item.context || item.name || '')}</span>
+            <span class="intel-signal-tag" style="background:${cfg.tagColor};color:#FAF8F4">${cfg.label}</span>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  } else {
+    // Rep view — per account cards
+    const rows = _intelData.rows || [];
+    if (!rows.length) {
+      feed.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">No intelligence extracted yet.<br><span style="font-size:12px">Click ↻ Refresh to scan your named account meeting notes.</span></div>';
+      return;
+    }
+    feed.innerHTML = rows.map((row: any) => {
+      const allRowSignals = [
+        ...(row.product_feedback||[]).map((s: any) => ({ ...s, _type:'product_feedback' })),
+        ...(row.pricing_signals||[]).map((s:
 })();
 </script>
 
