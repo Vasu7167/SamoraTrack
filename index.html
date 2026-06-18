@@ -1088,6 +1088,10 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
       <span class="nav-icon">◈</span>
       <span class="nav-label">SAMagic</span>
     </button>
+    <button class="nav-btn" onclick="switchTab('intel')" id="nav-intel" style="display:none">
+      <span class="nav-icon">◎</span>
+      <span class="nav-label">Intel</span>
+    </button>
     <button class="nav-btn" onclick="switchTab('you')" id="nav-you">
       <span class="nav-icon">◎</span>
       <span class="nav-label">You</span>
@@ -1433,9 +1437,15 @@ function launchApp() {
     const navOrg = document.getElementById('nav-org');
     if (navOrg) navOrg.style.display = ['admin','super_admin'].includes(profile.role) ? '' : 'none';
   }
-  // Intel tab visible to all logged-in users
+ // Intel tab visible to all logged-in users
   const navIntel = document.getElementById('tab-intel');
   if (navIntel) navIntel.style.display = '';
+
+  // Intel bottom nav visible to manager and above
+  const navIntelBtn = document.getElementById('nav-intel');
+  if (navIntelBtn) {
+    navIntelBtn.style.display = seniorRole ? '' : 'none';
+  }
 
   loadLocal(); runCarryOver();
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
