@@ -2452,14 +2452,17 @@ var _intelType = 'all';
 async function refreshIntelligence() {
   var btn = document.getElementById('intelRefreshBtn');
   var feed = document.getElementById('intelFeed');
+  var isManager = ['manager','super_admin','admin','director','executive'].includes(profile ? profile.role : '');
+  var repFilterEl = document.getElementById('intelRepFilter');
+  var repFilter = (isManager && repFilterEl) ? repFilterEl.value : '';
   if (btn) { btn.textContent = '↻ Extracting…'; btn.disabled = true; }
-  if (feed) feed.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">Scanning notetaker emails for your named accounts…</div>';
+  if (feed) feed.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">Scanning notetaker emails for ' + (repFilter ? 'this rep\'s' : 'your') + ' named accounts…</div>';
   try {
     var days = parseInt((document.getElementById('intelDaysFilter') || {}).value || '30') || 30;
     var r = await fetch(EDGE_FN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
-      body: JSON.stringify({ action: 'extract_intelligence', days_back: days })
+      body: JSON.stringify({ action: 'extract_intelligence', days_back: days, rep_user_id: repFilter || undefined })
     });
     var data = await r.json();
     if (!data.ok) throw new Error(data.error || 'Extraction failed');
@@ -2535,7 +2538,18 @@ async function populateIntelRepFilter() {
   if (!sel || !profile?.org_id) return;
   try {
     if (!_intelRepsCache) {
-      _intelRepsCache = await sbGet('user_profiles?org_id=eq.' + profile.org_id + '&select=user_id,email&order=email');
+      var seeAllReps = ['super_admin','admin','director','executive'].includes(profile.role);
+      var q = 'user_profiles?org_id=eq.' + profile.org_id + '&select=user_id,email,role,manager_id&order=email';
+      var allMembers = await sbGet(q);
+      // Only show frontline reps (member/sdr/ae), never managers/admins/super_admins themselves.
+      var reps = (allMembers || []).filter(function(p) {
+        return ['member','sdr','ae'].includes(p.role);
+      });
+      // Plain managers only see their own direct reports; senior roles see the whole org's reps.
+      if (!seeAllReps) {
+        reps = reps.filter(function(p) { return p.manager_id === currentUser.id; });
+      }
+      _intelRepsCache = reps;
     }
     var current = sel.value;
     sel.innerHTML = '<option value="">All reps</option>' + (_intelRepsCache || []).map(function(p) {
