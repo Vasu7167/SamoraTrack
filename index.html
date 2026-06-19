@@ -756,7 +756,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
           <div style="font-size:12px;color:var(--text3);margin-top:3px">Product &amp; pricing signals extracted from meeting notes · Named accounts only</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <select id="intelRepFilter" style="padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:12px;font-family:'DM Sans',sans-serif" onchange="renderIntelFeed()">
+          <select id="intelRepFilter" style="padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:12px;font-family:'DM Sans',sans-serif" onchange="loadIntelligence()">
             <option value="">All reps</option>
           </select>
           <select id="intelDaysFilter" style="padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:12px;font-family:'DM Sans',sans-serif" onchange="renderIntelligence()">
@@ -2479,11 +2479,14 @@ async function loadIntelligence() {
   var feed = document.getElementById('intelFeed');
   var isManager = ['manager','super_admin','admin','director','executive'].includes(profile ? profile.role : '');
   var days = parseInt((document.getElementById('intelDaysFilter') || {}).value || '30') || 30;
+  if (isManager) await populateIntelRepFilter();
+  var repFilterEl = document.getElementById('intelRepFilter');
+  var repFilter = repFilterEl ? repFilterEl.value : '';
   try {
     var r = await fetch(EDGE_FN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
-      body: JSON.stringify({ action: 'get_intelligence', days_back: days, view: isManager ? 'feed' : 'accounts' })
+      body: JSON.stringify({ action: 'get_intelligence', days_back: days, view: 'accounts', rep_user_id: isManager && repFilter ? repFilter : (isManager ? null : undefined) })
     });
     var data = await r.json();
     _intelData = data;
@@ -2491,6 +2494,22 @@ async function loadIntelligence() {
   } catch(e) {
     if (feed) feed.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--coral);font-size:13px">Error loading intelligence: ' + esc(e.message) + '</div>';
   }
+}
+
+let _intelRepsCache = null;
+async function populateIntelRepFilter() {
+  var sel = document.getElementById('intelRepFilter');
+  if (!sel || !profile?.org_id) return;
+  try {
+    if (!_intelRepsCache) {
+      _intelRepsCache = await sbGet('user_profiles?org_id=eq.' + profile.org_id + '&select=user_id,email&order=email');
+    }
+    var current = sel.value;
+    sel.innerHTML = '<option value="">All reps</option>' + (_intelRepsCache || []).map(function(p) {
+      return '<option value="' + p.user_id + '">' + esc(p.email.split('@')[0]) + '</option>';
+    }).join('');
+    sel.value = current;
+  } catch(e) { /* keep default */ }
 }
 
 function setIntelType(type, btn) {
@@ -2506,98 +2525,81 @@ function renderIntelFeed() {
   var feed = document.getElementById('intelFeed');
   var stats = document.getElementById('intelStats');
   if (!feed || !_intelData) return;
-  var isManager = ['manager','super_admin','admin','director','executive'].includes(profile ? profile.role : '');
+  var rows = _intelData.rows || [];
 
-  if (isManager && _intelData.view === 'feed') {
-    var f = _intelData.feed || {};
-    var allSignals = {
-      product_feedback: f.product_feedback || [],
-      pricing_signals: f.pricing_signals || [],
-      competitor_mentions: f.competitor_mentions || [],
-      expansion_signals: f.expansion_signals || [],
-      risk_signals: f.risk_signals || []
-    };
-    if (stats) {
-      stats.innerHTML = [
-        { label:'Product', key:'product_feedback', color:'rgba(99,102,241,.8)' },
-        { label:'Pricing', key:'pricing_signals', color:'var(--coral)' },
-        { label:'Competitors', key:'competitor_mentions', color:'var(--amber)' },
-        { label:'Expansion', key:'expansion_signals', color:'var(--green)' },
-        { label:'Risk', key:'risk_signals', color:'var(--coral)' }
-      ].map(function(s) {
-        return '<div class="intel-stat-card"><div class="intel-stat-n" style="color:' + s.color + '">' + allSignals[s.key].length + '</div><div class="intel-stat-l">' + s.label + '</div></div>';
-      }).join('');
-    }
-    var items = [];
-    if (_intelType === 'all') {
-      Object.keys(allSignals).forEach(function(type) {
-        allSignals[type].forEach(function(s) { items.push(Object.assign({}, s, { _type: type })); });
-      });
-    } else {
-      items = (allSignals[_intelType] || []).map(function(s) { return Object.assign({}, s, { _type: _intelType }); });
-    }
-    if (!items.length) {
-      feed.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">No signals found for this filter.<br><span style="font-size:12px">Click \u21bb Refresh to extract from notetaker emails.</span></div>';
-      return;
-    }
-    var typeConfig = {
-      product_feedback: { icon:'🔧', label:'Product', cls:'intel-sig--product', tagColor:'rgba(99,102,241,.6)' },
-      pricing_signals: { icon:'💰', label:'Pricing', cls:'intel-sig--pricing', tagColor:'rgba(239,68,68,.5)' },
-      competitor_mentions: { icon:'⚔', label:'Competitor', cls:'intel-sig--competitor', tagColor:'rgba(245,158,11,.5)' },
-      expansion_signals: { icon:'📈', label:'Expansion', cls:'intel-sig--expansion', tagColor:'rgba(74,222,128,.5)' },
-      risk_signals: { icon:'⚠', label:'Risk', cls:'intel-sig--risk', tagColor:'rgba(239,68,68,.5)' }
-    };
-    feed.innerHTML = items.map(function(item) {
-      var cfg = typeConfig[item._type] || { icon:'○', label:'Signal', cls:'', tagColor:'var(--border)' };
-      return '<div class="intel-card" style="margin-bottom:10px">' +
-        '<div class="intel-card-head">' +
-          '<span class="intel-card-acct">' + esc(item.account || '') + '</span>' +
-          '<span class="intel-card-meta">' + esc(item.date || '') + ' \u00b7 ' + esc(item.subject || '') + '</span>' +
-        '</div>' +
-        '<div class="intel-card-body">' +
-          '<div class="intel-signal ' + cfg.cls + '">' +
-            '<span class="intel-signal-icon">' + cfg.icon + '</span>' +
-            '<span class="intel-signal-text">' + esc(item.quote || item.context || item.name || '') + '</span>' +
-            '<span class="intel-signal-tag" style="background:' + cfg.tagColor + ';color:#FAF8F4">' + cfg.label + '</span>' +
-          '</div>' +
-        '</div>' +
-      '</div>';
+  if (stats) {
+    var counts = { product_feedback:0, pricing_signals:0, competitor_mentions:0, expansion_signals:0, risk_signals:0 };
+    rows.forEach(function(row) {
+      counts.product_feedback += (row.product_feedback||[]).length;
+      counts.pricing_signals += (row.pricing_signals||[]).length;
+      counts.competitor_mentions += (row.competitor_mentions||[]).length;
+      counts.expansion_signals += (row.expansion_signals||[]).length;
+      counts.risk_signals += (row.risk_signals||[]).length;
+    });
+    stats.innerHTML = [
+      { label:'Product', key:'product_feedback', color:'rgba(99,102,241,.8)' },
+      { label:'Pricing', key:'pricing_signals', color:'var(--coral)' },
+      { label:'Competitors', key:'competitor_mentions', color:'var(--amber)' },
+      { label:'Expansion', key:'expansion_signals', color:'var(--green)' },
+      { label:'Risk', key:'risk_signals', color:'var(--coral)' }
+    ].map(function(s) {
+      return '<div class="intel-stat-card"><div class="intel-stat-n" style="color:' + s.color + '">' + counts[s.key] + '</div><div class="intel-stat-l">' + s.label + '</div></div>';
     }).join('');
-  } else {
-    var rows = _intelData.rows || [];
-    if (!rows.length) {
-      feed.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">No intelligence extracted yet.<br><span style="font-size:12px">Click \u21bb Refresh to scan your named account meeting notes.</span></div>';
-      return;
-    }
-    var icons = { product_feedback:'🔧', pricing_signals:'💰', competitor_mentions:'⚔', expansion_signals:'📈', risk_signals:'⚠' };
-    feed.innerHTML = rows.map(function(row) {
-      var allRowSignals = [];
-      (row.product_feedback||[]).forEach(function(s) { allRowSignals.push(Object.assign({},s,{_type:'product_feedback'})); });
-      (row.pricing_signals||[]).forEach(function(s) { allRowSignals.push(Object.assign({},s,{_type:'pricing_signals'})); });
-      (row.competitor_mentions||[]).forEach(function(s) { allRowSignals.push(Object.assign({},s,{_type:'competitor_mentions'})); });
-      (row.expansion_signals||[]).forEach(function(s) { allRowSignals.push(Object.assign({},s,{_type:'expansion_signals'})); });
-      (row.risk_signals||[]).forEach(function(s) { allRowSignals.push(Object.assign({},s,{_type:'risk_signals'})); });
-      var filtered = allRowSignals.filter(function(s) { return _intelType === 'all' || s._type === _intelType; });
-      if (!filtered.length) return '';
-      var sentimentColor = { positive:'var(--green)', neutral:'var(--text3)', negative:'var(--coral)' }[row.sentiment] || 'var(--text3)';
+  }
+
+  if (!rows.length) {
+    feed.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">No intelligence extracted yet.<br><span style="font-size:12px">Click \u21bb Refresh to scan named account meeting notes.</span></div>';
+    return;
+  }
+
+  var icons = { product_feedback:'🔧', pricing_signals:'💰', competitor_mentions:'⚔', expansion_signals:'📈', risk_signals:'⚠' };
+  var cardsHtml = rows.map(function(row) {
+    var allRowSignals = [];
+    (row.product_feedback||[]).forEach(function(s) { allRowSignals.push(Object.assign({},s,{_type:'product_feedback'})); });
+    (row.pricing_signals||[]).forEach(function(s) { allRowSignals.push(Object.assign({},s,{_type:'pricing_signals'})); });
+    (row.competitor_mentions||[]).forEach(function(s) { allRowSignals.push(Object.assign({},s,{_type:'competitor_mentions'})); });
+    (row.expansion_signals||[]).forEach(function(s) { allRowSignals.push(Object.assign({},s,{_type:'expansion_signals'})); });
+    (row.risk_signals||[]).forEach(function(s) { allRowSignals.push(Object.assign({},s,{_type:'risk_signals'})); });
+    var filtered = allRowSignals.filter(function(s) { return _intelType === 'all' || s._type === _intelType; });
+
+    if (!filtered.length) {
+      if (_intelType !== 'all' || !row.summary) return '';
       return '<div class="intel-card" style="margin-bottom:12px">' +
         '<div class="intel-card-head">' +
           '<span class="intel-card-acct">' + esc(row.account_name) + '</span>' +
-          '<span class="intel-card-meta" style="color:' + sentimentColor + '">' + (row.sentiment||'') + ' \u00b7 ' + esc(row.meeting_date||'') + ' \u00b7 ' + esc(row.meeting_subject||'') + '</span>' +
+          '<span class="intel-card-meta">' + esc(row.meeting_date||'') + ' \u00b7 ' + esc(row.meeting_subject||'') + '</span>' +
         '</div>' +
         '<div class="intel-card-body">' +
-          filtered.map(function(s) {
-            return '<div class="intel-signal">' +
-              '<span class="intel-signal-icon">' + (icons[s._type]||'○') + '</span>' +
-              '<span class="intel-signal-text">' + esc(s.quote || s.context || s.name || '') + '</span>' +
-            '</div>';
-          }).join('') +
-          (row.summary ? '<div style="font-size:12px;color:var(--text3);margin-top:8px;font-style:italic">' + esc(row.summary) + '</div>' : '') +
+          '<div style="font-size:13px;color:var(--text2);font-style:italic">' + esc(row.summary) + '</div>' +
         '</div>' +
       '</div>';
-    }).join('');
+    }
+
+    var sentimentColor = { positive:'var(--green)', neutral:'var(--text3)', negative:'var(--coral)' }[row.sentiment] || 'var(--text3)';
+    return '<div class="intel-card" style="margin-bottom:12px">' +
+      '<div class="intel-card-head">' +
+        '<span class="intel-card-acct">' + esc(row.account_name) + '</span>' +
+        '<span class="intel-card-meta" style="color:' + sentimentColor + '">' + (row.sentiment||'') + ' \u00b7 ' + esc(row.meeting_date||'') + ' \u00b7 ' + esc(row.meeting_subject||'') + '</span>' +
+      '</div>' +
+      '<div class="intel-card-body">' +
+        filtered.map(function(s) {
+          return '<div class="intel-signal">' +
+            '<span class="intel-signal-icon">' + (icons[s._type]||'○') + '</span>' +
+            '<span class="intel-signal-text">' + esc(s.quote || s.context || s.name || '') + '</span>' +
+          '</div>';
+        }).join('') +
+        (row.summary ? '<div style="font-size:12px;color:var(--text3);margin-top:8px;font-style:italic">' + esc(row.summary) + '</div>' : '') +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  if (!cardsHtml.trim()) {
+    feed.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">No signals found for this filter.<br><span style="font-size:12px">Try "All" or a different time range.</span></div>';
+    return;
   }
+  feed.innerHTML = cardsHtml;
 }
+
 
 window.refreshIntelligence = refreshIntelligence;
 window.loadIntelligence = loadIntelligence;
