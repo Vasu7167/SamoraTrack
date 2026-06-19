@@ -2488,7 +2488,10 @@ function renderIntelDebug(data) {
     if (d.strictSearchFound !== undefined) parts.push('strict: ' + d.strictSearchFound + ', fallback: ' + d.fallbackSearchFound);
     if (d.notetakerEmailsFound !== undefined) parts.push('found: ' + d.notetakerEmailsFound + (d.usedFallback ? ' (fallback)' : ' (strict)'));
     if (d.geminiKeyMissing) parts.push('<span style="color:var(--coral)">Gemini API key not set</span>');
-    if (d.geminiNoMatch) parts.push('<span style="color:var(--amber)">Gemini returned no valid JSON</span>');
+    if (d.geminiApiError) parts.push('<span style="color:var(--coral)">Gemini API error: ' + esc(JSON.stringify(d.geminiApiError)) + '</span>');
+    if (d.geminiNoMatch) parts.push('<span style="color:var(--amber)">Gemini returned no JSON-shaped text' + (d.geminiFinishReason ? ' (finish: '+esc(d.geminiFinishReason)+')' : '') + '</span>');
+    if (d.geminiJsonParseError) parts.push('<span style="color:var(--coral)">JSON parse failed: ' + esc(d.geminiJsonParseError) + (d.geminiFinishReason ? ' (finish: '+esc(d.geminiFinishReason)+')' : '') + '</span>');
+    if (d.geminiRawText) parts.push('<span style="color:var(--text3);font-style:italic">raw: ' + esc(d.geminiRawText.slice(0,200)) + '\u2026</span>');
     if (d.geminiError) parts.push('<span style="color:var(--coral)">Gemini error: ' + esc(d.geminiError) + '</span>');
     if (d.dbInsertError) parts.push('<span style="color:var(--coral)">DB insert failed (' + d.status + '): ' + esc(d.dbInsertError) + '</span>');
     if (d.dbReadError) parts.push('<span style="color:var(--coral)">DB read failed: ' + esc(JSON.stringify(d.dbReadError)) + '</span>');
