@@ -2464,7 +2464,7 @@ async function refreshIntelligence() {
     var data = await r.json();
     if (!data.ok) throw new Error(data.error || 'Extraction failed');
     if (data.processed === 0) {
-      if (feed) feed.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">No notetaker emails found for your named accounts.<br><span style="font-size:12px">Make sure you have accounts assigned in Org \u2192 Rep Accounts</span></div>';
+      if (feed) feed.innerHTML = renderIntelDebug(data);
       if (btn) { btn.textContent = '↻ Refresh'; btn.disabled = false; }
       return;
     }
@@ -2473,6 +2473,36 @@ async function refreshIntelligence() {
     if (feed) feed.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--coral);font-size:13px">Error: ' + esc(e.message) + '</div>';
   }
   if (btn) { btn.textContent = '↻ Refresh'; btn.disabled = false; }
+}
+
+function renderIntelDebug(data) {
+  var debug = data.debug || [];
+  if (data.message) {
+    return '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">' + esc(data.message) + '<br><span style="font-size:12px">Add accounts in Org \u2192 Rep Accounts</span></div>';
+  }
+  if (!debug.length) {
+    return '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">No notetaker emails found for your named accounts.<br><span style="font-size:12px">Processed: ' + (data.processed||0) + ' \u00b7 Skipped: ' + (data.skipped||0) + '</span></div>';
+  }
+  var rows = debug.map(function(d) {
+    var parts = [];
+    if (d.strictSearchFound !== undefined) parts.push('strict: ' + d.strictSearchFound + ', fallback: ' + d.fallbackSearchFound);
+    if (d.notetakerEmailsFound !== undefined) parts.push('found: ' + d.notetakerEmailsFound + (d.usedFallback ? ' (fallback)' : ' (strict)'));
+    if (d.geminiKeyMissing) parts.push('<span style="color:var(--coral)">Gemini API key not set</span>');
+    if (d.geminiNoMatch) parts.push('<span style="color:var(--amber)">Gemini returned no valid JSON</span>');
+    if (d.geminiError) parts.push('<span style="color:var(--coral)">Gemini error: ' + esc(d.geminiError) + '</span>');
+    if (d.dbInsertError) parts.push('<span style="color:var(--coral)">DB insert failed (' + d.status + '): ' + esc(d.dbInsertError) + '</span>');
+    if (d.dbReadError) parts.push('<span style="color:var(--coral)">DB read failed: ' + esc(JSON.stringify(d.dbReadError)) + '</span>');
+    if (d.gmailApiError) parts.push('<span style="color:var(--coral)">Gmail API error: ' + esc(JSON.stringify(d.gmailApiError)) + '</span>');
+    if (d.subject) parts.push('subject: "' + esc(d.subject) + '"');
+    return '<div style="background:var(--surface2);border-radius:8px;padding:10px 14px;margin-bottom:8px;text-align:left">' +
+      '<div style="font-size:13px;font-weight:600;color:var(--text)">' + esc(d.account || '') + '</div>' +
+      '<div style="font-size:12px;color:var(--text3);margin-top:4px;line-height:1.6">' + parts.join('<br>') + '</div>' +
+    '</div>';
+  }).join('');
+  return '<div style="padding:24px 0">' +
+    '<div style="text-align:center;color:var(--text3);font-size:14px;margin-bottom:16px">No intelligence extracted \u2014 here\'s why, per account:</div>' +
+    rows +
+  '</div>';
 }
 
 async function loadIntelligence() {
