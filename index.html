@@ -1852,6 +1852,22 @@ async function removeMyAccount(id) {
   try { await fetch(SB_URL + '/rest/v1/org_accounts?id=eq.' + id, { method: 'DELETE', headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token } }); loadMyAccounts(); }
   catch(e) { alert('Error: ' + e.message); }
 }
+// Source icon/label map — extend here when WhatsApp/LinkedIn/Calling integrations land.
+var INTEL_SOURCE_CONFIG = {
+  calendar:    { icon: '📅', label: 'Calendar meeting', color: 'var(--gold)' },
+  notetaker:   { icon: '🎙', label: 'Notetaker', color: '#A78BFA' },
+  email_sent:  { icon: '✉', label: 'Email sent', color: 'var(--green)' },
+  email_reply: { icon: '↩', label: 'Email reply received', color: 'var(--green)' },
+  whatsapp:    { icon: '💬', label: 'WhatsApp', color: '#25D366' },
+  linkedin:    { icon: '🔗', label: 'LinkedIn', color: '#0A66C2' },
+  phone_call:  { icon: '📞', label: 'Call log', color: 'var(--amber)' },
+  none:        { icon: '○', label: 'No evidence', color: 'var(--text3)' }
+};
+function renderSourceBadge(source) {
+  var cfg = INTEL_SOURCE_CONFIG[source] || INTEL_SOURCE_CONFIG.none;
+  return '<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;color:' + cfg.color + ';background:rgba(0,0,0,0.12);border-radius:4px;padding:2px 7px;letter-spacing:0.02em">' + cfg.icon + ' ' + cfg.label + '</span>';
+}
+
 async function runIntentVsReality(repId, outputId) {
   const isManager = !!repId; const out = document.getElementById(outputId || 'ivrOutput'); const btn = document.getElementById('ivrBtn');
   if (!out) return;
@@ -1873,9 +1889,17 @@ async function runIntentVsReality(repId, outputId) {
     html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><div style="flex:1;height:5px;background:var(--surface2);border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+barColor+';border-radius:3px"></div></div><div style="font-size:12px;font-weight:600;color:'+barColor+'">'+pct+'% verified</div></div>';
     results.slice(0,10).forEach(function(r) {
       const sig = r.signal||'unknown';
-      const sigMap = {gap:{icon:'🚨',color:'var(--coral)',bg:'rgba(192,82,63,0.08)'},unverified:{icon:'⚠',color:'var(--amber)',bg:'rgba(160,117,42,0.08)'},verified:{icon:'✓',color:'var(--green)',bg:'rgba(74,140,92,0.08)'},verified_hot:{icon:'🔥',color:'var(--green)',bg:'rgba(74,140,92,0.12)'}};
+      const sigMap = {gap:{icon:'🚨',color:'var(--coral)',bg:'rgba(192,82,63,0.08)'},unverified:{icon:'⚠',color:'var(--amber)',bg:'rgba(160,117,42,0.08)'},verified:{icon:'✓',color:'var(--green)',bg:'rgba(74,140,92,0.08)'},verified_hot:{icon:'🔥',color:'var(--green)',bg:'rgba(74,140,92,0.12)'},done_not_logged:{icon:'💡',color:'var(--text3)',bg:'var(--surface2)'}};
       const cfg = sigMap[sig]||{icon:'○',color:'var(--text3)',bg:'var(--surface2)'};
-      html += '<div style="border-left:3px solid '+cfg.color+';padding:8px 12px;margin-bottom:5px;background:'+cfg.bg+';border-radius:0 6px 6px 0"><div style="font-size:12px;font-weight:500;color:var(--text)">'+cfg.icon+' '+esc(r.text||'')+'</div>'+(r.emailSubject?'<div style="font-size:11px;color:var(--text3);margin-top:4px">'+esc(r.emailSubject.slice(0,65))+'</div>':'')+'</div>';
+      const sourceBadge = (r.source && r.source !== 'none') ? renderSourceBadge(r.source) : '';
+      html += '<div style="border-left:3px solid '+cfg.color+';padding:8px 12px;margin-bottom:5px;background:'+cfg.bg+';border-radius:0 6px 6px 0">' +
+        '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">' +
+          '<div style="font-size:12px;font-weight:500;color:var(--text);flex:1">'+cfg.icon+' '+esc(r.text||'')+'</div>' +
+          sourceBadge +
+        '</div>' +
+        (r.account ? '<div style="font-size:10px;color:var(--text3);margin-top:3px">Account: '+esc(r.account)+'</div>' : '') +
+        (r.emailSubject ? '<div style="font-size:11px;color:var(--text3);margin-top:4px;font-style:italic">"'+esc(r.emailSubject.slice(0,80))+'"</div>' : '') +
+      '</div>';
     });
     out.innerHTML = html;
   } catch(e) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>'; }
