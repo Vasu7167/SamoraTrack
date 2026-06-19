@@ -2465,6 +2465,15 @@ async function refreshIntelligence() {
       body: JSON.stringify({ action: 'extract_intelligence', days_back: days, rep_user_id: repFilter || undefined })
     });
     var data = await r.json();
+    if (data.scopeError) {
+      if (feed) feed.innerHTML = '<div style="text-align:center;padding:48px 0">' +
+        '<div style="font-size:32px;margin-bottom:12px;opacity:0.5">🔒</div>' +
+        '<div style="font-size:14px;color:var(--text2);margin-bottom:6px;font-weight:600">Gmail permissions need to be re-granted</div>' +
+        '<div style="font-size:12px;color:var(--text3);max-width:380px;margin:0 auto;line-height:1.6">' + esc(repFilter ? 'This rep\'s' : 'Your') + ' Gmail connection is missing read access. ' + esc(repFilter ? 'They need' : 'Go') + ' to the SAM tab and click "Connect Gmail" again to re-grant permissions \u2014 simply refreshing the token will not fix this.</div>' +
+      '</div>';
+      if (btn) { btn.textContent = '↻ Refresh'; btn.disabled = false; }
+      return;
+    }
     if (!data.ok) throw new Error(data.error || 'Extraction failed');
     if (data.processed === 0) {
       if (feed) feed.innerHTML = renderIntelDebug(data);
