@@ -588,6 +588,16 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
         <button id="samGmailBtn" onclick="connectGmail()" style="padding:7px 14px;border-radius:var(--radius-sm);background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0">Connect Gmail</button>
       </div>
     </div>
+    <div id="samLocalIntelSection" style="margin-bottom:16px;display:none">
+      <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em">⚡ Deal Signals</div>
+          <button onclick="runLocalIntelligence()" id="localIntelBtn" style="padding:5px 12px;border-radius:20px;background:rgba(160,117,42,0.1);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Scan</button>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Instant pattern detection — proposals, NDAs, stale threads, unanswered emails, overdue follow-ups. No AI quota used.</div>
+        <div id="samLocalIntelOutput"></div>
+      </div>
+    </div>
     <div id="samCoverageSection" style="margin-bottom:16px;display:none">
       <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
@@ -1490,6 +1500,7 @@ function setSamMode(mode) {
     if (teamEl) teamEl.style.display = 'none';
     renderSamAlerts(); loadSamSignals();
     const covSec = document.getElementById('samCoverageSection'); if (covSec) covSec.style.display = 'block';
+    const localIntelSec = document.getElementById('samLocalIntelSection'); if (localIntelSec) localIntelSec.style.display = 'block';
   }
 }
 function switchToOrgPanel() {
@@ -2070,6 +2081,54 @@ function togglePanel(outputId, runFn) {
   }
 }
 
+// Signal-type display config for local (rule-based) intelligence — icon,
+// label, and color per detected pattern. Extend here as new pattern types
+// are added server-side.
+var LOCAL_SIGNAL_CONFIG = {
+  active_negotiation: { icon: '🔥', label: 'Active negotiation', color: 'var(--green)' },
+  awaiting_response:  { icon: '📨', label: 'Proposal sent', color: 'var(--amber)' },
+  deal_progression:   { icon: '📝', label: 'NDA exchange', color: 'var(--gold)' },
+  cold:                { icon: '❄', label: 'Going cold', color: 'var(--coral)' },
+  response_gap:        { icon: '⏰', label: 'Unanswered', color: 'var(--coral)' },
+  overdue_action:       { icon: '☑', label: 'Action overdue', color: 'var(--amber)' }
+};
+
+async function runLocalIntelligence(repId, resultElId) {
+  const isManager = !!repId;
+  const out = document.getElementById(resultElId || 'samLocalIntelOutput');
+  const btn = isManager ? null : document.getElementById('localIntelBtn');
+  if (!out) return;
+  if (btn) { btn.textContent = 'Scanning…'; btn.disabled = true; }
+  out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0">Scanning Gmail for deal patterns…</div>';
+  try {
+    const r = await fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify({ action: 'local_intelligence', rep_user_id: isManager ? repId : undefined }) });
+    const data = await r.json();
+    if (!data.connected) { out.innerHTML = '<div style="font-size:12px;color:var(--text3)">Gmail not connected' + (isManager?' for this rep':'') + '</div>'; if (btn) { btn.textContent = 'Scan'; btn.disabled = false; } return; }
+    if (data.message) { out.innerHTML = '<div style="font-size:12px;color:var(--text3)">' + esc(data.message) + '</div>'; if (btn) { btn.textContent = 'Scan'; btn.disabled = false; } return; }
+    const signals = data.signals || [];
+    if (!signals.length) { out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0">No notable patterns detected right now \u2014 clean slate ✓</div>'; if (btn) { btn.textContent = 'Scan'; btn.disabled = false; } return; }
+
+    let html = '';
+    signals.forEach(function(s) {
+      const cfg = LOCAL_SIGNAL_CONFIG[s.signal] || { icon: '○', label: s.type, color: 'var(--text3)' };
+      const priorityBadge = s.priority === 'high' ? '<span style="font-size:9px;font-weight:700;color:var(--coral);background:rgba(192,82,63,0.12);border-radius:4px;padding:1px 6px;margin-left:6px">HIGH</span>' : '';
+      html += '<div style="border-left:3px solid ' + cfg.color + ';padding:8px 12px;margin-bottom:6px;background:rgba(0,0,0,0.08);border-radius:0 6px 6px 0">' +
+        '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">' +
+          '<div style="flex:1">' +
+            '<div style="font-size:12px;font-weight:600;color:var(--text)">' + cfg.icon + ' ' + esc(s.account) + priorityBadge + '</div>' +
+            '<div style="font-size:12px;color:var(--text2);margin-top:2px">' + esc(s.title) + '</div>' +
+          '</div>' +
+          '<span style="font-size:9px;font-weight:600;color:' + cfg.color + ';background:rgba(0,0,0,0.1);border-radius:4px;padding:2px 6px;white-space:nowrap">' + cfg.label + '</span>' +
+        '</div>' +
+        (s.detail ? '<div style="font-size:11px;color:var(--text3);margin-top:4px;font-style:italic">"' + esc(s.detail.slice(0,100)) + '"</div>' : '') +
+        '<div style="font-size:10px;color:var(--text3);margin-top:3px">' + esc(s.evidence||'') + (s.date?' · '+esc(s.date):'') + '</div>' +
+      '</div>';
+    });
+    out.innerHTML = html;
+  } catch(e) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>'; }
+  if (btn) { btn.textContent = 'Scan'; btn.disabled = false; }
+}
+
 async function runCoverageCheck(repId, repEmail, resultElId) {
   const isManager = !!repId; const targetId = repId||currentUser?.id; const btnId = isManager?null:'coverageCheckBtn'; const outputId = resultElId||'samCoverageOutput';
   const btn = btnId?document.getElementById(btnId):null; const out = document.getElementById(outputId); if (!out) return;
@@ -2178,10 +2237,12 @@ async function renderTeam() {
             '<button id="sam-btn-' + m.user_id + '" onclick="event.stopPropagation();togglePanel(\'sam-result-' + m.user_id + '\',function(){runSamCheck(\'' + m.user_id + '\',\'' + m.email + '\')})" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(160,117,42,0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">⚡ SAM Signals</button>' +
             '<button onclick="event.stopPropagation();togglePanel(\'cov-' + m.user_id + '\',function(){runCoverageCheck(\'' + m.user_id + '\',\'' + m.email + '\',\'cov-' + m.user_id + '\')})" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(160,117,42,0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">📊 Coverage</button>' +
             '<button onclick="event.stopPropagation();togglePanel(\'ivr-' + m.user_id + '\',function(){runIntentVsReality(\'' + m.user_id + '\',\'ivr-' + m.user_id + '\')})" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(160,117,42,0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">🎯 Intent vs Reality</button>' +
+            '<button onclick="event.stopPropagation();togglePanel(\'local-' + m.user_id + '\',function(){runLocalIntelligence(\'' + m.user_id + '\',\'local-' + m.user_id + '\')})" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(160,117,42,0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">⚡ Deal Signals</button>' +
           '</div>' +
           '<div id="sam-result-' + m.user_id + '" style="margin-top:8px"></div>' +
           '<div id="cov-' + m.user_id + '" style="margin-top:6px"></div>' +
           '<div id="ivr-' + m.user_id + '" style="margin-top:6px"></div>' +
+          '<div id="local-' + m.user_id + '" style="margin-top:6px"></div>' +
         '</div>' +
         '<div class="member-detail" id="mdet-' + idx + '">' + renderMemberDetail(d, m.user_id, m.email) + '</div>' +
       '</div>';
@@ -2768,6 +2829,12 @@ async function refreshIntelligence() {
       return;
     }
     await loadIntelligence();
+    if (data.geminiQuotaExhausted && data.message) {
+      var quotaBanner = document.createElement('div');
+      quotaBanner.style.cssText = 'background:rgba(160,117,42,0.1);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--text2);line-height:1.6';
+      quotaBanner.innerHTML = '⏳ <strong style="color:var(--gold)">Quota limit reached</strong> — ' + esc(data.message);
+      if (feed) feed.insertBefore(quotaBanner, feed.firstChild);
+    }
   } catch(e) {
     if (feed) feed.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--coral);font-size:13px">Error: ' + esc(e.message) + '</div>';
   }
@@ -2776,6 +2843,13 @@ async function refreshIntelligence() {
 
 function renderIntelDebug(data) {
   var debug = data.debug || [];
+  if (data.geminiQuotaExhausted && data.message) {
+    return '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">' +
+      '<div style="font-size:32px;margin-bottom:12px;opacity:0.5">⏳</div>' +
+      '<div style="font-weight:600;color:var(--gold);margin-bottom:8px">Gemini quota limit reached</div>' +
+      '<div style="max-width:420px;margin:0 auto;line-height:1.6;font-size:13px">' + esc(data.message) + '</div>' +
+    '</div>';
+  }
   if (data.message) {
     return '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">' + esc(data.message) + '<br><span style="font-size:12px">Add accounts in Org \u2192 Rep Accounts</span></div>';
   }
