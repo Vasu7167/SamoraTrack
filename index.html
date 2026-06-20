@@ -772,6 +772,11 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
           <button id="intelRefreshBtn" onclick="refreshIntelligence()" style="padding:7px 16px;background:var(--gold);border:none;border-radius:8px;color:#18160F;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer">↻ Refresh</button>
         </div>
       </div>
+      <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+        <button class="intel-tab active" onclick="setIntelSource('all',this)" id="intel-src-all">All sources</button>
+        <button class="intel-tab" onclick="setIntelSource('ai',this)" id="intel-src-ai">🤖 AI Tool Signals</button>
+        <button class="intel-tab" onclick="setIntelSource('sam',this)" id="intel-src-sam">⚡ SAM Signals</button>
+      </div>
       <div style="display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap">
         <button class="intel-tab active" onclick="setIntelType('all',this)">All</button>
         <button class="intel-tab" onclick="setIntelType('product_feedback',this)">🔧 Product</button>
@@ -2803,40 +2808,63 @@ async function refreshIntelligence() {
   var isManager = ['manager','super_admin','admin','director','executive'].includes(profile ? profile.role : '');
   var repFilterEl = document.getElementById('intelRepFilter');
   var repFilter = (isManager && repFilterEl) ? repFilterEl.value : '';
-  if (btn) { btn.textContent = '↻ Extracting…'; btn.disabled = true; }
-  if (feed) feed.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">Scanning notetaker emails for ' + (repFilter ? 'this rep\'s' : 'your') + ' named accounts…</div>';
+  if (btn) { btn.textContent = '↻ Scanning…'; btn.disabled = true; }
+  if (feed) feed.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">Scanning ' + (repFilter ? 'this rep\'s' : 'your') + ' named accounts \u2014 AI signals + SAM pattern detection…</div>';
+
+  var days = parseInt((document.getElementById('intelDaysFilter') || {}).value || '30') || 30;
+  var aiData = null, samData = null, aiScopeError = false;
+
+  // SAM (rule-based) scan — runs independently of AI quota/availability, so
+  // it always has a chance to populate even when Gemini is exhausted.
   try {
-    var days = parseInt((document.getElementById('intelDaysFilter') || {}).value || '30') || 30;
-    var r = await fetch(EDGE_FN_URL, {
+    var rSam = await fetch(EDGE_FN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
+      body: JSON.stringify({ action: 'local_intelligence', rep_user_id: repFilter || undefined })
+    });
+    samData = await rSam.json();
+  } catch(e) { samData = { ok: false, error: e.message }; }
+
+  // AI (Gemini) extraction — may fail on quota; that's fine, SAM results
+  // above are unaffected and already captured.
+  try {
+    var rAi = await fetch(EDGE_FN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
       body: JSON.stringify({ action: 'extract_intelligence', days_back: days, rep_user_id: repFilter || undefined })
     });
-    var data = await r.json();
-    if (data.scopeError) {
-      if (feed) feed.innerHTML = '<div style="text-align:center;padding:48px 0">' +
-        '<div style="font-size:32px;margin-bottom:12px;opacity:0.5">🔒</div>' +
-        '<div style="font-size:14px;color:var(--text2);margin-bottom:6px;font-weight:600">Gmail permissions need to be re-granted</div>' +
-        '<div style="font-size:12px;color:var(--text3);max-width:380px;margin:0 auto;line-height:1.6">' + esc(repFilter ? 'This rep\'s' : 'Your') + ' Gmail connection is missing read access. ' + esc(repFilter ? 'They need' : 'Go') + ' to the SAM tab and click "Connect Gmail" again to re-grant permissions \u2014 simply refreshing the token will not fix this.</div>' +
-      '</div>';
-      if (btn) { btn.textContent = '↻ Refresh'; btn.disabled = false; }
-      return;
-    }
-    if (!data.ok) throw new Error(data.error || 'Extraction failed');
-    if (data.processed === 0) {
-      if (feed) feed.innerHTML = renderIntelDebug(data);
-      if (btn) { btn.textContent = '↻ Refresh'; btn.disabled = false; }
-      return;
-    }
-    await loadIntelligence();
-    if (data.geminiQuotaExhausted && data.message) {
-      var quotaBanner = document.createElement('div');
-      quotaBanner.style.cssText = 'background:rgba(160,117,42,0.1);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--text2);line-height:1.6';
-      quotaBanner.innerHTML = '⏳ <strong style="color:var(--gold)">Quota limit reached</strong> — ' + esc(data.message);
-      if (feed) feed.insertBefore(quotaBanner, feed.firstChild);
-    }
-  } catch(e) {
-    if (feed) feed.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--coral);font-size:13px">Error: ' + esc(e.message) + '</div>';
+    aiData = await rAi.json();
+    if (aiData.scopeError) aiScopeError = true;
+  } catch(e) { aiData = { ok: false, error: e.message }; }
+
+  if (aiScopeError) {
+    if (feed) feed.innerHTML = '<div style="text-align:center;padding:48px 0">' +
+      '<div style="font-size:32px;margin-bottom:12px;opacity:0.5">🔒</div>' +
+      '<div style="font-size:14px;color:var(--text2);margin-bottom:6px;font-weight:600">Gmail permissions need to be re-granted</div>' +
+      '<div style="font-size:12px;color:var(--text3);max-width:380px;margin:0 auto;line-height:1.6">' + esc(repFilter ? 'This rep\'s' : 'Your') + ' Gmail connection is missing read access. ' + esc(repFilter ? 'They need' : 'Go') + ' to the SAM tab and click "Connect Gmail" again to re-grant permissions \u2014 simply refreshing the token will not fix this.</div>' +
+    '</div>';
+    if (btn) { btn.textContent = '↻ Refresh'; btn.disabled = false; }
+    return;
+  }
+
+  // Always load whatever intelligence now exists (AI rows, SAM rows, or
+  // both) — SAM rows persist via local_intelligence even if AI failed.
+  await loadIntelligence();
+
+  // Build a status banner reflecting what actually happened in each path.
+  var banners = '';
+  if (samData && samData.ok && samData.count > 0) {
+    banners += '<div style="background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.25);border-radius:var(--radius);padding:10px 14px;margin-bottom:8px;font-size:12px;color:var(--text2)">⚡ <strong style="color:var(--green)">SAM Signals</strong> \u2014 ' + samData.count + ' pattern' + (samData.count>1?'s':'') + ' detected (no AI quota used)</div>';
+  }
+  if (aiData && aiData.geminiQuotaExhausted && aiData.message) {
+    banners += '<div style="background:rgba(160,117,42,0.1);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 14px;margin-bottom:8px;font-size:12px;color:var(--text2);line-height:1.6">⏳ <strong style="color:var(--gold)">AI Tool Signals limited</strong> \u2014 ' + esc(aiData.message) + '</div>';
+  } else if (aiData && aiData.ok && aiData.processed > 0) {
+    banners += '<div style="background:rgba(160,117,42,0.08);border:1px solid rgba(160,117,42,0.25);border-radius:var(--radius);padding:10px 14px;margin-bottom:8px;font-size:12px;color:var(--text2)">🤖 <strong style="color:var(--gold)">AI Tool Signals</strong> \u2014 ' + aiData.processed + ' meeting' + (aiData.processed>1?'s':'') + ' analysed</div>';
+  }
+  if (banners && feed) {
+    var bannerWrap = document.createElement('div');
+    bannerWrap.innerHTML = banners;
+    feed.insertBefore(bannerWrap, feed.firstChild);
   }
   if (btn) { btn.textContent = '↻ Refresh'; btn.disabled = false; }
 }
@@ -2929,9 +2957,25 @@ async function populateIntelRepFilter() {
   } catch(e) { /* keep default */ }
 }
 
+var _intelSource = 'all';
+function setIntelSource(source, btn) {
+  _intelSource = source;
+  ['all','ai','sam'].forEach(function(s) {
+    var b = document.getElementById('intel-src-' + s);
+    if (b) b.classList.toggle('active', s === source);
+  });
+  renderIntelFeed();
+}
+
 function setIntelType(type, btn) {
   _intelType = type;
-  document.querySelectorAll('.intel-tab').forEach(function(b) { b.classList.remove('active'); });
+  // Scope to the category row only — querySelectorAll('.intel-tab') would
+  // otherwise also deactivate the source-row buttons above it, since both
+  // rows share the same CSS class.
+  var categoryRow = btn ? btn.parentElement : null;
+  if (categoryRow) {
+    categoryRow.querySelectorAll('.intel-tab').forEach(function(b) { b.classList.remove('active'); });
+  }
   if (btn) btn.classList.add('active');
   renderIntelFeed();
 }
@@ -2942,7 +2986,8 @@ function renderIntelFeed() {
   var feed = document.getElementById('intelFeed');
   var stats = document.getElementById('intelStats');
   if (!feed || !_intelData) return;
-  var rows = _intelData.rows || [];
+  var allRows = _intelData.rows || [];
+  var rows = _intelSource === 'all' ? allRows : allRows.filter(function(r) { return (r.source || 'ai') === _intelSource; });
 
   if (stats) {
     var counts = { product_feedback:0, pricing_signals:0, competitor_mentions:0, expansion_signals:0, risk_signals:0 };
@@ -2965,11 +3010,20 @@ function renderIntelFeed() {
   }
 
   if (!rows.length) {
-    feed.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">No intelligence extracted yet.<br><span style="font-size:12px">Click \u21bb Refresh to scan named account meeting notes.</span></div>';
+    var emptyMsg = _intelSource === 'sam' ? 'No SAM pattern signals yet.<br><span style="font-size:12px">Click \u21bb Refresh \u2014 SAM scans run instantly, no AI quota needed.</span>'
+      : _intelSource === 'ai' ? 'No AI-extracted intelligence yet.<br><span style="font-size:12px">Click \u21bb Refresh to scan named account meeting notes.</span>'
+      : 'No intelligence extracted yet.<br><span style="font-size:12px">Click \u21bb Refresh to scan named account meeting notes.</span>';
+    feed.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">' + emptyMsg + '</div>';
     return;
   }
 
   var icons = { product_feedback:'🔧', pricing_signals:'💰', competitor_mentions:'⚔', expansion_signals:'📈', risk_signals:'⚠' };
+  var sourceBadgeHtml = function(row) {
+    var src = row.source || 'ai';
+    return src === 'sam'
+      ? '<span style="font-size:9px;font-weight:700;color:var(--green);background:rgba(74,140,92,0.12);border-radius:4px;padding:2px 6px;letter-spacing:0.03em">⚡ SAM</span>'
+      : '<span style="font-size:9px;font-weight:700;color:var(--gold);background:rgba(160,117,42,0.12);border-radius:4px;padding:2px 6px;letter-spacing:0.03em">🤖 AI</span>';
+  };
   var cardsHtml = rows.map(function(row) {
     var allRowSignals = [];
     (row.product_feedback||[]).forEach(function(s) { allRowSignals.push(Object.assign({},s,{_type:'product_feedback'})); });
@@ -2983,7 +3037,7 @@ function renderIntelFeed() {
       if (_intelType !== 'all' || !row.summary) return '';
       return '<div class="intel-card" style="margin-bottom:12px">' +
         '<div class="intel-card-head">' +
-          '<span class="intel-card-acct">' + esc(row.account_name) + '</span>' +
+          '<span class="intel-card-acct">' + esc(row.account_name) + ' ' + sourceBadgeHtml(row) + '</span>' +
           '<span class="intel-card-meta">' + esc(row.meeting_date||'') + ' \u00b7 ' + esc(row.meeting_subject||'') + '</span>' +
         '</div>' +
         '<div class="intel-card-body">' +
@@ -2995,7 +3049,7 @@ function renderIntelFeed() {
     var sentimentColor = { positive:'var(--green)', neutral:'var(--text3)', negative:'var(--coral)' }[row.sentiment] || 'var(--text3)';
     return '<div class="intel-card" style="margin-bottom:12px">' +
       '<div class="intel-card-head">' +
-        '<span class="intel-card-acct">' + esc(row.account_name) + '</span>' +
+        '<span class="intel-card-acct">' + esc(row.account_name) + ' ' + sourceBadgeHtml(row) + '</span>' +
         '<span class="intel-card-meta" style="color:' + sentimentColor + '">' + (row.sentiment||'') + ' \u00b7 ' + esc(row.meeting_date||'') + ' \u00b7 ' + esc(row.meeting_subject||'') + '</span>' +
       '</div>' +
       '<div class="intel-card-body">' +
