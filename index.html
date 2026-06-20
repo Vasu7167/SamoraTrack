@@ -1839,15 +1839,59 @@ async function runSamAccountSearch() {
     if (!data.threads?.length) { if (out) out.innerHTML = '<div style="font-size:13px;color:var(--text3);padding:12px">No sent emails found for "' + esc(query) + '"</div>'; return; }
     const a = data.analysis || {};
     const totalFound = data.totalFound || data.threads?.length || 0;
+    const totalReplies = data.inboxThreads?.length || 0;
+    const intel = data.intelligence || [];
     const sentimentColor = {positive:'var(--green)',neutral:'var(--amber)',negative:'var(--coral)'}[a.sentiment]||'var(--text3)';
+
     let html = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:16px;margin-top:8px">';
-    html += '<div style="font-family:var(--serif);font-size:20px;font-weight:500;margin-bottom:4px">' + esc(query) + '</div>';
-    html += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px"><span style="font-size:12px;color:var(--text3)">⚡ ' + totalFound + ' emails</span>';
-    if (a.sentiment) html += '<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:rgba(0,0,0,0.1);color:'+sentimentColor+';font-weight:500">'+a.sentiment+'</span>';
+    html += '<div style="font-family:var(--serif);font-size:20px;font-weight:500;margin-bottom:8px">' + esc(query) + '</div>';
+
+    // Coverage summary — sent + replies, all channels we have evidence for
+    html += '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px;font-size:12px;color:var(--text3)">' +
+      '<span>✉ <b style="color:var(--text)">' + totalFound + '</b> emails sent</span>' +
+      '<span>↩ <b style="color:' + (totalReplies>0?'var(--green)':'var(--text3)') + '">' + totalReplies + '</b> replies received</span>';
+    if (a.sentiment) html += '<span style="padding:2px 8px;border-radius:20px;background:rgba(0,0,0,0.1);color:'+sentimentColor+';font-weight:500">'+a.sentiment+'</span>';
     html += '</div>';
+
     if (a.summary) html += '<div style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:14px;padding:12px 14px;background:var(--surface2);border-radius:var(--radius);border-left:3px solid var(--gold)"><div style="font-size:10px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">⚡ SAM Analysis</div>' + esc(a.summary) + '</div>';
-    if (data.threads?.length) { const last = data.threads[0]; html += '<div style="font-size:11px;color:var(--text3)">Last sent: <span style="color:var(--text2)">' + esc(last.subject||'') + '</span> · ' + esc(last.date||'') + '</div>'; }
+
+    // Recent replies — the actual evidence of two-way engagement, not just outbound
+    if (data.inboxThreads?.length) {
+      html += '<div style="margin-bottom:14px">';
+      html += '<div style="font-size:10px;font-weight:600;color:var(--green);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">↩ Recent replies</div>';
+      data.inboxThreads.slice(0,3).forEach(function(t) {
+        html += '<div style="background:rgba(74,140,92,0.06);border:1px solid rgba(74,140,92,0.2);border-radius:8px;padding:8px 12px;margin-bottom:6px">' +
+          '<div style="font-size:12px;font-weight:500;color:var(--text)">' + esc(t.subject||'') + '</div>' +
+          '<div style="font-size:11px;color:var(--text3);margin-top:2px">' + esc(t.from||'') + ' · ' + esc(t.date||'') + '</div>' +
+        '</div>';
+      });
+      html += '</div>';
+    }
+
+    if (data.threads?.length) { const last = data.threads[0]; html += '<div style="font-size:11px;color:var(--text3);margin-bottom:4px">Last sent: <span style="color:var(--text2)">' + esc(last.subject||'') + '</span> · ' + esc(last.date||'') + '</div>'; }
     html += '</div>';
+
+    // Pulled-in intelligence — same data the Intel tab shows for this account
+    if (intel.length) {
+      html += '<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-top:10px">';
+      html += '<div style="font-size:10px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em;padding:8px 12px;background:var(--surface2);border-bottom:1px solid var(--border)">⚡ Account intelligence (' + intel.length + ' meeting' + (intel.length>1?'s':'') + ')</div>';
+      intel.slice(0,5).forEach(function(row) {
+        const sc = {positive:'var(--green)',neutral:'var(--text3)',negative:'var(--coral)'}[row.sentiment]||'var(--text3)';
+        const signalCount = (row.product_feedback||[]).length + (row.pricing_signals||[]).length + (row.competitor_mentions||[]).length + (row.expansion_signals||[]).length + (row.risk_signals||[]).length;
+        html += '<div style="padding:10px 12px;border-top:1px solid var(--border)">' +
+          '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">' +
+            '<span style="font-size:11px;color:var(--text3)">' + esc(row.meeting_date||'') + ' · ' + esc(row.meeting_subject||'') + '</span>' +
+            '<span style="font-size:10px;color:' + sc + '">' + esc(row.sentiment||'') + '</span>' +
+          '</div>' +
+          (row.summary ? '<div style="font-size:12px;color:var(--text2);line-height:1.5;margin-bottom:4px">' + esc(row.summary) + '</div>' : '') +
+          (signalCount > 0 ? '<div style="font-size:10px;color:var(--gold)">' + signalCount + ' signal' + (signalCount>1?'s':'') + ' extracted — see Intel tab for details</div>' : '') +
+        '</div>';
+      });
+      html += '</div>';
+    } else {
+      html += '<div style="font-size:11px;color:var(--text3);padding:8px 2px">No extracted intelligence for this account yet — run ↻ Refresh in the Intel tab to scan meeting notes.</div>';
+    }
+
     if (out) out.innerHTML = html;
   } catch(e) { if (out) out.innerHTML = '<div style="font-size:13px;color:var(--coral);padding:12px">Error: ' + esc(e.message) + '</div>'; }
 }
