@@ -1903,39 +1903,6 @@ async function runIntentVsReality(repId, outputId) {
     html += '<div style="background:var(--surface2);border-radius:6px;padding:8px;text-align:center"><div style="font-size:18px;font-weight:500;color:var(--coral)">'+(s.gaps||0)+'</div><div style="font-size:10px;color:var(--text3)">Gaps</div></div>';
     html += '<div style="background:var(--surface2);border-radius:6px;padding:8px;text-align:center"><div style="font-size:18px;font-weight:500;color:var(--amber)">'+(s.unverified||0)+'</div><div style="font-size:10px;color:var(--text3)">Unverified</div></div></div>';
     html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><div style="flex:1;height:5px;background:var(--surface2);border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+barColor+';border-radius:3px"></div></div><div style="font-size:12px;font-weight:600;color:'+barColor+'">'+pct+'% verified</div></div>';
-
-    // Per-account outreach grid — shows activity counts (calls/emails/meetings)
-    // and verified counts per account, so a manager can scan coverage at a
-    // glance instead of reading through every individual task.
-    const grid = data.accountGrid || [];
-    if (grid.length) {
-      html += '<div style="margin-bottom:16px;border:1px solid var(--border);border-radius:8px;overflow:hidden">';
-      html += '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;padding:8px 12px;background:var(--surface2);border-bottom:1px solid var(--border)">Outreach by account</div>';
-      html += '<table style="width:100%;border-collapse:collapse;font-size:12px">';
-      html += '<thead><tr style="background:var(--surface2)">' +
-        '<th style="padding:6px 10px;text-align:left;color:var(--text3);font-weight:500">Account</th>' +
-        '<th style="padding:6px 8px;text-align:center;color:var(--text3);font-weight:500">📞 Calls</th>' +
-        '<th style="padding:6px 8px;text-align:center;color:var(--text3);font-weight:500">✉ Emails</th>' +
-        '<th style="padding:6px 8px;text-align:center;color:var(--text3);font-weight:500">📅 Meetings</th>' +
-        '<th style="padding:6px 8px;text-align:center;color:var(--text3);font-weight:500">Total</th>' +
-        '</tr></thead><tbody>';
-      grid.forEach(function(g) {
-        const cellHtml = function(bucket) {
-          if (!bucket.total) return '<span style="color:var(--text3)">—</span>';
-          const color = bucket.verified === bucket.total ? 'var(--green)' : bucket.verified > 0 ? 'var(--amber)' : 'var(--text3)';
-          return '<span style="color:'+color+';font-weight:600">'+bucket.verified+'</span><span style="color:var(--text3)">/'+bucket.total+'</span>';
-        };
-        html += '<tr style="border-top:1px solid var(--border)">' +
-          '<td style="padding:7px 10px;color:var(--text);font-weight:500">'+esc(g.account)+'</td>' +
-          '<td style="padding:7px 8px;text-align:center">'+cellHtml(g.call)+'</td>' +
-          '<td style="padding:7px 8px;text-align:center">'+cellHtml(g.email)+'</td>' +
-          '<td style="padding:7px 8px;text-align:center">'+cellHtml(g.meeting)+'</td>' +
-          '<td style="padding:7px 8px;text-align:center;font-weight:600;color:'+(g.verified===g.total?'var(--green)':'var(--text2)')+'">'+g.verified+'/'+g.total+'</td>' +
-        '</tr>';
-      });
-      html += '</tbody></table></div>';
-      html += '<div style="font-size:10px;color:var(--text3);margin-bottom:14px;padding:0 2px">Verified / Total per activity type \u2014 "/" with no verified count means the activity has no source (e.g. calls, with no calling-tool integration yet)</div>';
-    }
     results.slice(0,10).forEach(function(r) {
       const sig = r.signal||'unknown';
       const sigMap = {gap:{icon:'🚨',color:'var(--coral)',bg:'rgba(192,82,63,0.08)'},unverified:{icon:'⚠',color:'var(--amber)',bg:'rgba(160,117,42,0.08)'},verified:{icon:'✓',color:'var(--green)',bg:'rgba(74,140,92,0.08)'},verified_hot:{icon:'🔥',color:'var(--green)',bg:'rgba(74,140,92,0.12)'},done_not_logged:{icon:'💡',color:'var(--text3)',bg:'var(--surface2)'},no_source:{icon:'○',color:'var(--text3)',bg:'var(--surface2)'}};
@@ -1956,24 +1923,112 @@ async function runIntentVsReality(repId, outputId) {
   } catch(e) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>'; }
   if (btn&&!isManager) { btn.textContent = 'Refresh'; btn.disabled = false; }
 }
+// Coverage period state — keyed by output element id so multiple rep cards
+// in the Team tab can each remember their own selected period independently.
+var _coveragePeriod = {};
+function setCoveragePeriod(outputId, period, btn) {
+  _coveragePeriod[outputId] = period;
+  var wrap = document.getElementById('covperiod-' + outputId);
+  if (wrap) wrap.querySelectorAll('button').forEach(function(b) { b.style.background = 'var(--surface2)'; b.style.color = 'var(--text2)'; b.style.borderColor = 'var(--border)'; });
+  if (btn) { btn.style.background = 'var(--gold)'; btn.style.color = '#18160F'; btn.style.borderColor = 'var(--gold)'; }
+  var customRow = document.getElementById('covcustom-' + outputId);
+  if (customRow) customRow.style.display = period === 'custom' ? 'flex' : 'none';
+  if (period !== 'custom') runCoverageCheck(_coverageRepId[outputId], _coverageRepEmail[outputId], outputId);
+}
+var _coverageRepId = {}, _coverageRepEmail = {};
+
+function getCoverageDateRange(outputId) {
+  const period = _coveragePeriod[outputId] || 'week';
+  const today = todayKey();
+  const teamDateEl = document.getElementById('teamDateInput');
+  const viewingDate = (teamDateEl && teamDateEl.value) ? teamDateEl.value : today;
+  if (period === 'today') return { from: viewingDate, to: viewingDate, label: viewingDate === today ? 'today' : viewingDate };
+  if (period === 'week') {
+    const d = parseDate(viewingDate); const day = d.getDay();
+    const monday = new Date(d); monday.setDate(d.getDate() - (day===0?6:day-1));
+    return { from: dateKey(monday), to: viewingDate, label: 'this week' };
+  }
+  if (period === 'month') {
+    const d = parseDate(viewingDate);
+    return { from: d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01', to: viewingDate, label: 'this month' };
+  }
+  if (period === 'custom') {
+    const fromEl = document.getElementById('covfrom-' + outputId), toEl = document.getElementById('covto-' + outputId);
+    const from = fromEl?.value || viewingDate, to = toEl?.value || viewingDate;
+    return { from, to, label: from + ' \u2192 ' + to };
+  }
+  return { from: viewingDate, to: viewingDate, label: viewingDate };
+}
+
+function renderCoveragePeriodPicker(outputId) {
+  const active = _coveragePeriod[outputId] || 'week';
+  const mk = function(period, label) {
+    const isActive = active === period;
+    return '<button onclick="setCoveragePeriod(\''+outputId+'\',\''+period+'\',this)" style="padding:4px 10px;border-radius:14px;font-size:11px;cursor:pointer;font-family:var(--sans);border:1px solid '+(isActive?'var(--gold)':'var(--border)')+';background:'+(isActive?'var(--gold)':'var(--surface2)')+';color:'+(isActive?'#18160F':'var(--text2)')+'">'+label+'</button>';
+  };
+  return '<div id="covperiod-'+outputId+'" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">' +
+    mk('today','Today') + mk('week','This week') + mk('month','This month') + mk('custom','Custom range') +
+    '</div>' +
+    '<div id="covcustom-'+outputId+'" style="display:'+(active==='custom'?'flex':'none')+';gap:8px;align-items:center;margin-bottom:10px">' +
+      '<input type="date" id="covfrom-'+outputId+'" style="background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px"/>' +
+      '<span style="font-size:11px;color:var(--text3)">to</span>' +
+      '<input type="date" id="covto-'+outputId+'" style="background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px"/>' +
+      '<button onclick="runCoverageCheck(\''+(_coverageRepId[outputId]||'')+'\',\''+(_coverageRepEmail[outputId]||'')+'\',\''+outputId+'\')" style="padding:5px 12px;border-radius:6px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Apply</button>' +
+    '</div>';
+}
+
 async function runCoverageCheck(repId, repEmail, resultElId) {
   const isManager = !!repId; const targetId = repId||currentUser?.id; const btnId = isManager?null:'coverageCheckBtn'; const outputId = resultElId||'samCoverageOutput';
   const btn = btnId?document.getElementById(btnId):null; const out = document.getElementById(outputId); if (!out) return;
-  const teamDateEl = document.getElementById('teamDateInput');
-  const checkDate = isManager?((teamDateEl&&teamDateEl.value)?teamDateEl.value:todayKey()):todayKey();
+  _coverageRepId[outputId] = repId; _coverageRepEmail[outputId] = repEmail;
+  const { from, to, label } = getCoverageDateRange(outputId);
   if (btn) { btn.textContent = 'Scanning…'; btn.disabled = true; }
-  out.innerHTML = '<div style="font-size:12px;color:var(--text3)">Checking account coverage for '+checkDate+'…</div>';
+  out.innerHTML = renderCoveragePeriodPicker(outputId) + '<div style="font-size:12px;color:var(--text3)">Checking account coverage for '+esc(label)+'…</div>';
   try {
-    const r = await fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify({ action: 'account_coverage', rep_user_id: isManager?targetId:null, day_key: checkDate }) });
+    const r = await fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify({ action: 'account_coverage', rep_user_id: isManager?targetId:null, date_from: from, date_to: to }) });
     const data = await r.json();
-    if (!data.connected) { out.innerHTML = '<div style="font-size:12px;color:var(--text3)">Gmail not connected'+(isManager?' for this rep':'')+'</div>'; if (btn){btn.textContent='Check today';btn.disabled=false;} return; }
-    const s = data.summary||{}; if (!s.total) { out.innerHTML = '<div style="font-size:12px;color:var(--text3)">No accounts found for '+checkDate+'</div>'; if (btn){btn.textContent='Check today';btn.disabled=false;} return; }
+    const picker = renderCoveragePeriodPicker(outputId);
+    if (!data.connected) { out.innerHTML = picker + '<div style="font-size:12px;color:var(--text3)">Gmail not connected'+(isManager?' for this rep':'')+'</div>'; if (btn){btn.textContent='Check today';btn.disabled=false;} return; }
+    const s = data.summary||{};
+    const grid = data.accountGrid||[];
+    if (!grid.length) { out.innerHTML = picker + '<div style="font-size:12px;color:var(--text3)">No accounts found for '+esc(label)+'</div>'; if (btn){btn.textContent='Check today';btn.disabled=false;} return; }
     const pct = s.coverageRate||0; const barColor = pct>=80?'var(--green)':pct>=50?'var(--amber)':'var(--coral)';
-    let html = '<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="color:var(--text2)">'+s.covered+'/'+s.total+' accounts emailed</span><span style="color:'+barColor+';font-weight:600">'+pct+'%</span></div><div style="height:5px;background:var(--surface2);border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+barColor+';border-radius:3px;transition:width 0.4s"></div></div></div>';
-    if (data.gap&&data.gap.length) { html += '<div style="margin-bottom:10px"><div style="font-size:10px;font-weight:600;color:var(--coral);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">🚨 Not actioned ('+data.gap.length+')</div>'+data.gap.map(function(a){return '<div style="border-left:3px solid var(--coral);padding:7px 10px;margin-bottom:5px;background:rgba(192,82,63,0.06);border-radius:0 6px 6px 0"><div style="font-size:12px;font-weight:500;color:var(--text)">'+esc(a.account)+'</div></div>';}).join('')+'</div>'; }
-    if (data.covered&&data.covered.length) { html += '<div><div style="font-size:10px;font-weight:600;color:var(--green);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">✓ Actioned ('+data.covered.length+')</div>'+data.covered.map(function(a){return '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;margin-bottom:4px;background:var(--surface2);border-radius:6px"><div style="font-size:12px;font-weight:500;color:var(--text)">'+esc(a.account)+'</div><span style="font-size:12px;color:var(--green)">✓</span></div>';}).join('')+'</div>'; }
+    let html = picker;
+    html += '<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="color:var(--text2)">'+s.coveredAccounts+'/'+s.totalAccounts+' accounts emailed \u00b7 '+s.totalLogged+' activities logged \u00b7 '+s.totalVerified+' verified</span><span style="color:'+barColor+';font-weight:600">'+pct+'%</span></div><div style="height:5px;background:var(--surface2);border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+barColor+';border-radius:3px;transition:width 0.4s"></div></div></div>';
+
+    // Outreach-by-account grid — logged (claimed in task text) vs verified
+    // (actually found in Gmail) counts per channel.
+    html += '<div style="margin-bottom:12px;border:1px solid var(--border);border-radius:8px;overflow:hidden">';
+    html += '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;padding:8px 12px;background:var(--surface2);border-bottom:1px solid var(--border)">Outreach by account</div>';
+    html += '<table style="width:100%;border-collapse:collapse;font-size:12px">';
+    html += '<thead><tr style="background:var(--surface2)">' +
+      '<th style="padding:6px 10px;text-align:left;color:var(--text3);font-weight:500">Account</th>' +
+      '<th style="padding:6px 6px;text-align:center;color:var(--text3);font-weight:500">📞 Calls</th>' +
+      '<th style="padding:6px 6px;text-align:center;color:var(--text3);font-weight:500">✉ Emails</th>' +
+      '<th style="padding:6px 6px;text-align:center;color:var(--text3);font-weight:500">📅 Meetings</th>' +
+      '<th style="padding:6px 6px;text-align:center;color:var(--text3);font-weight:500">🔗 LinkedIn</th>' +
+      '<th style="padding:6px 6px;text-align:center;color:var(--text3);font-weight:500">💬 WhatsApp</th>' +
+      '</tr></thead><tbody>';
+    grid.forEach(function(g) {
+      const cell = function(bucket, hasIntegration) {
+        if (!bucket.logged) return '<span style="color:var(--text3)">—</span>';
+        if (!hasIntegration) return '<span style="color:var(--text2);font-weight:600">'+bucket.logged+'</span><span style="color:var(--text3)" title="No integration yet to verify this channel"> (logged)</span>';
+        const color = bucket.verified >= bucket.logged ? 'var(--green)' : bucket.verified > 0 ? 'var(--amber)' : 'var(--coral)';
+        return '<span style="color:'+color+';font-weight:600">'+bucket.verified+'</span><span style="color:var(--text3)">/'+bucket.logged+'</span>';
+      };
+      html += '<tr style="border-top:1px solid var(--border)">' +
+        '<td style="padding:7px 10px;color:var(--text);font-weight:500">'+esc(g.account)+(g.repliesReceived>0?' <span style="color:var(--green);font-size:10px">'+g.repliesReceived+' repl'+(g.repliesReceived>1?'ies':'y')+'</span>':'')+'</td>' +
+        '<td style="padding:7px 6px;text-align:center">'+cell(g.call, false)+'</td>' +
+        '<td style="padding:7px 6px;text-align:center">'+cell(g.email, true)+'</td>' +
+        '<td style="padding:7px 6px;text-align:center">'+cell(g.meeting, false)+'</td>' +
+        '<td style="padding:7px 6px;text-align:center">'+cell(g.linkedin, false)+'</td>' +
+        '<td style="padding:7px 6px;text-align:center">'+cell(g.whatsapp, false)+'</td>' +
+      '</tr>';
+    });
+    html += '</tbody></table></div>';
+    html += '<div style="font-size:10px;color:var(--text3);margin-bottom:10px;padding:0 2px">"Logged" = quantity stated in the task text (e.g. "10 emails"). Verified/Logged = actually found in Gmail. "(logged)" channels have no integration yet to verify against.</div>';
     out.innerHTML = html;
-  } catch(e) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>'; }
+  } catch(e) { out.innerHTML = renderCoveragePeriodPicker(outputId) + '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>'; }
   if (btn) { btn.textContent = 'Refresh'; btn.disabled = false; }
 }
 async function runSamQuery() {
