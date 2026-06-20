@@ -1872,10 +1872,26 @@ async function runIntentVsReality(repId, outputId) {
   const isManager = !!repId; const out = document.getElementById(outputId || 'ivrOutput'); const btn = document.getElementById('ivrBtn');
   if (!out) return;
   if (btn && !isManager) { btn.textContent = 'Scanning…'; btn.disabled = true; }
-  out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0">Checking intent vs reality…</div>';
-  const today = todayKey(); const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate()-7);
+  // Respect the Team tab's "Viewing date" picker when checking a specific
+  // rep from the Team panel — previously this always silently ran a fixed
+  // rolling-7-day window regardless of which date was actually selected,
+  // which looked like it was scoping to the wrong period (e.g. MTD) when
+  // the person expected results for just the viewing date.
+  const teamDateEl = document.getElementById('teamDateInput');
+  const viewingDate = (isManager && teamDateEl && teamDateEl.value) ? teamDateEl.value : null;
+  const today = todayKey();
+  let dateFrom, dateTo, periodLabel;
+  if (viewingDate) {
+    dateFrom = viewingDate; dateTo = viewingDate;
+    periodLabel = viewingDate === today ? 'today' : viewingDate;
+  } else {
+    const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate()-7);
+    dateFrom = weekAgo.toISOString().split('T')[0]; dateTo = today;
+    periodLabel = 'this week';
+  }
+  out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0">Checking intent vs reality for ' + esc(periodLabel) + '…</div>';
   try {
-    const r = await fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify({ action: 'intent_vs_reality', rep_user_id: isManager?repId:null, date_from: weekAgo.toISOString().split('T')[0], date_to: today }) });
+    const r = await fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify({ action: 'intent_vs_reality', rep_user_id: isManager?repId:null, date_from: dateFrom, date_to: dateTo }) });
     const data = await r.json();
     if (!data.connected) { out.innerHTML = '<div style="font-size:12px;color:var(--text3)">Gmail not connected'+(isManager?' for this rep':'')+'</div>'; if (btn&&!isManager){btn.textContent='Check this week';btn.disabled=false;} return; }
     const s = data.summary||{}; const results = data.results||[];
@@ -1887,6 +1903,39 @@ async function runIntentVsReality(repId, outputId) {
     html += '<div style="background:var(--surface2);border-radius:6px;padding:8px;text-align:center"><div style="font-size:18px;font-weight:500;color:var(--coral)">'+(s.gaps||0)+'</div><div style="font-size:10px;color:var(--text3)">Gaps</div></div>';
     html += '<div style="background:var(--surface2);border-radius:6px;padding:8px;text-align:center"><div style="font-size:18px;font-weight:500;color:var(--amber)">'+(s.unverified||0)+'</div><div style="font-size:10px;color:var(--text3)">Unverified</div></div></div>';
     html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><div style="flex:1;height:5px;background:var(--surface2);border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+barColor+';border-radius:3px"></div></div><div style="font-size:12px;font-weight:600;color:'+barColor+'">'+pct+'% verified</div></div>';
+
+    // Per-account outreach grid — shows activity counts (calls/emails/meetings)
+    // and verified counts per account, so a manager can scan coverage at a
+    // glance instead of reading through every individual task.
+    const grid = data.accountGrid || [];
+    if (grid.length) {
+      html += '<div style="margin-bottom:16px;border:1px solid var(--border);border-radius:8px;overflow:hidden">';
+      html += '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;padding:8px 12px;background:var(--surface2);border-bottom:1px solid var(--border)">Outreach by account</div>';
+      html += '<table style="width:100%;border-collapse:collapse;font-size:12px">';
+      html += '<thead><tr style="background:var(--surface2)">' +
+        '<th style="padding:6px 10px;text-align:left;color:var(--text3);font-weight:500">Account</th>' +
+        '<th style="padding:6px 8px;text-align:center;color:var(--text3);font-weight:500">📞 Calls</th>' +
+        '<th style="padding:6px 8px;text-align:center;color:var(--text3);font-weight:500">✉ Emails</th>' +
+        '<th style="padding:6px 8px;text-align:center;color:var(--text3);font-weight:500">📅 Meetings</th>' +
+        '<th style="padding:6px 8px;text-align:center;color:var(--text3);font-weight:500">Total</th>' +
+        '</tr></thead><tbody>';
+      grid.forEach(function(g) {
+        const cellHtml = function(bucket) {
+          if (!bucket.total) return '<span style="color:var(--text3)">—</span>';
+          const color = bucket.verified === bucket.total ? 'var(--green)' : bucket.verified > 0 ? 'var(--amber)' : 'var(--text3)';
+          return '<span style="color:'+color+';font-weight:600">'+bucket.verified+'</span><span style="color:var(--text3)">/'+bucket.total+'</span>';
+        };
+        html += '<tr style="border-top:1px solid var(--border)">' +
+          '<td style="padding:7px 10px;color:var(--text);font-weight:500">'+esc(g.account)+'</td>' +
+          '<td style="padding:7px 8px;text-align:center">'+cellHtml(g.call)+'</td>' +
+          '<td style="padding:7px 8px;text-align:center">'+cellHtml(g.email)+'</td>' +
+          '<td style="padding:7px 8px;text-align:center">'+cellHtml(g.meeting)+'</td>' +
+          '<td style="padding:7px 8px;text-align:center;font-weight:600;color:'+(g.verified===g.total?'var(--green)':'var(--text2)')+'">'+g.verified+'/'+g.total+'</td>' +
+        '</tr>';
+      });
+      html += '</tbody></table></div>';
+      html += '<div style="font-size:10px;color:var(--text3);margin-bottom:14px;padding:0 2px">Verified / Total per activity type \u2014 "/" with no verified count means the activity has no source (e.g. calls, with no calling-tool integration yet)</div>';
+    }
     results.slice(0,10).forEach(function(r) {
       const sig = r.signal||'unknown';
       const sigMap = {gap:{icon:'🚨',color:'var(--coral)',bg:'rgba(192,82,63,0.08)'},unverified:{icon:'⚠',color:'var(--amber)',bg:'rgba(160,117,42,0.08)'},verified:{icon:'✓',color:'var(--green)',bg:'rgba(74,140,92,0.08)'},verified_hot:{icon:'🔥',color:'var(--green)',bg:'rgba(74,140,92,0.12)'},done_not_logged:{icon:'💡',color:'var(--text3)',bg:'var(--surface2)'},no_source:{icon:'○',color:'var(--text3)',bg:'var(--surface2)'}};
