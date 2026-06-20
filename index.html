@@ -1985,6 +1985,7 @@ async function runIntentVsReality(repId, outputId) {
     if (data.scopeError) { out.innerHTML = '<div style="font-size:12px;color:var(--coral);padding:8px 0">🔒 ' + esc(data.error || 'Gmail permissions need to be re-granted — reconnect Gmail.') + '</div>'; if (btn&&!isManager){btn.textContent='Check this week';btn.disabled=false;} return; }
     if (!data.connected) { out.innerHTML = '<div style="font-size:12px;color:var(--text3)">Gmail not connected'+(isManager?' for this rep':'')+'</div>'; if (btn&&!isManager){btn.textContent='Check this week';btn.disabled=false;} return; }
     const s = data.summary||{}; const results = data.results||[];
+    if (data.debug) { console.log('Intent vs Reality diagnostic — query + Gmail result per task:', data.debug); }
     if (!results.length) { out.innerHTML = '<div style="font-size:12px;color:var(--text3)">No outreach tasks found for this period</div>'; if (btn&&!isManager){btn.textContent='Check this week';btn.disabled=false;} return; }
     const pct = s.verificationRate||0; const barColor = pct>=80?'var(--green)':pct>=50?'var(--amber)':'var(--coral)';
     let html = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px">';
@@ -2009,6 +2010,20 @@ async function runIntentVsReality(repId, outputId) {
         noSourceNote +
       '</div>';
     });
+    if (data.debug && data.debug.length) {
+      html += '<div style="margin-top:14px;border:1px dashed var(--border2);border-radius:8px;padding:10px 12px">' +
+        '<div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">\u26a0\ufe0f Diagnostic \u2014 raw search per task (temporary, for debugging)</div>' +
+        data.debug.map(function(d) {
+          return '<div style="font-size:11px;color:var(--text3);margin-bottom:6px;font-family:monospace;line-height:1.5">' +
+            '<div style="color:var(--text2)">' + esc((d.task||'').slice(0,60)) + ' \u2192 ' + esc(d.account||'') + '</div>' +
+            '<div>query: ' + esc(d.query||'') + '</div>' +
+            '<div>found: ' + (d.messagesFound!=null?d.messagesFound:'?') + (d.bestScore!=null?' \u00b7 bestScore: '+d.bestScore:'') + (d.bestSubject?' \u00b7 best subject: "'+esc(d.bestSubject)+'"':'') + '</div>' +
+            (d.gmailApiError ? '<div style="color:var(--coral)">API error: ' + esc(JSON.stringify(d.gmailApiError)) + '</div>' : '') +
+            (d.exception ? '<div style="color:var(--coral)">Exception: ' + esc(d.exception) + '</div>' : '') +
+          '</div>';
+        }).join('') +
+      '</div>';
+    }
     out.innerHTML = html;
   } catch(e) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>'; }
   if (btn&&!isManager) { btn.textContent = 'Refresh'; btn.disabled = false; }
