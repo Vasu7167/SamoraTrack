@@ -1977,6 +1977,26 @@ function renderCoveragePeriodPicker(outputId) {
     '</div>';
 }
 
+// Generic open/close toggle for the per-rep action panels (SAM Signals,
+// Coverage, Intent vs Reality) in the Team tab. Previously clicking these
+// buttons only ever fetched and re-rendered into an ever-growing output div
+// with no way to collapse it again — clicking a second time just re-ran the
+// same fetch. Now: first click opens (runs the action), second click closes
+// (clears the panel) without re-fetching, third click re-opens fresh.
+var _panelOpenState = {};
+function togglePanel(outputId, runFn) {
+  const out = document.getElementById(outputId);
+  if (!out) return;
+  const isOpen = _panelOpenState[outputId] && out.innerHTML.trim().length > 0;
+  if (isOpen) {
+    out.innerHTML = '';
+    _panelOpenState[outputId] = false;
+  } else {
+    _panelOpenState[outputId] = true;
+    runFn();
+  }
+}
+
 async function runCoverageCheck(repId, repEmail, resultElId) {
   const isManager = !!repId; const targetId = repId||currentUser?.id; const btnId = isManager?null:'coverageCheckBtn'; const outputId = resultElId||'samCoverageOutput';
   const btn = btnId?document.getElementById(btnId):null; const out = document.getElementById(outputId); if (!out) return;
@@ -1991,7 +2011,12 @@ async function runCoverageCheck(repId, repEmail, resultElId) {
     if (!data.connected) { out.innerHTML = picker + '<div style="font-size:12px;color:var(--text3)">Gmail not connected'+(isManager?' for this rep':'')+'</div>'; if (btn){btn.textContent='Check today';btn.disabled=false;} return; }
     const s = data.summary||{};
     const grid = data.accountGrid||[];
-    if (!grid.length) { out.innerHTML = picker + '<div style="font-size:12px;color:var(--text3)">No accounts found for '+esc(label)+'</div>'; if (btn){btn.textContent='Check today';btn.disabled=false;} return; }
+    if (!grid.length) {
+      const emptyMsg = data.noAssignedAccounts
+        ? 'No accounts assigned to this rep yet \u2014 add some in Org \u2192 Rep Accounts to start tracking coverage'
+        : 'No task activity matched an assigned account for ' + esc(label);
+      out.innerHTML = picker + '<div style="font-size:12px;color:var(--text3)">'+emptyMsg+'</div>'; if (btn){btn.textContent='Check today';btn.disabled=false;} return;
+    }
     const pct = s.coverageRate||0; const barColor = pct>=80?'var(--green)':pct>=50?'var(--amber)':'var(--coral)';
     let html = picker;
     html += '<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="color:var(--text2)">'+s.coveredAccounts+'/'+s.totalAccounts+' accounts emailed \u00b7 '+s.totalLogged+' activities logged \u00b7 '+s.totalVerified+' verified</span><span style="color:'+barColor+';font-weight:600">'+pct+'%</span></div><div style="height:5px;background:var(--surface2);border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+barColor+';border-radius:3px;transition:width 0.4s"></div></div></div>';
@@ -2077,9 +2102,9 @@ async function renderTeam() {
         '</div>' +
         '<div style="padding:8px 16px;border-top:1px solid var(--border)">' +
           '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
-            '<button id="sam-btn-' + m.user_id + '" onclick="event.stopPropagation();runSamCheck(\'' + m.user_id + '\',\'' + m.email + '\')" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(160,117,42,0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">⚡ SAM Signals</button>' +
-            '<button onclick="event.stopPropagation();runCoverageCheck(\'' + m.user_id + '\',\'' + m.email + '\',\'cov-' + m.user_id + '\')" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(160,117,42,0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">📊 Coverage</button>' +
-            '<button onclick="event.stopPropagation();runIntentVsReality(\'' + m.user_id + '\',\'ivr-' + m.user_id + '\')" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(160,117,42,0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">🎯 Intent vs Reality</button>' +
+            '<button id="sam-btn-' + m.user_id + '" onclick="event.stopPropagation();togglePanel(\'sam-result-' + m.user_id + '\',function(){runSamCheck(\'' + m.user_id + '\',\'' + m.email + '\')})" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(160,117,42,0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">⚡ SAM Signals</button>' +
+            '<button onclick="event.stopPropagation();togglePanel(\'cov-' + m.user_id + '\',function(){runCoverageCheck(\'' + m.user_id + '\',\'' + m.email + '\',\'cov-' + m.user_id + '\')})" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(160,117,42,0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">📊 Coverage</button>' +
+            '<button onclick="event.stopPropagation();togglePanel(\'ivr-' + m.user_id + '\',function(){runIntentVsReality(\'' + m.user_id + '\',\'ivr-' + m.user_id + '\')})" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(160,117,42,0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">🎯 Intent vs Reality</button>' +
           '</div>' +
           '<div id="sam-result-' + m.user_id + '" style="margin-top:8px"></div>' +
           '<div id="cov-' + m.user_id + '" style="margin-top:6px"></div>' +
