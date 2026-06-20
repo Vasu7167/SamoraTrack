@@ -594,7 +594,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
           <div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em">⚡ Deal Signals</div>
           <button onclick="runLocalIntelligence()" id="localIntelBtn" style="padding:5px 12px;border-radius:20px;background:rgba(160,117,42,0.1);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Scan</button>
         </div>
-        <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Instant pattern detection — proposals, NDAs, stale threads, unanswered emails, overdue follow-ups. No AI quota used.</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Every assigned account, bucketed by deal stage \u2014 Prospective \u2192 Value Prop \u2192 Commercial \u2014 from email, calendar &amp; notetaker signals. No AI quota used.</div>
         <div id="samLocalIntelOutput"></div>
       </div>
     </div>
@@ -2092,14 +2092,36 @@ function togglePanel(outputId, runFn) {
 // Signal-type display config for local (rule-based) intelligence — icon,
 // label, and color per detected pattern. Extend here as new pattern types
 // are added server-side.
-var LOCAL_SIGNAL_CONFIG = {
-  active_negotiation: { icon: '🔥', label: 'Active negotiation', color: 'var(--green)' },
-  awaiting_response:  { icon: '📨', label: 'Proposal sent', color: 'var(--amber)' },
-  deal_progression:   { icon: '📝', label: 'NDA exchange', color: 'var(--gold)' },
-  cold:                { icon: '❄', label: 'Going cold', color: 'var(--coral)' },
-  response_gap:        { icon: '⏰', label: 'Unanswered', color: 'var(--coral)' },
-  overdue_action:       { icon: '☑', label: 'Action overdue', color: 'var(--amber)' }
+var DEAL_STAGE_CONFIG = {
+  commercial:  { label: 'Commercial', icon: '📝', color: 'var(--green)', desc: 'NDA / proposal / pricing being shared' },
+  value_prop:  { label: 'Value Prop', icon: '💡', color: 'var(--gold)', desc: 'Requirements & demo discussions underway' },
+  prospective: { label: 'Prospective', icon: '🌱', color: 'var(--text2)', desc: 'Outreach started, demo not yet confirmed' },
+  unknown:     { label: 'No activity yet', icon: '○', color: 'var(--text3)', desc: 'Assigned account, nothing detected in 90 days' }
 };
+var CHANNEL_ICON_CONFIG = {
+  email: '✉', calendar: '📅', notetaker: '🎙', call: '📞', whatsapp: '💬', linkedin: '🔗'
+};
+
+function renderChannelBadges(channels) {
+  var parts = [];
+  if (channels.email.sent > 0 || channels.email.replies > 0) {
+    parts.push('<span title="Email" style="display:inline-flex;align-items:center;gap:3px;font-size:10px;color:var(--text2);background:rgba(0,0,0,0.08);border-radius:4px;padding:2px 6px">' + CHANNEL_ICON_CONFIG.email + ' ' + channels.email.sent + (channels.email.replies>0?'/'+channels.email.replies+'\u21a9':'') + '</span>');
+  }
+  if (channels.calendar.meetings > 0) {
+    parts.push('<span title="Calendar meetings" style="display:inline-flex;align-items:center;gap:3px;font-size:10px;color:var(--text2);background:rgba(0,0,0,0.08);border-radius:4px;padding:2px 6px">' + CHANNEL_ICON_CONFIG.calendar + ' ' + channels.calendar.meetings + '</span>');
+  }
+  if (channels.notetaker.count > 0) {
+    parts.push('<span title="Notetaker" style="display:inline-flex;align-items:center;gap:3px;font-size:10px;color:var(--text2);background:rgba(0,0,0,0.08);border-radius:4px;padding:2px 6px">' + CHANNEL_ICON_CONFIG.notetaker + ' ' + channels.notetaker.count + '</span>');
+  }
+  // Future channels — shown greyed-out as "not connected" rather than
+  // omitted, so it's visible these exist as a roadmap, not forgotten.
+  ['call','whatsapp','linkedin'].forEach(function(ch) {
+    if (!channels[ch].integrated) {
+      parts.push('<span title="' + ch + ' \u2014 no integration yet" style="display:inline-flex;align-items:center;gap:3px;font-size:10px;color:var(--text3);opacity:0.4;background:rgba(0,0,0,0.05);border-radius:4px;padding:2px 6px">' + CHANNEL_ICON_CONFIG[ch] + '</span>');
+    }
+  });
+  return parts.join(' ');
+}
 
 async function runLocalIntelligence(repId, resultElId) {
   const isManager = !!repId;
@@ -2107,31 +2129,50 @@ async function runLocalIntelligence(repId, resultElId) {
   const btn = isManager ? null : document.getElementById('localIntelBtn');
   if (!out) return;
   if (btn) { btn.textContent = 'Scanning…'; btn.disabled = true; }
-  out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0">Scanning Gmail for deal patterns…</div>';
+  out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0">Scanning all channels \u2014 email, calendar, notetaker\u2026</div>';
   try {
     const r = await fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify({ action: 'local_intelligence', rep_user_id: isManager ? repId : undefined }) });
     const data = await r.json();
+    if (data.reconnectNeeded) { out.innerHTML = '<div style="font-size:12px;color:var(--coral);padding:8px 0">⚠️ ' + esc(data.error || 'Gmail connection expired \u2014 reconnect Gmail.') + '</div>'; if (btn) { btn.textContent = 'Scan'; btn.disabled = false; } return; }
+    if (data.scopeError) { out.innerHTML = '<div style="font-size:12px;color:var(--coral);padding:8px 0">🔒 ' + esc(data.error || 'Gmail permissions need to be re-granted.') + '</div>'; if (btn) { btn.textContent = 'Scan'; btn.disabled = false; } return; }
     if (!data.connected) { out.innerHTML = '<div style="font-size:12px;color:var(--text3)">Gmail not connected' + (isManager?' for this rep':'') + '</div>'; if (btn) { btn.textContent = 'Scan'; btn.disabled = false; } return; }
     if (data.message) { out.innerHTML = '<div style="font-size:12px;color:var(--text3)">' + esc(data.message) + '</div>'; if (btn) { btn.textContent = 'Scan'; btn.disabled = false; } return; }
-    const signals = data.signals || [];
-    if (!signals.length) { out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0">No notable patterns detected right now \u2014 clean slate ✓</div>'; if (btn) { btn.textContent = 'Scan'; btn.disabled = false; } return; }
+    const accounts = data.accounts || [];
+    if (!accounts.length) { out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0">No assigned accounts to scan</div>'; if (btn) { btn.textContent = 'Scan'; btn.disabled = false; } return; }
 
-    let html = '';
-    signals.forEach(function(s) {
-      const cfg = LOCAL_SIGNAL_CONFIG[s.signal] || { icon: '○', label: s.type, color: 'var(--text3)' };
-      const priorityBadge = s.priority === 'high' ? '<span style="font-size:9px;font-weight:700;color:var(--coral);background:rgba(192,82,63,0.12);border-radius:4px;padding:1px 6px;margin-left:6px">HIGH</span>' : '';
-      html += '<div style="border-left:3px solid ' + cfg.color + ';padding:8px 12px;margin-bottom:6px;background:rgba(0,0,0,0.08);border-radius:0 6px 6px 0">' +
-        '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">' +
-          '<div style="flex:1">' +
-            '<div style="font-size:12px;font-weight:600;color:var(--text)">' + cfg.icon + ' ' + esc(s.account) + priorityBadge + '</div>' +
-            '<div style="font-size:12px;color:var(--text2);margin-top:2px">' + esc(s.title) + '</div>' +
-          '</div>' +
-          '<span style="font-size:9px;font-weight:600;color:' + cfg.color + ';background:rgba(0,0,0,0.1);border-radius:4px;padding:2px 6px;white-space:nowrap">' + cfg.label + '</span>' +
-        '</div>' +
-        (s.detail ? '<div style="font-size:11px;color:var(--text3);margin-top:4px;font-style:italic">"' + esc(s.detail.slice(0,100)) + '"</div>' : '') +
-        '<div style="font-size:10px;color:var(--text3);margin-top:3px">' + esc(s.evidence||'') + (s.date?' · '+esc(s.date):'') + '</div>' +
+    const sc = data.stageCounts || {};
+    let html = '<div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">';
+    ['commercial','value_prop','prospective'].forEach(function(stage) {
+      const cfg = DEAL_STAGE_CONFIG[stage];
+      html += '<div style="flex:1;min-width:90px;background:rgba(0,0,0,0.06);border-radius:8px;padding:8px;text-align:center">' +
+        '<div style="font-size:18px;font-weight:600;color:' + cfg.color + '">' + (sc[stage]||0) + '</div>' +
+        '<div style="font-size:10px;color:var(--text3)">' + cfg.icon + ' ' + cfg.label + '</div>' +
       '</div>';
     });
+    html += '</div>';
+
+    // Group accounts by stage, render each as its own section, most
+    // advanced (Commercial) first since that's usually highest priority to review.
+    ['commercial','value_prop','prospective','unknown'].forEach(function(stage) {
+      const inStage = accounts.filter(function(a) { return a.stage === stage; });
+      if (!inStage.length) return;
+      const cfg = DEAL_STAGE_CONFIG[stage];
+      html += '<div style="margin-bottom:14px">';
+      html += '<div style="font-size:10px;font-weight:600;color:' + cfg.color + ';text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">' + cfg.icon + ' ' + cfg.label + ' (' + inStage.length + ') \u2014 <span style="font-weight:400;text-transform:none;color:var(--text3)">' + cfg.desc + '</span></div>';
+      inStage.forEach(function(a) {
+        const stalenessBadge = a.staleness === 'cold' ? '<span style="font-size:9px;font-weight:700;color:var(--coral);background:rgba(192,82,63,0.12);border-radius:4px;padding:1px 6px;margin-left:6px">❄ COLD</span>'
+          : a.staleness === 'stale' ? '<span style="font-size:9px;font-weight:700;color:var(--amber);background:rgba(160,117,42,0.12);border-radius:4px;padding:1px 6px;margin-left:6px">STALE</span>' : '';
+        html += '<div style="border-left:3px solid ' + cfg.color + ';padding:8px 12px;margin-bottom:6px;background:rgba(0,0,0,0.04);border-radius:0 6px 6px 0">' +
+          '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap">' +
+            '<div style="font-size:12px;font-weight:600;color:var(--text)">' + esc(a.account) + stalenessBadge + '</div>' +
+            '<div style="display:flex;gap:4px;flex-wrap:wrap">' + renderChannelBadges(a.channels) + '</div>' +
+          '</div>' +
+          (a.lastSentSubject ? '<div style="font-size:11px;color:var(--text3);margin-top:4px;font-style:italic">Last: "' + esc(a.lastSentSubject.slice(0,80)) + '"</div>' : '') +
+        '</div>';
+      });
+      html += '</div>';
+    });
+
     out.innerHTML = html;
   } catch(e) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>'; }
   if (btn) { btn.textContent = 'Scan'; btn.disabled = false; }
