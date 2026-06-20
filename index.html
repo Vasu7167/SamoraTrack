@@ -569,6 +569,15 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 
   <!-- ── SAM Agent ── -->
   <div class="panel" id="panel-signals" style="padding-bottom:160px">
+    <div id="samModeToggle" style="display:none;margin-bottom:14px">
+      <div style="display:inline-flex;background:var(--surface2);border:1px solid var(--border2);border-radius:20px;padding:3px">
+        <button id="samModeSelfBtn" onclick="setSamMode('self')" style="padding:6px 16px;border-radius:16px;border:none;background:var(--gold);color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Self</button>
+        <button id="samModeTeamBtn" onclick="setSamMode('team')" style="padding:6px 16px;border-radius:16px;border:none;background:transparent;color:var(--text2);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Team</button>
+      </div>
+    </div>
+
+    <!-- ── SELF MODE ── -->
+    <div id="samSelfMode">
     <div id="samAlerts" style="margin-bottom:8px"></div>
     <div id="samGmailStatus" style="margin-bottom:16px">
       <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px">
@@ -586,20 +595,6 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
           <button onclick="runCoverageCheck()" id="coverageCheckBtn" style="padding:5px 12px;border-radius:20px;background:rgba(160,117,42,0.1);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Check today</button>
         </div>
         <div id="samCoverageOutput"></div>
-      </div>
-    </div>
-    <div id="samAccountListSection" style="margin-bottom:16px;display:none">
-      <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-          <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em">My Accounts</div>
-          <button onclick="toggleAddMyAccount()" style="font-size:11px;color:var(--gold);background:none;border:none;cursor:pointer;font-family:var(--sans)">+ Add account</button>
-        </div>
-        <div id="myAccountAddRow" style="display:none;gap:8px;margin-bottom:10px">
-          <input id="myAccountName" placeholder="Account name" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>
-          <input id="myAccountDomain" placeholder="domain.com" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>
-          <button onclick="addMyAccount()" style="padding:7px 12px;border-radius:6px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Add</button>
-        </div>
-        <div id="myAccountsList"></div>
       </div>
     </div>
     <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:16px">
@@ -641,11 +636,85 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
       </div>
     </div>
     <div id="samSearchOutput"></div>
-    <div class="sam-chat-bar">
+    <div class="sam-chat-bar" id="samChatBar">
       <input class="sam-chat-input" id="samChatInput" placeholder="Ask SAM — check signals for Ferrero, who needs follow-up…" onkeydown="if(event.key==='Enter')runSamQuery()"/>
       <button class="sam-chat-btn" onclick="runSamQuery()" style="font-family:'EB Garamond',Georgia,serif;font-size:18px;font-weight:600;letter-spacing:-0.02em">S</button>
     </div>
     <div id="samChatOutput" style="margin-top:12px"></div>
+    </div>
+
+    <!-- ── TEAM MODE ── -->
+    <div id="samTeamMode" style="display:none">
+      <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div>
+            <div style="font-size:13px;font-weight:500;color:var(--text)">⚡ SAM Digest Report</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">Sends Intent vs Reality summary to manager + all reps</div>
+          </div>
+          <button id="digestBtn" onclick="sendWeeklyDigest()" style="padding:7px 16px;border-radius:20px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">Send now</button>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+          <span style="font-size:11px;color:var(--text3)">Period:</span>
+          <button class="sam-period-btn active" id="digest-period-wtd" onclick="setDigestPeriod('wtd',this)">Week to date</button>
+          <button class="sam-period-btn" id="digest-period-prev" onclick="setDigestPeriod('prev',this)">Previous week</button>
+          <button class="sam-period-btn" id="digest-period-custom" onclick="setDigestPeriod('custom',this)">Custom range</button>
+        </div>
+        <div id="digestCustomRange" style="display:none;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+          <span style="font-size:11px;color:var(--text3)">From:</span>
+          <input type="date" id="digestDateFrom" style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none"/>
+          <span style="font-size:11px;color:var(--text3)">To:</span>
+          <input type="date" id="digestDateTo" style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none"/>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+          <span style="font-size:11px;color:var(--text3)">Send to:</span>
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
+            <input type="checkbox" id="digestToManager" checked style="accent-color:var(--gold)"/>
+            <span style="font-size:12px;color:var(--text2)">Manager</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
+            <input type="checkbox" id="digestToReps" checked style="accent-color:var(--gold)"/>
+            <span style="font-size:12px;color:var(--text2)">All reps</span>
+          </label>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input id="digestExtraEmails" placeholder="Add email IDs (comma separated)" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none"/>
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-top:4px">Until domain is verified in Resend, only send to your own verified email address</div>
+      </div>
+      <div id="digestOutput" style="margin-bottom:12px"></div>
+      <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:16px">
+        <div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">⚡ SAM Account Search</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <select id="mgrRepSelect" style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;flex:0 0 auto">
+            <option value="">All reps</option>
+          </select>
+          <input id="mgrSearchInput" placeholder="Search account — Ferrero, Marico…" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none" onkeydown="if(event.key==='Enter')runManagerSearch()"/>
+          <button onclick="runManagerSearch()" style="padding:7px 14px;border-radius:var(--radius-sm);background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0">Search</button>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+          <span style="font-size:11px;color:var(--text3);align-self:center">Period:</span>
+          <button class="sam-period-btn active" id="mgr-period-all" onclick="setMgrPeriod('all',this)">All time</button>
+          <button class="sam-period-btn" id="mgr-period-30" onclick="setMgrPeriod('30',this)">30 days</button>
+          <button class="sam-period-btn" id="mgr-period-7" onclick="setMgrPeriod('7',this)">This week</button>
+          <button class="sam-period-btn" id="mgr-period-today" onclick="setMgrPeriod('today',this)">Today</button>
+          <button class="sam-period-btn" id="mgr-period-custom" onclick="setMgrPeriod('custom',this)">Custom range</button>
+        </div>
+        <div id="mgrCustomRange" style="display:none;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:4px">
+          <span style="font-size:11px;color:var(--text3)">From:</span>
+          <input type="date" id="mgrDateFrom" style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none"/>
+          <span style="font-size:11px;color:var(--text3)">To:</span>
+          <input type="date" id="mgrDateTo" style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none"/>
+          <button onclick="runManagerSearch()" style="padding:5px 12px;border-radius:var(--radius-sm);background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Apply</button>
+        </div>
+        <div id="mgrSearchOutput" style="margin-top:10px"></div>
+      </div>
+      <div class="filter-row">
+        <span class="filter-label">Viewing date:</span>
+        <input type="date" class="date-input" id="teamDateInput" onchange="renderTeam()"/>
+        <button class="filter-btn" onclick="document.getElementById('teamDateInput').value=todayKey();renderTeam()">Today</button>
+      </div>
+      <div id="teamList"><div class="empty"><div class="empty-icon">👥</div>Loading team…</div></div>
+    </div>
   </div>
 
   <!-- ── SAMagic ── -->
@@ -672,79 +741,6 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
         <div style="font-size:14px;color:var(--text2)">Loading SAMagic…</div>
       </div>
     </div>
-  </div>
-
-  <!-- ── Team ── -->
-  <div class="panel" id="panel-team">
-    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:12px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div>
-          <div style="font-size:13px;font-weight:500;color:var(--text)">⚡ SAM Digest Report</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:2px">Sends Intent vs Reality summary to manager + all reps</div>
-        </div>
-        <button id="digestBtn" onclick="sendWeeklyDigest()" style="padding:7px 16px;border-radius:20px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">Send now</button>
-      </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
-        <span style="font-size:11px;color:var(--text3)">Period:</span>
-        <button class="sam-period-btn active" id="digest-period-wtd" onclick="setDigestPeriod('wtd',this)">Week to date</button>
-        <button class="sam-period-btn" id="digest-period-prev" onclick="setDigestPeriod('prev',this)">Previous week</button>
-        <button class="sam-period-btn" id="digest-period-custom" onclick="setDigestPeriod('custom',this)">Custom range</button>
-      </div>
-      <div id="digestCustomRange" style="display:none;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
-        <span style="font-size:11px;color:var(--text3)">From:</span>
-        <input type="date" id="digestDateFrom" style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none"/>
-        <span style="font-size:11px;color:var(--text3)">To:</span>
-        <input type="date" id="digestDateTo" style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none"/>
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
-        <span style="font-size:11px;color:var(--text3)">Send to:</span>
-        <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
-          <input type="checkbox" id="digestToManager" checked style="accent-color:var(--gold)"/>
-          <span style="font-size:12px;color:var(--text2)">Manager</span>
-        </label>
-        <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
-          <input type="checkbox" id="digestToReps" checked style="accent-color:var(--gold)"/>
-          <span style="font-size:12px;color:var(--text2)">All reps</span>
-        </label>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input id="digestExtraEmails" placeholder="Add email IDs (comma separated)" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none"/>
-      </div>
-      <div style="font-size:10px;color:var(--text3);margin-top:4px">Until domain is verified in Resend, only send to your own verified email address</div>
-    </div>
-    <div id="digestOutput" style="margin-bottom:12px"></div>
-    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:16px">
-      <div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">⚡ SAM Account Search</div>
-      <div style="display:flex;gap:8px;margin-bottom:8px">
-        <select id="mgrRepSelect" style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;flex:0 0 auto">
-          <option value="">All reps</option>
-        </select>
-        <input id="mgrSearchInput" placeholder="Search account — Ferrero, Marico…" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none" onkeydown="if(event.key==='Enter')runManagerSearch()"/>
-        <button onclick="runManagerSearch()" style="padding:7px 14px;border-radius:var(--radius-sm);background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0">Search</button>
-      </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
-        <span style="font-size:11px;color:var(--text3);align-self:center">Period:</span>
-        <button class="sam-period-btn active" id="mgr-period-all" onclick="setMgrPeriod('all',this)">All time</button>
-        <button class="sam-period-btn" id="mgr-period-30" onclick="setMgrPeriod('30',this)">30 days</button>
-        <button class="sam-period-btn" id="mgr-period-7" onclick="setMgrPeriod('7',this)">This week</button>
-        <button class="sam-period-btn" id="mgr-period-today" onclick="setMgrPeriod('today',this)">Today</button>
-        <button class="sam-period-btn" id="mgr-period-custom" onclick="setMgrPeriod('custom',this)">Custom range</button>
-      </div>
-      <div id="mgrCustomRange" style="display:none;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:4px">
-        <span style="font-size:11px;color:var(--text3)">From:</span>
-        <input type="date" id="mgrDateFrom" style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none"/>
-        <span style="font-size:11px;color:var(--text3)">To:</span>
-        <input type="date" id="mgrDateTo" style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none"/>
-        <button onclick="runManagerSearch()" style="padding:5px 12px;border-radius:var(--radius-sm);background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Apply</button>
-      </div>
-      <div id="mgrSearchOutput" style="margin-top:10px"></div>
-    </div>
-    <div class="filter-row">
-      <span class="filter-label">Viewing date:</span>
-      <input type="date" class="date-input" id="teamDateInput" onchange="renderTeam()"/>
-      <button class="filter-btn" onclick="document.getElementById('teamDateInput').value=todayKey();renderTeam()">Today</button>
-    </div>
-    <div id="teamList"><div class="empty"><div class="empty-icon">👥</div>Loading team…</div></div>
   </div>
 
   <!-- ── Intelligence ── -->
@@ -854,6 +850,19 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
         <span id="themeMenuLabel">🌙 Switch to light mode</span><span class="you-arrow">›</span>
       </button>
     </div>
+    <div class="you-section-title" style="margin-top:16px">My Accounts</div>
+    <div class="admin-card" style="margin-bottom:0">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="font-size:12px;color:var(--text2)">Accounts you're working — used for Coverage &amp; signal tracking</div>
+        <button onclick="toggleAddMyAccount()" style="font-size:11px;color:var(--gold);background:none;border:none;cursor:pointer;font-family:var(--sans);white-space:nowrap">+ Add account</button>
+      </div>
+      <div id="myAccountAddRow" style="display:none;gap:8px;margin-bottom:10px">
+        <input id="myAccountName" placeholder="Account name" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>
+        <input id="myAccountDomain" placeholder="domain.com" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>
+        <button onclick="addMyAccount()" style="padding:7px 12px;border-radius:6px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">Add</button>
+      </div>
+      <div id="myAccountsList"></div>
+    </div>
     <div class="you-section-title" style="margin-top:16px">Your templates</div>
     <div class="you-menu">
       <button class="you-menu-item" onclick="openTemplateManager()">
@@ -916,10 +925,6 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
     <button class="nav-btn" onclick="switchTab('review')" id="nav-review">
       <span class="nav-icon">★</span>
       <span class="nav-label">Review</span>
-    </button>
-    <button class="nav-btn" onclick="switchTab('team')" id="nav-team" style="display:none">
-      <span class="nav-icon">👥</span>
-      <span class="nav-label">Team</span>
     </button>
     <button class="nav-btn" onclick="switchTab('exec')" id="nav-exec" style="display:none">
       <span class="nav-icon">◈</span>
@@ -1178,7 +1183,6 @@ function launchApp() {
   document.getElementById('uOrg').textContent = profile?.org_name || '';
   const seniorRole = ['super_admin','admin','manager','director','executive'].includes(role);
   if (seniorRole) {
-    const navTeam = document.getElementById('nav-team'); if (navTeam) navTeam.style.display = '';
     const navExec = document.getElementById('nav-exec');
     if (navExec) navExec.style.display = ['director','executive','admin','super_admin'].includes(role) ? '' : 'none';
   }
@@ -1459,10 +1463,36 @@ function switchTab(tab) {
   if (tab === 'you') renderYouPanel();
   if (tab === 'review') renderSummary();
   if (tab === 'exec') loadExecDashboard();
-  if (tab === 'signals') { renderSamAlerts(); loadSamSignals(); const covSec = document.getElementById('samCoverageSection'); if (covSec) covSec.style.display='block'; const accSec = document.getElementById('samAccountListSection'); if (accSec) accSec.style.display='block'; loadMyAccounts(); }
+  if (tab === 'signals') {
+    const seniorRole = ['super_admin','admin','manager','director','executive'].includes(profile?.role);
+    const toggleEl = document.getElementById('samModeToggle');
+    if (toggleEl) toggleEl.style.display = seniorRole ? 'block' : 'none';
+    const mode = (seniorRole && _samMode === 'team') ? 'team' : 'self';
+    setSamMode(mode);
+  }
   if (tab === 'intel') { loadIntelligence(); }
-  if (tab === 'team') { const tdi = document.getElementById('teamDateInput'); if (tdi) tdi.value = viewDate; renderTeam(); }
   if (tab === 'org') { if (currentUser?.refresh_token) { refreshToken().then(() => renderOrg()); } else { renderOrg(); } }
+}
+let _samMode = 'self';
+function setSamMode(mode) {
+  _samMode = mode;
+  const selfBtn = document.getElementById('samModeSelfBtn'), teamBtn = document.getElementById('samModeTeamBtn');
+  const selfEl = document.getElementById('samSelfMode'), teamEl = document.getElementById('samTeamMode');
+  if (mode === 'team') {
+    if (selfBtn) { selfBtn.style.background = 'transparent'; selfBtn.style.color = 'var(--text2)'; }
+    if (teamBtn) { teamBtn.style.background = 'var(--gold)'; teamBtn.style.color = '#18160F'; }
+    if (selfEl) selfEl.style.display = 'none';
+    if (teamEl) teamEl.style.display = 'block';
+    const tdi = document.getElementById('teamDateInput'); if (tdi) tdi.value = viewDate;
+    renderTeam();
+  } else {
+    if (selfBtn) { selfBtn.style.background = 'var(--gold)'; selfBtn.style.color = '#18160F'; }
+    if (teamBtn) { teamBtn.style.background = 'transparent'; teamBtn.style.color = 'var(--text2)'; }
+    if (selfEl) selfEl.style.display = 'block';
+    if (teamEl) teamEl.style.display = 'none';
+    renderSamAlerts(); loadSamSignals();
+    const covSec = document.getElementById('samCoverageSection'); if (covSec) covSec.style.display = 'block';
+  }
 }
 function switchToOrgPanel() {
   if (!['super_admin','admin'].includes(profile?.role)) return;
@@ -1631,6 +1661,7 @@ function renderYouPanel() {
   const tl = document.getElementById('themeMenuLabel');
   if (tl) { const isDark = document.body.classList.contains('dark-mode') || (!document.body.classList.contains('light-mode') && window.matchMedia('(prefers-color-scheme: dark)').matches); tl.textContent = isDark ? '☀ Switch to light mode' : '🌙 Switch to dark mode'; }
   const orgBtn = document.getElementById('orgMenuBtn'); if (orgBtn) orgBtn.style.display = ['super_admin','admin'].includes(profile?.role) ? '' : 'none';
+  loadMyAccounts();
 }
 async function loadSamSignals() {
   if (!currentUser?.token) return;
