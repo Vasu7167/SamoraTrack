@@ -591,7 +591,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
     <div id="samLocalIntelSection" style="margin-bottom:16px;display:none">
       <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-          <div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em">⚡ Deal Signals</div>
+          <div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em">⚡ SAM Intelligence</div>
           <button onclick="runLocalIntelligence()" id="localIntelBtn" style="padding:5px 12px;border-radius:20px;background:rgba(160,117,42,0.1);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Scan</button>
         </div>
         <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Every assigned account, bucketed by deal stage \u2014 Prospective \u2192 Value Prop \u2192 Commercial \u2014 from email, calendar &amp; notetaker signals. No AI quota used.</div>
@@ -775,7 +775,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
       <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
         <button class="intel-tab active" onclick="setIntelSource('all',this)" id="intel-src-all">All sources</button>
         <button class="intel-tab" onclick="setIntelSource('ai',this)" id="intel-src-ai">🤖 AI Tool Signals</button>
-        <button class="intel-tab" onclick="setIntelSource('sam',this)" id="intel-src-sam">⚡ SAM Signals</button>
+        <button class="intel-tab" onclick="setIntelSource('sam',this)" id="intel-src-sam">⚡ SAM Intelligence</button>
       </div>
       <div style="display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap">
         <button class="intel-tab active" onclick="setIntelType('all',this)">All</button>
@@ -955,11 +955,19 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 </div>
 </div>
 <script>
-const EDGE_FN_URL = 'https://gowpuicpmrwsohongosf.supabase.co/functions/v1/sam-gmail-signals';
-const GOOGLE_CLIENT_ID_SAM = '318545862958-fgv5rapqspaff680u8l6ul2kchkpu6ph.apps.googleusercontent.com';
 let SB_URL = localStorage.getItem('dt-sb-url') || 'https://gowpuicpmrwsohongosf.supabase.co';
 let SB_KEY = localStorage.getItem('dt-sb-key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdvd3B1aWNwbXJ3c29ob25nb3NmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzOTExMDgsImV4cCI6MjA5NTk2NzEwOH0.35CjODxyxOjAKp-xBOBx4oAXO_qjLyVttVaJEhp7YEg';
 let API_KEY = localStorage.getItem('dt-api-key') || '';
+// EDGE_FN_URL is derived from SB_URL, not hardcoded — previously this stayed
+// fixed to one Supabase project regardless of what URL/key someone entered
+// in the setup screen, so a second tenant could configure their own
+// database but every signal/intelligence feature would still silently hit
+// the original org's edge function. Now it always follows SB_URL, and
+// updateSupaConfig() (where SB_URL changes after initial load) keeps it in sync.
+let EDGE_FN_URL = SB_URL + '/functions/v1/sam-gmail-signals';
+// Google OAuth Client ID is also per-tenant (each org should use its own
+// Google Cloud project — see deployment notes) — overridable the same way.
+let GOOGLE_CLIENT_ID_SAM = localStorage.getItem('dt-google-client-id') || '318545862958-fgv5rapqspaff680u8l6ul2kchkpu6ph.apps.googleusercontent.com';
 let currentUser = null;
 let profile = null;
 let allData = {};
@@ -1957,39 +1965,80 @@ function renderSourceBadge(source) {
   return '<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;color:' + cfg.color + ';background:rgba(0,0,0,0.12);border-radius:4px;padding:2px 7px;letter-spacing:0.02em">' + cfg.icon + ' ' + cfg.label + '</span>';
 }
 
+var _ivrPeriod = {}, _ivrRepId = {};
+function setIvrPeriod(outputId, period, btn) {
+  _ivrPeriod[outputId] = period;
+  var wrap = document.getElementById('ivrperiod-' + outputId);
+  if (wrap) wrap.querySelectorAll('button').forEach(function(b) { b.style.background='var(--surface2)'; b.style.color='var(--text2)'; b.style.borderColor='var(--border)'; });
+  if (btn) { btn.style.background='var(--gold)'; btn.style.color='#18160F'; btn.style.borderColor='var(--gold)'; }
+  var customRow = document.getElementById('ivrcustom-' + outputId);
+  if (customRow) customRow.style.display = period === 'custom' ? 'flex' : 'none';
+  if (period !== 'custom') runIntentVsReality(_ivrRepId[outputId], outputId);
+}
+function renderIvrPeriodPicker(outputId) {
+  const active = _ivrPeriod[outputId] || 'week';
+  const mk = function(period, label) {
+    const isActive = active === period;
+    return '<button onclick="setIvrPeriod(\''+outputId+'\',\''+period+'\',this)" style="padding:4px 10px;border-radius:14px;font-size:11px;cursor:pointer;font-family:var(--sans);border:1px solid '+(isActive?'var(--gold)':'var(--border)')+';background:'+(isActive?'var(--gold)':'var(--surface2)')+';color:'+(isActive?'#18160F':'var(--text2)')+'">'+label+'</button>';
+  };
+  return '<div id="ivrperiod-'+outputId+'" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">' +
+    mk('today','Today') + mk('week','This week') + mk('month','This month') + mk('custom','Custom') +
+    '</div>' +
+    '<div id="ivrcustom-'+outputId+'" style="display:'+(active==='custom'?'flex':'none')+';gap:8px;align-items:center;margin-bottom:10px">' +
+      '<input type="date" id="ivrfrom-'+outputId+'" style="background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px"/>' +
+      '<span style="font-size:11px;color:var(--text3)">to</span>' +
+      '<input type="date" id="ivrto-'+outputId+'" style="background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px"/>' +
+      '<button onclick="runIntentVsReality(\''+(_ivrRepId[outputId]||'')+'\',\''+outputId+'\')" style="padding:5px 12px;border-radius:6px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Apply</button>' +
+    '</div>';
+}
 async function runIntentVsReality(repId, outputId) {
+  _ivrRepId[outputId || 'ivrOutput'] = repId;
   const isManager = !!repId; const out = document.getElementById(outputId || 'ivrOutput'); const btn = document.getElementById('ivrBtn');
   if (!out) return;
   if (btn && !isManager) { btn.textContent = 'Scanning…'; btn.disabled = true; }
-  // Respect the Team tab's "Viewing date" picker when checking a specific
-  // rep from the Team panel — previously this always silently ran a fixed
-  // rolling-7-day window regardless of which date was actually selected,
-  // which looked like it was scoping to the wrong period (e.g. MTD) when
-  // the person expected results for just the viewing date.
-  const teamDateEl = document.getElementById('teamDateInput');
-  const viewingDate = (isManager && teamDateEl && teamDateEl.value) ? teamDateEl.value : null;
   const today = todayKey();
   let dateFrom, dateTo, periodLabel;
-  if (viewingDate) {
-    dateFrom = viewingDate; dateTo = viewingDate;
-    periodLabel = viewingDate === today ? 'today' : viewingDate;
+  if (isManager) {
+    // Team mode: use the same period-picker state we maintain for this
+    // output panel — defaults to 'week' so the first click gives a
+    // meaningful range rather than a single day.
+    const period = _ivrPeriod[outputId] || 'week';
+    const teamDateEl = document.getElementById('teamDateInput');
+    const viewingDate = (teamDateEl && teamDateEl.value) ? teamDateEl.value : today;
+    if (period === 'today') {
+      dateFrom = dateTo = viewingDate; periodLabel = viewingDate === today ? 'today' : viewingDate;
+    } else if (period === 'week') {
+      const d = parseDate(viewingDate); const day = d.getDay();
+      const monday = new Date(d); monday.setDate(d.getDate() - (day===0?6:day-1));
+      dateFrom = dateKey(monday); dateTo = viewingDate; periodLabel = 'this week';
+    } else if (period === 'month') {
+      const d = parseDate(viewingDate);
+      dateFrom = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01'; dateTo = viewingDate; periodLabel = 'this month';
+    } else if (period === 'custom') {
+      dateFrom = document.getElementById('ivrfrom-'+outputId)?.value || viewingDate;
+      dateTo = document.getElementById('ivrto-'+outputId)?.value || viewingDate;
+      periodLabel = dateFrom + ' → ' + dateTo;
+    } else {
+      const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate()-7);
+      dateFrom = weekAgo.toISOString().split('T')[0]; dateTo = today; periodLabel = 'this week';
+    }
   } else {
     const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate()-7);
-    dateFrom = weekAgo.toISOString().split('T')[0]; dateTo = today;
-    periodLabel = 'this week';
+    dateFrom = weekAgo.toISOString().split('T')[0]; dateTo = today; periodLabel = 'this week';
   }
-  out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0">Checking intent vs reality for ' + esc(periodLabel) + '…</div>';
+  const picker = isManager ? renderIvrPeriodPicker(outputId) : '';
+  out.innerHTML = picker + '<div style="font-size:12px;color:var(--text3);padding:8px 0">Checking intent vs reality for ' + esc(periodLabel) + '…</div>';
   try {
     const r = await fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify({ action: 'intent_vs_reality', rep_user_id: isManager?repId:null, date_from: dateFrom, date_to: dateTo }) });
     const data = await r.json();
-    if (data.scopeError) { out.innerHTML = '<div style="font-size:12px;color:var(--coral);padding:8px 0">🔒 ' + esc(data.error || 'Gmail permissions need to be re-granted — reconnect Gmail.') + '</div>'; if (btn&&!isManager){btn.textContent='Check this week';btn.disabled=false;} return; }
-    if (data.reconnectNeeded) { out.innerHTML = '<div style="font-size:12px;color:var(--coral);padding:8px 0">⚠️ ' + esc(data.error || 'Gmail connection expired — reconnect Gmail.') + '</div>'; if (btn&&!isManager){btn.textContent='Check this week';btn.disabled=false;} return; }
-    if (!data.connected) { out.innerHTML = '<div style="font-size:12px;color:var(--text3)">Gmail not connected'+(isManager?' for this rep':'')+'</div>'; if (btn&&!isManager){btn.textContent='Check this week';btn.disabled=false;} return; }
+    if (data.scopeError) { out.innerHTML = picker + '<div style="font-size:12px;color:var(--coral);padding:8px 0">🔒 ' + esc(data.error || 'Gmail permissions need to be re-granted — reconnect Gmail.') + '</div>'; if (btn&&!isManager){btn.textContent='Check this week';btn.disabled=false;} return; }
+    if (data.reconnectNeeded) { out.innerHTML = picker + '<div style="font-size:12px;color:var(--coral);padding:8px 0">⚠️ ' + esc(data.error || 'Gmail connection expired — reconnect Gmail.') + '</div>'; if (btn&&!isManager){btn.textContent='Check this week';btn.disabled=false;} return; }
+    if (!data.connected) { out.innerHTML = picker + '<div style="font-size:12px;color:var(--text3)">Gmail not connected'+(isManager?' for this rep':'')+'</div>'; if (btn&&!isManager){btn.textContent='Check this week';btn.disabled=false;} return; }
     const s = data.summary||{}; const results = data.results||[];
-    if (data.debug) { console.log('Intent vs Reality diagnostic — query + Gmail result per task:', data.debug); }
-    if (!results.length) { out.innerHTML = '<div style="font-size:12px;color:var(--text3)">No outreach tasks found for this period</div>'; if (btn&&!isManager){btn.textContent='Check this week';btn.disabled=false;} return; }
+    if (data.debug) { console.log('IVR diagnostic:', data.debug); }
+    if (!results.length) { out.innerHTML = picker + '<div style="font-size:12px;color:var(--text3)">No outreach tasks found for ' + esc(periodLabel) + '</div>'; if (btn&&!isManager){btn.textContent='Check this week';btn.disabled=false;} return; }
     const pct = s.verificationRate||0; const barColor = pct>=80?'var(--green)':pct>=50?'var(--amber)':'var(--coral)';
-    let html = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px">';
+    let html = picker + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px">';
     html += '<div style="background:var(--surface2);border-radius:6px;padding:8px;text-align:center"><div style="font-size:18px;font-weight:500;color:var(--text)">'+(s.total||0)+'</div><div style="font-size:10px;color:var(--text3)">Tasks</div></div>';
     html += '<div style="background:var(--surface2);border-radius:6px;padding:8px;text-align:center"><div style="font-size:18px;font-weight:500;color:var(--green)">'+(s.verified||0)+'</div><div style="font-size:10px;color:var(--text3)">Verified</div></div>';
     html += '<div style="background:var(--surface2);border-radius:6px;padding:8px;text-align:center"><div style="font-size:18px;font-weight:500;color:var(--coral)">'+(s.gaps||0)+'</div><div style="font-size:10px;color:var(--text3)">Gaps</div></div>';
@@ -2121,6 +2170,65 @@ function renderChannelBadges(channels) {
     }
   });
   return parts.join(' ');
+}
+
+async function runSamIntelligence(repId, repEmail, resultElId) {
+  const out = document.getElementById(resultElId);
+  if (!out) return;
+  out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0">⚡ Running SAM Intelligence…</div>';
+
+  // Run both in parallel — neither depends on the other
+  const [samResult, intelResult] = await Promise.allSettled([
+    fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify({ action: 'get_rep_signals', rep_user_id: repId, query: '', days: 30 }) }).then(r => r.json()),
+    fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify({ action: 'local_intelligence', rep_user_id: repId }) }).then(r => r.json())
+  ]);
+
+  const samData = samResult.status === 'fulfilled' ? samResult.value : null;
+  const intelData = intelResult.status === 'fulfilled' ? intelResult.value : null;
+
+  let html = '';
+
+  // ── Deal stage pipeline (from local_intelligence) ──
+  if (intelData && intelData.ok && intelData.accounts?.length) {
+    const sc = intelData.stageCounts || {};
+    html += '<div style="margin-bottom:12px">';
+    html += '<div style="font-size:10px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">⚡ SAM Intelligence — Deal Pipeline</div>';
+    html += '<div style="display:flex;gap:6px;margin-bottom:10px">';
+    [{stage:'commercial',icon:'📝',color:'var(--green)',label:'Commercial'},{stage:'value_prop',icon:'💡',color:'var(--gold)',label:'Value Prop'},{stage:'prospective',icon:'🌱',color:'var(--text2)',label:'Prospective'}].forEach(function(s) {
+      html += '<div style="flex:1;background:rgba(0,0,0,0.06);border-radius:8px;padding:6px;text-align:center"><div style="font-size:16px;font-weight:600;color:'+s.color+'">'+(sc[s.stage]||0)+'</div><div style="font-size:10px;color:var(--text3)">'+s.icon+' '+s.label+'</div></div>';
+    });
+    html += '</div>';
+    ['commercial','value_prop','prospective'].forEach(function(stage) {
+      const accounts = intelData.accounts.filter(function(a) { return a.stage === stage && a.hasAnyActivity; });
+      if (!accounts.length) return;
+      const cfg = DEAL_STAGE_CONFIG[stage];
+      accounts.forEach(function(a) {
+        const stalenessBadge = a.staleness==='cold'?'<span style="font-size:9px;font-weight:700;color:var(--coral);background:rgba(192,82,63,0.12);border-radius:4px;padding:1px 5px;margin-left:4px">❄ COLD</span>':a.staleness==='stale'?'<span style="font-size:9px;color:var(--amber);margin-left:4px">STALE</span>':'';
+        html += '<div style="border-left:3px solid '+cfg.color+';padding:6px 10px;margin-bottom:4px;background:rgba(0,0,0,0.04);border-radius:0 6px 6px 0">' +
+          '<div style="font-size:12px;font-weight:600;color:var(--text)">'+cfg.icon+' '+esc(a.account)+stalenessBadge+'</div>' +
+          '<div style="display:flex;gap:4px;margin-top:3px">'+renderChannelBadges(a.channels)+'</div>' +
+          (a.lastSentSubject?'<div style="font-size:10px;color:var(--text3);margin-top:2px;font-style:italic">'+esc(a.lastSentSubject.slice(0,70))+'</div>':'') +
+        '</div>';
+      });
+    });
+    html += '</div>';
+  } else if (intelData && intelData.reconnectNeeded) {
+    html += '<div style="font-size:12px;color:var(--coral);margin-bottom:8px">⚠️ '+esc(intelData.error||'Gmail connection expired')+'</div>';
+  }
+
+  // ── Email/Gmail signals (from get_rep_signals) ──
+  if (samData && samData.connected && samData.signals?.length) {
+    html += '<div style="margin-top:4px"><div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Recent email signals</div>';
+    samData.signals.slice(0, 5).forEach(function(s) {
+      html += '<div style="background:var(--surface2);border-radius:6px;padding:7px 10px;margin-bottom:4px"><div style="font-size:12px;font-weight:500;color:var(--text)">'+esc(s.account||'')+'</div><div style="font-size:11px;color:var(--text3);margin-top:2px">'+esc(s.subject||s.snippet||'')+'</div></div>';
+    });
+    html += '</div>';
+  } else if (samData && !samData.connected) {
+    html += '<div style="font-size:12px;color:var(--text3)">Gmail not connected for this rep</div>';
+  }
+
+  if (!html) html = '<div style="font-size:12px;color:var(--text3);padding:8px 0">No signals found — add accounts in Org → Rep Accounts</div>';
+  out.innerHTML = html;
 }
 
 async function runLocalIntelligence(repId, resultElId) {
@@ -2285,15 +2393,13 @@ async function renderTeam() {
         '</div>' +
         '<div style="padding:8px 16px;border-top:1px solid var(--border)">' +
           '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
-            '<button id="sam-btn-' + m.user_id + '" onclick="event.stopPropagation();togglePanel(\'sam-result-' + m.user_id + '\',function(){runSamCheck(\'' + m.user_id + '\',\'' + m.email + '\')})" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(160,117,42,0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">⚡ SAM Signals</button>' +
+            '<button id="sam-btn-' + m.user_id + '" onclick="event.stopPropagation();togglePanel(\'sami-' + m.user_id + '\\',function(){runSamIntelligence(\\'' + m.user_id + '\\',\\'' + m.email + '\\',\\'sami-' + m.user_id + '\')})" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(160,117,42,0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">⚡ SAM Intelligence</button>' +
             '<button onclick="event.stopPropagation();togglePanel(\'cov-' + m.user_id + '\',function(){runCoverageCheck(\'' + m.user_id + '\',\'' + m.email + '\',\'cov-' + m.user_id + '\')})" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(160,117,42,0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">📊 Coverage</button>' +
             '<button onclick="event.stopPropagation();togglePanel(\'ivr-' + m.user_id + '\',function(){runIntentVsReality(\'' + m.user_id + '\',\'ivr-' + m.user_id + '\')})" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(160,117,42,0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">🎯 Intent vs Reality</button>' +
-            '<button onclick="event.stopPropagation();togglePanel(\'local-' + m.user_id + '\',function(){runLocalIntelligence(\'' + m.user_id + '\',\'local-' + m.user_id + '\')})" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(160,117,42,0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">⚡ Deal Signals</button>' +
           '</div>' +
-          '<div id="sam-result-' + m.user_id + '" style="margin-top:8px"></div>' +
+          '<div id="sami-' + m.user_id + '" style="margin-top:8px"></div>' +
           '<div id="cov-' + m.user_id + '" style="margin-top:6px"></div>' +
           '<div id="ivr-' + m.user_id + '" style="margin-top:6px"></div>' +
-          '<div id="local-' + m.user_id + '" style="margin-top:6px"></div>' +
         '</div>' +
         '<div class="member-detail" id="mdet-' + idx + '">' + renderMemberDetail(d, m.user_id, m.email) + '</div>' +
       '</div>';
@@ -2596,6 +2702,7 @@ async function saveSupabase() {
   const url = document.getElementById('supaUrl').value.trim().replace(/\/$/,''); const key = document.getElementById('supaKey').value.trim();
   if (!url || !key) { showSS('Enter both URL and anon key.', false); return; }
   SB_URL = url; SB_KEY = key; localStorage.setItem('dt-sb-url', url); localStorage.setItem('dt-sb-key', key);
+  EDGE_FN_URL = SB_URL + '/functions/v1/sam-gmail-signals'; // keep in sync with whichever project is now configured
   try { await fetch(url + '/rest/v1/daytrack?limit=1', { headers: { 'apikey': key, 'Authorization': 'Bearer ' + key } }); showSS('Connected! Syncing…', true); renderSettings(); await syncDown(); runCarryOver(); render(); showSS('All synced ✓', true); }
   catch(e) { showSS('Could not connect: ' + e.message, false); }
 }
@@ -2900,7 +3007,7 @@ async function refreshIntelligence() {
   // Build a status banner reflecting what actually happened in each path.
   var banners = '';
   if (samData && samData.ok && samData.count > 0) {
-    banners += '<div style="background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.25);border-radius:var(--radius);padding:10px 14px;margin-bottom:8px;font-size:12px;color:var(--text2)">⚡ <strong style="color:var(--green)">SAM Signals</strong> \u2014 ' + samData.count + ' pattern' + (samData.count>1?'s':'') + ' detected (no AI quota used)</div>';
+    banners += '<div style="background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.25);border-radius:var(--radius);padding:10px 14px;margin-bottom:8px;font-size:12px;color:var(--text2)">⚡ <strong style="color:var(--green)">SAM Intelligence</strong> \u2014 ' + samData.count + ' account' + (samData.count>1?'s':'') + ' scanned (no AI quota used)</div>';
   }
   if (aiData && aiData.geminiQuotaExhausted && aiData.message) {
     banners += '<div style="background:rgba(160,117,42,0.1);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 14px;margin-bottom:8px;font-size:12px;color:var(--text2);line-height:1.6">⏳ <strong style="color:var(--gold)">AI Tool Signals limited</strong> \u2014 ' + esc(aiData.message) + '</div>';
