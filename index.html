@@ -1196,9 +1196,19 @@ function doLogout() {
   document.getElementById('authScreen').classList.add('active');
 }
 
-function isRepRole(r) { return r === 'member' || r === 'sdr' || r === 'ae'; }
+// ── Role hierarchy (matches edge function) ──────────────────────────────
+// Tier 1: sdr, ae, member — frontline reps
+// Tier 2: manager — sees direct reports
+// Tier 3: director — sees cross-team
+// Tier 4: executive — sees full org pipeline
+// Tier 5: admin, super_admin — manages users/settings
+function isRepRole(r) { return ['sdr','ae','member'].includes(r); }
 function isSDR(r) { return r === 'sdr'; }
 function isAE(r) { return r === 'ae' || r === 'member'; }
+function canSeeTeam(r) { return ['manager','director','executive','admin','super_admin'].includes(r); }
+function canSeeCrossTeam(r) { return ['director','executive','admin','super_admin'].includes(r); }
+function canSeeFullOrg(r) { return ['executive','admin','super_admin'].includes(r); }
+function canManageOrg(r) { return ['admin','super_admin'].includes(r); }
 
 function launchApp() {
   document.getElementById('authScreen').classList.remove('active');
@@ -3113,7 +3123,7 @@ var _intelType = 'all';
 async function refreshIntelligence() {
   var btn = document.getElementById('intelRefreshBtn');
   var feed = document.getElementById('intelFeed');
-  var isManager = ['manager','super_admin','admin','director','executive'].includes(profile ? profile.role : '');
+  var isManager = canSeeTeam(profile ? profile.role : '');
   var repFilterEl = document.getElementById('intelRepFilter');
   var repFilter = (isManager && repFilterEl) ? repFilterEl.value : '';
   if (btn) { btn.textContent = '↻ Scanning…'; btn.disabled = true; }
@@ -3219,7 +3229,7 @@ function renderIntelDebug(data) {
 
 async function loadIntelligence() {
   var feed = document.getElementById('intelFeed');
-  var isManager = ['manager','super_admin','admin','director','executive'].includes(profile ? profile.role : '');
+  var isManager = canSeeTeam(profile ? profile.role : '');
   var days = parseInt((document.getElementById('intelDaysFilter') || {}).value || '30') || 30;
   if (isManager) await populateIntelRepFilter();
   var repFilterEl = document.getElementById('intelRepFilter');
