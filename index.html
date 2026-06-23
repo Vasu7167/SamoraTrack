@@ -821,11 +821,18 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
         </div>
         <div id="repAccountsList" style="margin-bottom:12px"></div>
         <div id="addAccountRow" style="display:none">
-          <div style="display:flex;gap:8px;margin-bottom:8px">
-            <input id="newAccountName" placeholder="Account name (e.g. Ferrero)" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none" onkeydown="if(event.key==='Enter')addRepAccount()"/>
-            <input id="newAccountDomain" placeholder="Domain (e.g. ferrero.com)" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none" onkeydown="if(event.key==='Enter')addRepAccount()"/>
+          <div style="display:flex;gap:8px;margin-bottom:6px">
+            <input id="newAccountName" placeholder="Account name (e.g. Ferrero)" style="flex:2;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none" oninput="onAccountNameInput(this.value)" onkeydown="if(event.key==='Enter')addRepAccount()"/>
+            <input id="newAccountRegion" placeholder="Region (e.g. India, APAC…)" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none" onkeydown="if(event.key==='Enter')addRepAccount()"/>
+            <input id="newAccountDomain" placeholder="Domain (optional)" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none" onkeydown="if(event.key==='Enter')addRepAccount()"/>
             <button onclick="addRepAccount()" style="padding:8px 14px;border-radius:var(--radius-sm);background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">Add</button>
           </div>
+          <!-- Parent match suggestion — shown when typed name matches an existing account -->
+          <div id="parentMatchSuggestion" style="display:none;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:6px;font-size:12px">
+            <span id="parentMatchText" style="color:var(--text2)"></span>
+            <span id="parentMatchActions" style="margin-left:8px"></span>
+          </div>
+          <input type="hidden" id="newAccountParentId" value=""/>
         </div>
       </div>
     </div>
@@ -869,9 +876,10 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
         <div style="font-size:12px;color:var(--text2)">Accounts you're working — used for Coverage &amp; signal tracking</div>
         <button onclick="toggleAddMyAccount()" style="font-size:11px;color:var(--gold);background:none;border:none;cursor:pointer;font-family:var(--sans);white-space:nowrap">+ Add account</button>
       </div>
-      <div id="myAccountAddRow" style="display:none;gap:8px;margin-bottom:10px">
-        <input id="myAccountName" placeholder="Account name" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>
-        <input id="myAccountDomain" placeholder="domain.com" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>
+      <div id="myAccountAddRow" style="display:none;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+        <input id="myAccountName" placeholder="Account name" style="flex:2;min-width:120px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>
+        <input id="myAccountRegion" placeholder="Region (e.g. India)" style="flex:1;min-width:90px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>
+        <input id="myAccountDomain" placeholder="domain.com" style="flex:1;min-width:90px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>
         <button onclick="addMyAccount()" style="padding:7px 12px;border-radius:6px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">Add</button>
       </div>
       <div id="myAccountsList"></div>
@@ -1929,19 +1937,44 @@ function renderSamAlerts() {
 async function loadMyAccounts() {
   const list = document.getElementById('myAccountsList'); if (!list || !currentUser?.token || !profile?.org_id) return;
   try {
-    const rows = await sbGet('org_accounts?user_id=eq.' + currentUser.id + '&org_id=eq.' + profile.org_id + '&select=id,account_name,domain&order=account_name');
+    const rows = await sbGet('org_accounts?user_id=eq.' + currentUser.id + '&org_id=eq.' + profile.org_id + '&select=id,account_name,domain,region&order=account_name');
     if (!rows || !rows.length) { list.innerHTML = '<div style="font-size:12px;color:var(--text3);font-style:italic">No accounts assigned yet.</div>'; return; }
-    list.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:6px">' + rows.map(r => '<div style="display:flex;align-items:center;gap:6px;padding:5px 10px;background:var(--surface2);border-radius:20px"><span style="font-size:12px;color:var(--text)">' + esc(r.account_name) + '</span>' + (r.domain?'<span style="font-size:10px;color:var(--text3)">'+esc(r.domain)+'</span>':'') + '<button onclick="removeMyAccount(\''+r.id+'\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:0">✕</button></div>').join('') + '</div>';
+    list.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:6px">' + rows.map(r => '<div style="display:flex;align-items:center;gap:6px;padding:5px 10px;background:var(--surface2);border-radius:20px"><span style="font-size:12px;color:var(--text)">' + esc(r.account_name) + '</span>' + (r.region?'<span style="font-size:10px;color:var(--text3);background:rgba(0,0,0,0.1);border-radius:4px;padding:1px 5px">'+esc(r.region)+'</span>':'') + (r.domain?'<span style="font-size:10px;color:var(--text3)">'+esc(r.domain)+'</span>':'') + '<button onclick="removeMyAccount(\''+r.id+'\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:0">✕</button></div>').join('') + '</div>';
   } catch(e) { list.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>'; }
 }
 function toggleAddMyAccount() { const row = document.getElementById('myAccountAddRow'); if (row) row.style.display = row.style.display === 'none' ? 'flex' : 'none'; }
 async function addMyAccount() {
-  const name = document.getElementById('myAccountName')?.value?.trim(); const domain = document.getElementById('myAccountDomain')?.value?.trim();
+  const name = document.getElementById('myAccountName')?.value?.trim();
+  const region = document.getElementById('myAccountRegion')?.value?.trim() || null;
+  const domain = document.getElementById('myAccountDomain')?.value?.trim() || null;
   if (!name) return;
+
+  // Auto-link to parent if a standalone account with this exact name already exists
+  // and the rep is adding a regional branch of it
+  let parentId = null;
+  if (region) {
+    try {
+      const pr = await fetch(SB_URL + '/rest/v1/org_accounts?org_id=eq.' + profile.org_id + '&account_name=eq.' + encodeURIComponent(name) + '&select=id&limit=1', {
+        headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token }
+      });
+      const existing = await pr.json();
+      if (Array.isArray(existing) && existing.length) parentId = existing[0].id;
+    } catch(e) { /* non-fatal */ }
+  }
+
   try {
-    const r = await fetch(SB_URL + '/rest/v1/org_accounts', { method: 'POST', headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }, body: JSON.stringify({ org_id: profile.org_id, user_id: currentUser.id, account_name: name, domain: domain||null, added_by: currentUser.id }) });
+    const body = { org_id: profile.org_id, user_id: currentUser.id, account_name: name, domain, added_by: currentUser.id };
+    if (region) body.region = region;
+    if (parentId) body.parent_account_id = parentId;
+    const r = await fetch(SB_URL + '/rest/v1/org_accounts', {
+      method: 'POST',
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify(body)
+    });
     if (!r.ok) throw new Error(await r.text());
-    document.getElementById('myAccountName').value = ''; document.getElementById('myAccountDomain').value = '';
+    document.getElementById('myAccountName').value = '';
+    if (document.getElementById('myAccountRegion')) document.getElementById('myAccountRegion').value = '';
+    document.getElementById('myAccountDomain').value = '';
     toggleAddMyAccount(); loadMyAccounts();
   } catch(e) { if (e.message.includes('duplicate')||e.message.includes('unique')) alert(name+' already in your list'); else alert('Error: '+e.message); }
 }
@@ -2199,16 +2232,36 @@ async function runSamIntelligence(repId, repEmail, resultElId) {
     });
     html += '</div>';
     ['commercial','value_prop','prospective'].forEach(function(stage) {
-      const accounts = intelData.accounts.filter(function(a) { return a.stage === stage && a.hasAnyActivity; });
-      if (!accounts.length) return;
+      const stageAccounts = intelData.accounts.filter(function(a) { return a.stage === stage && a.hasAnyActivity; });
+      if (!stageAccounts.length) return;
       const cfg = DEAL_STAGE_CONFIG[stage];
-      accounts.forEach(function(a) {
-        const stalenessBadge = a.staleness==='cold'?'<span style="font-size:9px;font-weight:700;color:var(--coral);background:rgba(192,82,63,0.12);border-radius:4px;padding:1px 5px;margin-left:4px">❄ COLD</span>':a.staleness==='stale'?'<span style="font-size:9px;color:var(--amber);margin-left:4px">STALE</span>':'';
-        html += '<div style="border-left:3px solid '+cfg.color+';padding:6px 10px;margin-bottom:4px;background:rgba(0,0,0,0.04);border-radius:0 6px 6px 0">' +
-          '<div style="font-size:12px;font-weight:600;color:var(--text)">'+cfg.icon+' '+esc(a.account)+stalenessBadge+'</div>' +
-          '<div style="display:flex;gap:4px;margin-top:3px">'+renderChannelBadges(a.channels)+'</div>' +
-          (a.lastSentSubject?'<div style="font-size:10px;color:var(--text3);margin-top:2px;font-style:italic">'+esc(a.lastSentSubject.slice(0,70))+'</div>':'') +
-        '</div>';
+
+      // Group by parent — accounts sharing the same parentAccountId are
+      // sub-entities of the same global company (e.g. Ferrero India +
+      // Ferrero Middle East both under Ferrero). Show them indented under
+      // a shared parent label so the rep immediately sees the full picture.
+      var groups = {};
+      stageAccounts.forEach(function(a) {
+        var key = a.parentAccountId || ('standalone_' + a.account);
+        if (!groups[key]) groups[key] = { parentName: a.parentAccountId ? a.account.replace(/\s+(india|middle east|europe|apac|americas|global|africa|asia|us|uk|latam|mena|sea|gcc)$/i,'').trim() : null, accounts: [] };
+        groups[key].accounts.push(a);
+      });
+
+      Object.keys(groups).forEach(function(key) {
+        var grp = groups[key];
+        if (grp.accounts.length > 1 && grp.parentName) {
+          html += '<div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin:6px 0 3px 0">' + esc(grp.parentName) + '</div>';
+        }
+        grp.accounts.forEach(function(a) {
+          var stalenessBadge = a.staleness==='cold'?'<span style="font-size:9px;font-weight:700;color:var(--coral);background:rgba(192,82,63,0.12);border-radius:4px;padding:1px 5px;margin-left:4px">\u2744 COLD</span>':a.staleness==='stale'?'<span style="font-size:9px;color:var(--amber);margin-left:4px">STALE</span>':'';
+          var regionBadge = a.region ? '<span style="font-size:9px;color:var(--text3);background:rgba(0,0,0,0.06);border-radius:4px;padding:1px 6px;margin-left:4px">' + esc(a.region) + '</span>' : '';
+          var indent = (grp.accounts.length > 1 && grp.parentName) ? 'margin-left:10px;border-left-width:2px;' : '';
+          html += '<div style="border-left:3px solid '+cfg.color+';'+indent+'padding:6px 10px;margin-bottom:4px;background:rgba(0,0,0,0.04);border-radius:0 6px 6px 0">' +
+            '<div style="font-size:12px;font-weight:600;color:var(--text)">'+cfg.icon+' '+esc(a.account)+regionBadge+stalenessBadge+'</div>' +
+            '<div style="display:flex;gap:4px;margin-top:3px">'+renderChannelBadges(a.channels)+'</div>' +
+            (a.lastSentSubject?'<div style="font-size:10px;color:var(--text3);margin-top:2px;font-style:italic">'+esc(a.lastSentSubject.slice(0,70))+'</div>':'') +
+          '</div>';
+        });
       });
     });
     html += '</div>';
@@ -2267,16 +2320,34 @@ async function runLocalIntelligence(repId, resultElId) {
       const cfg = DEAL_STAGE_CONFIG[stage];
       html += '<div style="margin-bottom:14px">';
       html += '<div style="font-size:10px;font-weight:600;color:' + cfg.color + ';text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">' + cfg.icon + ' ' + cfg.label + ' (' + inStage.length + ') \u2014 <span style="font-weight:400;text-transform:none;color:var(--text3)">' + cfg.desc + '</span></div>';
+
+      // Group by parent account for regional hierarchy display
+      var stageGroups = {};
       inStage.forEach(function(a) {
-        const stalenessBadge = a.staleness === 'cold' ? '<span style="font-size:9px;font-weight:700;color:var(--coral);background:rgba(192,82,63,0.12);border-radius:4px;padding:1px 6px;margin-left:6px">❄ COLD</span>'
-          : a.staleness === 'stale' ? '<span style="font-size:9px;font-weight:700;color:var(--amber);background:rgba(160,117,42,0.12);border-radius:4px;padding:1px 6px;margin-left:6px">STALE</span>' : '';
-        html += '<div style="border-left:3px solid ' + cfg.color + ';padding:8px 12px;margin-bottom:6px;background:rgba(0,0,0,0.04);border-radius:0 6px 6px 0">' +
-          '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap">' +
-            '<div style="font-size:12px;font-weight:600;color:var(--text)">' + esc(a.account) + stalenessBadge + '</div>' +
-            '<div style="display:flex;gap:4px;flex-wrap:wrap">' + renderChannelBadges(a.channels) + '</div>' +
-          '</div>' +
-          (a.lastSentSubject ? '<div style="font-size:11px;color:var(--text3);margin-top:4px;font-style:italic">Last: "' + esc(a.lastSentSubject.slice(0,80)) + '"</div>' : '') +
-        '</div>';
+        var key = a.parentAccountId || ('solo_' + a.account);
+        if (!stageGroups[key]) stageGroups[key] = { accounts: [] };
+        stageGroups[key].accounts.push(a);
+      });
+
+      Object.keys(stageGroups).forEach(function(key) {
+        var grp = stageGroups[key];
+        if (grp.accounts.length > 1) {
+          var parentLabel = grp.accounts[0].account.replace(/\s+(india|middle east|europe|apac|americas|global|africa|asia|us|uk|latam|mena|sea|gcc)$/i,'').trim();
+          html += '<div style="font-size:10px;color:var(--text3);font-weight:600;margin:6px 0 3px 4px;text-transform:uppercase;letter-spacing:0.04em">' + esc(parentLabel) + '</div>';
+        }
+        grp.accounts.forEach(function(a) {
+          const stalenessBadge = a.staleness === 'cold' ? '<span style="font-size:9px;font-weight:700;color:var(--coral);background:rgba(192,82,63,0.12);border-radius:4px;padding:1px 6px;margin-left:6px">\u2744 COLD</span>'
+            : a.staleness === 'stale' ? '<span style="font-size:9px;font-weight:700;color:var(--amber);background:rgba(160,117,42,0.12);border-radius:4px;padding:1px 6px;margin-left:6px">STALE</span>' : '';
+          const regionBadge = a.region ? '<span style="font-size:9px;color:var(--text3);background:rgba(0,0,0,0.06);border-radius:4px;padding:1px 6px;margin-left:5px">' + esc(a.region) + '</span>' : '';
+          const indent = grp.accounts.length > 1 ? 'margin-left:10px;border-left-width:2px;' : '';
+          html += '<div style="border-left:3px solid ' + cfg.color + ';' + indent + 'padding:8px 12px;margin-bottom:6px;background:rgba(0,0,0,0.04);border-radius:0 6px 6px 0">' +
+            '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap">' +
+              '<div style="font-size:12px;font-weight:600;color:var(--text)">' + esc(a.account) + regionBadge + stalenessBadge + '</div>' +
+              '<div style="display:flex;gap:4px;flex-wrap:wrap">' + renderChannelBadges(a.channels) + '</div>' +
+            '</div>' +
+            (a.lastSentSubject ? '<div style="font-size:11px;color:var(--text3);margin-top:4px;font-style:italic">Last: "' + esc(a.lastSentSubject.slice(0,80)) + '"</div>' : '') +
+          '</div>';
+        });
       });
       html += '</div>';
     });
@@ -2672,15 +2743,99 @@ async function loadRepAccounts() {
     list.innerHTML = rows.map(r => '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--surface2);border-radius:6px;margin-bottom:5px"><div><div style="font-size:13px;color:var(--text)">' + esc(r.account_name) + '</div>' + (r.domain?'<div style="font-size:11px;color:var(--text3)">'+esc(r.domain)+'</div>':'') + '</div><button onclick="removeRepAccount(\''+r.id+'\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px">✕</button></div>').join('');
   } catch(e) { list.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>'; }
 }
+var _accountNameTimer = null;
+async function onAccountNameInput(val) {
+  // Debounce — wait for the rep to pause typing before searching
+  clearTimeout(_accountNameTimer);
+  const suggestion = document.getElementById('parentMatchSuggestion');
+  if (!val || val.length < 3) { if (suggestion) suggestion.style.display = 'none'; return; }
+  _accountNameTimer = setTimeout(async function() {
+    try {
+      // Search for existing accounts in this org whose name contains the typed string
+      const r = await fetch(SB_URL + '/rest/v1/org_accounts?org_id=eq.' + profile.org_id + '&account_name=ilike.' + encodeURIComponent('%' + val + '%') + '&select=id,account_name,region,parent_account_id&limit=5', {
+        headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token }
+      });
+      const matches = await r.json();
+      if (!Array.isArray(matches) || !matches.length) { suggestion.style.display = 'none'; return; }
+
+      // Find parent candidates — rows that are either already a parent (region='Global' or has children)
+      // or standalone rows with the same or very similar name
+      const exactOrParent = matches.filter(function(m) {
+        return m.account_name.toLowerCase() === val.toLowerCase() ||
+               m.account_name.toLowerCase().replace(/\s+(global|worldwide)$/i,'').trim() === val.toLowerCase().trim();
+      });
+
+      if (!exactOrParent.length) { suggestion.style.display = 'none'; return; }
+
+      const parent = exactOrParent[0];
+      const existingBranches = matches.filter(function(m) { return m.parent_account_id === parent.id || m.id === parent.id; });
+      const branchList = existingBranches.filter(function(m) { return m.region && m.region !== 'Global'; }).map(function(m) { return m.region; }).join(' · ');
+
+      document.getElementById('parentMatchText').textContent =
+        '"' + parent.account_name + '" already exists' + (branchList ? ' — existing branches: ' + branchList : '') + '. Add as branch?';
+      document.getElementById('parentMatchActions').innerHTML =
+        '<button onclick="setParentMatch(\'' + parent.id + '\',\'' + parent.account_name.replace(/'/g,"\\'") + '\')" style="padding:3px 10px;border-radius:12px;background:var(--gold2);border:none;color:#18160F;font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;margin-right:6px">Yes, add as branch</button>' +
+        '<button onclick="clearParentMatch()" style="padding:3px 10px;border-radius:12px;background:transparent;border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);font-size:11px;cursor:pointer">No, standalone</button>';
+      suggestion.style.display = 'block';
+    } catch(e) { /* non-fatal — just don't show suggestion */ }
+  }, 400);
+}
+function setParentMatch(parentId, parentName) {
+  document.getElementById('newAccountParentId').value = parentId;
+  document.getElementById('parentMatchSuggestion').style.display = 'none';
+  // Pre-fill region field focus prompt
+  const regionInput = document.getElementById('newAccountRegion');
+  if (regionInput && !regionInput.value) { regionInput.focus(); }
+}
+function clearParentMatch() {
+  document.getElementById('newAccountParentId').value = '';
+  document.getElementById('parentMatchSuggestion').style.display = 'none';
+}
+
 async function addRepAccount() {
-  const repId = document.getElementById('accountRepSelect')?.value; const name = document.getElementById('newAccountName')?.value?.trim(); const domain = document.getElementById('newAccountDomain')?.value?.trim();
+  const repId = document.getElementById('accountRepSelect')?.value;
+  const name = document.getElementById('newAccountName')?.value?.trim();
+  const region = document.getElementById('newAccountRegion')?.value?.trim() || null;
+  const domain = document.getElementById('newAccountDomain')?.value?.trim() || null;
+  const parentId = document.getElementById('newAccountParentId')?.value?.trim() || null;
   if (!repId || !name) { alert('Select a rep and enter account name'); return; }
+
+  // If a region was typed but no parent was explicitly selected, do one more
+  // check — find any existing standalone account with the same base name and
+  // link to it automatically. This catches the case where the rep skips the
+  // suggestion prompt but types "Ferrero" + region "India".
+  let resolvedParentId = parentId;
+  if (!resolvedParentId && region) {
+    try {
+      const pr = await fetch(SB_URL + '/rest/v1/org_accounts?org_id=eq.' + profile.org_id + '&account_name=eq.' + encodeURIComponent(name) + '&select=id&limit=1', {
+        headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token }
+      });
+      const existing = await pr.json();
+      if (Array.isArray(existing) && existing.length) resolvedParentId = existing[0].id;
+    } catch(e) { /* non-fatal */ }
+  }
+
   try {
-    const r = await fetch(SB_URL + '/rest/v1/org_accounts', { method: 'POST', headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }, body: JSON.stringify({ org_id: profile.org_id, user_id: repId, account_name: name, domain: domain||null, added_by: currentUser.id }) });
+    const body = { org_id: profile.org_id, user_id: repId, account_name: name, domain, added_by: currentUser.id };
+    if (region) body.region = region;
+    if (resolvedParentId) body.parent_account_id = resolvedParentId;
+
+    const r = await fetch(SB_URL + '/rest/v1/org_accounts', {
+      method: 'POST',
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify(body)
+    });
     if (!r.ok) throw new Error(await r.text());
-    document.getElementById('newAccountName').value = ''; document.getElementById('newAccountDomain').value = '';
+    document.getElementById('newAccountName').value = '';
+    document.getElementById('newAccountRegion').value = '';
+    document.getElementById('newAccountDomain').value = '';
+    document.getElementById('newAccountParentId').value = '';
+    document.getElementById('parentMatchSuggestion').style.display = 'none';
     loadRepAccounts();
-  } catch(e) { if (e.message.includes('duplicate')||e.message.includes('unique')) alert(name+' is already assigned to this rep'); else alert('Error: '+e.message); }
+  } catch(e) {
+    if (e.message.includes('duplicate') || e.message.includes('unique')) alert(name + ' is already assigned to this rep');
+    else alert('Error: ' + e.message);
+  }
 }
 async function removeRepAccount(id) {
   if (!confirm('Remove this account?')) return;
