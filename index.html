@@ -1189,6 +1189,21 @@ async function loadProfile() {
       localStorage.setItem('dt-profile-' + currentUser.id, JSON.stringify(profile));
     } else { await setupProfile(''); }
   } catch(e) { const cached = localStorage.getItem('dt-profile-' + currentUser?.id); if (cached) profile = JSON.parse(cached); }
+
+  // Fetch org config — sets the correct Google Client ID for this user's org
+  // so the Gmail OAuth popup uses the right consent screen (Genefied sees
+  // "Genefied Sales Tracker", Flick2Know sees their own, etc.)
+  try {
+    const r = await fetch(EDGE_FN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
+      body: JSON.stringify({ action: 'get_org_config' })
+    });
+    const cfg = await r.json();
+    if (cfg.ok && cfg.googleClientId) {
+      GOOGLE_CLIENT_ID_SAM = cfg.googleClientId;
+    }
+  } catch(e) { /* non-fatal — falls back to default client ID */ }
 }
 function doLogout() {
   localStorage.removeItem('dt-user'); currentUser = null; profile = null; allData = {};
