@@ -592,10 +592,14 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
       <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
           <div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em">⚡ SAM Intelligence</div>
-          <button onclick="runLocalIntelligence()" id="localIntelBtn" style="padding:5px 12px;border-radius:20px;background:rgba(160,117,42,0.1);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Scan</button>
+          <div style="display:flex;gap:6px">
+            <button onclick="runLocalIntelligence()" id="localIntelBtn" style="padding:5px 12px;border-radius:20px;background:rgba(160,117,42,0.1);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Scan channels</button>
+            <button onclick="runExternalSignals()" id="externalSignalsBtn" style="padding:5px 12px;border-radius:20px;background:rgba(58,110,168,0.1);border:1px solid var(--border2);color:var(--blue);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">🌐 Market signals</button>
+          </div>
         </div>
-        <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Every assigned account, bucketed by deal stage \u2014 Prospective \u2192 Value Prop \u2192 Commercial \u2014 from email, calendar &amp; notetaker signals. No AI quota used.</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Deal pipeline from channels + external market signals (news, hiring, funding).</div>
         <div id="samLocalIntelOutput"></div>
+        <div id="externalSignalsOutput" style="margin-top:10px"></div>
       </div>
     </div>
     <div id="samCoverageSection" style="margin-bottom:16px;display:none">
@@ -2307,6 +2311,75 @@ async function runSamIntelligence(repId, repEmail, resultElId) {
 
   if (!html) html = '<div style="font-size:12px;color:var(--text3);padding:8px 0">No signals found — add accounts in Org → Rep Accounts</div>';
   out.innerHTML = html;
+}
+
+var SIGNAL_TYPE_CONFIG = {
+  expansion:      { icon: '🌍', label: 'Expansion',      color: 'var(--green)' },
+  hiring:         { icon: '👥', label: 'Hiring',          color: 'var(--blue)' },
+  leadership:     { icon: '👔', label: 'Leadership',      color: 'var(--gold)' },
+  funding:        { icon: '💰', label: 'Funding',         color: 'var(--green)' },
+  partnership:    { icon: '🤝', label: 'Partnership',     color: 'var(--text2)' },
+  earnings:       { icon: '📊', label: 'Earnings',        color: 'var(--text2)' },
+  restructuring:  { icon: '⚠', label: 'Restructuring',   color: 'var(--coral)' },
+  product_launch: { icon: '🚀', label: 'Product launch',  color: 'var(--amber)' }
+};
+
+async function runExternalSignals(repId, resultElId) {
+  var out = document.getElementById(resultElId || 'externalSignalsOutput');
+  var btn = document.getElementById('externalSignalsBtn');
+  if (!out) return;
+  if (btn) { btn.textContent = 'Scanning…'; btn.disabled = true; }
+  out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0">🌐 Scanning Google News for your named accounts…</div>';
+  try {
+    var r = await fetch(EDGE_FN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
+      body: JSON.stringify({ action: 'scan_external_signals' })
+    });
+    var data = await r.json();
+    if (!data.ok) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(data.error || 'Scan failed') + '</div>'; if (btn) { btn.textContent = '\ud83c\udf10 Market signals'; btn.disabled = false; } return; }
+
+    var results = data.results || [];
+    var totalSignals = results.reduce(function(s, r) { return s + (r.signalsInserted || 0); }, 0);
+
+    if (!totalSignals) {
+      out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">No new market signals found across ' + data.accountsScanned + ' accounts. Classified via ' + esc(data.classificationEngine || 'keywords') + '.</div>';
+      if (btn) { btn.textContent = '\ud83c\udf10 Market signals'; btn.disabled = false; }
+      return;
+    }
+
+    var html = '<div style="font-size:10px;font-weight:600;color:var(--blue);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">\ud83c\udf10 Market Signals \u2014 ' + totalSignals + ' detected across ' + data.accountsScanned + ' accounts</div>';
+
+    results.forEach(function(r) {
+      if (!r.signalsInserted) return;
+      html += '<div style="font-size:11px;font-weight:600;color:var(--text);margin-top:8px;margin-bottom:4px">' + esc(r.account) + (r.region ? ' <span style="font-size:9px;color:var(--text3);background:rgba(0,0,0,0.08);border-radius:4px;padding:1px 5px">' + esc(r.region) + '</span>' : '') + ' <span style="font-size:10px;color:var(--text3);font-weight:400">\u2014 ' + r.newsFound + ' articles, ' + r.signalsDetected + ' signals</span></div>';
+    });
+
+    // Load the actual signals from the DB to show headlines
+    try {
+      var sigRes = await fetch(SB_URL + '/rest/v1/account_signals?org_id=eq.' + profile.org_id + '&is_active=eq.true&order=detected_at.desc&limit=20', {
+        headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token }
+      });
+      var signals = await sigRes.json();
+      if (Array.isArray(signals) && signals.length) {
+        signals.forEach(function(s) {
+          var cfg = SIGNAL_TYPE_CONFIG[s.signal_type] || { icon: '○', label: s.signal_type, color: 'var(--text3)' };
+          var ext = s.extracted || {};
+          html += '<div style="border-left:3px solid ' + cfg.color + ';padding:6px 10px;margin-bottom:4px;background:rgba(0,0,0,0.04);border-radius:0 6px 6px 0">' +
+            '<div style="display:flex;align-items:center;gap:6px">' +
+              '<span style="font-size:9px;padding:1px 6px;border-radius:10px;background:rgba(0,0,0,0.08);color:' + cfg.color + ';font-weight:600">' + cfg.icon + ' ' + cfg.label + '</span>' +
+              '<span style="font-size:10px;color:var(--text3)">' + esc(ext.region || '') + '</span>' +
+            '</div>' +
+            '<div style="font-size:12px;color:var(--text);margin-top:3px">' + esc((ext.headline || s.raw_text || '').slice(0, 120)) + '</div>' +
+            (ext.link ? '<a href="' + esc(ext.link) + '" target="_blank" style="font-size:10px;color:var(--blue);text-decoration:none;margin-top:2px;display:inline-block">Read article →</a>' : '') +
+          '</div>';
+        });
+      }
+    } catch(e) { /* non-fatal — summary already shown */ }
+
+    out.innerHTML = html;
+  } catch(e) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>'; }
+  if (btn) { btn.textContent = '\ud83c\udf10 Market signals'; btn.disabled = false; }
 }
 
 async function runLocalIntelligence(repId, resultElId) {
