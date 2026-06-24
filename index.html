@@ -2329,7 +2329,7 @@ async function runExternalSignals(repId, resultElId) {
   var btn = document.getElementById('externalSignalsBtn');
   if (!out) return;
   if (btn) { btn.textContent = 'Scanning…'; btn.disabled = true; }
-  out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0">🌐 Scanning Google News for your named accounts…</div>';
+  out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0">🌐 Scanning web for buying signals across your accounts…</div>';
   try {
     var r = await fetch(EDGE_FN_URL, {
       method: 'POST',
@@ -2340,24 +2340,24 @@ async function runExternalSignals(repId, resultElId) {
     if (!data.ok) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(data.error || 'Scan failed') + '</div>'; if (btn) { btn.textContent = '\ud83c\udf10 Market signals'; btn.disabled = false; } return; }
 
     var results = data.results || [];
-    var totalSignals = results.reduce(function(s, r) { return s + (r.signalsInserted || 0); }, 0);
+    var totalSignals = data.totalSignalsDetected || 0;
 
     if (!totalSignals) {
-      out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">No new market signals found across ' + data.accountsScanned + ' accounts. Classified via ' + esc(data.classificationEngine || 'keywords') + '.</div>';
+      out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">No buying signals found across ' + data.accountsScanned + ' accounts. Try again later — signals refresh as news breaks.</div>';
       if (btn) { btn.textContent = '\ud83c\udf10 Market signals'; btn.disabled = false; }
       return;
     }
 
-    var html = '<div style="font-size:10px;font-weight:600;color:var(--blue);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">\ud83c\udf10 Market Signals \u2014 ' + totalSignals + ' detected across ' + data.accountsScanned + ' accounts</div>';
+    var html = '<div style="font-size:10px;font-weight:600;color:var(--blue);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">\ud83c\udf10 Market Signals \u2014 ' + totalSignals + ' found across ' + data.accountsScanned + ' accounts</div>';
 
     results.forEach(function(r) {
-      if (!r.signalsInserted) return;
-      html += '<div style="font-size:11px;font-weight:600;color:var(--text);margin-top:8px;margin-bottom:4px">' + esc(r.account) + (r.region ? ' <span style="font-size:9px;color:var(--text3);background:rgba(0,0,0,0.08);border-radius:4px;padding:1px 5px">' + esc(r.region) + '</span>' : '') + ' <span style="font-size:10px;color:var(--text3);font-weight:400">\u2014 ' + r.newsFound + ' articles, ' + r.signalsDetected + ' signals</span></div>';
+      if (!r.signalsDetected) return;
+      html += '<div style="font-size:11px;font-weight:600;color:var(--text);margin-top:8px;margin-bottom:4px">' + esc(r.account) + (r.region ? ' <span style="font-size:9px;color:var(--text3);background:rgba(0,0,0,0.08);border-radius:4px;padding:1px 5px">' + esc(r.region) + '</span>' : '') + ' <span style="font-size:10px;color:var(--text3);font-weight:400">\u2014 ' + r.signalsDetected + ' signals</span></div>';
     });
 
-    // Load the actual signals from the DB to show headlines
+    // Load the actual signals from the DB to show rich cards with source URLs
     try {
-      var sigRes = await fetch(SB_URL + '/rest/v1/account_signals?org_id=eq.' + profile.org_id + '&is_active=eq.true&order=detected_at.desc&limit=20', {
+      var sigRes = await fetch(SB_URL + '/rest/v1/account_signals?org_id=eq.' + profile.org_id + '&is_active=eq.true&source=eq.web_grounded&order=detected_at.desc&limit=25', {
         headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token }
       });
       var signals = await sigRes.json();
@@ -2366,12 +2366,14 @@ async function runExternalSignals(repId, resultElId) {
           var cfg = SIGNAL_TYPE_CONFIG[s.signal_type] || { icon: '○', label: s.signal_type, color: 'var(--text3)' };
           var ext = s.extracted || {};
           html += '<div style="border-left:3px solid ' + cfg.color + ';padding:6px 10px;margin-bottom:4px;background:rgba(0,0,0,0.04);border-radius:0 6px 6px 0">' +
-            '<div style="display:flex;align-items:center;gap:6px">' +
+            '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
               '<span style="font-size:9px;padding:1px 6px;border-radius:10px;background:rgba(0,0,0,0.08);color:' + cfg.color + ';font-weight:600">' + cfg.icon + ' ' + cfg.label + '</span>' +
-              '<span style="font-size:10px;color:var(--text3)">' + esc(ext.region || '') + '</span>' +
+              (s.confidence >= 80 ? '<span style="font-size:9px;color:var(--green)">High confidence</span>' : '') +
+              (ext.recency ? '<span style="font-size:9px;color:var(--text3)">' + esc(ext.recency) + '</span>' : '') +
             '</div>' +
-            '<div style="font-size:12px;color:var(--text);margin-top:3px">' + esc((ext.headline || s.raw_text || '').slice(0, 120)) + '</div>' +
-            (ext.link ? '<a href="' + esc(ext.link) + '" target="_blank" style="font-size:10px;color:var(--blue);text-decoration:none;margin-top:2px;display:inline-block">Read article →</a>' : '') +
+            '<div style="font-size:12px;color:var(--text);margin-top:3px">' + esc((ext.headline || s.raw_text || '').slice(0, 140)) + '</div>' +
+            (ext.detail ? '<div style="font-size:11px;color:var(--text2);margin-top:2px">' + esc(ext.detail.slice(0, 160)) + '</div>' : '') +
+            (ext.source_url ? '<a href="' + esc(ext.source_url) + '" target="_blank" rel="noopener" style="font-size:10px;color:var(--blue);text-decoration:none;margin-top:2px;display:inline-block">' + esc(ext.source_name || 'Source') + ' \u2192</a>' : '') +
           '</div>';
         });
       }
