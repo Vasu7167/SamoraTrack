@@ -4116,12 +4116,12 @@ async function openDealValueForm(accountId, accountName, opportunityId) {
 function renderDealModal() {
   document.getElementById('deal-value-modal')?.remove();
 
-  var orgTypes = window._orgConfig?.revenueStreamTypes || [
+  var orgTypes = (window._orgConfig?.revenueStreamTypes?.length ? window._orgConfig.revenueStreamTypes : [
     {key:'license_mrr',  label:'License MRR',           type:'MRR'},
     {key:'impl',         label:'Implementation',         type:'one_time'},
     {key:'support_qrr',  label:'Support & Maintenance',  type:'QRR'},
     {key:'training',     label:'Training',               type:'one_time'}
-  ];
+  ]);
   var FX = {USD:1,INR:0.012,EUR:1.08,GBP:1.27,AED:0.272,SAR:0.267,SGD:0.74,AUD:0.65,CAD:0.73,MXN:0.058,BRL:0.19};
   var ccyList = ['USD','INR','EUR','GBP','AED','SAR','SGD','AUD','CAD','MXN','BRL'];
   var TYPE_COLORS = {MRR:'#3A6EA8',QRR:'#4A8C5C',ARR:'#7B5EA7',one_time:'#A07824'};
@@ -4152,18 +4152,31 @@ function renderDealModal() {
 
     var streamsHtml = g.streams.map(function(s, si) {
       var def = orgTypes.find(function(t){return (t.key||t.label)===s.name;});
-      var badge = typeBadge(def?.type||'MRR');
-      return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">' +
-        '<select onchange="_dealGroups['+gi+'].streams['+si+'].name=this.value;renderDealModal()" style="flex:1;min-width:0;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none">' +
-          '<option value="">Select stream\u2026</option>' +
-          orgTypes.map(function(t){var val=t.key||t.label;return '<option value="'+esc(val)+'"'+(s.name===val?' selected':'')+'>'+esc(t.label)+'</option>';}).join('') +
-        '</select>' +
-        badge +
-        '<input type="number" placeholder="0" value="'+(s.amount||'')+'" oninput="_dealGroups['+gi+'].streams['+si+'].amount=this.value;updateDealTotal()" style="width:90px;flex-shrink:0;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;text-align:right"/>' +
-        '<select onchange="_dealGroups['+gi+'].streams['+si+'].currency=this.value" style="width:65px;flex-shrink:0;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 4px;color:var(--text);font-family:var(--sans);font-size:11px;outline:none">' +
-          ccyList.map(function(c){return '<option'+(s.currency===c?' selected':'')+'>'+c+'</option>';}).join('') +
-        '</select>' +
-        (g.streams.length>1?'<button onclick="_dealGroups['+gi+'].streams.splice('+si+',1);renderDealModal()" style="flex-shrink:0;background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;padding:0 2px">\u00d7</button>':'') +
+      var type = def?.type || 'MRR';
+      var typeColors = {MRR:'#3A6EA8',QRR:'#4A8C5C',ARR:'#7B5EA7',one_time:'#A07824'};
+      var typeC = typeColors[type]||'#888';
+      var badge = '<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:'+typeC+'20;color:'+typeC+';flex-shrink:0">'+type.replace('_','-')+'</span>';
+      var showUnits = type === 'MRR' || type === 'QRR'; // show units for recurring streams
+      return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px">' +
+        // Row 1: stream selector + type badge + remove
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
+          '<select onchange="_dealGroups['+gi+'].streams['+si+'].name=this.value;renderDealModal()" style="flex:1;min-width:0;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none">' +
+            '<option value="">\u2014 Select revenue stream \u2014</option>' +
+            orgTypes.map(function(t){var val=t.key||t.label;return '<option value="'+esc(val)+'"'+(s.name===val?' selected':'')+'>'+esc(t.label)+'</option>';}).join('') +
+          '</select>' +
+          badge +
+          (g.streams.length>1?'<button onclick="_dealGroups['+gi+'].streams.splice('+si+',1);renderDealModal()" style="flex-shrink:0;background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;line-height:1;padding:0">\u00d7</button>':'') +
+        '</div>' +
+        // Row 2: amount + currency + units (if recurring)
+        '<div style="display:flex;gap:8px;align-items:center">' +
+          '<div style="flex:1;position:relative">' +
+            '<input type="number" placeholder="Amount" value="'+(s.amount||'')+'" oninput="_dealGroups['+gi+'].streams['+si+'].amount=this.value;updateDealTotal()" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:var(--sans);font-size:14px;outline:none;text-align:right"/>' +
+          '</div>' +
+          '<select onchange="_dealGroups['+gi+'].streams['+si+'].currency=this.value" style="width:70px;flex-shrink:0;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 6px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none">' +
+            ccyList.map(function(c){return '<option'+(s.currency===c?' selected':'')+'>'+c+'</option>';}).join('') +
+          '</select>' +
+          '<input type="number" placeholder="Units/seats" value="'+(s.units||'')+'" oninput="_dealGroups['+gi+'].streams['+si+'].units=this.value" title="Number of licenses, seats, or outlets" style="width:100px;flex-shrink:0;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none;text-align:center"/>' +
+        '</div>' +
       '</div>';
     }).join('');
 
@@ -4265,7 +4278,7 @@ function renderDealModal() {
 }
 
 function updateDealTotal() {
-  var orgTypes = window._orgConfig?.revenueStreamTypes || [];
+  var orgTypes = (window._orgConfig?.revenueStreamTypes?.length ? window._orgConfig.revenueStreamTypes : [{key:'license_mrr',label:'License MRR',type:'MRR'},{key:'impl',label:'Implementation',type:'one_time'},{key:'support_qrr',label:'Support & Maintenance',type:'QRR'},{key:'training',label:'Training',type:'one_time'}]);
   var FX = {USD:1,INR:0.012,EUR:1.08,GBP:1.27,AED:0.272,SAR:0.267,SGD:0.74,AUD:0.65,CAD:0.73,MXN:0.058,BRL:0.19};
   var total = 0;
   _dealGroups.forEach(function(g){
@@ -4284,7 +4297,7 @@ function updateDealTotal() {
 
 async function saveDealValue() {
   var statusEl = document.getElementById('dv-status');
-  var orgTypes = window._orgConfig?.revenueStreamTypes || [];
+  var orgTypes = (window._orgConfig?.revenueStreamTypes?.length ? window._orgConfig.revenueStreamTypes : [{key:'license_mrr',label:'License MRR',type:'MRR'},{key:'impl',label:'Implementation',type:'one_time'},{key:'support_qrr',label:'Support & Maintenance',type:'QRR'},{key:'training',label:'Training',type:'one_time'}]);
   var FX = {USD:1,INR:0.012,EUR:1.08,GBP:1.27,AED:0.272,SAR:0.267,SGD:0.74,AUD:0.65,CAD:0.73,MXN:0.058,BRL:0.19};
   var dealType  = document.getElementById('dv-type')?.value  || 'new_business';
   var closeDate = document.getElementById('dv-close')?.value || null;
