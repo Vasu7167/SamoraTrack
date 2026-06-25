@@ -1255,8 +1255,9 @@ async function loadProfile() {
       body: JSON.stringify({ action: 'get_org_config' })
     });
     const cfg = await r.json();
-    if (cfg.ok && cfg.googleClientId) {
-      GOOGLE_CLIENT_ID_SAM = cfg.googleClientId;
+    if (cfg.ok) {
+      if (cfg.googleClientId) GOOGLE_CLIENT_ID_SAM = cfg.googleClientId;
+      window._orgConfig = cfg; // store for use throughout the app
     }
   } catch(e) { /* non-fatal — falls back to default client ID */ }
 }
@@ -3688,7 +3689,7 @@ function renderPipelineDeals(data) {
             '<div style="font-size:16px;font-weight:600;color:var(--gold)">' + fmtUsd(d.deal_value_usd) + '</div>' +
             '<div style="font-size:10px;color:var(--text3)">USD</div>' +
             '<div style="margin-top:4px;font-size:10px;color:var(--text3)">' + prob + '% → ' + fmtUsd(d.weighted_value_usd) + '</div>' +
-            '<button onclick="openDealValueForm(\'' + d.id + '\',\'' + esc(d.account) + '\')" style="margin-top:6px;font-size:10px;padding:3px 10px;border-radius:4px;border:1px solid ' + (d.tier==='verified'?'var(--border2)':d.tier==='partial'?'var(--amber)':'var(--green)') + ';background:transparent;color:' + (d.tier==='verified'?'var(--text3)':d.tier==='partial'?'var(--amber)':'var(--green)') + ';cursor:pointer">' + (d.tier==='verified'?'Edit':d.tier==='partial'?'Boost signals':'Confirm') + '</button>' +
+            '<button onclick="' + (d.tier==='verified' ? 'openDealValueForm(\'' + d.id + '\',\'' + esc(d.account) + '\')' : d.tier==='partial' ? 'boostSignals(\'' + d.id + '\',\'' + esc(d.account) + '\')' : 'openDealValueForm(\'' + d.id + '\',\'' + esc(d.account) + '\')') + '" style="margin-top:6px;font-size:10px;padding:3px 10px;border-radius:4px;border:1px solid ' + (d.tier==='verified'?'var(--border2)':d.tier==='partial'?'var(--amber)':'var(--green)') + ';background:transparent;color:' + (d.tier==='verified'?'var(--text3)':d.tier==='partial'?'var(--amber)':'var(--green)') + ';cursor:pointer">' + (d.tier==='verified'?'Edit':d.tier==='partial'?'⚡ Boost signals':'Confirm') + '</button>' +
           '</div>' +
         '</div>' +
       '</div>';
@@ -3701,7 +3702,7 @@ var _dealStreams = []; // current streams being edited
 function openDealValueForm(accountId, accountName) {
   var existing = document.getElementById('deal-value-modal');
   if (existing) existing.remove();
-  _dealStreams = [{ id: Date.now(), name: '', type: 'MRR', amount: '', currency: (orgConfig?.defaultCurrency || 'USD') }];
+  _dealStreams = [{ id: Date.now(), name: '', type: 'MRR', amount: '', currency: (window._window._orgConfig?.defaultCurrency || 'USD') }];
 
   renderDealModal(accountId, accountName);
 }
@@ -3807,7 +3808,7 @@ function renderDealModal(accountId, accountName) {
 }
 
 function addDealStream() {
-  _dealStreams.push({ id: Date.now(), name: '', type: 'MRR', amount: '', currency: orgConfig?.defaultCurrency || 'USD' });
+  _dealStreams.push({ id: Date.now(), name: '', type: 'MRR', amount: '', currency: window._orgConfig?.defaultCurrency || 'USD' });
   var modal = document.getElementById('deal-value-modal');
   var accountId = modal?.querySelector('button[onclick*="saveDealValue"]')?.getAttribute('onclick')?.match(/'([^']+)'/)?.[1] || '';
   var accountName = modal?.querySelector('[style*="font-size:15px"]')?.textContent?.replace('💰 ', '') || '';
@@ -3877,6 +3878,18 @@ async function saveDealValue(accountId) {
       if (statusEl) { statusEl.textContent = 'Error: ' + (d.error || 'Save failed'); statusEl.style.color = 'var(--coral)'; }
     }
   } catch(e) { if (statusEl) { statusEl.textContent = 'Error: ' + e.message; statusEl.style.color = 'var(--coral)'; } }
+}
+
+function boostSignals(accountId, accountName) {
+  // Switch to SAM tab and show a prompt to run local intelligence
+  // which will update the signal score for this account
+  switchTab('signals');
+  setTimeout(function() {
+    var out = document.getElementById('samLocalIntelOutput');
+    if (out) out.innerHTML = '<div style="font-size:12px;color:var(--amber);padding:8px 0">⚡ Run "Scan channels" to generate signals for <strong>' + esc(accountName) + '</strong> and move it to verified pipeline.</div>';
+    var section = document.getElementById('samLocalIntelSection');
+    if (section) section.style.display = 'block';
+  }, 300);
 }
 
 async function loadIntelligence() {
