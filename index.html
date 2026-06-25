@@ -2337,6 +2337,7 @@ async function runExternalSignals(repId, resultElId) {
       body: JSON.stringify({ action: 'scan_external_signals' })
     });
     var data = await r.json();
+    console.log('External signals response:', JSON.stringify(data, null, 2));
     if (!data.ok) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(data.error || 'Scan failed') + '</div>'; if (btn) { btn.textContent = '\ud83c\udf10 Market signals'; btn.disabled = false; } return; }
 
     var results = data.results || [];
