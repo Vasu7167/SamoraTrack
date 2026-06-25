@@ -2016,9 +2016,21 @@ function renderSamAlerts() {
 async function loadMyAccounts() {
   const list = document.getElementById('myAccountsList'); if (!list || !currentUser?.token || !profile?.org_id) return;
   try {
-    const rows = await sbGet('org_accounts?user_id=eq.' + currentUser.id + '&org_id=eq.' + profile.org_id + '&select=id,account_name,domain,region&order=account_name');
+    const rows = await sbGet('org_accounts?user_id=eq.' + currentUser.id + '&org_id=eq.' + profile.org_id + '&select=id,account_name,domain,region,deal_value,deal_value_usd&order=account_name');
     if (!rows || !rows.length) { list.innerHTML = '<div style="font-size:12px;color:var(--text3);font-style:italic">No accounts assigned yet.</div>'; return; }
-    list.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:6px">' + rows.map(r => '<div style="display:flex;align-items:center;gap:6px;padding:5px 10px;background:var(--surface2);border-radius:20px"><span style="font-size:12px;color:var(--text)">' + esc(r.account_name) + '</span>' + (r.region?'<span style="font-size:10px;color:var(--text3);background:rgba(0,0,0,0.1);border-radius:4px;padding:1px 5px">'+esc(r.region)+'</span>':'') + (r.domain?'<span style="font-size:10px;color:var(--text3)">'+esc(r.domain)+'</span>':'') + '<button onclick="removeMyAccount(\''+r.id+'\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:0">✕</button></div>').join('') + '</div>';
+    list.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:6px">' + rows.map(r => {
+      var hasValue = r.deal_value != null;
+      var valueTag = hasValue
+        ? '<span style="font-size:10px;color:var(--green);font-weight:500">$' + (r.deal_value_usd ? Math.round(r.deal_value_usd/1000)+'K' : r.deal_value) + '</span>'
+        : '';
+      return '<div style="display:flex;align-items:center;gap:6px;padding:5px 10px;background:var(--surface2);border-radius:20px">' +
+        '<span style="font-size:12px;color:var(--text)">' + esc(r.account_name) + '</span>' +
+        (r.region ? '<span style="font-size:10px;color:var(--text3);background:rgba(0,0,0,0.1);border-radius:4px;padding:1px 5px">' + esc(r.region) + '</span>' : '') +
+        valueTag +
+        '<button onclick="openDealValueForm(\'' + r.id + '\',\'' + esc(r.account_name) + '\')" style="background:none;border:none;color:' + (hasValue ? 'var(--text3)' : 'var(--amber)') + ';cursor:pointer;font-size:11px;padding:0" title="' + (hasValue ? 'Edit deal value' : 'Add deal value') + '">' + (hasValue ? '💰' : '+ $') + '</button>' +
+        '<button onclick="removeMyAccount(\'' + r.id + '\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:0">✕</button>' +
+      '</div>';
+    }).join('') + '</div>';
   } catch(e) { list.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>'; }
 }
 function toggleAddMyAccount() { const row = document.getElementById('myAccountAddRow'); if (row) row.style.display = row.style.display === 'none' ? 'flex' : 'none'; }
