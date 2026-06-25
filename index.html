@@ -4100,12 +4100,27 @@ async function openDealValueForm(accountId, accountName, opportunityId) {
   _dealOpportunityId = opportunityId || null;
   document.getElementById('deal-value-modal')?.remove();
 
-  // Load products
+  // Show brief loading state
+  var loader = document.createElement('div');
+  loader.id = 'deal-value-modal';
+  loader.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.3);display:flex;align-items:flex-end;justify-content:center;z-index:999';
+  loader.innerHTML = '<div style="background:var(--bg);border-radius:20px 20px 0 0;width:100%;max-width:560px;padding:24px;text-align:center"><div style="font-size:13px;color:var(--text3)">Loading\u2026</div></div>';
+  document.body.appendChild(loader);
+
+  // Always re-fetch org config + products to ensure stream types are fresh
   try {
-    var r = await fetch(EDGE_FN_URL, { method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
-      body:JSON.stringify({action:'get_products'}) });
-    _orgProducts = (await r.json()).products || [];
+    var [cfgRes, prodRes] = await Promise.all([
+      fetch(EDGE_FN_URL, { method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+        body:JSON.stringify({action:'get_org_config'}) }),
+      fetch(EDGE_FN_URL, { method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+        body:JSON.stringify({action:'get_products'}) })
+    ]);
+    var cfg  = await cfgRes.json();
+    var prod = await prodRes.json();
+    if (cfg.ok)  window._orgConfig = cfg;
+    _orgProducts = prod.products || [];
   } catch(e) { _orgProducts = []; }
 
   // Start with one empty group
