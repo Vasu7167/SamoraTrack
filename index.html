@@ -280,6 +280,9 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 .signal-action{font-size:12px;color:var(--green);background:rgba(110,231,183,0.08);border-radius:6px;padding:5px 10px}
 .rtab{flex:1;padding:10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:transparent;color:var(--text2);font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer;transition:all 0.2s}
 .template-btn{font-size:12px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text2);padding:6px 12px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all 0.2s}
+.pv-btn{font-size:11px;padding:5px 14px;border-radius:20px;border:1px solid var(--border2);background:var(--surface2);color:var(--text3);cursor:pointer;font-family:var(--sans);font-weight:500;transition:all 0.15s}
+.pv-btn.active{background:var(--gold2);border-color:var(--gold2);color:#18160F}
+.pv-btn:hover:not(.active){color:var(--text);border-color:var(--border2)}
 .template-btn:hover{border-color:var(--gold);color:var(--gold)}
 .rtab:hover{border-color:var(--border2);color:var(--text)}
 .rtab.active{background:var(--surface);border-color:var(--gold);color:var(--gold)}
@@ -556,6 +559,38 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
   </div>
 
   <!-- ── Review ── -->
+  <!-- ── Pipeline ── -->
+  <div class="panel" id="panel-pipeline" style="padding-bottom:120px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div>
+        <div style="font-size:15px;font-weight:600;color:var(--text)">Pipeline Intelligence</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">Verified + AI-extracted deals · Region &amp; stage breakdown</div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button onclick="loadPipeline()" id="pipelineRefreshBtn" style="padding:6px 12px;border-radius:20px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">↻ Refresh</button>
+      </div>
+    </div>
+
+    <!-- Intelligent prompts -->
+    <div id="pipelinePrompts" style="margin-bottom:14px"></div>
+
+    <!-- Summary cards -->
+    <div id="pipelineSummary" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px"></div>
+
+    <!-- View toggle -->
+    <div style="display:flex;gap:6px;margin-bottom:14px">
+      <button onclick="setPipelineView('combined')" id="pv-combined" class="pv-btn active">Combined</button>
+      <button onclick="setPipelineView('verified')" id="pv-verified" class="pv-btn">✅ Verified</button>
+      <button onclick="setPipelineView('unverified')" id="pv-unverified" class="pv-btn">〜 Unverified</button>
+    </div>
+
+    <!-- Region chart -->
+    <div id="pipelineChart" style="margin-bottom:16px"></div>
+
+    <!-- Deal cards -->
+    <div id="pipelineDeals"></div>
+  </div>
+
   <div class="panel" id="panel-review">
     <div class="sum-card"><div class="sum-title">Day at a glance</div><div class="sum-grid" id="sumGrid"></div></div>
     <div class="review-tabs" style="display:flex;gap:8px;margin-bottom:14px">
@@ -956,6 +991,10 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
     <button class="nav-btn" onclick="switchTab('signals')" id="nav-signals">
       <span class="nav-icon sam-icon">S</span>
       <span class="nav-label">SAM</span>
+    </button>
+    <button class="nav-btn" onclick="switchTab('pipeline')" id="nav-pipeline">
+      <span class="nav-icon">◈</span>
+      <span class="nav-label">Pipeline</span>
     </button>
     <button class="nav-btn" onclick="switchTab('review')" id="nav-review">
       <span class="nav-icon">★</span>
@@ -1539,6 +1578,7 @@ function switchTab(tab) {
     setSamMode(mode);
   }
   if (tab === 'intel') { loadIntelligence(); }
+  if (tab === 'pipeline') { loadPipeline(); }
   if (tab === 'org') { if (currentUser?.refresh_token) { refreshToken().then(() => renderOrg()); } else { renderOrg(); } }
 }
 let _samMode = 'self';
@@ -3417,6 +3457,268 @@ function renderIntelDebug(data) {
     '<div style="text-align:center;color:var(--text3);font-size:14px;margin-bottom:16px">No intelligence extracted \u2014 here\'s why, per account:</div>' +
     rows +
   '</div>';
+}
+
+// ── Pipeline Intelligence ────────────────────────────────────────────────────
+var _pipelineData = null;
+var _pipelineView = 'combined'; // 'combined' | 'verified' | 'unverified'
+
+function setPipelineView(view) {
+  _pipelineView = view;
+  document.querySelectorAll('.pv-btn').forEach(function(b) { b.classList.remove('active'); });
+  var btn = document.getElementById('pv-' + view);
+  if (btn) btn.classList.add('active');
+  if (_pipelineData) renderPipelineChart(_pipelineData);
+}
+
+async function loadPipeline() {
+  var btn = document.getElementById('pipelineRefreshBtn');
+  if (btn) btn.textContent = '↻ Loading…';
+  var promptsEl = document.getElementById('pipelinePrompts');
+  var summaryEl = document.getElementById('pipelineSummary');
+  var chartEl = document.getElementById('pipelineChart');
+  var dealsEl = document.getElementById('pipelineDeals');
+  if (chartEl) chartEl.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:20px 0;text-align:center">Loading pipeline…</div>';
+
+  try {
+    var r = await fetch(EDGE_FN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
+      body: JSON.stringify({ action: 'get_pipeline' })
+    });
+    _pipelineData = await r.json();
+    if (!_pipelineData.ok) { if (chartEl) chartEl.innerHTML = '<div style="color:var(--coral);font-size:12px">' + esc(_pipelineData.error || 'Failed to load pipeline') + '</div>'; return; }
+
+    // Prompts
+    if (promptsEl && _pipelineData.prompts?.length) {
+      promptsEl.innerHTML = _pipelineData.prompts.map(function(p) {
+        return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:8px 12px;margin-bottom:6px;font-size:12px;color:var(--text)">' + esc(p) + '</div>';
+      }).join('');
+    }
+
+    // Summary cards
+    var s = _pipelineData.summary || {};
+    if (summaryEl) {
+      var fmtUsd = function(v) { return v >= 1000000 ? '$' + (v/1000000).toFixed(1) + 'M' : v >= 1000 ? '$' + Math.round(v/1000) + 'K' : '$' + v; };
+      summaryEl.innerHTML = [
+        { label: 'Total pipeline', value: fmtUsd(s.total_value_usd || 0), sub: (s.total_deals || 0) + ' deals', color: 'var(--gold)' },
+        { label: '✅ Verified', value: fmtUsd(s.verified_value_usd || 0), sub: (s.verified_deals || 0) + ' rep-stated', color: 'var(--green)' },
+        { label: '〜 Unverified', value: fmtUsd(s.unverified_value_usd || 0), sub: (s.unverified_deals || 0) + ' AI-extracted', color: 'var(--amber)' },
+        { label: 'Weighted forecast', value: fmtUsd(s.weighted_value_usd || 0), sub: 'probability-adjusted', color: 'var(--blue)' }
+      ].map(function(c) {
+        return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:12px 14px">' +
+          '<div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">' + esc(c.label) + '</div>' +
+          '<div style="font-size:20px;font-weight:600;color:' + c.color + '">' + c.value + '</div>' +
+          '<div style="font-size:10px;color:var(--text3);margin-top:2px">' + c.sub + '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    renderPipelineChart(_pipelineData);
+    renderPipelineDeals(_pipelineData);
+  } catch(e) {
+    if (chartEl) chartEl.innerHTML = '<div style="color:var(--coral);font-size:12px">Error: ' + esc(e.message) + '</div>';
+  }
+  if (btn) btn.textContent = '↻ Refresh';
+}
+
+function renderPipelineChart(data) {
+  var chartEl = document.getElementById('pipelineChart');
+  if (!chartEl) return;
+
+  var regions = data.regionBreakdown || [];
+  if (!regions.length) { chartEl.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:16px 0;text-align:center">No pipeline data yet — add deal values to your accounts to see the chart.</div>'; return; }
+
+  // Stage colours from org config
+  var stageColors = { prospective: '#888780', value_prop: '#A07824', commercial: '#3B6D11', unknown: '#555' };
+  var dealStages = data.dealStages || [{ key:'prospective',label:'Prospective' },{ key:'value_prop',label:'Value Prop' },{ key:'commercial',label:'Commercial' }];
+  var fmtUsd = function(v) { return v >= 1000000 ? '$'+(v/1000000).toFixed(1)+'M' : '$'+Math.round(v/1000)+'K'; };
+
+  // Filter by current view
+  var filteredRegions = regions.map(function(r) {
+    var total = _pipelineView === 'verified' ? r.verified_usd : _pipelineView === 'unverified' ? r.unverified_usd : r.total_usd;
+    return Object.assign({}, r, { display_usd: total });
+  }).filter(function(r) { return r.display_usd > 0; }).sort(function(a, b) { return b.display_usd - a.display_usd; });
+
+  if (!filteredRegions.length) { chartEl.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:16px 0;text-align:center">No ' + _pipelineView + ' deals yet.</div>'; return; }
+
+  var maxUsd = Math.max.apply(null, filteredRegions.map(function(r) { return r.display_usd; }));
+
+  var html = '<div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Region × Stage pipeline</div>';
+
+  // Legend
+  html += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">';
+  dealStages.forEach(function(s) {
+    var color = stageColors[s.key] || '#888';
+    html += '<div style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:' + color + '"></div><span style="font-size:10px;color:var(--text3)">' + esc(s.label) + '</span></div>';
+  });
+  if (_pipelineView === 'combined') {
+    html += '<div style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:repeating-linear-gradient(45deg,#888,#888 1px,transparent 1px,transparent 5px);border:1px solid #888"></div><span style="font-size:10px;color:var(--text3)">Unverified (AI)</span></div>';
+  }
+  html += '</div>';
+
+  filteredRegions.forEach(function(r) {
+    var barWidth = maxUsd > 0 ? Math.max(4, r.display_usd / maxUsd * 100) : 0;
+    html += '<div style="margin-bottom:10px">';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">';
+    html += '<span style="font-size:12px;font-weight:500;color:var(--text)">' + esc(r.region) + '</span>';
+    html += '<span style="font-size:11px;color:var(--text2)">' + fmtUsd(r.display_usd) + ' · ' + r.deals + ' deal' + (r.deals !== 1 ? 's' : '') + '</span>';
+    html += '</div>';
+
+    // Stacked bar
+    html += '<div style="height:22px;background:var(--surface);border-radius:4px;overflow:hidden;position:relative">';
+
+    // For stage breakdown within the bar
+    var stages = r.stages || {};
+    var stageTotal = Object.values(stages).reduce(function(s, st) { return s + (st.usd || 0); }, 0);
+    var x = 0;
+    dealStages.forEach(function(s) {
+      var st = stages[s.key];
+      if (!st || !st.usd) return;
+      var pct = stageTotal > 0 ? st.usd / stageTotal * barWidth : 0;
+      var color = stageColors[s.key] || '#888';
+      html += '<div style="position:absolute;top:0;left:' + x + '%;width:' + pct + '%;height:100%;background:' + color + '"></div>';
+      x += pct;
+    });
+
+    // Unverified overlay (hatched) in combined view
+    if (_pipelineView === 'combined' && r.unverified_usd > 0 && r.total_usd > 0) {
+      var unvPct = r.unverified_usd / r.total_usd * barWidth;
+      html += '<div style="position:absolute;top:0;right:0;width:' + unvPct + '%;height:100%;background:repeating-linear-gradient(45deg,rgba(136,135,128,0.3),rgba(136,135,128,0.3) 2px,transparent 2px,transparent 6px);border-left:1px solid rgba(255,255,255,0.3)"></div>';
+    }
+
+    html += '</div>';
+    html += '</div>';
+  });
+
+  // Closing this quarter highlight
+  var cq = (data.summary || {}).closing_this_quarter_usd || 0;
+  if (cq > 0) {
+    html += '<div style="margin-top:10px;padding:8px 12px;background:rgba(74,140,92,0.1);border:1px solid rgba(74,140,92,0.3);border-radius:8px;font-size:11px;color:var(--green)">📅 <strong>' + fmtUsd(cq) + '</strong> expected to close this quarter</div>';
+  }
+
+  chartEl.innerHTML = html;
+}
+
+function renderPipelineDeals(data) {
+  var el = document.getElementById('pipelineDeals');
+  if (!el) return;
+
+  var deals = _pipelineView === 'verified' ? (data.verified || []) :
+              _pipelineView === 'unverified' ? (data.unverified || []) :
+              [...(data.verified || []), ...(data.unverified || [])];
+
+  deals.sort(function(a, b) { return (b.deal_value_usd || 0) - (a.deal_value_usd || 0); });
+
+  if (!deals.length) { el.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:16px 0;text-align:center">No deals in this view yet.</div>'; return; }
+
+  var stageColors = { prospective: '#888780', value_prop: '#A07824', commercial: '#3B6D11', unknown: '#555' };
+  var fmtUsd = function(v) { if (!v) return '—'; return v >= 1000000 ? '$'+(v/1000000).toFixed(1)+'M' : '$'+Math.round(v/1000)+'K'; };
+
+  el.innerHTML = '<div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Deal breakdown</div>' +
+    deals.map(function(d) {
+      var stageColor = stageColors[d.stage] || 'var(--text3)';
+      var prob = d.close_probability || 0;
+      var isVerified = d.verified;
+      var localValue = d.deal_value ? (d.deal_currency || 'USD') + ' ' + d.deal_value.toLocaleString() : null;
+
+      return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;margin-bottom:6px;display:flex;align-items:flex-start;gap:10px">' +
+        '<div style="flex:1">' +
+          '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">' +
+            '<span style="font-size:13px;font-weight:500;color:var(--text)">' + esc(d.account) + '</span>' +
+            (d.region ? '<span style="font-size:9px;color:var(--text3);background:rgba(0,0,0,0.08);border-radius:4px;padding:1px 6px">' + esc(d.region) + '</span>' : '') +
+            '<span style="font-size:9px;font-weight:600;padding:1px 7px;border-radius:10px;background:' + stageColor + '22;color:' + stageColor + '">' + esc(d.stage) + '</span>' +
+            (isVerified ? '<span style="font-size:9px;color:var(--green)">✅ verified</span>' : '<span style="font-size:9px;color:var(--amber)">〜 AI-extracted</span>') +
+          '</div>' +
+          (d.hint_context ? '<div style="font-size:11px;color:var(--text3);font-style:italic;margin-bottom:4px">"' + esc(d.hint_context.slice(0, 100)) + '"</div>' : '') +
+          '<div style="display:flex;gap:10px;flex-wrap:wrap">' +
+            (localValue ? '<span style="font-size:11px;color:var(--text2)">Local: ' + localValue + '</span>' : '') +
+            (d.expected_close ? '<span style="font-size:11px;color:var(--text3)">Close: ' + d.expected_close + '</span>' : '') +
+            (d.licenses_units ? '<span style="font-size:11px;color:var(--text3)">' + d.licenses_units + ' units</span>' : '') +
+          '</div>' +
+        '</div>' +
+        '<div style="text-align:right;flex-shrink:0">' +
+          '<div style="font-size:16px;font-weight:600;color:var(--gold)">' + fmtUsd(d.deal_value_usd) + '</div>' +
+          '<div style="font-size:10px;color:var(--text3)">USD</div>' +
+          '<div style="margin-top:4px;font-size:10px;color:var(--text3)">' + prob + '% → ' + fmtUsd(d.weighted_value_usd) + '</div>' +
+          (isVerified ?
+            '<button onclick="openDealValueForm(\'' + d.id + '\',\'' + esc(d.account) + '\')" style="margin-top:6px;font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer">Edit</button>' :
+            '<button onclick="openDealValueForm(\'' + d.id + '\',\'' + esc(d.account) + '\')" style="margin-top:6px;font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid var(--amber);background:transparent;color:var(--amber);cursor:pointer">Confirm</button>'
+          ) +
+        '</div>' +
+      '</div>';
+    }).join('');
+}
+
+function openDealValueForm(accountId, accountName) {
+  var existing = document.getElementById('deal-value-modal');
+  if (existing) existing.remove();
+
+  var modal = document.createElement('div');
+  modal.id = 'deal-value-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:999';
+  modal.innerHTML = '<div style="background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:20px;width:360px;max-height:90vh;overflow-y:auto">' +
+    '<div style="font-size:14px;font-weight:500;color:var(--text);margin-bottom:14px">💰 Deal value — ' + esc(accountName) + '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 80px;gap:8px;margin-bottom:10px">' +
+      '<input id="dv-amount" type="number" placeholder="Deal value" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>' +
+      '<select id="dv-currency" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-family:var(--sans);font-size:12px">' +
+        ['USD','INR','EUR','GBP','AED','SAR','SGD','AUD','CAD','MXN','BRL'].map(function(c) { return '<option>' + c + '</option>'; }).join('') +
+      '</select>' +
+    '</div>' +
+    '<input id="dv-units" type="number" placeholder="Units / licenses / outlets (optional)" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;margin-bottom:8px"/>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">' +
+      '<select id="dv-type" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-family:var(--sans);font-size:12px">' +
+        ['new_business','expansion','renewal','upsell'].map(function(t) { return '<option value="'+t+'">'+t.replace('_',' ')+'</option>'; }).join('') +
+      '</select>' +
+      '<input id="dv-close" type="date" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none"/>' +
+    '</div>' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">' +
+      '<label style="font-size:12px;color:var(--text3)">Close probability:</label>' +
+      '<input id="dv-prob" type="range" min="0" max="100" value="50" oninput="document.getElementById(\'dv-prob-val\').textContent=this.value+\'%\'" style="flex:1"/>' +
+      '<span id="dv-prob-val" style="font-size:12px;color:var(--gold);width:36px">50%</span>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px">' +
+      '<button onclick="saveDealValue(\'' + accountId + '\')" style="flex:1;padding:9px;background:var(--gold2);border:none;border-radius:8px;color:#18160F;font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer">Save deal</button>' +
+      '<button onclick="document.getElementById(\'deal-value-modal\').remove()" style="padding:9px 16px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--text3);font-family:var(--sans);font-size:13px;cursor:pointer">Cancel</button>' +
+    '</div>' +
+    '<div id="dv-status" style="font-size:11px;margin-top:8px;text-align:center"></div>' +
+  '</div>';
+  modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
+
+  // Pre-fill currency from org default
+  var cSel = document.getElementById('dv-currency');
+  if (cSel && orgConfig?.defaultCurrency) cSel.value = orgConfig.defaultCurrency;
+}
+
+async function saveDealValue(accountId) {
+  var amount = parseFloat(document.getElementById('dv-amount')?.value);
+  var currency = document.getElementById('dv-currency')?.value || 'USD';
+  var units = parseInt(document.getElementById('dv-units')?.value) || null;
+  var dealType = document.getElementById('dv-type')?.value || 'new_business';
+  var closeDate = document.getElementById('dv-close')?.value || null;
+  var prob = parseInt(document.getElementById('dv-prob')?.value) || 50;
+  var statusEl = document.getElementById('dv-status');
+
+  if (!amount || isNaN(amount)) { if (statusEl) { statusEl.textContent = 'Enter a deal value'; statusEl.style.color = 'var(--coral)'; } return; }
+  if (statusEl) { statusEl.textContent = 'Saving and converting to USD…'; statusEl.style.color = 'var(--text3)'; }
+
+  try {
+    var r = await fetch(EDGE_FN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
+      body: JSON.stringify({ action: 'upsert_deal_value', account_id: accountId, deal_value: amount, deal_currency: currency, licenses_units: units, deal_type: dealType, expected_close: closeDate, close_probability: prob })
+    });
+    var d = await r.json();
+    if (d.ok) {
+      if (statusEl) { statusEl.textContent = '✓ Saved · USD equivalent: $' + (d.deal_value_usd || 0).toLocaleString(); statusEl.style.color = 'var(--green)'; }
+      setTimeout(function() { document.getElementById('deal-value-modal')?.remove(); loadPipeline(); }, 1500);
+    } else {
+      if (statusEl) { statusEl.textContent = 'Error: ' + (d.error || 'Save failed'); statusEl.style.color = 'var(--coral)'; }
+    }
+  } catch(e) {
+    if (statusEl) { statusEl.textContent = 'Error: ' + e.message; statusEl.style.color = 'var(--coral)'; }
+  }
 }
 
 async function loadIntelligence() {
