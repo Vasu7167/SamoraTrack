@@ -581,6 +581,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
     <div style="display:flex;gap:6px;margin-bottom:14px">
       <button onclick="setPipelineView('combined')" id="pv-combined" class="pv-btn active">Combined</button>
       <button onclick="setPipelineView('verified')" id="pv-verified" class="pv-btn">✅ Verified</button>
+      <button onclick="setPipelineView('partial')" id="pv-partial" class="pv-btn">⚡ Partial</button>
       <button onclick="setPipelineView('unverified')" id="pv-unverified" class="pv-btn">〜 Unverified</button>
     </div>
 
@@ -3480,7 +3481,7 @@ function setPipelineView(view) {
   document.querySelectorAll('.pv-btn').forEach(function(b) { b.classList.remove('active'); });
   var btn = document.getElementById('pv-' + view);
   if (btn) btn.classList.add('active');
-  if (_pipelineData) renderPipelineChart(_pipelineData);
+  if (_pipelineData) { renderPipelineChart(_pipelineData); renderPipelineDeals(_pipelineData); }
 }
 
 async function loadPipeline() {
@@ -3508,15 +3509,15 @@ async function loadPipeline() {
       }).join('');
     }
 
-    // Summary cards
+    // Summary cards — four cards covering all three tiers
     var s = _pipelineData.summary || {};
     if (summaryEl) {
-      var fmtUsd = function(v) { return v >= 1000000 ? '$' + (v/1000000).toFixed(1) + 'M' : v >= 1000 ? '$' + Math.round(v/1000) + 'K' : '$' + v; };
+      var fmtUsd = function(v) { return v >= 1000000 ? '$' + (v/1000000).toFixed(1) + 'M' : v >= 1000 ? '$' + Math.round(v/1000) + 'K' : '$' + (v||0); };
       summaryEl.innerHTML = [
         { label: 'Total pipeline', value: fmtUsd(s.total_value_usd || 0), sub: (s.total_deals || 0) + ' deals', color: 'var(--gold)' },
-        { label: '✅ Verified', value: fmtUsd(s.verified_value_usd || 0), sub: (s.verified_deals || 0) + ' rep-stated', color: 'var(--green)' },
-        { label: '〜 Unverified', value: fmtUsd(s.unverified_value_usd || 0), sub: (s.unverified_deals || 0) + ' AI-extracted', color: 'var(--amber)' },
-        { label: 'Weighted forecast', value: fmtUsd(s.weighted_value_usd || 0), sub: 'probability-adjusted', color: 'var(--blue)' }
+        { label: '✅ Verified', value: fmtUsd(s.verified_value_usd || 0), sub: (s.verified_deals || 0) + ' · value + signals ≥ 40', color: 'var(--green)' },
+        { label: '⚡ Partial', value: fmtUsd(s.partial_value_usd || 0), sub: (s.partial_deals || 0) + ' · value only, low signals', color: 'var(--amber)' },
+        { label: '〜 Unverified', value: fmtUsd(s.unverified_value_usd || 0), sub: (s.unverified_deals || 0) + ' · AI-extracted only', color: 'var(--text3)' }
       ].map(function(c) {
         return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:12px 14px">' +
           '<div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">' + esc(c.label) + '</div>' +
@@ -3548,7 +3549,9 @@ function renderPipelineChart(data) {
 
   // Filter by current view
   var filteredRegions = regions.map(function(r) {
-    var total = _pipelineView === 'verified' ? r.verified_usd : _pipelineView === 'unverified' ? r.unverified_usd : r.total_usd;
+    var total = _pipelineView === 'verified'   ? r.verified_usd :
+                _pipelineView === 'partial'    ? r.partial_usd :
+                _pipelineView === 'unverified' ? r.unverified_usd : r.total_usd;
     return Object.assign({}, r, { display_usd: total });
   }).filter(function(r) { return r.display_usd > 0; }).sort(function(a, b) { return b.display_usd - a.display_usd; });
 
@@ -3616,9 +3619,10 @@ function renderPipelineDeals(data) {
   var el = document.getElementById('pipelineDeals');
   if (!el) return;
 
-  var deals = _pipelineView === 'verified' ? (data.verified || []) :
+  var deals = _pipelineView === 'verified'   ? (data.verified || []) :
+              _pipelineView === 'partial'    ? (data.partial  || []) :
               _pipelineView === 'unverified' ? (data.unverified || []) :
-              [...(data.verified || []), ...(data.unverified || [])];
+              [...(data.verified || []), ...(data.partial || []), ...(data.unverified || [])];
 
   deals.sort(function(a, b) { return (b.deal_value_usd || 0) - (a.deal_value_usd || 0); });
 
@@ -3626,37 +3630,48 @@ function renderPipelineDeals(data) {
 
   var stageColors = { prospective: '#888780', value_prop: '#A07824', commercial: '#3B6D11', unknown: '#555' };
   var fmtUsd = function(v) { if (!v) return '—'; return v >= 1000000 ? '$'+(v/1000000).toFixed(1)+'M' : '$'+Math.round(v/1000)+'K'; };
+  var tierConfig = {
+    verified:   { icon: '✅', label: 'Verified',   color: 'var(--green)' },
+    partial:    { icon: '⚡', label: 'Partial',    color: 'var(--amber)' },
+    unverified: { icon: '〜', label: 'Unverified', color: 'var(--text3)' }
+  };
 
   el.innerHTML = '<div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Deal breakdown</div>' +
     deals.map(function(d) {
       var stageColor = stageColors[d.stage] || 'var(--text3)';
       var prob = d.close_probability || 0;
-      var isVerified = d.verified;
-      var localValue = d.deal_value ? (d.deal_currency || 'USD') + ' ' + d.deal_value.toLocaleString() : null;
+      var tc = tierConfig[d.tier] || tierConfig.unverified;
+      var localValue = d.deal_value ? (d.deal_currency || 'USD') + ' ' + Number(d.deal_value).toLocaleString() : null;
+      var scoreBar = d.signal_score != null
+        ? '<div style="display:inline-flex;align-items:center;gap:4px;margin-left:6px"><div style="width:40px;height:4px;background:var(--border2);border-radius:2px;overflow:hidden"><div style="height:100%;background:' + (d.signal_score>=60?'var(--green)':d.signal_score>=40?'var(--amber)':'var(--coral)') + ';width:' + d.signal_score + '%"></div></div><span style="font-size:9px;color:var(--text3)">' + d.signal_score + '</span></div>'
+        : '';
 
-      return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;margin-bottom:6px;display:flex;align-items:flex-start;gap:10px">' +
-        '<div style="flex:1">' +
-          '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">' +
-            '<span style="font-size:13px;font-weight:500;color:var(--text)">' + esc(d.account) + '</span>' +
-            (d.region ? '<span style="font-size:9px;color:var(--text3);background:rgba(0,0,0,0.08);border-radius:4px;padding:1px 6px">' + esc(d.region) + '</span>' : '') +
-            '<span style="font-size:9px;font-weight:600;padding:1px 7px;border-radius:10px;background:' + stageColor + '22;color:' + stageColor + '">' + esc(d.stage) + '</span>' +
-            (isVerified ? '<span style="font-size:9px;color:var(--green)">✅ verified</span>' : '<span style="font-size:9px;color:var(--amber)">〜 AI-extracted</span>') +
+      return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;margin-bottom:6px">' +
+        '<div style="display:flex;align-items:flex-start;gap:10px">' +
+          '<div style="flex:1">' +
+            '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">' +
+              '<span style="font-size:13px;font-weight:500;color:var(--text)">' + esc(d.account) + '</span>' +
+              (d.region ? '<span style="font-size:9px;color:var(--text3);background:rgba(0,0,0,0.08);border-radius:4px;padding:1px 6px">' + esc(d.region) + '</span>' : '') +
+              '<span style="font-size:9px;font-weight:600;padding:1px 7px;border-radius:10px;background:' + stageColor + '22;color:' + stageColor + '">' + esc(d.stage) + '</span>' +
+            '</div>' +
+            '<div style="display:flex;align-items:center;gap:4px;margin-bottom:4px">' +
+              '<span style="font-size:10px;color:' + tc.color + ';font-weight:500">' + tc.icon + ' ' + tc.label + '</span>' +
+              scoreBar +
+            '</div>' +
+            '<div style="font-size:10px;color:var(--text3);font-style:italic;margin-bottom:4px">' + esc(d.verification_reason || '') + '</div>' +
+            (d.hint_context ? '<div style="font-size:11px;color:var(--text3);font-style:italic">"' + esc(d.hint_context.slice(0, 100)) + '"</div>' : '') +
+            '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:2px">' +
+              (localValue ? '<span style="font-size:11px;color:var(--text2)">Local: ' + localValue + '</span>' : '') +
+              (d.expected_close ? '<span style="font-size:11px;color:var(--text3)">Close: ' + d.expected_close + '</span>' : '') +
+              (d.licenses_units ? '<span style="font-size:11px;color:var(--text3)">' + d.licenses_units + ' units</span>' : '') +
+            '</div>' +
           '</div>' +
-          (d.hint_context ? '<div style="font-size:11px;color:var(--text3);font-style:italic;margin-bottom:4px">"' + esc(d.hint_context.slice(0, 100)) + '"</div>' : '') +
-          '<div style="display:flex;gap:10px;flex-wrap:wrap">' +
-            (localValue ? '<span style="font-size:11px;color:var(--text2)">Local: ' + localValue + '</span>' : '') +
-            (d.expected_close ? '<span style="font-size:11px;color:var(--text3)">Close: ' + d.expected_close + '</span>' : '') +
-            (d.licenses_units ? '<span style="font-size:11px;color:var(--text3)">' + d.licenses_units + ' units</span>' : '') +
+          '<div style="text-align:right;flex-shrink:0">' +
+            '<div style="font-size:16px;font-weight:600;color:var(--gold)">' + fmtUsd(d.deal_value_usd) + '</div>' +
+            '<div style="font-size:10px;color:var(--text3)">USD</div>' +
+            '<div style="margin-top:4px;font-size:10px;color:var(--text3)">' + prob + '% → ' + fmtUsd(d.weighted_value_usd) + '</div>' +
+            '<button onclick="openDealValueForm(\'' + d.id + '\',\'' + esc(d.account) + '\')" style="margin-top:6px;font-size:10px;padding:3px 10px;border-radius:4px;border:1px solid ' + (d.tier==='verified'?'var(--border2)':d.tier==='partial'?'var(--amber)':'var(--green)') + ';background:transparent;color:' + (d.tier==='verified'?'var(--text3)':d.tier==='partial'?'var(--amber)':'var(--green)') + ';cursor:pointer">' + (d.tier==='verified'?'Edit':d.tier==='partial'?'Boost signals':'Confirm') + '</button>' +
           '</div>' +
-        '</div>' +
-        '<div style="text-align:right;flex-shrink:0">' +
-          '<div style="font-size:16px;font-weight:600;color:var(--gold)">' + fmtUsd(d.deal_value_usd) + '</div>' +
-          '<div style="font-size:10px;color:var(--text3)">USD</div>' +
-          '<div style="margin-top:4px;font-size:10px;color:var(--text3)">' + prob + '% → ' + fmtUsd(d.weighted_value_usd) + '</div>' +
-          (isVerified ?
-            '<button onclick="openDealValueForm(\'' + d.id + '\',\'' + esc(d.account) + '\')" style="margin-top:6px;font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer">Edit</button>' :
-            '<button onclick="openDealValueForm(\'' + d.id + '\',\'' + esc(d.account) + '\')" style="margin-top:6px;font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid var(--amber);background:transparent;color:var(--amber);cursor:pointer">Confirm</button>'
-          ) +
         '</div>' +
       '</div>';
     }).join('');
