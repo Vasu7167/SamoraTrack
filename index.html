@@ -490,7 +490,11 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
       </div>
       <div class="char-hint" id="ch-today"></div>
       <div style="font-size:10px;color:var(--text3);padding:0 2px" id="roleTipToday"></div>
-      <div id="today-template-row" style="display:flex;justify-content:flex-end;margin-top:8px">
+      <div id="today-template-row" style="display:flex;justify-content:flex-end;align-items:center;gap:6px;margin-top:8px">
+        <button class="template-btn" onclick="shareTasksMenu()" style="display:flex;align-items:center;gap:5px;padding:5px 10px">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+          Share
+        </button>
         <button class="template-btn" onclick="openTemplateManager()">📋 Templates</button>
       </div>
     </div>
@@ -517,7 +521,10 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <span style="font-size:12px;color:var(--text3)">Your tasks for today</span>
       <div style="display:flex;gap:6px;align-items:center">
-        <button class="template-btn" onclick="shareTasksMenu()" style="background:rgba(37,211,102,0.1);border-color:rgba(37,211,102,0.3);color:#25D366">↗ Share</button>
+        <button class="template-btn" onclick="shareTasksMenu()" style="display:flex;align-items:center;gap:5px;padding:5px 10px">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+            Share
+          </button>
         <button class="template-btn" onclick="openTemplateManager()">📋 Templates</button>
       </div>
     </div>
