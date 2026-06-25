@@ -3595,39 +3595,19 @@ function populatePipelineFilters(data) {
 function renderPipelineDashboard(data) {
   var el = document.getElementById('pipelineDashboard');
   if (!el) return;
-  var fmtUsd = function(v) { return !v ? '$0' : v >= 1000000 ? '$'+(v/1000000).toFixed(1)+'M' : '$'+Math.round(v/1000)+'K'; };
+  var fmtUsd = function(v) { return !v ? '$0' : v >= 1000000 ? '$'+(v/1000000).toFixed(1)+'M' : v >= 1000 ? '$'+Math.round(v/1000)+'K' : '$'+v; };
   var deals = getFilteredDeals(data);
-  var s = data.summary || {};
-  var callerTier = data.callerTier || 'self';
   var html = '';
 
-  // ── Summary cards (always shown) ──────────────────────────────────────
-  html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">' +
-    [
-      {label:'Total pipeline', val:fmtUsd(deals.reduce(function(s,d){return s+d.deal_value_usd},0)), sub:deals.length+' deals', c:'var(--gold)'},
-      {label:'✅ Verified', val:fmtUsd(deals.filter(function(d){return d.tier==='verified'}).reduce(function(s,d){return s+d.deal_value_usd},0)), sub:deals.filter(function(d){return d.tier==='verified'}).length+' deals', c:'var(--green)'},
-      {label:'⚡ Partial', val:fmtUsd(deals.filter(function(d){return d.tier==='partial'}).reduce(function(s,d){return s+d.deal_value_usd},0)), sub:deals.filter(function(d){return d.tier==='partial'}).length+' deals', c:'var(--amber)'},
-      {label:'Weighted forecast', val:fmtUsd(deals.reduce(function(s,d){return s+d.weighted_value_usd},0)), sub:'probability-adjusted', c:'var(--blue)'}
-    ].map(function(c) {
-      return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:12px 14px">' +
-        '<div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">'+c.label+'</div>' +
-        '<div style="font-size:18px;font-weight:600;color:'+c.c+'">'+c.val+'</div>' +
-        '<div style="font-size:10px;color:var(--text3);margin-top:2px">'+c.sub+'</div>' +
-      '</div>';
-    }).join('') + '</div>';
-
-  // ── Tab-specific content ───────────────────────────────────────────────
   if (_pipelineDashTab === 'byProduct') {
     html += renderByProductChart(deals, fmtUsd);
   } else if (_pipelineDashTab === 'byStream') {
     html += renderByStreamChart(deals, fmtUsd);
   } else if (_pipelineDashTab === 'byRegion') {
-    // Region chart already rendered separately below — show team breakdown for managers
     if (canSeeTeam(profile?.role)) html += renderRepBreakdown(data, deals, fmtUsd);
   } else if (_pipelineDashTab === 'attention') {
     html += renderAttentionPanel(deals, data, fmtUsd);
   } else {
-    // Overview — role-specific insights
     if (canSeeFullOrg(profile?.role)) html += renderExecInsights(data, deals, fmtUsd);
     else if (canSeeCrossTeam(profile?.role)) html += renderDirectorInsights(data, deals, fmtUsd);
     else if (canSeeTeam(profile?.role)) html += renderManagerInsights(data, deals, fmtUsd);
@@ -3637,169 +3617,294 @@ function renderPipelineDashboard(data) {
   el.innerHTML = html;
 }
 
-function barChart(title, rows, maxVal, fmtUsd) {
-  if (!rows.length) return '<div style="font-size:12px;color:var(--text3);padding:8px 0">No data</div>';
-  return '<div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">'+title+'</div>' +
-    rows.map(function(r) {
-      var pct = maxVal > 0 ? Math.max(3, r.val / maxVal * 100) : 3;
-      return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">' +
-        '<div style="font-size:11px;color:var(--text2);width:100px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(r.label)+'</div>' +
-        '<div style="flex:1;height:10px;background:var(--surface);border-radius:5px;overflow:hidden">' +
-          '<div style="height:100%;width:'+pct+'%;background:'+(r.color||'var(--gold)')+';border-radius:5px"></div>' +
+// ── Shared bar chart helper ────────────────────────────────────────────────
+function mkBars(rows, maxVal, fmtUsd) {
+  var COLORS = ['#3A6EA8','#A07824','#4A8C5C','#C0523F','#7B5EA7','#2E8B8B'];
+  return rows.map(function(r, i) {
+    var pct = maxVal > 0 ? Math.max(3, r.val / maxVal * 100) : 3;
+    var color = r.color || COLORS[i % COLORS.length];
+    return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">' +
+      '<div style="font-size:12px;color:var(--text2);width:110px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+esc(r.label)+'">'+esc(r.label)+'</div>' +
+      '<div style="flex:1;height:9px;background:rgba(0,0,0,0.15);border-radius:5px;overflow:hidden">' +
+        '<div style="height:100%;width:'+pct+'%;background:'+color+';border-radius:5px;transition:width 0.4s ease"></div>' +
+      '</div>' +
+      '<div style="font-size:12px;color:var(--text);font-weight:500;width:50px;text-align:right;flex-shrink:0">'+fmtUsd(r.val)+'</div>' +
+    '</div>';
+  }).join('');
+}
+
+// ── Role header card wrapper ──────────────────────────────────────────────
+function mkRoleCard(roleLabel, roleColor, title, subtitle, content) {
+  return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:14px;overflow:hidden;margin-bottom:10px">' +
+    '<div style="padding:16px 18px 12px;border-bottom:1px solid var(--border)">' +
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between">' +
+        '<div>' +
+          '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
+            '<span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;background:'+roleColor+';color:#fff">'+esc(roleLabel)+'</span>' +
+          '</div>' +
+          '<div style="font-size:17px;font-weight:700;color:var(--text)">'+esc(title)+'</div>' +
+          '<div style="font-size:12px;color:var(--text3);font-style:italic;margin-top:2px">'+esc(subtitle)+'</div>' +
         '</div>' +
-        '<div style="font-size:11px;color:var(--text);width:54px;text-align:right;flex-shrink:0">'+fmtUsd(r.val)+'</div>' +
-        (r.sub ? '<div style="font-size:10px;color:var(--text3);width:40px;flex-shrink:0">'+r.sub+'</div>' : '') +
-      '</div>';
-    }).join('');
+        '<div style="font-size:18px;color:var(--text3);cursor:pointer;padding:4px">&#8943;</div>' +
+      '</div>' +
+    '</div>' +
+    '<div style="padding:16px 18px">'+content+'</div>' +
+  '</div>';
 }
 
-function renderByProductChart(deals, fmtUsd) {
+function mkMetricCard(label, value, sub, color) {
+  return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px">' +
+    '<div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;font-weight:600">'+esc(label)+'</div>' +
+    '<div style="font-size:28px;font-weight:700;color:'+(color||'var(--text)')+'">'+value+'</div>' +
+    (sub ? '<div style="font-size:11px;color:var(--text3);margin-top:3px">'+esc(sub)+'</div>' : '') +
+  '</div>';
+}
+
+function mkAlertRow(dot, text) {
+  return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">' +
+    (dot ? '<div style="width:8px;height:8px;border-radius:50%;background:'+dot+';flex-shrink:0"></div>' : '<div style="width:8px;height:8px;flex-shrink:0"></div>') +
+    '<div style="font-size:13px;color:var(--text)">'+text+'</div>' +
+  '</div>';
+}
+
+// ── AE / SDR ─────────────────────────────────────────────────────────────
+function renderRepInsights(data, deals, fmtUsd) {
+  var today = new Date();
+  var verified = deals.filter(function(d){return d.tier==='verified';});
+  var partial  = deals.filter(function(d){return d.tier==='partial';});
+  var unverif  = deals.filter(function(d){return d.tier==='unverified';});
+  var totalVal = deals.reduce(function(s,d){return s+d.deal_value_usd;},0);
+  var closing  = deals.filter(function(d){
+    if (!d.expected_close) return false;
+    var dt=new Date(d.expected_close), qEnd=new Date(today.getFullYear(),Math.floor(today.getMonth()/3)*3+3,0);
+    return dt<=qEnd;
+  });
+  var closingVal  = closing.reduce(function(s,d){return s+d.deal_value_usd;},0);
+  var closingW    = closing.reduce(function(s,d){return s+d.weighted_value_usd;},0);
+  var hot         = deals.filter(function(d){return (d.signal_score||0)>=60;});
+  var attn        = deals.filter(function(d){return d.expected_close && new Date(d.expected_close)<today;});
+  var needsAttn   = attn.length + unverif.filter(function(d){return d.deal_value_usd>5000;}).length;
+
+  // By product bars
   var byProduct = {};
-  deals.forEach(function(d) {
-    var key = d.product_name || 'No product';
-    if (!byProduct[key]) byProduct[key] = 0;
-    byProduct[key] += d.deal_value_usd;
-  });
-  var rows = Object.entries(byProduct).sort(function(a,b){return b[1]-a[1]}).map(function(e) { return {label:e[0],val:e[1]}; });
-  var max = Math.max.apply(null, rows.map(function(r){return r.val;}));
-  return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:14px 16px">' +
-    barChart('Pipeline by product', rows, max, fmtUsd) + '</div>';
+  var PCOLS = ['#3A6EA8','#A07824','#4A8C5C','#C0523F','#7B5EA7','#2E8B8B'];
+  deals.forEach(function(d){var k=d.product_name||'No product';if(!byProduct[k])byProduct[k]={val:0,i:Object.keys(byProduct).length};byProduct[k].val+=d.deal_value_usd;});
+  var productRows = Object.entries(byProduct).sort(function(a,b){return b[1].val-a[1].val;}).slice(0,5).map(function(e){return {label:e[0],val:e[1].val,color:PCOLS[e[1].i%PCOLS.length]};});
+  var maxP = Math.max.apply(null,productRows.map(function(r){return r.val;})||[1]);
+
+  // Action items
+  var actionItems = [];
+  attn.forEach(function(d){actionItems.push({dot:'var(--coral)',text:esc(d.account)+' \u2014 close date passed ('+d.expected_close+')'});});
+  hot.slice(0,3).forEach(function(d){if(!attn.find(function(a){return a.id===d.id;}))actionItems.push({dot:'var(--amber)',text:esc(d.account)+' \u2014 score '+d.signal_score+' \uD83D\uDD25 follow up now'});});
+  unverif.filter(function(d){return d.deal_value_usd>5000;}).slice(0,2).forEach(function(d){actionItems.push({dot:'var(--blue)',text:esc(d.account)+' \u2014 confirm AI hint '+fmtUsd(d.deal_value_usd)});});
+  if (!actionItems.length) actionItems.push({dot:'var(--green)',text:'\u2705 No urgent actions \u2014 pipeline looks healthy'});
+
+  var inner = '';
+
+  // Top 3 metrics
+  inner += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px">' +
+    mkMetricCard('My pipeline', fmtUsd(totalVal), verified.length+' verified \u00b7 '+partial.length+' partial \u00b7 '+unverif.length+' unverified', 'var(--text)') +
+    mkMetricCard('Closing this quarter', fmtUsd(closingVal), closing.length+' deals \u00b7 weighted '+fmtUsd(closingW), 'var(--green)') +
+    mkMetricCard('Needs attention', needsAttn.toString(), 'Going cold or past close', needsAttn>0?'var(--amber)':'var(--green)') +
+  '</div>';
+
+  // Product bars + action items side by side
+  inner += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
+
+  if (productRows.length) {
+    inner += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px">' +
+      '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:12px">Pipeline by product</div>' +
+      mkBars(productRows, maxP, fmtUsd) +
+    '</div>';
+  }
+
+  inner += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px">' +
+    '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px">Action items</div>' +
+    actionItems.slice(0,5).map(function(a){return mkAlertRow(a.dot,a.text);}).join('') +
+  '</div>';
+
+  inner += '</div>';
+
+  return mkRoleCard('AE / SDR','#3B5BA5','My pipeline health','"Am I on track? What needs my attention today?"', inner);
 }
 
-function renderByStreamChart(deals, fmtUsd) {
-  var byStream = {};
-  deals.forEach(function(d) {
-    var streams = d.revenue_streams || [];
-    if (!streams.length) { byStream['Unclassified'] = (byStream['Unclassified']||0) + d.deal_value_usd; }
-    else streams.forEach(function(s) {
-      var k = s.label || s.name || s.key || 'Other';
-      byStream[k] = (byStream[k]||0) + (parseFloat(s.amount)||0);
-    });
-  });
-  var rows = Object.entries(byStream).sort(function(a,b){return b[1]-a[1]}).map(function(e) { return {label:e[0],val:e[1]}; });
-  var max = Math.max.apply(null, rows.map(function(r){return r.val;})||[1]);
-  return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:14px 16px">' +
-    barChart('Pipeline by revenue stream', rows, max, fmtUsd) + '</div>';
-}
+// ── Manager ───────────────────────────────────────────────────────────────
+function renderManagerInsights(data, deals, fmtUsd) {
+  var today = new Date();
+  var verified = deals.filter(function(d){return d.tier==='verified';});
+  var verifiedVal = verified.reduce(function(s,d){return s+d.deal_value_usd;},0);
+  var totalVal = deals.reduce(function(s,d){return s+d.deal_value_usd;},0);
+  var pct = totalVal > 0 ? Math.round(verifiedVal/totalVal*100) : 0;
+  var pctColor = pct>=50?'var(--green)':pct>=35?'var(--amber)':'var(--coral)';
 
-function renderRepBreakdown(data, deals, fmtUsd) {
+  // Pipeline by rep — group by rep_user_id
   var byRep = {};
-  deals.forEach(function(d) {
-    var key = d.rep_user_id || 'unknown';
-    if (!byRep[key]) byRep[key] = { val:0, verified:0, count:0 };
-    byRep[key].val += d.deal_value_usd;
-    byRep[key].count++;
-    if (d.tier === 'verified') byRep[key].verified += d.deal_value_usd;
+  deals.forEach(function(d){
+    var k = d.rep_email || d.rep_user_id?.slice(0,8) || 'Unknown';
+    if (!byRep[k]) byRep[k] = {val:0,verified:0};
+    byRep[k].val += d.deal_value_usd;
+    if (d.tier==='verified') byRep[k].verified += d.deal_value_usd;
   });
-  var rows = Object.entries(byRep).sort(function(a,b){return b[1].val-a[1].val}).map(function(e) {
-    return {label: e[0].slice(0,8)+'…', val:e[1].val, sub:e[1].count+'d'};
+  var repRows = Object.entries(byRep).sort(function(a,b){return b[1].val-a[1].val;}).slice(0,6).map(function(e,i){
+    var verPct = e[1].val>0?e[1].verified/e[1].val:0;
+    var c = verPct>=0.5?'#4A8C5C':verPct>=0.3?'#A07824':'#888780';
+    return {label:e[0],val:e[1].val,color:c};
   });
-  var max = Math.max.apply(null, rows.map(function(r){return r.val;})||[1]);
-  return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:14px 16px;margin-bottom:10px">' +
-    barChart('Pipeline by rep', rows, max, fmtUsd) + '</div>';
+  var maxR = Math.max.apply(null,repRows.map(function(r){return r.val;})||[1]);
+
+  // Coverage gaps
+  var gaps = [];
+  var noDeals = data.regionBreakdown?.filter(function(r){return r.verified_usd===0&&r.total_usd>0;}) || [];
+  if (noDeals.length) noDeals.forEach(function(r){gaps.push({dot:'var(--coral)',text:esc(r.region)+' region \u2014 '+fmtUsd(r.total_usd)+' with zero verified deals'});});
+  var atRisk = deals.filter(function(d){return d.expected_close&&new Date(d.expected_close)<today;});
+  if (atRisk.length) gaps.push({dot:'var(--amber)',text:atRisk.length+' deal'+(atRisk.length>1?'s':'') + ' past expected close date across team'});
+  var partial = deals.filter(function(d){return d.tier==='partial';});
+  if (partial.length > deals.length*0.5) gaps.push({dot:'var(--amber)',text:'>50% of pipeline is partial \u2014 coach reps to run SAM signals'});
+  var unverif = deals.filter(function(d){return d.tier==='unverified';});
+  if (unverif.length) gaps.push({dot:'var(--blue)',text:unverif.length+' AI hints ('+fmtUsd(unverif.reduce(function(s,d){return s+d.deal_value_usd;},0))+') awaiting rep confirmation'});
+  if (!gaps.length) gaps.push({dot:'var(--green)',text:'\u2705 No coverage gaps detected'});
+
+  var inner = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">';
+
+  // Rep bars
+  inner += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px">' +
+    '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:12px">Pipeline by rep</div>' +
+    (repRows.length ? mkBars(repRows, maxR, fmtUsd) : '<div style="font-size:12px;color:var(--text3)">No deal data yet</div>') +
+  '</div>';
+
+  // Coverage gaps
+  inner += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px">' +
+    '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px">Coverage gaps</div>' +
+    gaps.slice(0,5).map(function(g){return mkAlertRow(g.dot,g.text);}).join('') +
+  '</div>';
+
+  inner += '</div>';
+
+  // Bottom metrics
+  inner += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+    '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px">' +
+      '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px">Verified pipeline (team)</div>' +
+      '<div style="font-size:28px;font-weight:700;color:var(--green)">'+fmtUsd(verifiedVal)+'</div>' +
+      '<div style="height:6px;background:rgba(0,0,0,0.15);border-radius:3px;margin:8px 0;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+pctColor+';border-radius:3px"></div></div>' +
+      '<div style="font-size:11px;color:var(--text3)">'+pct+'% of total \u2014 target: 60%</div>' +
+    '</div>' +
+    mkMetricCard('Deals at risk', atRisk.length.toString(), 'Past close date or going cold', atRisk.length>0?'var(--coral)':'var(--green)') +
+  '</div>';
+
+  return mkRoleCard('Manager','#A07824','Team performance','"Who needs coaching? Where are the gaps?"', inner);
 }
 
+// ── Director ──────────────────────────────────────────────────────────────
+function renderDirectorInsights(data, deals, fmtUsd) {
+  var regions = (data.regionBreakdown || []).slice(0,5);
+  var maxR = Math.max.apply(null, regions.map(function(r){return r.total_usd;})||[1]);
+  var regionRows = regions.map(function(r,i){return {label:r.region,val:r.total_usd,color:['#3A6EA8','#A07824','#4A8C5C','#C0523F','#7B5EA7'][i%5]};});
+
+  var verified = deals.filter(function(d){return d.tier==='verified';});
+  var verifiedVal = verified.reduce(function(s,d){return s+d.deal_value_usd;},0);
+  var totalVal = deals.reduce(function(s,d){return s+d.deal_value_usd;},0);
+  var confPct = totalVal>0?Math.round(verifiedVal/totalVal*100):0;
+  var weakRegions = regions.filter(function(r){return r.verified_usd===0;});
+
+  var inner = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">';
+
+  inner += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px">' +
+    '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:12px">Pipeline by region</div>' +
+    (regionRows.length ? mkBars(regionRows, maxR, fmtUsd) : '<div style="font-size:12px;color:var(--text3)">No regional data</div>') +
+  '</div>';
+
+  var alerts = weakRegions.map(function(r){return {dot:'var(--coral)',text:esc(r.region)+' \u2014 '+fmtUsd(r.total_usd)+' with no verified deals'};});
+  if (!alerts.length) alerts.push({dot:'var(--green)',text:'\u2705 All regions have verified pipeline'});
+  inner += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px">' +
+    '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px">Regional risk signals</div>' +
+    alerts.map(function(a){return mkAlertRow(a.dot,a.text);}).join('') +
+  '</div>';
+
+  inner += '</div>';
+
+  inner += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">' +
+    mkMetricCard('Total pipeline', fmtUsd(totalVal), deals.length+' deals across '+regions.length+' regions', 'var(--text)') +
+    mkMetricCard('Forecast confidence', confPct+'%', 'verified vs total pipeline', confPct>=50?'var(--green)':confPct>=35?'var(--amber)':'var(--coral)') +
+    mkMetricCard('Regions with no verified deals', weakRegions.length.toString(), weakRegions.map(function(r){return r.region;}).join(', ')||'All clear', weakRegions.length?'var(--coral)':'var(--green)') +
+  '</div>';
+
+  return mkRoleCard('Director','#3B5BA5','Cross-team pipeline intelligence','"Where is growth coming from? Where is the risk?"', inner);
+}
+
+// ── CXO / Exec ────────────────────────────────────────────────────────────
+function renderExecInsights(data, deals, fmtUsd) {
+  var s = data.summary || {};
+  var confPct = s.total_value_usd>0?Math.round(s.verified_value_usd/s.total_value_usd*100):0;
+  var weightedPct = s.total_value_usd>0?Math.round(s.weighted_value_usd/s.total_value_usd*100):0;
+  var pctColor = confPct>=50?'var(--green)':confPct>=35?'var(--amber)':'var(--coral)';
+
+  // Product performance bars
+  var byProduct = {};
+  var PCOLS = ['#3A6EA8','#A07824','#4A8C5C','#C0523F','#7B5EA7'];
+  deals.forEach(function(d){var k=d.product_name||'Unclassified';if(!byProduct[k])byProduct[k]={val:0,verified:0,i:Object.keys(byProduct).length};byProduct[k].val+=d.deal_value_usd;if(d.tier==='verified')byProduct[k].verified+=d.deal_value_usd;});
+  var productRows = Object.entries(byProduct).sort(function(a,b){return b[1].val-a[1].val;}).slice(0,5).map(function(e){return {label:e[0],val:e[1].val,color:PCOLS[e[1].i%PCOLS.length]};});
+  var maxP = Math.max.apply(null,productRows.map(function(r){return r.val;})||[1]);
+
+  var inner = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">' +
+    mkMetricCard('Total org pipeline', fmtUsd(s.total_value_usd||0), fmtUsd(s.weighted_value_usd||0)+' weighted \u00b7 '+fmtUsd(s.closing_this_quarter_usd||0)+' this quarter', 'var(--text)') +
+    mkMetricCard('Forecast confidence', confPct+'%', 'of pipeline is fully verified', pctColor) +
+    mkMetricCard('Win probability', weightedPct+'%', 'weighted vs total pipeline', 'var(--blue)') +
+  '</div>';
+
+  inner += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
+
+  if (productRows.length) {
+    inner += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px">' +
+      '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:12px">Product line performance</div>' +
+      mkBars(productRows, maxP, fmtUsd) +
+    '</div>';
+  }
+
+  // Top risk signals
+  var risks = [];
+  var unverif = deals.filter(function(d){return d.tier==='unverified';});
+  if (unverif.length) risks.push({dot:'var(--amber)',text:fmtUsd(unverif.reduce(function(s,d){return s+d.deal_value_usd;},0))+' unverified \u2014 awaiting rep confirmation'});
+  var noVerRegions = (data.regionBreakdown||[]).filter(function(r){return r.verified_usd===0&&r.total_usd>0;});
+  noVerRegions.forEach(function(r){risks.push({dot:'var(--coral)',text:esc(r.region)+' \u2014 '+fmtUsd(r.total_usd)+' pipeline, zero verified'});});
+  var today = new Date();
+  var atRisk = deals.filter(function(d){return d.expected_close&&new Date(d.expected_close)<today;});
+  if (atRisk.length) risks.push({dot:'var(--coral)',text:atRisk.length+' deal'+(atRisk.length>1?'s':'')+' past close date \u2014 need exec review'});
+  if (!risks.length) risks.push({dot:'var(--green)',text:'\u2705 No critical pipeline risks detected'});
+
+  inner += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px">' +
+    '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px">Top risk signals</div>' +
+    risks.slice(0,5).map(function(r){return mkAlertRow(r.dot,r.text);}).join('') +
+  '</div>';
+
+  inner += '</div>';
+
+  return mkRoleCard('CXO / Exec','#4A8C5C','Org pipeline intelligence','"Are we going to hit the number? Where is the risk?"', inner);
+}
+
+// ── Attention panel ───────────────────────────────────────────────────────
 function renderAttentionPanel(deals, data, fmtUsd) {
   var today = new Date();
   var alerts = [];
   deals.forEach(function(d) {
-    if (d.expected_close && new Date(d.expected_close) < today) alerts.push({type:'overdue',msg:esc(d.account)+' — close date passed ('+d.expected_close+')',color:'var(--coral)'});
+    if (d.expected_close && new Date(d.expected_close) < today)
+      alerts.push({dot:'var(--coral)', text:esc(d.account)+' \u2014 close date passed ('+d.expected_close+')'});
   });
-  var unverifiedHighValue = deals.filter(function(d){return d.tier==='unverified' && d.deal_value_usd > 5000;});
-  if (unverifiedHighValue.length) alerts.push({type:'unverified',msg:unverifiedHighValue.length+' high-value AI hints need rep confirmation — '+fmtUsd(unverifiedHighValue.reduce(function(s,d){return s+d.deal_value_usd},0))+' at stake',color:'var(--amber)'});
-  var noValue = data.regionBreakdown?.filter(function(r){return r.verified_usd===0 && r.total_usd > 0;}) || [];
-  if (noValue.length) noValue.forEach(function(r){alerts.push({type:'region',msg:esc(r.region)+' — $'+Math.round(r.total_usd/1000)+'K pipeline with zero verified deals',color:'var(--amber)'}); });
-
-  if (!alerts.length) return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:14px 16px;font-size:13px;color:var(--green)">✅ No immediate attention items — pipeline looks healthy.</div>';
-
-  return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:14px 16px">' +
-    '<div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Action items ('+alerts.length+')</div>' +
-    alerts.map(function(a) {
-      return '<div style="display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">' +
-        '<div style="width:8px;height:8px;border-radius:50%;background:'+a.color+';flex-shrink:0;margin-top:4px"></div>' +
-        '<div style="font-size:12px;color:var(--text)">'+a.msg+'</div>' +
-      '</div>';
-    }).join('') + '</div>';
-}
-
-function renderRepInsights(data, deals, fmtUsd) {
-  var closing = deals.filter(function(d){
-    if (!d.expected_close) return false;
-    var dt = new Date(d.expected_close), now = new Date();
-    var qEnd = new Date(now.getFullYear(), Math.floor(now.getMonth()/3)*3+3, 0);
-    return dt <= qEnd;
+  var unverifiedHV = deals.filter(function(d){return d.tier==='unverified'&&d.deal_value_usd>5000;});
+  if (unverifiedHV.length)
+    alerts.push({dot:'var(--amber)',text:unverifiedHV.length+' high-value AI hints need confirmation \u2014 '+fmtUsd(unverifiedHV.reduce(function(s,d){return s+d.deal_value_usd;},0))+' at stake'});
+  (data.regionBreakdown||[]).filter(function(r){return r.verified_usd===0&&r.total_usd>0;}).forEach(function(r){
+    alerts.push({dot:'var(--amber)',text:esc(r.region)+' \u2014 '+fmtUsd(r.total_usd)+' pipeline with zero verified deals'});
   });
-  var hot = deals.filter(function(d){return d.signal_score >= 60;});
-  return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
-    '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:12px 14px">' +
-      '<div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">Closing this quarter</div>' +
-      '<div style="font-size:20px;font-weight:600;color:var(--green)">'+fmtUsd(closing.reduce(function(s,d){return s+d.deal_value_usd},0))+'</div>' +
-      '<div style="font-size:10px;color:var(--text3)">'+closing.length+' deals</div>' +
-    '</div>' +
-    '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:12px 14px">' +
-      '<div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">Hot deals (score ≥60)</div>' +
-      '<div style="font-size:20px;font-weight:600;color:var(--gold)">'+hot.length+'</div>' +
-      '<div style="font-size:10px;color:var(--text3)">'+fmtUsd(hot.reduce(function(s,d){return s+d.deal_value_usd},0))+' combined</div>' +
-    '</div>' +
-  '</div>';
-}
+  if (!alerts.length)
+    return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:20px;text-align:center;color:var(--green);font-size:14px;font-weight:600">\u2705 No immediate attention items \u2014 pipeline looks healthy.</div>';
 
-function renderManagerInsights(data, deals, fmtUsd) {
-  var verified = deals.filter(function(d){return d.tier==='verified';});
-  var partial = deals.filter(function(d){return d.tier==='partial';});
-  var pct = deals.length > 0 ? Math.round(verified.length/deals.length*100) : 0;
-  return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:14px 16px">' +
-    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">' +
-      '<div style="font-size:11px;font-weight:600;color:var(--text)">Team pipeline quality</div>' +
-      '<div style="font-size:20px;font-weight:600;color:'+(pct>=50?'var(--green)':pct>=35?'var(--amber)':'var(--coral)')+'">'+pct+'%<span style="font-size:11px;font-weight:400;color:var(--text3)"> verified</span></div>' +
+  return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:14px;overflow:hidden">' +
+    '<div style="padding:14px 18px;border-bottom:1px solid var(--border)">' +
+      '<div style="font-size:15px;font-weight:700;color:var(--text)">Action items</div>' +
+      '<div style="font-size:12px;color:var(--text3);font-style:italic">'+alerts.length+' items need your attention</div>' +
     '</div>' +
-    '<div style="height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;margin-bottom:10px">' +
-      '<div style="height:100%;width:'+pct+'%;background:'+(pct>=50?'var(--green)':pct>=35?'var(--amber)':'var(--coral)') + ';border-radius:4px"></div>' +
-    '</div>' +
-    '<div style="display:flex;gap:12px;font-size:11px;color:var(--text3)">' +
-      '<span>✅ '+verified.length+' verified ('+fmtUsd(verified.reduce(function(s,d){return s+d.deal_value_usd},0))+')</span>' +
-      '<span>⚡ '+partial.length+' partial ('+fmtUsd(partial.reduce(function(s,d){return s+d.deal_value_usd},0))+')</span>' +
-    '</div>' +
-  '</div>';
-}
-
-function renderDirectorInsights(data, deals, fmtUsd) {
-  var regions = data.regionBreakdown || [];
-  var topRegion = regions[0];
-  var weakRegions = regions.filter(function(r){return r.verified_usd === 0;});
-  return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
-    '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:12px 14px">' +
-      '<div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">Strongest region</div>' +
-      '<div style="font-size:16px;font-weight:600;color:var(--text)">'+(topRegion?.region||'—')+'</div>' +
-      '<div style="font-size:10px;color:var(--text3)">'+fmtUsd(topRegion?.total_usd||0)+' · '+fmtUsd(topRegion?.verified_usd||0)+' verified</div>' +
-    '</div>' +
-    '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:12px 14px">' +
-      '<div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">Regions with no verified deals</div>' +
-      '<div style="font-size:20px;font-weight:600;color:'+(weakRegions.length?'var(--coral)':'var(--green)')+'">'+weakRegions.length+'</div>' +
-      '<div style="font-size:10px;color:var(--text3)">'+(weakRegions.length ? weakRegions.map(function(r){return r.region;}).join(', ') : 'All regions have verified deals')+'</div>' +
-    '</div>' +
-  '</div>';
-}
-
-function renderExecInsights(data, deals, fmtUsd) {
-  var s = data.summary || {};
-  var confPct = s.total_value_usd > 0 ? Math.round(s.verified_value_usd/s.total_value_usd*100) : 0;
-  var weightedPct = s.total_value_usd > 0 ? Math.round(s.weighted_value_usd/s.total_value_usd*100) : 0;
-  return '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">' +
-    '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:12px 14px">' +
-      '<div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">Forecast confidence</div>' +
-      '<div style="font-size:24px;font-weight:600;color:'+(confPct>=50?'var(--green)':confPct>=35?'var(--amber)':'var(--coral)')+'">'+confPct+'%</div>' +
-      '<div style="font-size:10px;color:var(--text3)">of pipeline is fully verified</div>' +
-    '</div>' +
-    '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:12px 14px">' +
-      '<div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">Closing this quarter</div>' +
-      '<div style="font-size:24px;font-weight:600;color:var(--gold)">'+fmtUsd(s.closing_this_quarter_usd||0)+'</div>' +
-      '<div style="font-size:10px;color:var(--text3)">based on expected close dates</div>' +
-    '</div>' +
-    '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:12px 14px">' +
-      '<div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">Win probability</div>' +
-      '<div style="font-size:24px;font-weight:600;color:var(--blue)">'+weightedPct+'%</div>' +
-      '<div style="font-size:10px;color:var(--text3)">weighted vs total pipeline</div>' +
+    '<div style="padding:8px 18px">' +
+      alerts.map(function(a){return mkAlertRow(a.dot,a.text);}).join('') +
     '</div>' +
   '</div>';
 }
@@ -4025,9 +4130,19 @@ function renderDealModal() {
   ];
 
   var streamsHtml = _dealStreams.map(function(s, i) {
+    // Build dropdown options from org-defined stream types
+    var streamOpts = orgStreamTypes.length > 0
+      ? '<option value="">— Select stream —</option>' + orgStreamTypes.map(function(t) {
+          var val = t.key || t.label; var lbl = t.label;
+          return '<option value="' + esc(val) + '"' + (s.name===val?' selected':'') + '>' + esc(lbl) + '</option>';
+        }).join('')
+      : '<option value="">No stream types configured</option>';
+
     return '<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;padding:10px 12px;background:var(--surface2);border-radius:var(--radius-sm)">' +
       '<div style="flex:1;min-width:0">' +
-        '<input value="' + esc(s.name) + '" placeholder="Revenue stream name…" oninput="_dealStreams[' + i + '].name=this.value" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;margin-bottom:6px"/>' +
+        '<select onchange="_dealStreams[' + i + '].name=this.value" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;margin-bottom:6px">' +
+          streamOpts +
+        '</select>' +
         '<div style="display:flex;gap:6px">' +
           '<select onchange="_dealStreams[' + i + '].type=this.value" style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 8px;color:var(--text);font-family:var(--sans);font-size:12px">' +
             streamTypes.map(function(t) {
@@ -4037,6 +4152,7 @@ function renderDealModal() {
             }).join('') +
           '</select>' +
         '</div>' +
+      '</div>' +
       '</div>' +
       '<div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">' +
         '<div style="display:flex;gap:4px">' +
