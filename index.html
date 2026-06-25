@@ -281,8 +281,9 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 .rtab{flex:1;padding:10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:transparent;color:var(--text2);font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer;transition:all 0.2s}
 .template-btn{font-size:12px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text2);padding:6px 12px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all 0.2s}
 .pv-btn{font-size:11px;padding:5px 14px;border-radius:20px;border:1px solid var(--border2);background:var(--surface2);color:var(--text3);cursor:pointer;font-family:var(--sans);font-weight:500;transition:all 0.15s}
-.pv-btn.active{background:var(--gold2);border-color:var(--gold2);color:#18160F}
+.pv-btn.active{background:var(--gold);border-color:var(--gold);color:#18160F}
 .pv-btn:hover:not(.active){color:var(--text);border-color:var(--border2)}
+@keyframes slideUp{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}
 .template-btn:hover{border-color:var(--gold);color:var(--gold)}
 .rtab:hover{border-color:var(--border2);color:var(--text)}
 .rtab.active{background:var(--surface);border-color:var(--gold);color:var(--gold)}
@@ -3093,7 +3094,7 @@ async function askQ(q) {
 function initTheme() {
   const saved = localStorage.getItem('dt-theme');
   if (saved) { document.body.classList.add(saved + '-mode'); updateThemeIcon(saved); }
-  else { updateThemeIcon(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); }
+  else { document.body.classList.add('light-mode'); updateThemeIcon('light'); } // Default: light mode
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => { if (!localStorage.getItem('dt-theme')) updateThemeIcon(e.matches ? 'dark' : 'light'); });
 }
 function toggleTheme() {
@@ -3179,27 +3180,44 @@ function shareTasksMenu() {
   const text = buildTasksText();
   if (!text) { alert('No tasks to share today.'); return; }
 
-  // Show a small inline menu below the share button
   var existing = document.getElementById('share-menu-popup');
   if (existing) { existing.remove(); return; }
 
-  var menu = document.createElement('div');
-  menu.id = 'share-menu-popup';
-  menu.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--bg2);border:1px solid var(--border2);border-radius:12px;padding:16px;z-index:999;min-width:240px;box-shadow:0 8px 32px rgba(0,0,0,0.4)';
-  menu.innerHTML =
-    '<div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:12px">Share today\'s tasks</div>' +
-    '<button onclick="shareWhatsApp()" style="width:100%;padding:10px 14px;background:rgba(37,211,102,0.12);border:1px solid rgba(37,211,102,0.3);border-radius:8px;color:#25D366;font-family:var(--sans);font-size:13px;font-weight:500;cursor:pointer;margin-bottom:8px;text-align:left">💬 Share via WhatsApp</button>' +
-    '<button onclick="shareEmail()" style="width:100%;padding:10px 14px;background:rgba(160,117,42,0.1);border:1px solid var(--border2);border-radius:8px;color:var(--gold);font-family:var(--sans);font-size:13px;font-weight:500;cursor:pointer;margin-bottom:8px;text-align:left">✉ Share via Email</button>' +
-    '<button onclick="copyTaskText()" style="width:100%;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-family:var(--sans);font-size:13px;font-weight:500;cursor:pointer;margin-bottom:12px;text-align:left" id="copy-tasks-btn">📋 Copy to clipboard</button>' +
-    '<button onclick="document.getElementById(\'share-menu-popup\').remove()" style="width:100%;padding:6px;background:none;border:none;color:var(--text3);font-family:var(--sans);font-size:12px;cursor:pointer">Cancel</button>';
-  document.body.appendChild(menu);
+  var overlay = document.createElement('div');
+  overlay.id = 'share-menu-popup';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);display:flex;align-items:flex-end;justify-content:center;z-index:999;padding:0';
 
-  // Close on outside click
-  setTimeout(function() {
-    document.addEventListener('click', function handler(e) {
-      if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', handler); }
-    });
-  }, 100);
+  var parts = viewDate.split('-');
+  var dateStr = parts[2] + '/' + parts[1] + '/' + parts[0];
+
+  overlay.innerHTML =
+    '<div style="background:var(--bg);border-top:1px solid var(--border2);border-radius:var(--radius-lg) var(--radius-lg) 0 0;width:100%;max-width:480px;padding:0 0 24px 0;animation:slideUp 0.25s ease">' +
+      '<div style="width:40px;height:4px;background:var(--border2);border-radius:2px;margin:12px auto 16px"></div>' +
+      '<div style="padding:0 20px">' +
+        '<div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px">Share today\'s priorities</div>' +
+        '<div style="font-size:12px;color:var(--text3);margin-bottom:20px">' + dateStr + ' · ' + (buildTasksText()?.split('\n').filter(function(l){return l.match(/^\d+\./);}).length || 0) + ' tasks</div>' +
+
+        '<button onclick="shareWhatsApp()" style="width:100%;padding:13px 16px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.25);border-radius:var(--radius);color:#128C7E;font-family:var(--sans);font-size:14px;font-weight:500;cursor:pointer;margin-bottom:10px;text-align:left;display:flex;align-items:center;gap:12px">' +
+          '<span style="font-size:22px">💬</span>' +
+          '<div><div style="font-weight:600">Share via WhatsApp</div><div style="font-size:12px;color:var(--text3);font-weight:400">Opens WhatsApp with your priorities pre-filled</div></div>' +
+        '</button>' +
+
+        '<button onclick="shareEmail()" style="width:100%;padding:13px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:var(--sans);font-size:14px;font-weight:500;cursor:pointer;margin-bottom:10px;text-align:left;display:flex;align-items:center;gap:12px">' +
+          '<span style="font-size:22px">✉️</span>' +
+          '<div><div style="font-weight:600">Share via Email</div><div style="font-size:12px;color:var(--text3);font-weight:400">Opens your mail app with subject and body</div></div>' +
+        '</button>' +
+
+        '<button onclick="copyTaskText()" id="copy-tasks-btn" style="width:100%;padding:13px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:var(--sans);font-size:14px;font-weight:500;cursor:pointer;margin-bottom:16px;text-align:left;display:flex;align-items:center;gap:12px">' +
+          '<span style="font-size:22px">📋</span>' +
+          '<div><div style="font-weight:600">Copy to clipboard</div><div style="font-size:12px;color:var(--text3);font-weight:400">Paste anywhere — Slack, Teams, SMS</div></div>' +
+        '</button>' +
+
+        '<button onclick="document.getElementById(\'share-menu-popup\').remove()" style="width:100%;padding:11px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text3);font-family:var(--sans);font-size:13px;cursor:pointer">Cancel</button>' +
+      '</div>' +
+    '</div>';
+
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
 }
 
 function shareWhatsApp() {
@@ -3677,75 +3695,188 @@ function renderPipelineDeals(data) {
     }).join('');
 }
 
+// ── Deal Value & Revenue Streams Modal ──────────────────────────────────────
+var _dealStreams = []; // current streams being edited
+
 function openDealValueForm(accountId, accountName) {
   var existing = document.getElementById('deal-value-modal');
   if (existing) existing.remove();
+  _dealStreams = [{ id: Date.now(), name: '', type: 'MRR', amount: '', currency: (orgConfig?.defaultCurrency || 'USD') }];
 
-  var modal = document.createElement('div');
-  modal.id = 'deal-value-modal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:999';
-  modal.innerHTML = '<div style="background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:20px;width:360px;max-height:90vh;overflow-y:auto">' +
-    '<div style="font-size:14px;font-weight:500;color:var(--text);margin-bottom:14px">💰 Deal value — ' + esc(accountName) + '</div>' +
-    '<div style="display:grid;grid-template-columns:1fr 80px;gap:8px;margin-bottom:10px">' +
-      '<input id="dv-amount" type="number" placeholder="Deal value" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>' +
-      '<select id="dv-currency" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-family:var(--sans);font-size:12px">' +
-        ['USD','INR','EUR','GBP','AED','SAR','SGD','AUD','CAD','MXN','BRL'].map(function(c) { return '<option>' + c + '</option>'; }).join('') +
-      '</select>' +
-    '</div>' +
-    '<input id="dv-units" type="number" placeholder="Units / licenses / outlets (optional)" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;margin-bottom:8px"/>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">' +
-      '<select id="dv-type" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-family:var(--sans);font-size:12px">' +
-        ['new_business','expansion','renewal','upsell'].map(function(t) { return '<option value="'+t+'">'+t.replace('_',' ')+'</option>'; }).join('') +
-      '</select>' +
-      '<input id="dv-close" type="date" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none"/>' +
-    '</div>' +
-    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">' +
-      '<label style="font-size:12px;color:var(--text3)">Close probability:</label>' +
-      '<input id="dv-prob" type="range" min="0" max="100" value="50" oninput="document.getElementById(\'dv-prob-val\').textContent=this.value+\'%\'" style="flex:1"/>' +
-      '<span id="dv-prob-val" style="font-size:12px;color:var(--gold);width:36px">50%</span>' +
-    '</div>' +
-    '<div style="display:flex;gap:8px">' +
-      '<button onclick="saveDealValue(\'' + accountId + '\')" style="flex:1;padding:9px;background:var(--gold2);border:none;border-radius:8px;color:#18160F;font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer">Save deal</button>' +
-      '<button onclick="document.getElementById(\'deal-value-modal\').remove()" style="padding:9px 16px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--text3);font-family:var(--sans);font-size:13px;cursor:pointer">Cancel</button>' +
-    '</div>' +
-    '<div id="dv-status" style="font-size:11px;margin-top:8px;text-align:center"></div>' +
-  '</div>';
-  modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
-  document.body.appendChild(modal);
+  renderDealModal(accountId, accountName);
+}
 
-  // Pre-fill currency from org default
-  var cSel = document.getElementById('dv-currency');
-  if (cSel && orgConfig?.defaultCurrency) cSel.value = orgConfig.defaultCurrency;
+function renderDealModal(accountId, accountName) {
+  var existing = document.getElementById('deal-value-modal');
+  if (existing) existing.remove();
+
+  var currencies = ['USD','INR','EUR','GBP','AED','SAR','SGD','AUD','CAD','MXN','BRL'];
+  var streamTypes = [
+    { value: 'MRR', label: 'MRR — Monthly recurring' },
+    { value: 'QRR', label: 'QRR — Quarterly recurring' },
+    { value: 'ARR', label: 'ARR — Annual recurring' },
+    { value: 'one_time', label: 'One-time / Total deal' }
+  ];
+
+  var streamsHtml = _dealStreams.map(function(s, i) {
+    return '<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;padding:10px 12px;background:var(--surface2);border-radius:var(--radius-sm)">' +
+      '<div style="flex:1;min-width:0">' +
+        '<input value="' + esc(s.name) + '" placeholder="Revenue stream name…" oninput="_dealStreams[' + i + '].name=this.value" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;margin-bottom:6px"/>' +
+        '<div style="display:flex;gap:6px">' +
+          '<select onchange="_dealStreams[' + i + '].type=this.value" style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 8px;color:var(--text);font-family:var(--sans);font-size:12px">' +
+            streamTypes.map(function(t) { return '<option value="' + t.value + '"' + (s.type === t.value ? ' selected' : '') + '>' + t.label + '</option>'; }).join('') +
+          '</select>' +
+        '</div>' +
+      '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">' +
+        '<div style="display:flex;gap:4px">' +
+          '<input type="number" value="' + (s.amount || '') + '" placeholder="Amount" oninput="_dealStreams[' + i + '].amount=this.value;updateDealTotal()" style="width:100px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 8px;color:var(--text);font-family:var(--sans);font-size:13px;text-align:right;outline:none"/>' +
+          '<select onchange="_dealStreams[' + i + '].currency=this.value" style="width:62px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 4px;color:var(--text);font-family:var(--sans);font-size:11px">' +
+            currencies.map(function(c) { return '<option' + (s.currency === c ? ' selected' : '') + '>' + c + '</option>'; }).join('') +
+          '</select>' +
+        '</div>' +
+        (_dealStreams.length > 1 ?
+          '<button onclick="removeDealStream(' + i + ')" style="font-size:11px;color:var(--coral);background:none;border:none;cursor:pointer;text-align:right;padding:0">Remove</button>' : '') +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  var overlay = document.createElement('div');
+  overlay.id = 'deal-value-modal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:999;padding:16px';
+  overlay.innerHTML =
+    '<div style="background:var(--bg);border:1px solid var(--border2);border-radius:var(--radius-lg);width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3)">' +
+      '<div style="padding:18px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--bg);z-index:1">' +
+        '<div>' +
+          '<div style="font-size:15px;font-weight:600;color:var(--text)">💰 ' + esc(accountName) + '</div>' +
+          '<div style="font-size:11px;color:var(--text3);margin-top:2px">Add revenue streams for this opportunity</div>' +
+        '</div>' +
+        '<button onclick="document.getElementById(\'deal-value-modal\').remove()" style="background:none;border:none;color:var(--text3);font-size:22px;cursor:pointer;padding:0;line-height:1">×</button>' +
+      '</div>' +
+
+      '<div style="padding:16px 20px">' +
+        '<!-- Revenue streams -->' +
+        '<div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">Revenue streams</div>' +
+        '<div id="deal-streams-list">' + streamsHtml + '</div>' +
+        '<button onclick="addDealStream()" style="width:100%;padding:8px;background:transparent;border:1px dashed var(--border2);border-radius:var(--radius-sm);color:var(--gold);font-family:var(--sans);font-size:12px;font-weight:500;cursor:pointer;margin-bottom:14px">+ Add revenue stream</button>' +
+
+        '<!-- Total -->' +
+        '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between">' +
+          '<span style="font-size:12px;color:var(--text3)">Total deal value (USD equivalent)</span>' +
+          '<span id="deal-total-display" style="font-size:18px;font-weight:600;color:var(--gold)">$0</span>' +
+        '</div>' +
+
+        '<!-- Deal details -->' +
+        '<div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">Deal details</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">' +
+          '<div>' +
+            '<div style="font-size:11px;color:var(--text3);margin-bottom:4px">Deal type</div>' +
+            '<select id="dv-type" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px;color:var(--text);font-family:var(--sans);font-size:12px">' +
+              ['new_business','expansion','renewal','upsell'].map(function(t) { return '<option value="'+t+'">'+t.replace('_',' ')+'</option>'; }).join('') +
+            '</select>' +
+          '</div>' +
+          '<div>' +
+            '<div style="font-size:11px;color:var(--text3);margin-bottom:4px">Expected close</div>' +
+            '<input id="dv-close" type="date" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none"/>' +
+          '</div>' +
+        '</div>' +
+        '<div style="margin-bottom:14px">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
+            '<span style="font-size:11px;color:var(--text3)">Close probability</span>' +
+            '<span id="dv-prob-val" style="font-size:13px;font-weight:600;color:var(--gold)">50%</span>' +
+          '</div>' +
+          '<input id="dv-prob" type="range" min="0" max="100" value="50" oninput="document.getElementById(\'dv-prob-val\').textContent=this.value+\'%\'" style="width:100%;accent-color:var(--gold)"/>' +
+        '</div>' +
+        '<div style="margin-bottom:16px">' +
+          '<div style="font-size:11px;color:var(--text3);margin-bottom:4px">Units / licenses / outlets (optional)</div>' +
+          '<input id="dv-units" type="number" placeholder="e.g. 500" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>' +
+        '</div>' +
+
+        '<!-- Actions -->' +
+        '<div style="display:flex;gap:8px">' +
+          '<button onclick="saveDealValue(\'' + accountId + '\')" style="flex:1;padding:11px;background:var(--gold);border:none;border-radius:var(--radius-sm);color:#18160F;font-family:var(--sans);font-size:14px;font-weight:600;cursor:pointer">Save deal</button>' +
+          '<button onclick="document.getElementById(\'deal-value-modal\').remove()" style="padding:11px 18px;background:transparent;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text3);font-family:var(--sans);font-size:13px;cursor:pointer">Cancel</button>' +
+        '</div>' +
+        '<div id="dv-status" style="font-size:12px;margin-top:10px;text-align:center"></div>' +
+      '</div>' +
+    '</div>';
+
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+  updateDealTotal();
+}
+
+function addDealStream() {
+  _dealStreams.push({ id: Date.now(), name: '', type: 'MRR', amount: '', currency: orgConfig?.defaultCurrency || 'USD' });
+  var modal = document.getElementById('deal-value-modal');
+  var accountId = modal?.querySelector('button[onclick*="saveDealValue"]')?.getAttribute('onclick')?.match(/'([^']+)'/)?.[1] || '';
+  var accountName = modal?.querySelector('[style*="font-size:15px"]')?.textContent?.replace('💰 ', '') || '';
+  renderDealModal(accountId, accountName);
+}
+
+function removeDealStream(i) {
+  _dealStreams.splice(i, 1);
+  var modal = document.getElementById('deal-value-modal');
+  var accountId = modal?.querySelector('button[onclick*="saveDealValue"]')?.getAttribute('onclick')?.match(/'([^']+)'/)?.[1] || '';
+  var accountName = modal?.querySelector('[style*="font-size:15px"]')?.textContent?.replace('💰 ', '') || '';
+  renderDealModal(accountId, accountName);
+}
+
+function updateDealTotal() {
+  // Calculate USD total from all streams
+  // MRR × 12 = ARR, QRR × 4 = ARR, ARR = ARR, one_time = face value
+  var FX = { USD:1, INR:0.012, EUR:1.08, GBP:1.27, AED:0.272, SAR:0.267, SGD:0.74, AUD:0.65, CAD:0.73, MXN:0.058, BRL:0.19 };
+  var total = 0;
+  _dealStreams.forEach(function(s) {
+    var amount = parseFloat(s.amount) || 0;
+    var fx = FX[s.currency] || 1;
+    var usd = amount * fx;
+    var annualised = s.type === 'MRR' ? usd * 12 : s.type === 'QRR' ? usd * 4 : usd;
+    total += annualised;
+  });
+  var el = document.getElementById('deal-total-display');
+  if (el) el.textContent = total >= 1000000 ? '$' + (total/1000000).toFixed(1) + 'M' : total >= 1000 ? '$' + Math.round(total/1000) + 'K' : '$' + Math.round(total);
+  return total;
 }
 
 async function saveDealValue(accountId) {
-  var amount = parseFloat(document.getElementById('dv-amount')?.value);
-  var currency = document.getElementById('dv-currency')?.value || 'USD';
-  var units = parseInt(document.getElementById('dv-units')?.value) || null;
+  var statusEl = document.getElementById('dv-status');
+  var totalUsd = updateDealTotal();
+  if (totalUsd === 0) { if (statusEl) { statusEl.textContent = 'Add at least one revenue stream with a value'; statusEl.style.color = 'var(--coral)'; } return; }
+
+  // Use first stream's currency as primary, total USD as deal_value_usd
+  var primaryStream = _dealStreams.find(function(s) { return parseFloat(s.amount) > 0; }) || _dealStreams[0];
   var dealType = document.getElementById('dv-type')?.value || 'new_business';
   var closeDate = document.getElementById('dv-close')?.value || null;
   var prob = parseInt(document.getElementById('dv-prob')?.value) || 50;
-  var statusEl = document.getElementById('dv-status');
+  var units = parseInt(document.getElementById('dv-units')?.value) || null;
 
-  if (!amount || isNaN(amount)) { if (statusEl) { statusEl.textContent = 'Enter a deal value'; statusEl.style.color = 'var(--coral)'; } return; }
-  if (statusEl) { statusEl.textContent = 'Saving and converting to USD…'; statusEl.style.color = 'var(--text3)'; }
-
+  if (statusEl) { statusEl.textContent = 'Saving…'; statusEl.style.color = 'var(--text3)'; }
   try {
     var r = await fetch(EDGE_FN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
-      body: JSON.stringify({ action: 'upsert_deal_value', account_id: accountId, deal_value: amount, deal_currency: currency, licenses_units: units, deal_type: dealType, expected_close: closeDate, close_probability: prob })
+      body: JSON.stringify({
+        action: 'upsert_deal_value',
+        account_id: accountId,
+        deal_value: parseFloat(primaryStream.amount) || totalUsd,
+        deal_currency: primaryStream.currency || 'USD',
+        revenue_streams: _dealStreams.filter(function(s) { return parseFloat(s.amount) > 0; }),
+        deal_value_usd: Math.round(totalUsd),
+        licenses_units: units,
+        deal_type: dealType,
+        expected_close: closeDate,
+        close_probability: prob
+      })
     });
     var d = await r.json();
     if (d.ok) {
-      if (statusEl) { statusEl.textContent = '✓ Saved · USD equivalent: $' + (d.deal_value_usd || 0).toLocaleString(); statusEl.style.color = 'var(--green)'; }
-      setTimeout(function() { document.getElementById('deal-value-modal')?.remove(); loadPipeline(); }, 1500);
+      if (statusEl) { statusEl.textContent = '✓ Saved · ' + (totalUsd >= 1000 ? '$' + Math.round(totalUsd/1000) + 'K' : '$' + Math.round(totalUsd)) + ' USD total'; statusEl.style.color = 'var(--green)'; }
+      setTimeout(function() { document.getElementById('deal-value-modal')?.remove(); loadMyAccounts(); if (typeof loadPipeline === 'function') loadPipeline(); }, 1600);
     } else {
       if (statusEl) { statusEl.textContent = 'Error: ' + (d.error || 'Save failed'); statusEl.style.color = 'var(--coral)'; }
     }
-  } catch(e) {
-    if (statusEl) { statusEl.textContent = 'Error: ' + e.message; statusEl.style.color = 'var(--coral)'; }
-  }
+  } catch(e) { if (statusEl) { statusEl.textContent = 'Error: ' + e.message; statusEl.style.color = 'var(--coral)'; } }
 }
 
 async function loadIntelligence() {
