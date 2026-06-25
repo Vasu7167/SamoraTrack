@@ -3700,13 +3700,26 @@ function renderPipelineDeals(data) {
 var _dealStreams = [];
 var _dealAccountId = '';
 var _dealAccountName = '';
+var _dealOpportunityId = null;
+var _orgProducts = [];
 
-function openDealValueForm(accountId, accountName) {
+async function openDealValueForm(accountId, accountName, opportunityId) {
   _dealAccountId = accountId;
   _dealAccountName = accountName;
+  _dealOpportunityId = opportunityId || null;
   var existing = document.getElementById('deal-value-modal');
   if (existing) existing.remove();
   _dealStreams = [{ id: Date.now(), name: '', type: 'MRR', amount: '', currency: (window._orgConfig?.defaultCurrency || 'USD') }];
+
+  // Load org products first
+  try {
+    var r = await fetch(EDGE_FN_URL, { method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
+      body: JSON.stringify({ action: 'get_products' }) });
+    var d = await r.json();
+    _orgProducts = d.products || [];
+  } catch(e) { _orgProducts = []; }
+
   renderDealModal();
 }
 
@@ -3785,22 +3798,26 @@ function renderDealModal() {
             '<div style="font-size:11px;color:var(--text3);margin-bottom:4px">Expected close</div>' +
             '<input id="dv-close" type="date" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none"/>' +
           '</div>' +
+        '<!-- Probability note -->' +
+        '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px">' +
+          '<div style="font-size:11px;color:var(--text3);margin-bottom:2px">Close probability</div>' +
+          '<div style="font-size:12px;color:var(--text2)">Auto-derived from deal stage + conversation signals. Updates each time you run SAM Intelligence.</div>' +
         '</div>' +
-        '<div style="margin-bottom:14px">' +
-          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
-            '<span style="font-size:11px;color:var(--text3)">Close probability</span>' +
-            '<span id="dv-prob-val" style="font-size:13px;font-weight:600;color:var(--gold)">50%</span>' +
-          '</div>' +
-          '<input id="dv-prob" type="range" min="0" max="100" value="50" oninput="document.getElementById(\'dv-prob-val\').textContent=this.value+\'%\'" style="width:100%;accent-color:var(--gold)"/>' +
-        '</div>' +
-        '<div style="margin-bottom:16px">' +
-          '<div style="font-size:11px;color:var(--text3);margin-bottom:4px">Units / licenses / outlets (optional)</div>' +
-          '<input id="dv-units" type="number" placeholder="e.g. 500" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>' +
-        '</div>' +
+
+        '<!-- Product selection -->' +
+        (_orgProducts.length > 0 ?
+          '<div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Product / offering</div>' +
+          '<select id="dv-product" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text);font-family:var(--sans);font-size:13px;margin-bottom:14px">' +
+            '<option value="">\u2014 Select product/offering \u2014</option>' +
+            _orgProducts.map(function(p) { return '<option value="' + p.id + '">' + esc(p.name) + (p.category ? ' (' + esc(p.category) + ')' : '') + '</option>'; }).join('') +
+          '</select>'
+          :
+          '<div style="background:var(--surface);border:1px dashed var(--border2);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--text3)">\ud83d\udca1 No products configured \u2014 ask admin to add product catalog.</div>'
+        ) +
 
         '<!-- Actions -->' +
         '<div style="display:flex;gap:8px">' +
-          '<button onclick="saveDealValue(\'' + accountId + '\')" style="flex:1;padding:11px;background:var(--gold);border:none;border-radius:var(--radius-sm);color:#18160F;font-family:var(--sans);font-size:14px;font-weight:600;cursor:pointer">Save deal</button>' +
+          '<button onclick="saveDealValue()" style="flex:1;padding:11px;background:var(--gold);border:none;border-radius:var(--radius-sm);color:#18160F;font-family:var(--sans);font-size:14px;font-weight:600;cursor:pointer">Save opportunity</button>' +
           '<button onclick="document.getElementById(\'deal-value-modal\').remove()" style="padding:11px 18px;background:transparent;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text3);font-family:var(--sans);font-size:13px;cursor:pointer">Cancel</button>' +
         '</div>' +
         '<div id="dv-status" style="font-size:12px;margin-top:10px;text-align:center"></div>' +
@@ -3839,18 +3856,17 @@ function updateDealTotal() {
   return total;
 }
 
-async function saveDealValue(accountId) {
-  var aid = accountId || _dealAccountId;
+async function saveDealValue() {
+  var aid = _dealAccountId;
   var statusEl = document.getElementById('dv-status');
   var totalUsd = updateDealTotal();
   if (totalUsd === 0) { if (statusEl) { statusEl.textContent = 'Add at least one revenue stream with a value'; statusEl.style.color = 'var(--coral)'; } return; }
 
-  // Use first stream's currency as primary, total USD as deal_value_usd
   var primaryStream = _dealStreams.find(function(s) { return parseFloat(s.amount) > 0; }) || _dealStreams[0];
   var dealType = document.getElementById('dv-type')?.value || 'new_business';
   var closeDate = document.getElementById('dv-close')?.value || null;
-  var prob = parseInt(document.getElementById('dv-prob')?.value) || 50;
   var units = parseInt(document.getElementById('dv-units')?.value) || null;
+  var productId = document.getElementById('dv-product')?.value || null;
 
   if (statusEl) { statusEl.textContent = 'Saving…'; statusEl.style.color = 'var(--text3)'; }
   try {
@@ -3858,22 +3874,22 @@ async function saveDealValue(accountId) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
       body: JSON.stringify({
-        action: 'upsert_deal_value',
-        account_id: aid,
-        deal_value: parseFloat(primaryStream.amount) || totalUsd,
-        deal_currency: primaryStream.currency || 'USD',
+        action: 'upsert_opportunity',
+        opportunity_id: _dealOpportunityId,
+        account_id: aid, product_id: productId,
+        deal_value: parseFloat(primaryStream?.amount) || totalUsd,
+        deal_currency: primaryStream?.currency || 'USD',
         revenue_streams: _dealStreams.filter(function(s) { return parseFloat(s.amount) > 0; }),
         deal_value_usd: Math.round(totalUsd),
-        licenses_units: units,
-        deal_type: dealType,
-        expected_close: closeDate,
-        close_probability: prob
+        deal_type: dealType, expected_close: closeDate, licenses_units: units,
+        stage: 'prospective'
       })
     });
     var d = await r.json();
     if (d.ok) {
-      if (statusEl) { statusEl.textContent = '✓ Saved · ' + (totalUsd >= 1000 ? '$' + Math.round(totalUsd/1000) + 'K' : '$' + Math.round(totalUsd)) + ' USD total'; statusEl.style.color = 'var(--green)'; }
-      setTimeout(function() { document.getElementById('deal-value-modal')?.remove(); loadMyAccounts(); if (typeof loadPipeline === 'function') loadPipeline(); }, 1600);
+      var prob = d.probability || ''; var basis = d.probabilityBasis || '';
+      if (statusEl) { statusEl.textContent = '\u2713 Saved \u00b7 ' + (totalUsd >= 1000 ? '$' + Math.round(totalUsd/1000) + 'K' : '$' + Math.round(totalUsd)) + ' USD' + (prob ? ' \u00b7 ' + prob + '% probability' : ''); statusEl.style.color = 'var(--green)'; }
+      setTimeout(function() { document.getElementById('deal-value-modal')?.remove(); loadMyAccounts(); if (typeof loadPipeline === 'function') loadPipeline(); }, 1800);
     } else {
       if (statusEl) { statusEl.textContent = 'Error: ' + (d.error || 'Save failed'); statusEl.style.color = 'var(--coral)'; }
     }
