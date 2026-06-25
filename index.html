@@ -516,7 +516,10 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
   <div class="panel" id="panel-tasks">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <span style="font-size:12px;color:var(--text3)">Your tasks for today</span>
-      <button class="template-btn" onclick="openTemplateManager()">📋 Templates</button>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="template-btn" onclick="shareTasksMenu()" style="background:rgba(37,211,102,0.1);border-color:rgba(37,211,102,0.3);color:#25D366">↗ Share</button>
+        <button class="template-btn" onclick="openTemplateManager()">📋 Templates</button>
+      </div>
     </div>
     <div class="add-box"><div class="ab-row"><input id="pInput" placeholder="Add a priority (min 25 chars)…" oninput="updateCBar('p')" onkeydown="if(event.key==='Enter')addItem('tasks')" maxlength="300"/><button class="mic-btn" id="mic-p" onclick="toggleVoice('pInput','mic-p')">🎙</button><button onclick="addItem('tasks')">+</button></div><div class="cbar" id="cb-p"><div class="cfill" id="cf-p" style="width:0%"></div></div><div class="chint" id="ch-p">Minimum 25 characters</div></div>
     <div class="items" id="list-tasks"></div>
@@ -3080,6 +3083,97 @@ function tmplKey() {
 }
 function getTemplates() { const k = tmplKey(); if (!k) return []; try { return JSON.parse(localStorage.getItem(k)||'[]'); } catch { return []; } }
 function saveTemplates(list) { const k = tmplKey(); if (!k) return; localStorage.setItem(k, JSON.stringify(list)); }
+function buildTasksText() {
+  const d = dayData(viewDate);
+  const tasks = d.tasks || [];
+  if (!tasks.length) return null;
+
+  // Format date as DD/MM/YYYY
+  const parts = viewDate.split('-');
+  const dateStr = parts[2] + '/' + parts[1] + '/' + parts[0];
+
+  // Header line with sender name
+  const senderName = profile?.org_name || currentUser?.email?.split('@')[0] || 'Me';
+  let text = '*Priorities for ' + dateStr + '*\n';
+  text += '_Shared by ' + senderName + '_\n\n';
+
+  // Tasks with serial numbers, priorities marked with ⭐
+  let sno = 1;
+  tasks.forEach(function(t) {
+    if (!t.text) return;
+    const displayText = t.text.startsWith('*') ? t.text.slice(1).trim() : t.text;
+    const done = t.done ? '✅ ' : '🔲 ';
+    const priority = (t.priority || t.text.startsWith('*')) ? '⭐ ' : '';
+    text += sno + '. ' + done + priority + displayText + '\n';
+    sno++;
+  });
+
+  // Summary line
+  const total = tasks.length;
+  const done = tasks.filter(function(t) { return t.done; }).length;
+  text += '\n_' + done + '/' + total + ' completed_';
+  return text;
+}
+
+function shareTasksMenu() {
+  const text = buildTasksText();
+  if (!text) { alert('No tasks to share today.'); return; }
+
+  // Show a small inline menu below the share button
+  var existing = document.getElementById('share-menu-popup');
+  if (existing) { existing.remove(); return; }
+
+  var menu = document.createElement('div');
+  menu.id = 'share-menu-popup';
+  menu.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--bg2);border:1px solid var(--border2);border-radius:12px;padding:16px;z-index:999;min-width:240px;box-shadow:0 8px 32px rgba(0,0,0,0.4)';
+  menu.innerHTML =
+    '<div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:12px">Share today\'s tasks</div>' +
+    '<button onclick="shareWhatsApp()" style="width:100%;padding:10px 14px;background:rgba(37,211,102,0.12);border:1px solid rgba(37,211,102,0.3);border-radius:8px;color:#25D366;font-family:var(--sans);font-size:13px;font-weight:500;cursor:pointer;margin-bottom:8px;text-align:left">💬 Share via WhatsApp</button>' +
+    '<button onclick="shareEmail()" style="width:100%;padding:10px 14px;background:rgba(160,117,42,0.1);border:1px solid var(--border2);border-radius:8px;color:var(--gold);font-family:var(--sans);font-size:13px;font-weight:500;cursor:pointer;margin-bottom:8px;text-align:left">✉ Share via Email</button>' +
+    '<button onclick="copyTaskText()" style="width:100%;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-family:var(--sans);font-size:13px;font-weight:500;cursor:pointer;margin-bottom:12px;text-align:left" id="copy-tasks-btn">📋 Copy to clipboard</button>' +
+    '<button onclick="document.getElementById(\'share-menu-popup\').remove()" style="width:100%;padding:6px;background:none;border:none;color:var(--text3);font-family:var(--sans);font-size:12px;cursor:pointer">Cancel</button>';
+  document.body.appendChild(menu);
+
+  // Close on outside click
+  setTimeout(function() {
+    document.addEventListener('click', function handler(e) {
+      if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', handler); }
+    });
+  }, 100);
+}
+
+function shareWhatsApp() {
+  var text = buildTasksText();
+  if (!text) return;
+  document.getElementById('share-menu-popup')?.remove();
+  // WhatsApp URL scheme — opens WhatsApp with pre-filled message
+  var url = 'https://wa.me/?text=' + encodeURIComponent(text);
+  window.open(url, '_blank');
+}
+
+function shareEmail() {
+  var text = buildTasksText();
+  if (!text) return;
+  document.getElementById('share-menu-popup')?.remove();
+  var parts = viewDate.split('-');
+  var dateStr = parts[2] + '/' + parts[1] + '/' + parts[0];
+  var subject = 'Priorities for ' + dateStr;
+  // Convert WhatsApp formatting (*bold*, _italic_) to plain text for email
+  var body = text.replace(/\*/g, '').replace(/_/g, '');
+  window.location.href = 'mailto:?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+}
+
+function copyTaskText() {
+  var text = buildTasksText();
+  if (!text) return;
+  // Plain text version without WhatsApp markdown
+  var plain = text.replace(/\*/g, '').replace(/_/g, '');
+  navigator.clipboard.writeText(plain).then(function() {
+    var btn = document.getElementById('copy-tasks-btn');
+    if (btn) { btn.textContent = '✓ Copied!'; btn.style.color = 'var(--green)'; setTimeout(function() { document.getElementById('share-menu-popup')?.remove(); }, 1200); }
+  });
+}
+
 function openTemplateManager() { document.getElementById('templateModal').style.display = 'flex'; renderTemplateList(); }
 function closeTemplateManager() { document.getElementById('templateModal').style.display = 'none'; }
 function renderTemplateList() {
