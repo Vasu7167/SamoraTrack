@@ -4114,120 +4114,133 @@ async function openDealValueForm(accountId, accountName, opportunityId) {
 }
 
 function renderDealModal() {
-  var accountId = _dealAccountId;
-  var accountName = _dealAccountName;
   var existing = document.getElementById('deal-value-modal');
   if (existing) existing.remove();
 
-  var currencies = ['USD','INR','EUR','GBP','AED','SAR','SGD','AUD','CAD','MXN','BRL'];
-  // Use org-defined stream types from admin config, or sensible defaults
-  var orgStreamTypes = (window._orgConfig?.revenueStreamTypes || []);
-  var streamTypes = orgStreamTypes.length > 0 ? orgStreamTypes : [
-    { value: 'MRR', label: 'MRR \u2014 Monthly recurring' },
-    { value: 'QRR', label: 'QRR \u2014 Quarterly recurring' },
-    { value: 'ARR', label: 'ARR \u2014 Annual recurring' },
-    { value: 'one_time', label: 'One-time / Total deal' }
+  // Stream types from org config with fallback defaults
+  var orgTypes = (window._orgConfig?.revenueStreamTypes) || [];
+  var streamTypes = orgTypes.length > 0 ? orgTypes : [
+    { key:'license_mrr',  label:'License MRR',            type:'MRR'      },
+    { key:'impl',         label:'Implementation',          type:'one_time' },
+    { key:'support_qrr',  label:'Support & Maintenance',   type:'QRR'      },
+    { key:'training',     label:'Training',                type:'one_time' }
   ];
 
-  var streamsHtml = _dealStreams.map(function(s, i) {
-    // Build dropdown options from org-defined stream types
-    var streamOpts = orgStreamTypes.length > 0
-      ? '<option value="">— Select stream —</option>' + orgStreamTypes.map(function(t) {
-          var val = t.key || t.label; var lbl = t.label;
-          return '<option value="' + esc(val) + '"' + (s.name===val?' selected':'') + '>' + esc(lbl) + '</option>';
-        }).join('')
-      : '<option value="">No stream types configured</option>';
+  // Type badge colour
+  function typeBadge(type) {
+    var colors = { MRR:'#3A6EA8', QRR:'#4A8C5C', ARR:'#7B5EA7', one_time:'#A07824' };
+    return '<span style="font-size:10px;font-weight:600;padding:1px 6px;border-radius:6px;background:' + (colors[type]||'#888') + '22;color:' + (colors[type]||'#888') + '">' + (type||'').replace('_',' ') + '</span>';
+  }
 
-    return '<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;padding:10px 12px;background:var(--surface2);border-radius:var(--radius-sm)">' +
-      '<div style="flex:1;min-width:0">' +
-        '<select onchange="_dealStreams[' + i + '].name=this.value" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;margin-bottom:6px">' +
-          streamOpts +
+  // Stream rows
+  function streamRows() {
+    return _dealStreams.map(function(s, i) {
+      var selectedType = (streamTypes.find(function(t){return (t.key||t.label)===s.name;})||{}).type || 'MRR';
+      return '<div style="display:flex;align-items:center;gap:6px;padding:10px 12px;background:var(--surface2);border-radius:10px;margin-bottom:6px">' +
+        // Stream name select
+        '<select onchange="_dealStreams['+i+'].name=this.value;renderDealModal()" style="flex:2;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none">' +
+          '<option value="">Select stream\u2026</option>' +
+          streamTypes.map(function(t) {
+            var val = t.key || t.label;
+            return '<option value="'+esc(val)+'"'+(s.name===val?' selected':'')+'>'+esc(t.label)+'</option>';
+          }).join('') +
         '</select>' +
-        '<div style="display:flex;gap:6px">' +
-          '<select onchange="_dealStreams[' + i + '].type=this.value" style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 8px;color:var(--text);font-family:var(--sans);font-size:12px">' +
-            streamTypes.map(function(t) {
-              var val = t.value || t.key || t.type || t.label;
-              var lbl = t.label || t.value || val;
-              return '<option value="' + val + '"' + (s.type === val ? ' selected' : '') + '>' + lbl + '</option>';
-            }).join('') +
-          '</select>' +
-        '</div>' +
-      '</div>' +
-      '</div>' +
-      '<div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">' +
-        '<div style="display:flex;gap:4px">' +
-          '<input type="number" value="' + (s.amount || '') + '" placeholder="Amount" oninput="_dealStreams[' + i + '].amount=this.value;updateDealTotal()" style="width:100px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 8px;color:var(--text);font-family:var(--sans);font-size:13px;text-align:right;outline:none"/>' +
-          '<select onchange="_dealStreams[' + i + '].currency=this.value" style="width:62px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 4px;color:var(--text);font-family:var(--sans);font-size:11px">' +
-            currencies.map(function(c) { return '<option' + (s.currency === c ? ' selected' : '') + '>' + c + '</option>'; }).join('') +
-          '</select>' +
-        '</div>' +
-        (_dealStreams.length > 1 ?
-          '<button onclick="removeDealStream(' + i + ')" style="font-size:11px;color:var(--coral);background:none;border:none;cursor:pointer;text-align:right;padding:0">Remove</button>' : '') +
-      '</div>' +
-    '</div>';
-  }).join('');
+        // Type badge (auto from stream selection)
+        '<div style="flex-shrink:0">'+typeBadge(selectedType)+'</div>' +
+        // Amount
+        '<input type="number" placeholder="Amount" value="'+(s.amount||'')+'" oninput="_dealStreams['+i+'].amount=this.value;updateDealTotal()" style="flex:1.5;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;text-align:right"/>' +
+        // Currency
+        '<select onchange="_dealStreams['+i+'].currency=this.value" style="width:68px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 6px;color:var(--text);font-family:var(--sans);font-size:11px;outline:none">' +
+          ['USD','INR','EUR','GBP','AED','SAR','SGD','AUD','CAD','MXN','BRL'].map(function(c){
+            return '<option'+(s.currency===c?' selected':'')+'>'+c+'</option>';
+          }).join('') +
+        '</select>' +
+        // Units (for license/seat-based streams)
+        '<input type="number" placeholder="Units" value="'+(s.units||'')+'" oninput="_dealStreams['+i+'].units=this.value" title="Licenses / seats / outlets" style="width:72px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 8px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none;text-align:center"/>' +
+        // Remove
+        (_dealStreams.length > 1 ? '<button onclick="removeDealStream('+i+')" style="flex-shrink:0;background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;line-height:1;padding:0 2px" title="Remove">\u00d7</button>' : '') +
+      '</div>';
+    }).join('');
+  }
 
   var overlay = document.createElement('div');
   overlay.id = 'deal-value-modal';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:999;padding:16px';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);display:flex;align-items:flex-end;justify-content:center;z-index:999;padding:0';
+
   overlay.innerHTML =
-    '<div style="background:var(--bg);border:1px solid var(--border2);border-radius:var(--radius-lg);width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3)">' +
-      '<div style="padding:18px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--bg);z-index:1">' +
-        '<div>' +
-          '<div style="font-size:15px;font-weight:600;color:var(--text)">💰 ' + esc(accountName) + '</div>' +
-          '<div style="font-size:11px;color:var(--text3);margin-top:2px">Add revenue streams for this opportunity</div>' +
+    '<div style="background:var(--bg);border-top:1px solid var(--border2);border-radius:20px 20px 0 0;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;animation:slideUp 0.28s ease">' +
+
+      // Header
+      '<div style="position:sticky;top:0;background:var(--bg);z-index:1;padding:18px 20px 14px;border-bottom:1px solid var(--border)">' +
+        '<div style="width:36px;height:4px;background:var(--border2);border-radius:2px;margin:0 auto 14px"></div>' +
+        '<div style="display:flex;align-items:flex-start;justify-content:space-between">' +
+          '<div>' +
+            '<div style="font-size:17px;font-weight:700;color:var(--text)">\uD83D\uDCB0 ' + esc(_dealAccountName) + '</div>' +
+            '<div style="font-size:12px;color:var(--text3);margin-top:2px">Add revenue streams for this opportunity</div>' +
+          '</div>' +
+          '<button onclick="document.getElementById(\'deal-value-modal\').remove()" style="background:var(--surface2);border:none;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;color:var(--text3)">\u00d7</button>' +
         '</div>' +
-        '<button onclick="document.getElementById(\'deal-value-modal\').remove()" style="background:none;border:none;color:var(--text3);font-size:22px;cursor:pointer;padding:0;line-height:1">×</button>' +
       '</div>' +
 
-      '<div style="padding:16px 20px">' +
-        '<!-- Revenue streams -->' +
-        '<div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">Revenue streams</div>' +
-        '<div id="deal-streams-list">' + streamsHtml + '</div>' +
-        '<button onclick="addDealStream()" style="width:100%;padding:8px;background:transparent;border:1px dashed var(--border2);border-radius:var(--radius-sm);color:var(--gold);font-family:var(--sans);font-size:12px;font-weight:500;cursor:pointer;margin-bottom:14px">+ Add revenue stream</button>' +
+      '<div style="padding:18px 20px">' +
 
-        '<!-- Total -->' +
-        '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between">' +
-          '<span style="font-size:12px;color:var(--text3)">Total deal value (USD equivalent)</span>' +
-          '<span id="deal-total-display" style="font-size:18px;font-weight:600;color:var(--gold)">$0</span>' +
-        '</div>' +
-
-        '<!-- Deal details -->' +
-        '<div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">Deal details</div>' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">' +
-          '<div>' +
-            '<div style="font-size:11px;color:var(--text3);margin-bottom:4px">Deal type</div>' +
-            '<select id="dv-type" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px;color:var(--text);font-family:var(--sans);font-size:12px">' +
-              ['new_business','expansion','renewal','upsell'].map(function(t) { return '<option value="'+t+'">'+t.replace('_',' ')+'</option>'; }).join('') +
-            '</select>' +
-          '</div>' +
-          '<div>' +
-            '<div style="font-size:11px;color:var(--text3);margin-bottom:4px">Expected close</div>' +
-            '<input id="dv-close" type="date" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none"/>' +
-          '</div>' +
-        '<!-- Probability note -->' +
-        '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px">' +
-          '<div style="font-size:11px;color:var(--text3);margin-bottom:2px">Close probability</div>' +
-          '<div style="font-size:12px;color:var(--text2)">Auto-derived from deal stage + conversation signals. Updates each time you run SAM Intelligence.</div>' +
-        '</div>' +
-
-        '<!-- Product selection -->' +
+        // ── PRODUCT / OFFERING (top — sets the context) ─────────────────
         (_orgProducts.length > 0 ?
-          '<div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Product / offering</div>' +
-          '<select id="dv-product" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text);font-family:var(--sans);font-size:13px;margin-bottom:14px">' +
-            '<option value="">\u2014 Select product/offering \u2014</option>' +
-            _orgProducts.map(function(p) { return '<option value="' + p.id + '">' + esc(p.name) + (p.category ? ' (' + esc(p.category) + ')' : '') + '</option>'; }).join('') +
-          '</select>'
-          :
-          '<div style="background:var(--surface);border:1px dashed var(--border2);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--text3)">\ud83d\udca1 No products configured \u2014 ask admin to add product catalog.</div>'
-        ) +
+          '<div style="margin-bottom:16px">' +
+            '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">Product / offering</div>' +
+            '<select id="dv-product" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 14px;color:var(--text);font-family:var(--sans);font-size:14px;outline:none">' +
+              '<option value="">\u2014 Select product/offering \u2014</option>' +
+              _orgProducts.map(function(p) { return '<option value="'+p.id+'"'+(_dealOpportunityId===p.id?' selected':'')+'>'+esc(p.name)+(p.category?' ('+esc(p.category)+')':'')+' </option>'; }).join('') +
+            '</select>' +
+          '</div>' : '') +
 
-        '<!-- Actions -->' +
+        // ── REVENUE STREAMS ─────────────────────────────────────────────
+        '<div style="margin-bottom:16px">' +
+          '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">Revenue streams</div>' +
+          '<div style="font-size:11px;color:var(--text3);margin-bottom:8px">Units/outlets column is optional \u2014 fill only if applicable</div>' +
+          '<div id="deal-streams-list">'+streamRows()+'</div>' +
+          '<button onclick="addDealStream()" style="width:100%;padding:10px;background:transparent;border:1.5px dashed var(--border2);border-radius:10px;color:var(--gold);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;margin-top:4px">+ Add revenue stream</button>' +
+        '</div>' +
+
+        // ── TOTAL ────────────────────────────────────────────────────────
+        '<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between">' +
+          '<div>' +
+            '<div style="font-size:12px;color:var(--text3)">Total deal value (USD equivalent)</div>' +
+            '<div style="font-size:11px;color:var(--text3);margin-top:2px">MRR\u00d712 \u00b7 QRR\u00d74 \u00b7 One-time\u00d71</div>' +
+          '</div>' +
+          '<div id="deal-total-display" style="font-size:24px;font-weight:700;color:var(--gold)">$0</div>' +
+        '</div>' +
+
+        // ── DEAL DETAILS ─────────────────────────────────────────────────
+        '<div style="margin-bottom:16px">' +
+          '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">Deal details</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+            '<div>' +
+              '<div style="font-size:11px;color:var(--text3);margin-bottom:5px">Expected close</div>' +
+              '<input id="dv-close" type="date" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>' +
+            '</div>' +
+            '<div>' +
+              '<div style="font-size:11px;color:var(--text3);margin-bottom:5px">Deal type</div>' +
+              '<select id="dv-type" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none">' +
+                ['new_business','expansion','renewal','upsell'].map(function(t){return '<option value="'+t+'">'+t.replace('_',' ')+'</option>';}).join('') +
+              '</select>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+
+        // ── PROBABILITY NOTE ──────────────────────────────────────────────
+        '<div style="background:var(--surface2);border-radius:10px;padding:10px 14px;margin-bottom:18px;display:flex;align-items:center;gap:10px">' +
+          '<div style="font-size:18px">\uD83E\uDDE0</div>' +
+          '<div style="font-size:12px;color:var(--text3)">Close probability is <strong>auto-derived</strong> from deal stage + conversation signals. Runs each time you scan channels.</div>' +
+        '</div>' +
+
+        // ── ACTIONS ───────────────────────────────────────────────────────
         '<div style="display:flex;gap:8px">' +
-          '<button onclick="saveDealValue()" style="flex:1;padding:11px;background:var(--gold);border:none;border-radius:var(--radius-sm);color:#18160F;font-family:var(--sans);font-size:14px;font-weight:600;cursor:pointer">Save opportunity</button>' +
-          '<button onclick="document.getElementById(\'deal-value-modal\').remove()" style="padding:11px 18px;background:transparent;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text3);font-family:var(--sans);font-size:13px;cursor:pointer">Cancel</button>' +
+          '<button onclick="saveDealValue()" style="flex:1;padding:14px;background:var(--gold);border:none;border-radius:12px;color:#18160F;font-family:var(--sans);font-size:15px;font-weight:700;cursor:pointer;letter-spacing:0.01em">Save opportunity</button>' +
+          '<button onclick="document.getElementById(\'deal-value-modal\').remove()" style="padding:14px 20px;background:var(--surface2);border:1px solid var(--border);border-radius:12px;color:var(--text3);font-family:var(--sans);font-size:14px;cursor:pointer">Cancel</button>' +
         '</div>' +
         '<div id="dv-status" style="font-size:12px;margin-top:10px;text-align:center"></div>' +
+
       '</div>' +
     '</div>';
 
@@ -4237,7 +4250,7 @@ function renderDealModal() {
 }
 
 function addDealStream() {
-  _dealStreams.push({ id: Date.now(), name: '', type: 'MRR', amount: '', currency: window._orgConfig?.defaultCurrency || 'USD' });
+  _dealStreams.push({ name:'', type:'MRR', amount:'', currency: window._orgConfig?.defaultCurrency || 'USD', units:'' });
   renderDealModal();
 }
 
@@ -4247,19 +4260,21 @@ function removeDealStream(i) {
 }
 
 function updateDealTotal() {
-  // Calculate USD total from all streams
-  // MRR × 12 = ARR, QRR × 4 = ARR, ARR = ARR, one_time = face value
   var FX = { USD:1, INR:0.012, EUR:1.08, GBP:1.27, AED:0.272, SAR:0.267, SGD:0.74, AUD:0.65, CAD:0.73, MXN:0.058, BRL:0.19 };
+  var orgTypes = (window._orgConfig?.revenueStreamTypes) || [];
   var total = 0;
   _dealStreams.forEach(function(s) {
     var amount = parseFloat(s.amount) || 0;
     var fx = FX[s.currency] || 1;
     var usd = amount * fx;
-    var annualised = s.type === 'MRR' ? usd * 12 : s.type === 'QRR' ? usd * 4 : usd;
+    // Look up type from org-defined stream types
+    var streamDef = orgTypes.find(function(t){ return (t.key||t.label) === s.name; });
+    var calcType = streamDef?.type || s.type || 'one_time';
+    var annualised = calcType === 'MRR' ? usd * 12 : calcType === 'QRR' ? usd * 4 : usd;
     total += annualised;
   });
   var el = document.getElementById('deal-total-display');
-  if (el) el.textContent = total >= 1000000 ? '$' + (total/1000000).toFixed(1) + 'M' : total >= 1000 ? '$' + Math.round(total/1000) + 'K' : '$' + Math.round(total);
+  if (el) el.textContent = total >= 1000000 ? '$'+(total/1000000).toFixed(1)+'M' : total >= 1000 ? '$'+Math.round(total/1000)+'K' : '$'+Math.round(total);
   return total;
 }
 
@@ -4267,15 +4282,24 @@ async function saveDealValue() {
   var aid = _dealAccountId;
   var statusEl = document.getElementById('dv-status');
   var totalUsd = updateDealTotal();
-  if (totalUsd === 0) { if (statusEl) { statusEl.textContent = 'Add at least one revenue stream with a value'; statusEl.style.color = 'var(--coral)'; } return; }
 
-  var primaryStream = _dealStreams.find(function(s) { return parseFloat(s.amount) > 0; }) || _dealStreams[0];
+  var validStreams = _dealStreams.filter(function(s){ return s.name && parseFloat(s.amount) > 0; });
+  if (!validStreams.length) {
+    if (statusEl) { statusEl.textContent = 'Select a stream type and enter an amount'; statusEl.style.color = 'var(--coral)'; }
+    return;
+  }
+
+  var orgTypes = (window._orgConfig?.revenueStreamTypes) || [];
+  var primaryStream = validStreams[0];
+  var primaryDef = orgTypes.find(function(t){ return (t.key||t.label) === primaryStream.name; });
   var dealType = document.getElementById('dv-type')?.value || 'new_business';
   var closeDate = document.getElementById('dv-close')?.value || null;
-  var units = parseInt(document.getElementById('dv-units')?.value) || null;
   var productId = document.getElementById('dv-product')?.value || null;
 
-  if (statusEl) { statusEl.textContent = 'Saving…'; statusEl.style.color = 'var(--text3)'; }
+  // Total units from all streams
+  var totalUnits = _dealStreams.reduce(function(s,d){ return s + (parseInt(d.units)||0); }, 0) || null;
+
+  if (statusEl) { statusEl.textContent = 'Saving\u2026'; statusEl.style.color = 'var(--text3)'; }
   try {
     var r = await fetch(EDGE_FN_URL, {
       method: 'POST',
@@ -4283,29 +4307,42 @@ async function saveDealValue() {
       body: JSON.stringify({
         action: 'upsert_opportunity',
         opportunity_id: _dealOpportunityId,
-        account_id: aid, product_id: productId,
-        deal_value: parseFloat(primaryStream?.amount) || totalUsd,
-        deal_currency: primaryStream?.currency || 'USD',
-        revenue_streams: _dealStreams.filter(function(s) { return parseFloat(s.amount) > 0; }),
+        account_id: aid,
+        product_id: productId,
+        deal_value: parseFloat(primaryStream.amount),
+        deal_currency: primaryStream.currency || 'USD',
+        revenue_streams: validStreams.map(function(s) {
+          var def = orgTypes.find(function(t){ return (t.key||t.label)===s.name; });
+          return { key: def?.key||s.name, label: def?.label||s.name, type: def?.type||'one_time', amount: parseFloat(s.amount), currency: s.currency, units: parseInt(s.units)||null };
+        }),
         deal_value_usd: Math.round(totalUsd),
-        deal_type: dealType, expected_close: closeDate, licenses_units: units,
+        deal_type: dealType,
+        expected_close: closeDate,
+        licenses_units: totalUnits,
         stage: 'prospective'
       })
     });
     var d = await r.json();
     if (d.ok) {
-      var prob = d.probability || ''; var basis = d.probabilityBasis || '';
-      if (statusEl) { statusEl.textContent = '\u2713 Saved \u00b7 ' + (totalUsd >= 1000 ? '$' + Math.round(totalUsd/1000) + 'K' : '$' + Math.round(totalUsd)) + ' USD' + (prob ? ' \u00b7 ' + prob + '% probability' : ''); statusEl.style.color = 'var(--green)'; }
-      setTimeout(function() { document.getElementById('deal-value-modal')?.remove(); loadMyAccounts(); if (typeof loadPipeline === 'function') loadPipeline(); }, 1800);
+      var prob = d.probability || '';
+      if (statusEl) {
+        statusEl.textContent = '\u2713 Saved \u00b7 ' + (totalUsd >= 1000 ? '$'+Math.round(totalUsd/1000)+'K' : '$'+Math.round(totalUsd)) + ' USD' + (prob ? ' \u00b7 ' + prob + '% probability' : '');
+        statusEl.style.color = 'var(--green)';
+      }
+      setTimeout(function() {
+        document.getElementById('deal-value-modal')?.remove();
+        loadMyAccounts();
+        if (typeof loadPipeline === 'function') loadPipeline();
+      }, 1800);
     } else {
       if (statusEl) { statusEl.textContent = 'Error: ' + (d.error || 'Save failed'); statusEl.style.color = 'var(--coral)'; }
     }
-  } catch(e) { if (statusEl) { statusEl.textContent = 'Error: ' + e.message; statusEl.style.color = 'var(--coral)'; } }
+  } catch(e) {
+    if (statusEl) { statusEl.textContent = 'Error: ' + e.message; statusEl.style.color = 'var(--coral)'; }
+  }
 }
 
 function boostSignals(accountId, accountName) {
-  // Switch to SAM tab and show a prompt to run local intelligence
-  // which will update the signal score for this account
   switchTab('signals');
   setTimeout(function() {
     var out = document.getElementById('samLocalIntelOutput');
