@@ -2638,7 +2638,26 @@ async function runCoverageCheck(repId, repEmail, resultElId) {
       '</tr></thead><tbody>';
 
     grid.forEach(function(g) {
-      // Generic verified/logged cell with source badge
+      // Email cell — shows verified + logged with gap warning if significant
+      var emailCell = function(b) {
+        if (!b.verified && !b.logged) return '<span style="color:var(--text3)">—</span>';
+        var h = '';
+        if (b.verified > 0) {
+          h += '<span style="color:var(--green);font-weight:600">'+b.verified+'</span>';
+          var src = (b.source||'').replace('gmail+smartreach','G+SR').replace('smartreach','SR').replace('gmail','G');
+          if (src) h += '<span style="font-size:9px;color:var(--text3);margin-left:2px">'+src+'</span>';
+          if (b.opens > 0) h += '<br><span style="font-size:9px;color:var(--amber)">'+b.opens+'👁</span>';
+          // Show gap if logged is much higher than verified
+          if (b.logged > b.verified * 2 && b.logged > 5) {
+            h += '<br><span style="font-size:9px;color:var(--amber)" title="'+b.logged+' claimed in tasks but only '+b.verified+' found in Gmail/SmartReach — emails may have been sent via another tool">'+b.logged+' lgd ⚠</span>';
+          }
+        } else if (b.logged) {
+          h += '<span style="color:var(--text2)">'+b.logged+'</span><span style="font-size:10px;color:var(--text3)"> lgd</span>';
+        }
+        return h;
+      };
+
+      // Generic channel cell
       var cell = function(bucket) {
         if (!bucket.verified && !bucket.logged) return '<span style="color:var(--text3)">—</span>';
         var h = '';
@@ -2648,25 +2667,11 @@ async function runCoverageCheck(repId, repEmail, resultElId) {
             var src = (bucket.source||'').replace('gmail+smartreach','G+SR').replace('smartreach','SR').replace('gmail','G');
             h += '<span style="font-size:9px;color:var(--text3);margin-left:2px">'+src+'</span>';
           }
+          if (bucket.logged > bucket.verified) {
+            h += '<span style="font-size:9px;color:var(--text3)"> /'+bucket.logged+' lgd</span>';
+          }
         } else {
           h += '<span style="color:var(--text2)">'+bucket.logged+'</span><span style="font-size:10px;color:var(--text3)"> lgd</span>';
-        }
-        return h;
-      };
-
-      // Email cell — shows verified count + source + opens if available
-      var emailCell = function(b) {
-        if (!b.verified && !b.logged) return '<span style="color:var(--text3)">—</span>';
-        var h = '';
-        if (b.verified > 0) {
-          h += '<span style="color:var(--green);font-weight:600">'+b.verified+'</span>';
-          // Source badge
-          var src = (b.source||'').replace('gmail+smartreach','G+SR').replace('smartreach','SR').replace('gmail','G');
-          if (src) h += '<span style="font-size:9px;color:var(--text3);margin-left:2px">'+src+'</span>';
-          // Opens/clicks from SmartReach
-          if (b.opens > 0) h += '<br><span style="font-size:9px;color:var(--amber)">'+b.opens+' opens</span>';
-        } else {
-          h += '<span style="color:var(--text2)">'+b.logged+'</span><span style="font-size:10px;color:var(--text3)"> lgd</span>';
         }
         return h;
       };
@@ -2715,20 +2720,24 @@ async function runCoverageCheck(repId, repEmail, resultElId) {
       else if (signal === '💧') accountHint = 'No engagement — try a different channel';
       else if (signal === '📋') accountHint = 'Unverified — sync SmartReach for accuracy';
 
-      var campaignTag = g.campaigns ? '<div style="font-size:9px;color:var(--text3);margin-top:2px">📨 '+esc(g.campaigns.slice(0,40))+'</div>' : '';
+      var campaignTag = g.campaigns ? '<div style="font-size:9px;color:var(--text3);margin-top:1px">📨 '+esc(g.campaigns.slice(0,45))+'</div>' : '';
+
+      var taskLines = (g.taskTexts || []).slice(0,4).map(function(t) {
+        return '<div style="font-size:10px;color:var(--text3);padding:1px 0 1px 8px;border-left:2px solid var(--border)">'+esc(t)+'</div>';
+      }).join('');
 
       html += '<tr style="border-top:1px solid var(--border)">' +
         '<td style="padding:7px 10px">' +
           '<div style="color:var(--text);font-weight:500;font-size:12px">'+esc(g.account)+'</div>' +
           '<div style="font-size:10px;color:'+sigColor+';margin-top:1px">'+accountHint+'</div>' +
-          campaignTag +
+          campaignTag + taskLines +
         '</td>' +
-        '<td style="padding:7px 6px;text-align:center">'+emailCell(g.email)+'</td>' +
-        '<td style="padding:7px 6px;text-align:center">'+cell(g.linkedin)+'</td>' +
-        '<td style="padding:7px 6px;text-align:center">'+cell(g.call)+'</td>' +
-        '<td style="padding:7px 6px;text-align:center">'+cell(g.whatsapp)+'</td>' +
-        '<td style="padding:7px 6px;text-align:center">'+replyCell+'</td>' +
-        '<td style="padding:7px 8px;text-align:center">' +
+        '<td style="padding:7px 6px;text-align:center;vertical-align:top">'+emailCell(g.email)+'</td>' +
+        '<td style="padding:7px 6px;text-align:center;vertical-align:top">'+cell(g.linkedin)+'</td>' +
+        '<td style="padding:7px 6px;text-align:center;vertical-align:top">'+cell(g.call)+'</td>' +
+        '<td style="padding:7px 6px;text-align:center;vertical-align:top">'+cell(g.whatsapp)+'</td>' +
+        '<td style="padding:7px 6px;text-align:center;vertical-align:top">'+replyCell+'</td>' +
+        '<td style="padding:7px 8px;text-align:center;vertical-align:top">' +
           '<span style="font-size:16px" title="'+esc(sigTitle)+'">'+signal+'</span>' +
         '</td>' +
       '</tr>';
@@ -2736,21 +2745,8 @@ async function runCoverageCheck(repId, repEmail, resultElId) {
     html += '</tbody></table></div>';
     html += '<div style="font-size:10px;color:var(--text3);margin-bottom:12px;padding:0 2px">G = Gmail verified · SR = SmartReach verified · lgd = rep logged, not tool-verified · Signal: 🔥 replied · 👁 opening · ⚡ multichannel · 💧 sent · ○ untouched</div>';
 
-    // ── Qualitative coaching (Gemini) ────────────────────────────────────────
-    // Build a concise data summary to send to Gemini
     var coachingGrid = grid.map(function(g) {
-      return {
-        account:         g.account,
-        emails_verified: g.email.verified || 0,
-        emails_logged:   g.email.logged || 0,
-        opens:           g.email.opens || 0,
-        linkedin:        g.linkedin.verified || 0,
-        calls:           g.call.logged || 0,
-        whatsapp:        g.whatsapp.verified || 0,
-        replies:         g.repliesReceived || 0,
-        campaign:        g.campaigns || null,
-        signal:          g.signal || null
-      };
+      return { account:g.account, emails_verified:g.email.verified||0, emails_logged:g.email.logged||0, opens:g.email.opens||0, linkedin:g.linkedin.verified||0, calls:g.call.logged||0, whatsapp:g.whatsapp.verified||0, replies:g.repliesReceived||0, campaign:g.campaigns||null };
     });
 
     html += '<div id="cov-coaching-'+outputId+'" style="background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:12px 14px">';
@@ -2759,1972 +2755,93 @@ async function runCoverageCheck(repId, repEmail, resultElId) {
     html += '</div>';
 
     out.innerHTML = html;
-
-    // Async: fire Gemini coaching call after rendering table
     getCoverageCoaching(coachingGrid, outputId, isManager ? repEmail : currentUser?.email);
   } catch(e) { out.innerHTML = renderCoveragePeriodPicker(outputId) + '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>'; }
   if (btn) { btn.textContent = 'Refresh'; btn.disabled = false; }
 }
+
 async function getCoverageCoaching(grid, outputId, repEmail) {
   var coachEl = document.getElementById('cov-coaching-' + outputId);
   if (!coachEl) return;
-
-  // Compute summary stats for context
   var totalAccounts = grid.length;
-  var touchedAccounts = grid.filter(function(g){return g.emails_verified > 0 || g.linkedin > 0 || g.calls > 0 || g.whatsapp > 0;}).length;
-  var repliedAccounts = grid.filter(function(g){return g.replies > 0;}).length;
-  var totalEmails = grid.reduce(function(s,g){return s+g.emails_verified;}, 0);
-  var totalOpens = grid.reduce(function(s,g){return s+g.opens;}, 0);
-  var totalReplies = grid.reduce(function(s,g){return s+g.replies;}, 0);
-  var openRate = totalEmails > 0 ? Math.round(totalOpens/totalEmails*100) : 0;
-  var replyRate = totalEmails > 0 ? Math.round(totalReplies/totalEmails*100) : 0;
-  var multichannel = grid.filter(function(g){
-    var channels = [g.emails_verified>0, g.linkedin>0, g.calls>0, g.whatsapp>0].filter(Boolean).length;
-    return channels >= 2;
-  }).length;
+  var touchedAccounts = grid.filter(function(g){return g.emails_verified>0||g.linkedin>0||g.calls>0||g.whatsapp>0;}).length;
+  var repliedAccounts = grid.filter(function(g){return g.replies>0;}).length;
+  var totalEmails = grid.reduce(function(s,g){return s+g.emails_verified;},0);
+  var totalOpens = grid.reduce(function(s,g){return s+g.opens;},0);
+  var totalReplies = grid.reduce(function(s,g){return s+g.replies;},0);
+  var openRate = totalEmails>0?Math.round(totalOpens/totalEmails*100):0;
+  var replyRate = totalEmails>0?Math.round(totalReplies/totalEmails*100):0;
+  var multichannel = grid.filter(function(g){return [g.emails_verified>0,g.linkedin>0,g.calls>0,g.whatsapp>0].filter(Boolean).length>=2;}).length;
+  var hot = grid.filter(function(g){return g.replies>0;}).map(function(g){return g.account;});
+  var opening = grid.filter(function(g){return g.opens>0&&g.replies===0;}).map(function(g){return g.account;});
+  var cold = grid.filter(function(g){return (g.emails_verified>0||g.linkedin>0)&&g.opens===0&&g.replies===0;}).map(function(g){return g.account;});
+  var untouched = grid.filter(function(g){return g.emails_verified===0&&g.linkedin===0&&g.calls===0&&g.whatsapp===0;}).map(function(g){return g.account;});
 
-  // Hot accounts (replied), cold accounts (sent but no engagement), untouched
-  var hot = grid.filter(function(g){return g.replies > 0;}).map(function(g){return g.account;});
-  var opening = grid.filter(function(g){return g.opens > 0 && g.replies === 0;}).map(function(g){return g.account;});
-  var cold = grid.filter(function(g){return (g.emails_verified>0||g.linkedin>0) && g.opens === 0 && g.replies === 0;}).map(function(g){return g.account;});
-  var untouched = grid.filter(function(g){return g.emails_verified===0 && g.linkedin===0 && g.calls===0 && g.whatsapp===0;}).map(function(g){return g.account;});
-
-  var dataContext = 'SDR outreach data for ' + (repEmail||'rep') + ':\n' +
-    '- Accounts: ' + touchedAccounts + '/' + totalAccounts + ' touched\n' +
-    '- Verified email sends: ' + totalEmails + ' | Open rate: ' + openRate + '% | Reply rate: ' + replyRate + '%\n' +
-    '- Multichannel accounts (2+ channels): ' + multichannel + '/' + totalAccounts + '\n' +
-    (hot.length    ? '- 🔥 Replied: '             + hot.join(', ') + '\n' : '') +
-    (opening.length? '- 👁 Opening, not replying: ' + opening.join(', ') + '\n' : '') +
-    (cold.length   ? '- ❄ Sent, zero engagement: ' + cold.join(', ') + '\n' : '') +
-    (untouched.length ? '- ○ Not touched: '        + untouched.join(', ') + '\n' : '') +
-    '\nBenchmarks: cold email open rate 25-40%, reply rate 5-12%, LinkedIn reply rate 10-20%.\n';
-
-  var prompt = dataContext +
-    '\nYou are a sharp B2B sales coach. Provide coaching in exactly 4 sections. Keep each bullet to one punchy sentence. Name specific accounts. No preamble.\n\n' +
-    '1. WHAT\'S WORKING (max 2 bullets)\n' +
-    '2. WHAT TO FIX NOW (max 3 bullets — specific, actionable, account-level)\n' +
-    '3. THIS WEEK\'S PRIORITY (1 sentence — the single most important action)\n' +
-    '4. FORECAST (2 sentences — given current activity, what outcome should the rep realistically expect? Be honest but constructive. Address "will my inputs lead to results?")\n\n' +
-    'Be direct. Use sales language, not corporate speak. Do not pad with pleasantries.';
+  var dataContext = 'SDR outreach for '+(repEmail||'rep')+':\n- Accounts: '+touchedAccounts+'/'+totalAccounts+' touched\n- Email: '+totalEmails+' verified, open rate '+openRate+'%, reply rate '+replyRate+'%\n- Multichannel: '+multichannel+'/'+totalAccounts+'\n'+(hot.length?'- Replied: '+hot.join(', ')+'\n':'')+(opening.length?'- Opening, not replying: '+opening.join(', ')+'\n':'')+(cold.length?'- Sent, zero engagement: '+cold.join(', ')+'\n':'')+(untouched.length?'- Not touched: '+untouched.join(', ')+'\n':'')+'\nBenchmarks: open rate 25-40%, reply rate 5-12%.\n';
+  var prompt = dataContext+'\nProvide coaching in 4 sections, one punchy bullet each. No preamble.\n1. WHAT\'S WORKING (max 2 bullets)\n2. WHAT TO FIX NOW (max 3 bullets — specific accounts)\n3. THIS WEEK\'S PRIORITY (1 sentence)\n4. FORECAST (2 sentences — will current activity lead to results?)\nBe direct. Name accounts. Sales language.';
 
   try {
     var r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 500,
-        messages: [{ role: 'user', content: prompt }]
-      })
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:500,messages:[{role:'user',content:prompt}]})
     });
     var d = await r.json();
-    var coaching = d.content?.[0]?.text || '';
-
-    if (!coaching) { coachEl.innerHTML = '<div style="font-size:11px;color:var(--gold);font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">⚡ Coaching</div><div style="font-size:12px;color:var(--text3)">No coaching available</div>'; return; }
-
-    // Parse and render the three sections
-    var sections = [
-      { key: "WHAT'S WORKING",       color: 'var(--green)', icon: '✅' },
-      { key: 'WHAT TO FIX NOW',      color: 'var(--coral)', icon: '⚡' },
-      { key: "THIS WEEK'S PRIORITY", color: 'var(--gold)',  icon: '🎯' },
-      { key: 'FORECAST',             color: 'var(--blue)',  icon: '📈' }
-    ];
-
-    var rendered = '<div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">⚡ Coaching — '+esc(repEmail?repEmail.split('@')[0]:'you')+'</div>';
-
-    // Also render quick stats row
-    rendered += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border)">' +
-      '<span style="font-size:12px;color:var(--text2)"><strong style="color:'+( openRate>=25?'var(--green)':openRate>=10?'var(--amber)':'var(--coral)' )+'">'+openRate+'%</strong> open rate</span>' +
-      '<span style="font-size:12px;color:var(--text2)"><strong style="color:'+( replyRate>=8?'var(--green)':replyRate>=3?'var(--amber)':'var(--coral)' )+'">'+replyRate+'%</strong> reply rate</span>' +
-      '<span style="font-size:12px;color:var(--text2)"><strong style="color:var(--blue)">'+multichannel+'/'+ totalAccounts+'</strong> multichannel</span>' +
-      '<span style="font-size:12px;color:var(--text2)"><strong style="color:var(--green)">'+repliedAccounts+'</strong> replied</span>' +
-    '</div>';
-
-    // Render coaching text — split into sections
-    var lines = coaching.split('\n').filter(function(l){return l.trim();});
-    var currentSection = null;
-    var buf = '';
-
-    lines.forEach(function(line) {
-      var sectionMatch = sections.find(function(s){ return line.toUpperCase().includes(s.key); });
-      if (sectionMatch) {
-        if (currentSection && buf) rendered += buf + '</div>';
-        currentSection = sectionMatch;
-        buf = '<div style="margin-bottom:10px"><div style="font-size:11px;font-weight:600;color:'+sectionMatch.color+';margin-bottom:5px">'+sectionMatch.icon+' '+sectionMatch.key+'</div>';
-      } else if (line.match(/^[\-\•\*]/)) {
-        buf += '<div style="font-size:12px;color:var(--text);padding:3px 0 3px 12px;border-left:2px solid '+(currentSection?.color||'var(--border)')+';margin-bottom:4px">'+esc(line.replace(/^[\-\•\*]\s*/,''))+'</div>';
-      } else if (currentSection) {
-        buf += '<div style="font-size:12px;color:var(--text);font-weight:500">'+esc(line)+'</div>';
-      }
+    var coaching = d.content?.[0]?.text||'';
+    if (!coaching) { coachEl.innerHTML='<div style="font-size:12px;color:var(--text3)">Coaching unavailable</div>'; return; }
+    var sections=[{key:"WHAT'S WORKING",color:'var(--green)',icon:'✅'},{key:'WHAT TO FIX NOW',color:'var(--coral)',icon:'⚡'},{key:"THIS WEEK'S PRIORITY",color:'var(--gold)',icon:'🎯'},{key:'FORECAST',color:'var(--blue)',icon:'📈'}];
+    var rendered='<div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">⚡ Coaching — '+esc(repEmail?repEmail.split('@')[0]:'you')+'</div>';
+    rendered+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border)">'+'<span style="font-size:12px;color:var(--text2)"><strong style="color:'+(openRate>=25?'var(--green)':openRate>=10?'var(--amber)':'var(--coral)')+'">'+openRate+'%</strong> open rate</span>'+'<span style="font-size:12px;color:var(--text2)"><strong style="color:'+(replyRate>=8?'var(--green)':replyRate>=3?'var(--amber)':'var(--coral)')+'">'+replyRate+'%</strong> reply rate</span>'+'<span style="font-size:12px;color:var(--text2)"><strong style="color:var(--blue)">'+multichannel+'/'+totalAccounts+'</strong> multichannel</span>'+'<span style="font-size:12px;color:var(--text2)"><strong style="color:var(--green)">'+repliedAccounts+'</strong> replied</span>'+'</div>';
+    var lines=coaching.split('\n').filter(function(l){return l.trim();}); var currentSection=null; var buf='';
+    lines.forEach(function(line){
+      var sm=sections.find(function(s){return line.toUpperCase().includes(s.key);});
+      if(sm){if(currentSection&&buf)rendered+=buf+'</div>';currentSection=sm;buf='<div style="margin-bottom:10px"><div style="font-size:11px;font-weight:600;color:'+sm.color+';margin-bottom:5px">'+sm.icon+' '+sm.key+'</div>';}
+      else if(line.match(/^[\-\•\*]/)){buf+='<div style="font-size:12px;color:var(--text);padding:3px 0 3px 12px;border-left:2px solid '+(currentSection?.color||'var(--border)')+';margin-bottom:4px">'+esc(line.replace(/^[\-\•\*]\s*/,''))+'</div>';}
+      else if(currentSection){buf+='<div style="font-size:12px;color:var(--text);font-weight:500">'+esc(line)+'</div>';}
     });
-    if (currentSection && buf) rendered += buf + '</div>';
-
-    coachEl.innerHTML = rendered;
-  } catch(e) {
-    coachEl.innerHTML = '<div style="font-size:11px;color:var(--gold);font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">⚡ Coaching</div><div style="font-size:12px;color:var(--text3)">Coaching unavailable: '+esc(e.message)+'</div>';
-  }
+    if(currentSection&&buf)rendered+=buf+'</div>';
+    coachEl.innerHTML=rendered;
+  } catch(e) { coachEl.innerHTML='<div style="font-size:12px;color:var(--text3)">Coaching error: '+esc(e.message)+'</div>'; }
 }
 
-async function runSamQuery() {
-  const inp = document.getElementById('samChatInput'); const out = document.getElementById('samChatOutput');
-  const query = inp?.value?.trim(); if (!query || !out) return;
-  inp.value = ''; out.innerHTML = '<div class="sam-chat-response"><div class="ldots"><span></span><span></span><span></span></div></div>';
-  if (!API_KEY) { out.innerHTML = '<div class="sam-chat-response" style="color:var(--text3)">Add your Anthropic API key in Settings to activate SAM chat.</div>'; return; }
-  try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', { method:'POST', headers:{'Content-Type':'application/json','x-api-key':API_KEY,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'}, body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:400,messages:[{role:'user',content:'You are SAM, a sharp B2B sales intelligence agent. User asks: "'+query+'". Their tasks today: '+JSON.stringify((dayData(viewDate).tasks||[]).map(t=>t.text))+'. Give a sharp 2-3 sentence response. No fluff.'}]}) });
-    const data = await r.json(); out.innerHTML = '<div class="sam-chat-response">' + esc(data.content?.[0]?.text || 'No response.') + '</div>';
-  } catch(e) { out.innerHTML = '<div class="sam-chat-response" style="color:var(--coral)">Error: '+esc(e.message)+'</div>'; }
-}
-async function renderTeam() {
-  const tl = document.getElementById('teamList'); if (!tl) return;
-  const teamDateEl = document.getElementById('teamDateInput');
-  const selectedDate = (teamDateEl && teamDateEl.value) ? teamDateEl.value : todayKey();
-  tl.innerHTML = '<div class="empty"><div class="empty-icon">⏳</div>Loading team data…</div>';
-  if (!SB_URL || !SB_KEY) { tl.innerHTML = '<div class="empty"><div class="empty-icon">☁</div>Set up Supabase in Settings to see team data.</div>'; return; }
-  if (!currentUser?.token) { tl.innerHTML = '<div class="empty"><div class="empty-icon">🔒</div>Session expired — please sign out and sign back in.</div>'; return; }
-  try {
-    let q;
-    const seeAll = ['super_admin','admin','director','executive'].includes(profile?.role);
-    if (seeAll) q = 'user_profiles?org_id=eq.' + profile.org_id + '&select=user_id,email,role,manager_id';
-    else q = 'user_profiles?org_id=eq.' + profile.org_id + '&manager_id=eq.' + currentUser.id + '&select=user_id,email,role,manager_id';
-    const members = await sbGet(q);
-    const others = (members || []).filter(m => m.user_id !== currentUser.id);
-    if (!others.length) { tl.innerHTML = '<div class="empty"><div class="empty-icon">👥</div>No team members found. Share your org code for members to join.</div>'; return; }
-    populateMgrRepSelect(others);
-    const uids = others.map(m => m.user_id);
-    const rows = await sbGet('daytrack?day_key=eq.' + selectedDate + '&user_id=in.(' + uids.join(',') + ')&select=user_id,data');
-    const dataMap = {}; (rows || []).forEach(r => { dataMap[r.user_id] = r.data; });
-    const roleLabelMap = { super_admin:'Admin', admin:'Admin', manager:'Manager', director:'Director', executive:'Executive', member:'Member', sdr:'SDR', ae:'AE' };
-    tl.innerHTML = others.map((m, idx) => {
-      const d = dataMap[m.user_id] || { tasks:[], issues:[], wins:[], misses:[] };
-      const taskArr = d.tasks?.length ? d.tasks : (d.priorities || []);
-      const total = taskArr.length, done = taskArr.filter(t=>t.done).length;
-      const pct = total ? Math.round(done/total*100) : 0;
-      const sc = calcDayScore(taskArr);
-      return '<div class="member-card">' +
-        '<div class="member-hdr" onclick="toggleMember(' + idx + ')">' +
-          '<div class="m-avatar">' + m.email[0].toUpperCase() + '</div>' +
-          '<div class="m-info"><div class="m-name">' + esc(m.email) + ' <span class="role-pill" style="font-size:10px">' + (roleLabelMap[m.role]||'Member') + '</span></div>' +
-          '<div class="m-stats"><div class="mst">Tasks <span>' + total + '</span></div><div class="mst">Done <span>' + done + '</span></div><div class="mst">Issues <span>' + (d.issues?.length||0) + '</span></div><div class="mst">Score <span style="color:' + scoreColor(sc.score) + '">' + sc.score + '</span></div></div></div>' +
-          '<div class="m-pct"><div class="m-pct-num">' + pct + '%</div><div class="m-pct-lbl">complete</div></div>' +
-          '<div class="m-toggle" id="mtog-' + idx + '">▾</div>' +
-        '</div>' +
-        '<div style="padding:8px 16px;border-top:1px solid var(--border)">' +
-          '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
-            '<button id="sam-btn-' + m.user_id + '" onclick="event.stopPropagation();togglePanel(\'sami-' + m.user_id + '\',function(){runSamIntelligence(\'' + m.user_id + '\',\'' + m.email + '\',\'sami-' + m.user_id + '\')})" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(160,117,42,0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">⚡ SAM Intelligence</button>' +
-            '<button onclick="event.stopPropagation();togglePanel(\'cov-' + m.user_id + '\',function(){runCoverageCheck(\'' + m.user_id + '\',\'' + m.email + '\',\'cov-' + m.user_id + '\')})" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(160,117,42,0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">📊 Coverage</button>' +
-            '<button onclick="event.stopPropagation();togglePanel(\'ivr-' + m.user_id + '\',function(){runIntentVsReality(\'' + m.user_id + '\',\'ivr-' + m.user_id + '\')})" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(160,117,42,0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">🎯 Intent vs Reality</button>' +
-          '</div>' +
-          '<div id="sami-' + m.user_id + '" style="margin-top:8px"></div>' +
-          '<div id="cov-' + m.user_id + '" style="margin-top:6px"></div>' +
-          '<div id="ivr-' + m.user_id + '" style="margin-top:6px"></div>' +
-        '</div>' +
-        '<div class="member-detail" id="mdet-' + idx + '">' + renderMemberDetail(d, m.user_id, m.email) + '</div>' +
-      '</div>';
-    }).join('');
-  } catch(e) { tl.innerHTML = '<div class="empty"><div class="empty-icon">⚠</div>Error loading team: ' + esc(e.message) + '</div>'; }
-}
-function renderMemberDetail(d, memberId, memberEmail) {
-  const canDelegate = ['manager','super_admin','admin'].includes(profile?.role);
-  const taskSection = '<div class="det-sec"><div class="det-lbl">Tasks</div>' + ((d.tasks||[]).length ? (d.tasks||[]).map(it => {
-    const isPri = it.priority || it.text?.startsWith('*'); const displayTxt = it.text?.startsWith('*') ? it.text.slice(1).trim() : (it.text||'');
-    return '<div class="det-item ' + (it.done?'done-item':'') + '"><span class="di-dot" style="background:' + (isPri?'var(--coral)':'var(--gold)') + '"></span><span>' + esc(displayTxt) + '</span>' + (it.completedAt?'<span style="font-size:11px;color:var(--text3);margin-left:6px">✓ '+it.completedAt+'</span>':'') + '</div>';
-  }).join('') : '<div class="m-empty">None logged</div>') + '</div>';
-  const issueSection = '<div class="det-sec"><div class="det-lbl">Issues</div>' + ((d.issues||[]).length ? (d.issues||[]).map(it => '<div class="det-item"><span class="di-dot" style="background:var(--coral)"></span>' + esc(it.text) + '</div>').join('') : '<div class="m-empty">None logged</div>') + '</div>';
-  const winSection = '<div class="det-sec"><div class="det-lbl">Wins</div>' + ((d.wins||[]).length ? (d.wins||[]).map(it => {
-    const displayTxt = it.text?.startsWith('*') ? it.text.slice(1).trim() : (it.text||'');
-    const ts = it.completedAt ? '<span style="font-size:10px;color:var(--text3);margin-left:6px">· '+it.completedAt+'</span>' : '';
-    // completionNote may be on the win directly (new saves) or on the matching task (pre-fix saves)
-    const matchingTask = (d.tasks||[]).find(function(t){ return t.text===it.text && t.completionNote; });
-    const noteText = it.completionNote || (matchingTask && matchingTask.completionNote) || '';
-    const note = noteText ? '<div style="font-size:11px;color:var(--text2);background:var(--surface2);border-radius:5px;padding:3px 8px;margin-top:4px;font-style:italic">💬 '+esc(noteText)+'</div>' : '';
-    return '<div class="det-item"><span class="di-dot" style="background:var(--green)"></span><div style="flex:1"><span>'+esc(displayTxt)+'</span>'+ts+note+'</div></div>';
-  }).join('') : '<div class="m-empty">None logged</div>') + '</div>';
-  const delegateSection = canDelegate ? '<div class="det-sec"><div class="det-lbl">Delegate a task</div><div style="display:flex;gap:8px;margin-top:6px"><input class="setup-input" style="margin-bottom:0;font-size:12px;padding:7px 10px" id="delegate-input-' + memberId + '" placeholder="Task to delegate (min 25 chars)…" maxlength="300"/><button class="setup-btn" style="padding:7px 14px;font-size:12px;white-space:nowrap" onclick="delegateTask(\'' + memberId + '\',\'' + memberEmail + '\')">Send ↗</button></div></div>' : '';
-  return taskSection + issueSection + winSection + delegateSection;
-}
-async function runSamCheck(memberId, memberEmail) {
-  const resultEl = document.getElementById('sam-result-' + memberId); const btn = document.getElementById('sam-btn-' + memberId);
-  if (!resultEl) return;
-  if (btn) { btn.textContent = '⚡ Scanning…'; btn.disabled = true; }
-  resultEl.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0">Reading ' + esc(memberEmail.split('@')[0]) + ' signals…</div>';
-  try {
-    const r = await fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify({ action: 'get_rep_signals', rep_user_id: memberId, query: '', days: 30 }) });
-    const data = await r.json();
-    if (!data.connected) { resultEl.innerHTML = '<div style="font-size:12px;color:var(--text3)">Gmail not connected for this rep</div>'; }
-    else {
-      const sent = data.threads||[]; const inbox = data.inboxThreads||[]; const total = data.totalFound||0;
-      let html = '<div style="font-size:11px;color:var(--green);margin-bottom:8px">Gmail connected</div>';
-      html += '<div style="font-size:11px;color:var(--text3);margin-bottom:8px">'+total+' sent emails (30 days) · '+inbox.length+' replies</div>';
-      if (inbox.length>0) { html += '<div style="border-left:3px solid var(--green);padding:6px 10px;background:rgba(74,140,92,0.08);border-radius:0 6px 6px 0;margin-bottom:6px"><div style="font-size:12px;font-weight:500;color:var(--green)">🔥 '+inbox.length+' reply(ies) from prospect</div>'+inbox.slice(0,2).map(function(t){return '<div style="font-size:11px;color:var(--text2);margin-top:4px">'+esc(t.subject||'')+'</div>';}).join('')+'</div>'; }
-      if (sent.length>0) { const last = sent[0]; html += '<div style="font-size:11px;color:var(--text3)">Last sent: <span style="color:var(--text2)">'+esc(last.subject||'')+'</span> · '+esc(last.date||'')+'</div>'; }
-      resultEl.innerHTML = html;
-    }
-  } catch(e) { resultEl.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>'; }
-  if (btn) { btn.textContent = '⚡ Refresh SAM signals'; btn.disabled = false; }
-}
-async function delegateTask(memberId, memberEmail) {
-  const inp = document.getElementById('delegate-input-' + memberId); const text = inp.value.trim();
-  if (text.length < 25) { alert('Please enter at least 25 characters.'); inp.focus(); return; }
-  const selectedDate = document.getElementById('teamDateInput').value || todayKey();
-  const isPriority = text.startsWith('*'); const cleanText = isPriority ? text.slice(1).trim() : text;
-  const now = new Date(); const ts = now.toLocaleDateString('en-IN', { day:'numeric', month:'short' }) + ' · ' + now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
-  try {
-    const r = await fetch(SB_URL + '/rest/v1/rpc/delegate_task', { method: 'POST', headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_member_id: memberId, p_org_id: profile.org_id, p_day_key: selectedDate, p_task_text: cleanText, p_delegated_by: currentUser.email, p_added_at: ts, p_is_priority: isPriority }) });
-    if (!r.ok) throw new Error(await r.text());
-    inp.value = ''; alert('Task delegated to ' + memberEmail + ' ✓'); renderTeam();
-  } catch(e) { alert('Failed to delegate: ' + e.message); }
-}
-function toggleMember(idx) { const det = document.getElementById('mdet-'+idx); const tog = document.getElementById('mtog-'+idx); const open = det.classList.toggle('open'); tog.classList.toggle('open', open); }
-
-let mgrSearchPeriod = 'all';
-function setMgrPeriod(period, btn) {
-  mgrSearchPeriod = period;
-  document.querySelectorAll('#mgr-period-all,#mgr-period-30,#mgr-period-7,#mgr-period-today,#mgr-period-custom').forEach(b => b.classList.remove('active')); btn.classList.add('active');
-  const customRange = document.getElementById('mgrCustomRange'); if (customRange) customRange.style.display = period === 'custom' ? 'flex' : 'none';
-}
-function populateMgrRepSelect(members) {
-  // Rep dropdown removed — team account search now always searches across
-  // all reps mapped to this manager in one call. Kept as a no-op so the
-  // existing call site in renderTeam() doesn't need touching.
-}
-async function runManagerSearch() {
-  const query = document.getElementById('mgrSearchInput')?.value?.trim(); const out = document.getElementById('mgrSearchOutput');
-  if (!query) { if(out) out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Please enter an account name</div>'; return; }
-  if (out) out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0">Scanning ' + esc(query) + ' across your team\u2019s Gmail\u2026</div>';
-  let dateFrom = '', dateTo = '';
-  if (mgrSearchPeriod === 'custom') { dateFrom = document.getElementById('mgrDateFrom')?.value||''; dateTo = document.getElementById('mgrDateTo')?.value||''; }
-  const daysMap = { all: 0, '30': 30, '7': 7, today: 1 };
-  try {
-    const r = await fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify({ action: 'search_account_team', query, days: daysMap[mgrSearchPeriod] ?? 0, date_from: dateFrom, date_to: dateTo }) });
-    const data = await r.json();
-    if (data.error) { if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral);padding:8px 0">' + esc(data.error) + '</div>'; return; }
-    if (data.message) { if (out) out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0">' + esc(data.message) + '</div>'; return; }
-    const reps = data.repResults || [];
-    const intel = data.intelligence || [];
-    let html = '<div style="background:var(--surface2);border-radius:var(--radius);padding:14px 16px;margin-bottom:10px">';
-    html += '<div style="font-family:var(--serif);font-size:18px;font-weight:500;margin-bottom:8px">' + esc(query) + '</div>';
-    html += '<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--text3)"><span>⚡ <b style="color:var(--text)">' + (data.totalFound||0) + '</b> emails sent across team</span><span>↩ <b style="color:var(--green)">' + (data.totalReplies||0) + '</b> replies received</span></div>';
-    html += '</div>';
-
-    // Per-rep coverage breakdown
-    if (reps.length) {
-      html += '<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:12px">';
-      html += '<div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;padding:8px 12px;background:var(--surface2);border-bottom:1px solid var(--border)">Coverage by rep</div>';
-      reps.forEach(function(r) {
-        if (!r.connected) {
-          html += '<div style="padding:8px 12px;border-top:1px solid var(--border);font-size:12px;color:var(--text3)">' + esc(r.rep.split('@')[0]) + ' \u2014 Gmail not connected</div>';
-          return;
-        }
-        const hasActivity = r.emailsSent > 0;
-        html += '<div style="padding:8px 12px;border-top:1px solid var(--border)">' +
-          '<div style="display:flex;justify-content:space-between;align-items:center">' +
-            '<span style="font-size:12px;font-weight:500;color:var(--text)">' + esc(r.rep.split('@')[0]) + '</span>' +
-            '<span style="font-size:11px;color:' + (hasActivity?'var(--green)':'var(--text3)') + '">' + r.emailsSent + ' sent' + (r.repliesReceived>0?' \u00b7 ' + r.repliesReceived + ' repl' + (r.repliesReceived>1?'ies':'y'):'') + '</span>' +
-          '</div>' +
-          (r.lastSubject ? '<div style="font-size:11px;color:var(--text3);margin-top:2px">Last: ' + esc(r.lastSubject.slice(0,60)) + (r.lastDate?' \u00b7 '+esc(r.lastDate):'') + '</div>' : '') +
-        '</div>';
-      });
-      html += '</div>';
-    }
-
-    // Pulled-in intelligence (same data the Intel tab shows for this account)
-    if (intel.length) {
-      html += '<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden">';
-      html += '<div style="font-size:10px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em;padding:8px 12px;background:var(--surface2);border-bottom:1px solid var(--border)">\u26a1 Account intelligence (' + intel.length + ' meeting' + (intel.length>1?'s':'') + ')</div>';
-      intel.slice(0,5).forEach(function(row) {
-        const sentimentColor = {positive:'var(--green)',neutral:'var(--text3)',negative:'var(--coral)'}[row.sentiment]||'var(--text3)';
-        const signalCount = (row.product_feedback||[]).length + (row.pricing_signals||[]).length + (row.competitor_mentions||[]).length + (row.expansion_signals||[]).length + (row.risk_signals||[]).length;
-        html += '<div style="padding:10px 12px;border-top:1px solid var(--border)">' +
-          '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">' +
-            '<span style="font-size:11px;color:var(--text3)">' + esc(row.meeting_date||'') + ' \u00b7 ' + esc(row.meeting_subject||'') + '</span>' +
-            '<span style="font-size:10px;color:' + sentimentColor + '">' + esc(row.sentiment||'') + '</span>' +
-          '</div>' +
-          (row.summary ? '<div style="font-size:12px;color:var(--text2);line-height:1.5;margin-bottom:4px">' + esc(row.summary) + '</div>' : '') +
-          (signalCount > 0 ? '<div style="font-size:10px;color:var(--gold)">' + signalCount + ' signal' + (signalCount>1?'s':'') + ' extracted \u2014 see Intel tab for details</div>' : '') +
-        '</div>';
-      });
-      html += '</div>';
-    } else {
-      html += '<div style="font-size:11px;color:var(--text3);padding:8px 2px">No extracted intelligence for this account yet \u2014 run \u21bb Refresh in the Intel tab to scan meeting notes.</div>';
-    }
-
-    if (out) out.innerHTML = html;
-  } catch(e) { if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral);padding:8px 0">Error: ' + esc(e.message) + '</div>'; }
-}
-
-let digestPeriod = 'wtd';
-function setDigestPeriod(period, btn) {
-  digestPeriod = period;
-  document.querySelectorAll('#digest-period-wtd,#digest-period-prev,#digest-period-custom').forEach(b => b.classList.remove('active')); btn.classList.add('active');
-  const cr = document.getElementById('digestCustomRange'); if (cr) cr.style.display = period === 'custom' ? 'flex' : 'none';
-}
-function getDigestDateRange() {
-  const today = todayKey();
-  if (digestPeriod === 'wtd') { const d = new Date(); const day = d.getDay(); const monday = new Date(d); monday.setDate(d.getDate() - (day===0?6:day-1)); return { from: monday.toISOString().split('T')[0], to: today }; }
-  if (digestPeriod === 'prev') { const d = new Date(); const day = d.getDay(); const lastMonday = new Date(d); lastMonday.setDate(d.getDate()-day-6); const lastSunday = new Date(d); lastSunday.setDate(d.getDate()-day); return { from: lastMonday.toISOString().split('T')[0], to: lastSunday.toISOString().split('T')[0] }; }
-  if (digestPeriod === 'custom') return { from: document.getElementById('digestDateFrom')?.value||today, to: document.getElementById('digestDateTo')?.value||today };
-  return { from: today, to: today };
-}
-async function sendWeeklyDigest() {
-  const btn = document.getElementById('digestBtn'); const out = document.getElementById('digestOutput');
-  if (btn) { btn.textContent = 'Sending…'; btn.disabled = true; }
-  const { from, to } = getDigestDateRange();
-  const toManager = document.getElementById('digestToManager')?.checked !== false;
-  const toReps = document.getElementById('digestToReps')?.checked !== false;
-  try {
-    const extraEmails = (document.getElementById('digestExtraEmails')?.value||'').split(',').map(function(e){return e.trim();}).filter(function(e){return e.includes('@');});
-    const r = await fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify({ action: 'weekly_digest', date_from: from, date_to: to, send_to_manager: toManager, send_to_reps: toReps, extra_emails: extraEmails }) });
-    const data = await r.json();
-    if (data.success) { if (out) out.innerHTML = '<div style="font-size:12px;color:var(--green);padding:8px 0">✓ Digest sent to ' + data.sent + ' people for ' + data.weekLabel + '</div>'; if (btn) { btn.textContent = '✓ Sent'; setTimeout(() => { btn.textContent = 'Send now'; btn.disabled = false; }, 3000); } }
-    else { throw new Error(data.error || 'Failed to send'); }
-  } catch(e) { if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral);padding:8px 0">Error: ' + esc(e.message) + '</div>'; if (btn) { btn.textContent = 'Send now'; btn.disabled = false; } }
-}
-function showNudgeBanner(tasks) {
-  const banner = document.getElementById('nudgeBanner'); const text = document.getElementById('nudgeText');
-  if (!banner || !text) return;
-  const hour = new Date().getHours(); const pending = (tasks||[]).filter(function(t){return !t.done;}).length;
-  if (pending === 0 || hour < 9) { banner.style.display = 'none'; return; }
-  let msg = '';
-  if (hour >= 11 && hour < 13) msg = '⏰ Almost noon — ' + pending + ' task' + (pending>1?'s':'') + ' still open. Finish before 12 for max rhythm score.';
-  else if (hour >= 16 && hour < 18) msg = '⏰ Last push — ' + pending + ' task' + (pending>1?'s':'') + ' to go. Complete before 6pm to stay on track.';
-  if (msg) { text.textContent = msg; banner.style.display = 'block'; } else banner.style.display = 'none';
-}
-
-let execPeriod = 'today';
-function setExecPeriod(period, btn) {
-  execPeriod = period;
-  document.querySelectorAll('#exec-period-today,#exec-period-wtd,#exec-period-mtd,#exec-period-custom').forEach(b => b.classList.remove('active')); btn.classList.add('active');
-  const cr = document.getElementById('execCustomRange'); if (cr) cr.style.display = period === 'custom' ? 'flex' : 'none';
-  if (period !== 'custom') loadExecDashboard();
-}
-function getExecDateRange() {
-  const today = todayKey();
-  if (execPeriod==='today') return {from:today,to:today,label:'Today'};
-  if (execPeriod==='wtd') { const d=new Date();const day=d.getDay();const monday=new Date(d);monday.setDate(d.getDate()-(day===0?6:day-1));return {from:monday.toISOString().split('T')[0],to:today,label:'Week to date'}; }
-  if (execPeriod==='mtd') { const d=new Date();return {from:d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01',to:today,label:'Month to date'}; }
-  if (execPeriod==='custom') { const from=document.getElementById('execDateFrom')?.value||today;const to=document.getElementById('execDateTo')?.value||today;return {from,to,label:from+' → '+to}; }
-  return {from:today,to:today,label:'Today'};
-}
-async function loadExecDashboard() {
-  const container = document.getElementById('execDashboard'); if (!container||!currentUser?.token||!profile?.org_id) return;
-  container.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text3);font-size:13px">Loading org pulse…</div>';
-  try {
-    const members = await sbGet('user_profiles?org_id=eq.' + profile.org_id + '&select=user_id,email,role');
-    if (!members?.length) { container.innerHTML = '<div style="padding:20px;color:var(--text3)">No team members found</div>'; return; }
-    const reps = members.filter(function(m){return m.role==='member'||m.role==='sdr'||m.role==='ae'||m.role==='manager';});
-    const {from:dateFrom,to:dateTo,label:dateLabel} = getExecDateRange();
-    const repData = [];
-    for (const rep of reps) {
-      const dt = await sbGet('daytrack?user_id=eq.' + rep.user_id + '&day_key=gte.' + dateFrom + '&day_key=lte.' + dateTo + '&select=day_key,data&order=day_key.desc');
-      const allTasks=[],allWins=[],allIssues=[];
-      (dt||[]).forEach(function(row){
-        var date = row.date || viewDate;
-        (row.data?.tasks||[]).forEach(function(t){allTasks.push(t);});
-        (row.data?.wins||[]).forEach(function(w){allWins.push(Object.assign({},w,{date:date}));});
-        (row.data?.issues||[]).forEach(function(i){allIssues.push(i);});
-      });
-      const sc = calcDayScore(allTasks);
-      repData.push({email:rep.email,role:rep.role,score:sc.score,completion:sc.completion,rhythm:sc.rhythm,tasks:allTasks.length,done:allTasks.filter(function(t){return t.done;}).length,pending:allTasks.filter(function(t){return !t.done;}).length,wins:allWins.length,winItems:allWins,issues:allIssues.length,gmailConnected:false});
-    }
-    const avgScore = repData.length?Math.round(repData.reduce(function(s,r){return s+r.score;},0)/repData.length):0;
-    const totalTasks=repData.reduce(function(s,r){return s+r.tasks;},0);
-    const totalDone=repData.reduce(function(s,r){return s+r.done;},0);
-    const totalWins=repData.reduce(function(s,r){return s+r.wins;},0);
-    const totalIssues=repData.reduce(function(s,r){return s+r.issues;},0);
-    const orgCompletionRate=totalTasks?Math.round((totalDone/totalTasks)*100):0;
-    const atRisk=repData.filter(function(r){return r.score<40&&r.tasks>0;});
-    const noActivity=repData.filter(function(r){return r.tasks===0;});
-    const col=scoreColor(avgScore);
-    let html='<div style="margin-bottom:20px"><div style="font-family:var(--serif);font-size:22px;color:var(--text);margin-bottom:2px">SAMagic</div><div style="font-size:12px;color:var(--text3)">'+dateLabel+' · '+reps.length+' reps</div></div>';
-    html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">';
-    [{label:'Org Score',value:avgScore,suffix:'',color:scoreColor(avgScore),sub:scoreLabel(avgScore)},{label:'Completion',value:orgCompletionRate,suffix:'%',color:orgCompletionRate>=70?'var(--green)':orgCompletionRate>=50?'var(--amber)':'var(--coral)',sub:totalDone+'/'+totalTasks+' tasks done'},{label:'Wins',value:totalWins,suffix:'',color:totalWins>0?'var(--green)':'var(--text3)',sub:totalWins>0?'Across team':'None logged yet'},{label:'Issues',value:totalIssues,suffix:'',color:totalIssues>0?'var(--coral)':'var(--text3)',sub:totalIssues>0?'Flagged today':'All clear'}].forEach(function(k){html+='<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px"><div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">'+k.label+'</div><div style="font-size:28px;font-weight:500;color:'+k.color+';line-height:1;margin-bottom:4px">'+k.value+k.suffix+'</div><div style="font-size:11px;color:var(--text3)">'+k.sub+'</div></div>';});
-    html+='</div>';
-    html+='<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-bottom:12px"><div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px">Team scores</div>';
-    repData.slice().sort(function(a,b){return b.score-a.score;}).forEach(function(r){const bc=scoreColor(r.score);const w=r.tasks>0?r.score:0;html+='<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="font-size:12px;color:var(--text2)">'+esc(r.email.split('@')[0])+'</span><span style="font-size:12px;font-weight:600;color:'+bc+'">'+( r.tasks>0?r.score:'—')+'</span></div><div style="height:4px;background:var(--surface2);border-radius:2px;overflow:hidden"><div style="height:100%;width:'+w+'%;background:'+bc+';border-radius:2px;transition:width 0.5s"></div></div></div>';});
-    html+='</div>';
-    if (atRisk.length||noActivity.length||totalIssues>0) {
-      html+='<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-bottom:12px"><div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Priorities & Risks</div>';
-      if (atRisk.length) { html+='<div style="border-left:3px solid var(--coral);padding:8px 12px;background:var(--coral-lt);border-radius:0 6px 6px 0;margin-bottom:8px"><div style="font-size:12px;font-weight:500;color:var(--coral);margin-bottom:4px">🚨 Low score ('+atRisk.length+')</div>'+atRisk.map(function(r){return '<div style="font-size:12px;color:var(--text2)">'+esc(r.email.split('@')[0])+' — score '+r.score+' · '+r.pending+' tasks pending</div>';}).join('')+'</div>'; }
-      if (noActivity.length) { html+='<div style="border-left:3px solid var(--amber);padding:8px 12px;background:var(--amber-lt);border-radius:0 6px 6px 0;margin-bottom:8px"><div style="font-size:12px;font-weight:500;color:var(--amber)">⚠ No tasks logged ('+noActivity.length+')</div>'+noActivity.map(function(r){return '<div style="font-size:12px;color:var(--text2)">'+esc(r.email.split('@')[0])+'</div>';}).join('')+'</div>'; }
-      html+='</div>';
-    }
-    html+='<button onclick="loadExecDashboard()" style="font-size:11px;color:var(--gold);background:none;border:none;cursor:pointer;font-family:var(--sans);padding:0">↻ Refresh</button>';
-
-    // ── Wins detail (with timestamps and completion notes) ─────────────────
-    const allWinsFlat = repData.flatMap(function(r){return (r.winItems||[]).map(function(w){return Object.assign({},w,{repEmail:r.email});});});
-    if (allWinsFlat.length) {
-      html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-top:12px">' +
-        '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">★ Team wins today ('+allWinsFlat.length+')</div>';
-      allWinsFlat.forEach(function(w) {
-        var repName = w.repEmail ? w.repEmail.split('@')[0] : '';
-        var displayText = w.text?.startsWith('*') ? w.text.slice(1).trim() : (w.text || '');
-        var ts = w.completedAt || w.addedAt || '';
-        var note = w.completionNote || '';
-        html += '<div style="padding:10px 12px;background:var(--bg);border-radius:8px;margin-bottom:6px;border-left:3px solid var(--green)">' +
-          '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">' +
-            '<div style="flex:1">' +
-              '<div style="font-size:13px;color:var(--text);font-weight:500">'+esc(displayText)+'</div>' +
-              (note ? '<div style="font-size:12px;color:var(--text2);margin-top:4px;font-style:italic;background:var(--surface2);border-radius:6px;padding:4px 8px">💬 '+esc(note)+'</div>' : '') +
-            '</div>' +
-            '<div style="text-align:right;flex-shrink:0">' +
-              '<div style="font-size:11px;color:var(--green);font-weight:600">'+esc(repName)+'</div>' +
-              (ts ? '<div style="font-size:10px;color:var(--text3);margin-top:2px">'+esc(ts)+'</div>' : '') +
-            '</div>' +
-          '</div>' +
-        '</div>';
-      });
-      html += '</div>';
-    }
-
-    container.innerHTML = html;
-  } catch(e) { container.innerHTML = '<div style="padding:20px;font-size:13px;color:var(--coral)">Error: ' + esc(e.message) + '</div>'; }
-}
-
-let orgPeople = [];
-async function renderOrg() {
-  document.getElementById('orgCodeDisplay').textContent = profile?.org_code || '—';
-  const isSuperAdmin = ['super_admin','admin'].includes(profile?.role);
-  const peopleCard = document.getElementById('peopleCard'); const assignSection = document.getElementById('assignSection');
-  if (peopleCard) peopleCard.style.display = isSuperAdmin ? '' : 'none';
-  if (assignSection) assignSection.style.display = isSuperAdmin ? '' : 'none';
-  if (!SB_URL || !isSuperAdmin) return;
-  try {
-    orgPeople = await sbGet(`user_profiles?org_id=eq.${profile.org_id}&select=user_id,email,role,manager_id`);
-    renderPeopleTable(); renderAssignCard();
-    const accountRepSel = document.getElementById('accountRepSelect');
-    if (accountRepSel) accountRepSel.innerHTML = '<option value="">Select a rep…</option>' + orgPeople.map(p => '<option value="' + p.user_id + '">' + esc(p.email) + '</option>').join('');
-  } catch(e) { document.getElementById('peopleList').innerHTML = `<div class="empty">Error: ${e.message}</div>`; }
-}
-function renderPeopleTable() {
-  if (!orgPeople?.length) { document.getElementById('peopleList').innerHTML = '<div class="empty">No members yet.</div>'; return; }
-  const rows = orgPeople.map(p => {
-    const roleOpts = ['sdr','ae','manager','director','executive','admin'].map(r => `<option value="${r}" ${p.role===r?'selected':''}>${{sdr:'SDR',ae:'AE',manager:'Manager',director:'Director',executive:'Executive',admin:'Admin'}[r]||r}</option>`).join('');
-    return `<tr><td>${esc(p.email)}</td><td><select class="role-select" onchange="updateRole('${p.user_id}', this.value)">${roleOpts}</select></td></tr>`;
-  }).join('');
-  document.getElementById('peopleList').innerHTML = `<table class="people-table"><thead><tr><th>Email</th><th>Role</th></tr></thead><tbody>${rows}</tbody></table>`;
-}
-function renderAssignCard() {
-  const seniorRoles = ['manager','director','executive','admin','super_admin'];
-  const managers = orgPeople.filter(p => seniorRoles.includes(p.role));
-  const reportees = orgPeople.filter(p => p.role==='member'||p.role==='sdr'||p.role==='ae'||p.role==='manager');
-  if (!managers.length) { document.getElementById('assignCard').innerHTML = '<div class="m-empty">No senior members yet. Assign a Manager, Director or Executive role first.</div>'; return; }
-  const html = managers.map(mgr => {
-    const mgrMembers = reportees.filter(m => m.manager_id === mgr.user_id);
-    const unassigned = reportees.filter(m => !m.manager_id || m.manager_id !== mgr.user_id);
-    return `<div style="margin-bottom:16px"><div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:8px">${esc(mgr.email)}</div><div style="font-size:12px;color:var(--text3);margin-bottom:6px">Current team: ${mgrMembers.length?mgrMembers.map(m=>`<span style="color:var(--green)">${esc(m.email)}</span>`).join(', '):'none'}</div><select class="role-select" style="width:100%;padding:8px;font-size:13px" onchange="assignToManager('${mgr.user_id}', this.value); this.value=''"><option value="">+ Assign a member…</option>${unassigned.map(m=>`<option value="${m.user_id}">${esc(m.email)}</option>`).join('')}</select></div>`;
-  }).join('');
-  document.getElementById('assignCard').innerHTML = html;
-}
-async function updateRole(userId, newRole) { if (!SB_URL) return; try { await sbPatch(`user_profiles?user_id=eq.${userId}`, { role: newRole }); await renderOrg(); } catch(e) { alert('Error updating role: ' + e.message); } }
-async function assignToManager(managerId, memberId) { if (!memberId || !SB_URL) return; try { await sbPatch(`user_profiles?user_id=eq.${memberId}`, { manager_id: managerId }); await renderOrg(); } catch(e) { alert('Error assigning member: ' + e.message); } }
-
-async function loadRepAccounts() {
-  const repId = document.getElementById('accountRepSelect')?.value; const list = document.getElementById('repAccountsList'); const addRow = document.getElementById('addAccountRow');
-  if (!repId) { if (list) list.innerHTML = ''; if (addRow) addRow.style.display = 'none'; return; }
-  if (addRow) addRow.style.display = 'flex';
-  if (list) list.innerHTML = '<div style="font-size:12px;color:var(--text3)">Loading…</div>';
-  try {
-    const rows = await sbGet('org_accounts?user_id=eq.' + repId + '&org_id=eq.' + profile.org_id + '&select=id,account_name,domain&order=account_name');
-    if (!rows || !rows.length) { list.innerHTML = '<div style="font-size:12px;color:var(--text3);font-style:italic">No accounts assigned yet</div>'; return; }
-    list.innerHTML = rows.map(r => '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--surface2);border-radius:6px;margin-bottom:5px"><div><div style="font-size:13px;color:var(--text)">' + esc(r.account_name) + '</div>' + (r.domain?'<div style="font-size:11px;color:var(--text3)">'+esc(r.domain)+'</div>':'') + '</div><button onclick="removeRepAccount(\''+r.id+'\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px">✕</button></div>').join('');
-  } catch(e) { list.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>'; }
-}
-var _accountNameTimer = null;
-async function onAccountNameInput(val) {
-  // Debounce — wait for the rep to pause typing before searching
-  clearTimeout(_accountNameTimer);
-  const suggestion = document.getElementById('parentMatchSuggestion');
-  if (!val || val.length < 3) { if (suggestion) suggestion.style.display = 'none'; return; }
-  _accountNameTimer = setTimeout(async function() {
-    try {
-      // Search for existing accounts in this org whose name contains the typed string
-      const r = await fetch(SB_URL + '/rest/v1/org_accounts?org_id=eq.' + profile.org_id + '&account_name=ilike.' + encodeURIComponent('%' + val + '%') + '&select=id,account_name,region,parent_account_id&limit=5', {
-        headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token }
-      });
-      const matches = await r.json();
-      if (!Array.isArray(matches) || !matches.length) { suggestion.style.display = 'none'; return; }
-
-      // Find parent candidates — rows that are either already a parent (region='Global' or has children)
-      // or standalone rows with the same or very similar name
-      const exactOrParent = matches.filter(function(m) {
-        return m.account_name.toLowerCase() === val.toLowerCase() ||
-               m.account_name.toLowerCase().replace(/\s+(global|worldwide)$/i,'').trim() === val.toLowerCase().trim();
-      });
-
-      if (!exactOrParent.length) { suggestion.style.display = 'none'; return; }
-
-      const parent = exactOrParent[0];
-      const existingBranches = matches.filter(function(m) { return m.parent_account_id === parent.id || m.id === parent.id; });
-      const branchList = existingBranches.filter(function(m) { return m.region && m.region !== 'Global'; }).map(function(m) { return m.region; }).join(' · ');
-
-      document.getElementById('parentMatchText').textContent =
-        '"' + parent.account_name + '" already exists' + (branchList ? ' — existing branches: ' + branchList : '') + '. Add as branch?';
-      document.getElementById('parentMatchActions').innerHTML =
-        '<button onclick="setParentMatch(\'' + parent.id + '\',\'' + parent.account_name.replace(/'/g,"\\'") + '\')" style="padding:3px 10px;border-radius:12px;background:var(--gold2);border:none;color:#18160F;font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;margin-right:6px">Yes, add as branch</button>' +
-        '<button onclick="clearParentMatch()" style="padding:3px 10px;border-radius:12px;background:transparent;border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);font-size:11px;cursor:pointer">No, standalone</button>';
-      suggestion.style.display = 'block';
-    } catch(e) { /* non-fatal — just don't show suggestion */ }
-  }, 400);
-}
-function setParentMatch(parentId, parentName) {
-  document.getElementById('newAccountParentId').value = parentId;
-  document.getElementById('parentMatchSuggestion').style.display = 'none';
-  // Pre-fill region field focus prompt
-  const regionInput = document.getElementById('newAccountRegion');
-  if (regionInput && !regionInput.value) { regionInput.focus(); }
-}
-function clearParentMatch() {
-  document.getElementById('newAccountParentId').value = '';
-  document.getElementById('parentMatchSuggestion').style.display = 'none';
-}
-
-async function addRepAccount() {
-  const repId = document.getElementById('accountRepSelect')?.value;
-  const name = document.getElementById('newAccountName')?.value?.trim();
-  const region = document.getElementById('newAccountRegion')?.value?.trim() || null;
-  const domain = document.getElementById('newAccountDomain')?.value?.trim() || null;
-  const parentId = document.getElementById('newAccountParentId')?.value?.trim() || null;
-  if (!repId || !name) { alert('Select a rep and enter account name'); return; }
-
-  // If a region was typed but no parent was explicitly selected, do one more
-  // check — find any existing standalone account with the same base name and
-  // link to it automatically. This catches the case where the rep skips the
-  // suggestion prompt but types "Ferrero" + region "India".
-  let resolvedParentId = parentId;
-  if (!resolvedParentId && region) {
-    try {
-      const pr = await fetch(SB_URL + '/rest/v1/org_accounts?org_id=eq.' + profile.org_id + '&account_name=eq.' + encodeURIComponent(name) + '&select=id&limit=1', {
-        headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token }
-      });
-      const existing = await pr.json();
-      if (Array.isArray(existing) && existing.length) resolvedParentId = existing[0].id;
-    } catch(e) { /* non-fatal */ }
-  }
-
-  try {
-    const body = { org_id: profile.org_id, user_id: repId, account_name: name, domain, added_by: currentUser.id };
-    if (region) body.region = region;
-    if (resolvedParentId) body.parent_account_id = resolvedParentId;
-
-    const r = await fetch(SB_URL + '/rest/v1/org_accounts', {
-      method: 'POST',
-      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-      body: JSON.stringify(body)
-    });
-    if (!r.ok) throw new Error(await r.text());
-    document.getElementById('newAccountName').value = '';
-    document.getElementById('newAccountRegion').value = '';
-    document.getElementById('newAccountDomain').value = '';
-    document.getElementById('newAccountParentId').value = '';
-    document.getElementById('parentMatchSuggestion').style.display = 'none';
-    loadRepAccounts();
-  } catch(e) {
-    if (e.message.includes('duplicate') || e.message.includes('unique')) alert(name + ' is already assigned to this rep');
-    else alert('Error: ' + e.message);
-  }
-}
-async function removeRepAccount(id) {
-  if (!confirm('Remove this account?')) return;
-  try { await fetch(SB_URL + '/rest/v1/org_accounts?id=eq.' + id, { method: 'DELETE', headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token } }); loadRepAccounts(); }
-  catch(e) { alert('Error: ' + e.message); }
-}
-function copyOrgCode() { const code = profile?.org_code || ''; navigator.clipboard?.writeText(code).then(() => alert('Copied: ' + code)).catch(() => alert('Your org code: ' + code)); }
-
-function renderSettings() {
-  document.getElementById('apiBadge').textContent = API_KEY ? 'set ✓' : 'not set';
-  document.getElementById('apiBadge').className = API_KEY ? 'badge-ok' : 'badge-no';
-  document.getElementById('supaBadge').textContent = (SB_URL && SB_KEY) ? 'connected ✓' : 'not set';
-  document.getElementById('supaBadge').className = (SB_URL && SB_KEY) ? 'badge-ok' : 'badge-no';
-  if (API_KEY) document.getElementById('apiInput').placeholder = '••••• (saved — paste to update)';
-  if (SB_URL) document.getElementById('supaUrl').value = SB_URL;
-}
-function saveApiKey() { const v = document.getElementById('apiInput').value.trim(); if (!v) return; API_KEY = v; localStorage.setItem('dt-api-key', v); document.getElementById('apiInput').value = ''; renderSettings(); alert('API key saved!'); }
-async function saveSupabase() {
-  const url = document.getElementById('supaUrl').value.trim().replace(/\/$/,''); const key = document.getElementById('supaKey').value.trim();
-  if (!url || !key) { showSS('Enter both URL and anon key.', false); return; }
-  SB_URL = url; SB_KEY = key; localStorage.setItem('dt-sb-url', url); localStorage.setItem('dt-sb-key', key);
-  EDGE_FN_URL = SB_URL + '/functions/v1/sam-gmail-signals'; // keep in sync with whichever project is now configured
-  try { await fetch(url + '/rest/v1/daytrack?limit=1', { headers: { 'apikey': key, 'Authorization': 'Bearer ' + key } }); showSS('Connected! Syncing…', true); renderSettings(); await syncDown(); runCarryOver(); render(); showSS('All synced ✓', true); }
-  catch(e) { showSS('Could not connect: ' + e.message, false); }
-}
-function showSS(msg, ok) { const el = document.getElementById('syncStatus'); el.textContent = msg; el.className = 'sstatus ' + (ok?'ok':'err'); }
-function clearToday() { if (!confirm('Clear all data for this day?')) return; allData[viewDate]={tasks:[],issues:[],wins:[],misses:[]}; save(viewDate); render(); }
-
-let reviewPeriod = 'daily';
-function setReviewPeriod(period) {
-  reviewPeriod = period;
-  document.querySelectorAll('.rtab').forEach(t => t.classList.remove('active'));
-  document.getElementById('rtab-' + period).classList.add('active');
-  const labels = { daily: '✦ Daily review', weekly: '✦ Weekly review', monthly: '✦ Monthly review' };
-  document.getElementById('reviewLabel').textContent = labels[period];
-  document.getElementById('aiBody').textContent = 'Hit Refresh for Claude\'s ' + period + ' review.';
-  document.getElementById('aiHints').style.display = 'none';
-}
-function getPeriodData() {
-  const today = new Date(); let days = [];
-  if (reviewPeriod === 'daily') { days = [viewDate]; }
-  else if (reviewPeriod === 'weekly') { for (let i = 6; i >= 0; i--) { const d = new Date(today); d.setDate(today.getDate()-i); days.push(dateKey(d)); } }
-  else { for (let i = 29; i >= 0; i--) { const d = new Date(today); d.setDate(today.getDate()-i); days.push(dateKey(d)); } }
-  let totalTasks=0,doneTasks=0,totalIssues=0,totalWins=0,totalMisses=0,taskTexts=[],issueTexts=[],winTexts=[];
-  days.forEach(k => { const d = allData[k]; if (!d) return; totalTasks+=d.tasks?.length||0; doneTasks+=d.tasks?.filter(t=>t.done).length||0; totalIssues+=d.issues?.length||0; totalWins+=d.wins?.filter(w=>!w.fromTask).length||0; totalMisses+=d.misses?.length||0; if (d.tasks?.length) taskTexts.push(...d.tasks.slice(0,3).map(t=>t.text+(t.done?' ✓':''))); if (d.issues?.length) issueTexts.push(...d.issues.slice(0,2).map(i=>i.text)); if (d.wins?.length) winTexts.push(...d.wins.filter(w=>!w.fromTask).slice(0,2).map(w=>w.text)); });
-  return {days,totalTasks,doneTasks,totalIssues,totalWins,totalMisses,taskTexts,issueTexts,winTexts};
-}
-async function runReview() {
-  const body = document.getElementById('aiBody');
-  const d = dayData(viewDate); const total = d.tasks.length, done = d.tasks.filter(t=>t.done).length;
-  renderSummary();
-  const pd = getPeriodData(); const pct = pd.totalTasks ? Math.round(pd.doneTasks/pd.totalTasks*100) : 0;
-  const periodLabel = reviewPeriod==='daily' ? fmtDate(viewDate) : reviewPeriod==='weekly' ? 'this week' : 'this month';
-  const fallback = `<strong>${reviewPeriod.charAt(0).toUpperCase()+reviewPeriod.slice(1)} summary — ${periodLabel}</strong><br><br>✦ ${pd.totalTasks} tasks, ${pd.doneTasks} done (${pct}%)<br>⚡ ${pd.totalIssues} issues<br>★ ${pd.totalWins} wins<br>○ ${pd.totalMisses} misses`;
-  if (!API_KEY) { body.innerHTML = fallback + '<br><br><em style="color:var(--text3)">Add your Anthropic key in Settings for AI insights.</em>'; return; }
-  if (!pd.totalTasks && !pd.totalIssues && !pd.totalWins) { body.textContent = 'Nothing logged for this period yet.'; return; }
-  body.innerHTML = '<div class="ldots"><span></span><span></span><span></span></div>';
-  document.getElementById('aiHints').style.display = 'none';
-  const myRole = profile?.role || 'member'; const isSDRRole = myRole === 'sdr';
-  const roleContext = isSDRRole ? 'This person is an SDR. Focus on coverage, outreach, connections, meetings booked.' : 'This person is an AE. Focus on deal quality, pipeline progression, proposals, closings.';
-  let prompt;
-  if (reviewPeriod === 'daily') {
-    const pList = d.tasks.map(t=>`- ${t.text} (${t.done?'done':'pending'})`).join('\n')||'None';
-    const iList = d.issues.map(i=>`- ${i.text}`).join('\n')||'None';
-    const aList = d.wins.filter(w=>!w.fromTask).map(a=>`- ${a.text}`).join('\n')||'None';
-    prompt = viewDate > todayKey() ? `Tasks planned for ${viewDate}:\n${pList}\n\nGive a short encouraging planning note in 2-3 sentences.` : `You are a warm productivity coach. ${roleContext}\n\nReview this day (${viewDate}) in 3 short flowing paragraphs, no bullets, under 110 words.\n\nTasks (${done}/${total}):\n${pList}\nIssues:\n${iList}\nExtra wins:\n${aList}`;
-  } else {
-    prompt = `You are a strategic productivity coach. ${roleContext}\n\nGive a ${reviewPeriod} performance review.\n\nStats: ${pd.totalTasks} tasks, ${pd.doneTasks} done (${pct}%), ${pd.totalIssues} issues, ${pd.totalWins} wins, ${pd.totalMisses} misses.\n\n4 short paragraphs: (1) overall, (2) patterns, (3) what went well, (4) 2-3 recommendations. Under 180 words. No bullets.`;
-  }
-  try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', { method:'POST', headers:{'Content-Type':'application/json','x-api-key':API_KEY,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'}, body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:reviewPeriod==='daily'?300:500,messages:[{role:'user',content:prompt}]}) });
-    const data = await r.json();
-    if (data.error) { body.innerHTML = fallback + `<br><br><em style="color:var(--coral)">${data.error.message}</em>`; return; }
-    body.textContent = data.content?.[0]?.text || 'No response.';
-    document.getElementById('aiHints').style.display = 'flex';
-  } catch(e) { body.innerHTML = fallback + `<br><br><em style="color:var(--text3)">AI unavailable: ${e.message}</em>`; }
-}
-async function askQ(q) {
-  if (!API_KEY) return;
-  const body = document.getElementById('aiBody');
-  body.innerHTML = '<div class="ldots"><span></span><span></span><span></span></div>';
-  document.getElementById('aiHints').style.display = 'none';
-  const d = dayData(viewDate);
-  const ctx = `Tasks: ${d.tasks.map(t=>t.text+(t.done?' (done)':'')).join(', ')||'none'}. Issues: ${d.issues.map(i=>i.text).join(', ')||'none'}.`;
-  try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'Content-Type':'application/json','x-api-key':API_KEY,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true' }, body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:200, messages:[{role:'user',content:`Context: ${ctx}\nQuestion: ${q}\nAnswer in 2-3 sentences, warm and practical.`}] }) });
-    const data = await r.json(); body.textContent = data.content?.[0]?.text || 'No response.';
-    document.getElementById('aiHints').style.display = 'flex';
-  } catch(e) { body.textContent = 'Could not reach the API.'; }
-}
-function initTheme() {
-  const saved = localStorage.getItem('dt-theme');
-  if (saved) { document.body.classList.add(saved + '-mode'); updateThemeIcon(saved); }
-  else { document.body.classList.add('light-mode'); updateThemeIcon('light'); } // Default: light mode
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => { if (!localStorage.getItem('dt-theme')) updateThemeIcon(e.matches ? 'dark' : 'light'); });
-}
-function toggleTheme() {
-  const isDark = document.body.classList.contains('dark-mode') || (!document.body.classList.contains('light-mode') && window.matchMedia('(prefers-color-scheme: dark)').matches);
-  if (isDark) { document.body.classList.remove('dark-mode'); document.body.classList.add('light-mode'); localStorage.setItem('dt-theme', 'light'); updateThemeIcon('light'); }
-  else { document.body.classList.remove('light-mode'); document.body.classList.add('dark-mode'); localStorage.setItem('dt-theme', 'dark'); updateThemeIcon('dark'); }
-}
-function updateThemeIcon(mode) { const btn = document.getElementById('themeToggle'); if (btn) btn.textContent = mode === 'dark' ? 'Light' : 'Dark'; }
-
-let activeRecognition = null;
-function toggleVoice(inputId, btnId) {
-  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) { alert('Voice input not supported in this browser. Try Chrome or Safari.'); return; }
-  const btn = document.getElementById(btnId);
-  if (activeRecognition) { activeRecognition.stop(); activeRecognition = null; btn.classList.remove('recording'); btn.textContent = '🎙'; return; }
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition; const recognition = new SR();
-  recognition.lang = 'en-IN'; recognition.continuous = false; recognition.interimResults = false;
-  recognition.onstart = () => { btn.classList.add('recording'); btn.textContent = '🔴'; };
-  recognition.onresult = (e) => { const transcript = e.results[0][0].transcript; const inp = document.getElementById(inputId); inp.value = (inp.value + ' ' + transcript).trim(); inp.dispatchEvent(new Event('input')); inp.focus(); };
-  recognition.onend = () => { btn.classList.remove('recording'); btn.textContent = '🎙'; activeRecognition = null; };
-  recognition.onerror = () => { btn.classList.remove('recording'); btn.textContent = '🎙'; activeRecognition = null; };
-  activeRecognition = recognition; recognition.start();
-}
-
-function isWeekday(dateStr) { const d = parseDate(dateStr); const day = d.getDay(); return day !== 0 && day !== 6; }
-function calcStreak() {
-  let streak = 0; let d = new Date(); d.setDate(d.getDate()-1);
-  while (true) { const k = dateKey(d); if (!isWeekday(k)) { d.setDate(d.getDate()-1); continue; } const data = allData[k]; const tasks = data?.tasks||[]; const done = tasks.filter(t=>t.done).length; if (!tasks.length || done===0) break; streak++; d.setDate(d.getDate()-1); if (streak>365) break; }
-  return streak;
-}
-function calcMomentum() {
-  let total=0,done=0,days=0; const d=new Date(); d.setDate(d.getDate()-1);
-  while (days<5) { const k=dateKey(d); if (isWeekday(k)) { const data=allData[k]; const tasks=data?.tasks||[]; total+=tasks.length; done+=tasks.filter(t=>t.done).length; days++; } d.setDate(d.getDate()-1); }
-  return total ? Math.round((done/total)*100) : 0;
-}
-function renderMomentum() {
-  const streak=calcStreak(); const momentum=calcMomentum(); const mr=document.getElementById('momentumRow'); if (!mr) return;
-  if (streak===0&&momentum===0){mr.innerHTML='';return;}
-  const fireEmoji=streak>=7?'🔥':streak>=3?'⚡':'✦';
-  mr.innerHTML='<div class="streak-badge"><div class="streak-fire">'+fireEmoji+'</div><div class="streak-info"><div class="streak-num">'+streak+'</div><div class="streak-lbl">'+(streak===1?'1 day streak':streak+' day streak')+' (weekdays)</div></div></div><div class="momentum-bar-wrap"><div class="momentum-lbl"><span>5-day momentum</span><span style="color:var(--gold);font-weight:600">'+momentum+'%</span></div><div class="momentum-bar"><div class="momentum-fill" style="width:'+momentum+'%"></div></div></div>';
-}
-
-function tmplKey() {
-  const uid = currentUser?.id; if (!uid) return null;
-  const legacyKey = 'dt-tmpl-undefined'; const legacyData = localStorage.getItem(legacyKey);
-  if (legacyData && legacyData !== '[]') { try { const existing = JSON.parse(localStorage.getItem('dt-tmpl-' + uid)||'[]'); if (!existing.length) localStorage.setItem('dt-tmpl-' + uid, legacyData); } catch {} localStorage.removeItem(legacyKey); }
-  return 'dt-tmpl-' + uid;
-}
-function getTemplates() { const k = tmplKey(); if (!k) return []; try { return JSON.parse(localStorage.getItem(k)||'[]'); } catch { return []; } }
-function saveTemplates(list) { const k = tmplKey(); if (!k) return; localStorage.setItem(k, JSON.stringify(list)); }
-function buildTasksText() {
-  const d = dayData(viewDate);
-  const tasks = d.tasks || [];
-  if (!tasks.length) return null;
-
-  // Format date as DD/MM/YYYY
-  const parts = viewDate.split('-');
-  const dateStr = parts[2] + '/' + parts[1] + '/' + parts[0];
-
-  // Header line with sender name
-  const senderName = profile?.org_name || currentUser?.email?.split('@')[0] || 'Me';
-  let text = '*Priorities for ' + dateStr + '*\n';
-  text += '_Shared by ' + senderName + '_\n\n';
-
-  // Tasks with serial numbers, priorities marked with ⭐
-  let sno = 1;
-  tasks.forEach(function(t) {
-    if (!t.text) return;
-    const displayText = t.text.startsWith('*') ? t.text.slice(1).trim() : t.text;
-    const done = t.done ? '✅ ' : '🔲 ';
-    const priority = (t.priority || t.text.startsWith('*')) ? '⭐ ' : '';
-    text += sno + '. ' + done + priority + displayText + '\n';
-    sno++;
-  });
-
-  // Summary line
-  const total = tasks.length;
-  const done = tasks.filter(function(t) { return t.done; }).length;
-  text += '\n_' + done + '/' + total + ' completed_';
-  return text;
-}
-
-function shareTasksMenu() {
-  const text = buildTasksText();
-  if (!text) { alert('No tasks to share today.'); return; }
-
-  var existing = document.getElementById('share-menu-popup');
-  if (existing) { existing.remove(); return; }
-
-  var overlay = document.createElement('div');
-  overlay.id = 'share-menu-popup';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);display:flex;align-items:flex-end;justify-content:center;z-index:999;padding:0';
-
-  var parts = viewDate.split('-');
-  var dateStr = parts[2] + '/' + parts[1] + '/' + parts[0];
-
-  overlay.innerHTML =
-    '<div style="background:var(--bg);border-top:1px solid var(--border2);border-radius:var(--radius-lg) var(--radius-lg) 0 0;width:100%;max-width:480px;padding:0 0 24px 0;animation:slideUp 0.25s ease">' +
-      '<div style="width:40px;height:4px;background:var(--border2);border-radius:2px;margin:12px auto 16px"></div>' +
-      '<div style="padding:0 20px">' +
-        '<div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px">Share today\'s priorities</div>' +
-        '<div style="font-size:12px;color:var(--text3);margin-bottom:20px">' + dateStr + ' · ' + (buildTasksText()?.split('\n').filter(function(l){return l.match(/^\d+\./);}).length || 0) + ' tasks</div>' +
-
-        '<button onclick="shareWhatsApp()" style="width:100%;padding:13px 16px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.25);border-radius:var(--radius);color:#128C7E;font-family:var(--sans);font-size:14px;font-weight:500;cursor:pointer;margin-bottom:10px;text-align:left;display:flex;align-items:center;gap:12px">' +
-          '<span style="font-size:22px">💬</span>' +
-          '<div><div style="font-weight:600">Share via WhatsApp</div><div style="font-size:12px;color:var(--text3);font-weight:400">Opens WhatsApp with your priorities pre-filled</div></div>' +
-        '</button>' +
-
-        '<button onclick="shareEmail()" style="width:100%;padding:13px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:var(--sans);font-size:14px;font-weight:500;cursor:pointer;margin-bottom:10px;text-align:left;display:flex;align-items:center;gap:12px">' +
-          '<span style="font-size:22px">✉️</span>' +
-          '<div><div style="font-weight:600">Share via Email</div><div style="font-size:12px;color:var(--text3);font-weight:400">Opens your mail app with subject and body</div></div>' +
-        '</button>' +
-
-        '<button onclick="copyTaskText()" id="copy-tasks-btn" style="width:100%;padding:13px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:var(--sans);font-size:14px;font-weight:500;cursor:pointer;margin-bottom:16px;text-align:left;display:flex;align-items:center;gap:12px">' +
-          '<span style="font-size:22px">📋</span>' +
-          '<div><div style="font-weight:600">Copy to clipboard</div><div style="font-size:12px;color:var(--text3);font-weight:400">Paste anywhere — Slack, Teams, SMS</div></div>' +
-        '</button>' +
-
-        '<button onclick="document.getElementById(\'share-menu-popup\').remove()" style="width:100%;padding:11px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text3);font-family:var(--sans);font-size:13px;cursor:pointer">Cancel</button>' +
-      '</div>' +
-    '</div>';
-
-  overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
-  document.body.appendChild(overlay);
-}
-
-function shareWhatsApp() {
-  var text = buildTasksText();
-  if (!text) return;
-  document.getElementById('share-menu-popup')?.remove();
-  // WhatsApp URL scheme — opens WhatsApp with pre-filled message
-  var url = 'https://wa.me/?text=' + encodeURIComponent(text);
-  window.open(url, '_blank');
-}
-
-function shareEmail() {
-  var text = buildTasksText();
-  if (!text) return;
-  document.getElementById('share-menu-popup')?.remove();
-  var parts = viewDate.split('-');
-  var dateStr = parts[2] + '/' + parts[1] + '/' + parts[0];
-  var subject = 'Priorities for ' + dateStr;
-  // Convert WhatsApp formatting (*bold*, _italic_) to plain text for email
-  var body = text.replace(/\*/g, '').replace(/_/g, '');
-  window.location.href = 'mailto:?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
-}
-
-function copyTaskText() {
-  var text = buildTasksText();
-  if (!text) return;
-  // Plain text version without WhatsApp markdown
-  var plain = text.replace(/\*/g, '').replace(/_/g, '');
-  navigator.clipboard.writeText(plain).then(function() {
-    var btn = document.getElementById('copy-tasks-btn');
-    if (btn) { btn.textContent = '✓ Copied!'; btn.style.color = 'var(--green)'; setTimeout(function() { document.getElementById('share-menu-popup')?.remove(); }, 1200); }
-  });
-}
-
-function openTemplateManager() { document.getElementById('templateModal').style.display = 'flex'; renderTemplateList(); }
-function closeTemplateManager() { document.getElementById('templateModal').style.display = 'none'; }
-function renderTemplateList() {
-  const templates = getTemplates(); const list = document.getElementById('tmplList'); const count = document.getElementById('tmplCount');
-  count.textContent = templates.length ? `(${templates.length})` : '';
-  if (!templates.length) { list.innerHTML = '<div style="font-size:13px;color:var(--text3);font-style:italic;padding:8px 0">No template tasks yet. Add some above.</div>'; return; }
-  list.innerHTML = templates.map((t, i) => `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface2);border-radius:8px;margin-bottom:6px"><input type="checkbox" id="tmpl-chk-${i}" checked style="accent-color:var(--gold);width:16px;height:16px;flex-shrink:0"><input type="text" value="${esc(t)}" id="tmpl-txt-${i}" style="flex:1;background:transparent;border:none;outline:none;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px" onchange="updateTemplateTask(${i}, this.value)"/><button onclick="deleteTemplateTask(${i})" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;flex-shrink:0">✕</button></div>`).join('');
-}
-function addTemplateTask() { const inp = document.getElementById('tmplInput'); const text = inp.value.trim(); const hint = document.getElementById('tmplHint'); if (text.length < 25) { hint.style.display='block'; inp.focus(); return; } hint.style.display='none'; const templates = getTemplates(); templates.push(text); saveTemplates(templates); inp.value = ''; renderTemplateList(); }
-function updateTemplateTask(i, newVal) { const templates = getTemplates(); if (newVal.trim().length >= 25) templates[i] = newVal.trim(); saveTemplates(templates); }
-function deleteTemplateTask(i) { const templates = getTemplates(); templates.splice(i, 1); saveTemplates(templates); renderTemplateList(); }
-function loadTemplateToday() {
-  const templates = getTemplates(); if (!templates.length) { alert('No template tasks saved yet.'); return; }
-  const now = new Date(); const ts = now.toLocaleDateString('en-IN', { day:'numeric', month:'short' }) + ' · ' + now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
-  const d = dayData(viewDate); let added = 0;
-  templates.forEach((text, i) => {
-    const chk = document.getElementById('tmpl-chk-' + i); const editedTxt = document.getElementById('tmpl-txt-' + i)?.value?.trim() || text;
-    if (!chk || !chk.checked) return; if (d.tasks.find(t => t.text === editedTxt)) return;
-    const isPriority = editedTxt.startsWith('*'); const cleanText = isPriority ? editedTxt.slice(1).trim() : editedTxt;
-    d.tasks.push({ text: cleanText, done: false, addedAt: ts, priority: isPriority }); added++;
-  });
-  if (added === 0) { alert('All selected tasks are already in today\'s list.'); return; }
-  runCarryOver(); render(); save(viewDate); closeTemplateManager();
-}
-document.addEventListener('click', e => { const modal = document.getElementById('templateModal'); if (modal && e.target === modal) closeTemplateManager(); });
-
-function updateSectionPillCounts() {
-  const d = dayData(viewDate);
-  const counts = { tasks:d.tasks?.length||0, issues:d.issues?.length||0, wins:d.wins?.length||0, misses:d.misses?.length||0 };
-  const labels = { tasks:'✦ Tasks', issues:'⚡ Issues', wins:'★ Wins', misses:'○ Misses' };
-  Object.keys(counts).forEach(k => { const btn = document.getElementById('tsb-'+k); if (btn) btn.textContent = labels[k]+(counts[k]?(' ('+counts[k]+')'):''); });
-}
-function saveMissComment(dayKey, idx, comment) { const d = dayData(dayKey); if (!d.misses[idx]) return; d.misses[idx].comment = comment.trim(); save(dayKey); renderToday(); }
-function isAnonymous() { const toggle = document.getElementById('anonToggle'); return toggle ? toggle.checked : false; }
-
-let _cfMissIdx = null, _cfTaskKey = null, _cfTaskIdx = null;
-function openCarryFromTask(btn) {
-  const idx = parseInt(btn.dataset.taskidx);
-  const raw = btn.dataset.tasktext||''; const tmp = document.createElement('textarea'); tmp.innerHTML = raw; const txt = tmp.value;
-  openCarryForward(null, txt, 'tasks', idx);
-}
-function openCarryForward(missIdx, taskText, taskKey, taskIdx) {
-  _cfMissIdx = missIdx!=null?missIdx:null; _cfTaskKey = taskKey||null; _cfTaskIdx = taskIdx!=null?taskIdx:null;
-  document.getElementById('carryFwdTaskText').textContent = taskText;
-  document.getElementById('carryFwdReason').value = '';
-  const tomorrow=new Date();tomorrow.setDate(tomorrow.getDate()+1);
-  const dayAfter=new Date();dayAfter.setDate(dayAfter.getDate()+2);
-  const nextMon=new Date();const daysToMon=(8-nextMon.getDay())%7||7;nextMon.setDate(nextMon.getDate()+daysToMon);
-  const fmt=d=>d.toISOString().split('T')[0]; const lbl=d=>d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
-  const quickDays=document.getElementById('carryFwdQuickDays');
-  quickDays.innerHTML=[{label:'Tomorrow · '+lbl(tomorrow),val:fmt(tomorrow)},{label:lbl(dayAfter),val:fmt(dayAfter)},{label:'Next Mon · '+lbl(nextMon),val:fmt(nextMon)}].map(opt=>'<button onclick="selectCarryDate(\''+opt.val+'\')" id="cfq-'+opt.val+'" style="padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text2);font-family:\'DM Sans\',sans-serif;font-size:12px;cursor:pointer;white-space:nowrap">'+opt.label+'</button>').join('');
-  document.getElementById('carryFwdDate').value=fmt(tomorrow); selectCarryDate(fmt(tomorrow));
-  document.getElementById('carryFwdModal').style.display='flex';
-  setTimeout(()=>document.getElementById('carryFwdReason').focus(),200);
-}
-function selectCarryDate(val) {
-  document.getElementById('carryFwdDate').value=val;
-  document.querySelectorAll('[id^="cfq-"]').forEach(b=>{const on=b.id==='cfq-'+val;b.style.background=on?'var(--gold)':'var(--surface2)';b.style.color=on?'#18160F':'var(--text2)';b.style.borderColor=on?'var(--gold)':'var(--border)';});
-}
-document.addEventListener('change',e=>{if(e.target.id==='carryFwdDate')selectCarryDate(e.target.value);});
-function closeCarryForward(){document.getElementById('carryFwdModal').style.display='none';_cfMissIdx=null;_cfTaskKey=null;_cfTaskIdx=null;}
-function confirmCarryForward(){
-  const targetDate=document.getElementById('carryFwdDate').value; const reason=document.getElementById('carryFwdReason').value.trim(); const taskText=document.getElementById('carryFwdTaskText').textContent;
-  if(!targetDate){alert('Please choose a date.');return;} if(targetDate<=viewDate){alert('Please choose a future date.');return;}
-  const now=new Date(); const ts=now.toLocaleDateString('en-IN',{day:'numeric',month:'short'})+' · '+now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
-  const d=dayData(targetDate); if(!d.tasks)d.tasks=[];
-  if(!d.tasks.find(t=>t.text===taskText))d.tasks.push({text:taskText,done:false,addedAt:ts,priority:false,carriedFrom:viewDate,carryReason:reason||null});
-  save(targetDate);
-  if(_cfMissIdx!==null){const miss=dayData(viewDate).misses?.[_cfMissIdx];if(miss){miss.carriedTo=targetDate;miss.carryReason=reason||null;}save(viewDate);}
-  if(_cfTaskKey&&_cfTaskIdx!==null){const task=dayData(viewDate)[_cfTaskKey]?.[_cfTaskIdx];if(task){task.carriedTo=targetDate;task.carryReason=reason||null;}save(viewDate);}
-  runCarryOver();render();closeCarryForward();
-  const targetLabel=new Date(targetDate+'T12:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
-  showCFToast('Carried forward to '+targetLabel+' ✓');
-}
-function showCFToast(msg){let t=document.getElementById('cf-toast');if(!t){t=document.createElement('div');t.id='cf-toast';t.style.cssText='position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surface);border:1px solid var(--gold);padding:10px 18px;border-radius:8px;font-size:13px;color:var(--text);z-index:9998;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap;font-family:"DM Sans",sans-serif';document.body.appendChild(t);}t.textContent=msg;requestAnimationFrame(()=>{t.style.opacity='1';t.style.transform='translateX(-50%) translateY(0)';});clearTimeout(t._timer);t._timer=setTimeout(()=>{t.style.opacity='0';t.style.transform='translateX(-50%) translateY(10px)';},3000);}
-document.addEventListener('click',e=>{const m=document.getElementById('carryFwdModal');if(m&&e.target===m)closeCarryForward();});
-
-(async function init() {
-  initTheme();
-  setInterval(async () => { if (currentUser?.refresh_token) await refreshToken(); }, 30 * 60 * 1000);
-  document.addEventListener('visibilitychange', async () => {
-    if (document.visibilityState === 'visible' && currentUser?.token) {
-      await syncDown(); runCarryOver(); _lastCalDate = null; render();
-    }
-  });
-  const saved = localStorage.getItem('dt-user');
-  if (saved) {
-    currentUser = JSON.parse(saved);
-    if (currentUser?.refresh_token) {
-      const ok = await refreshToken();
-      if (!ok) { localStorage.removeItem('dt-user'); currentUser = null; registerSW(); return; }
-    }
-    await loadProfile();
-    if (profile) launchApp();
-    else { localStorage.removeItem('dt-user'); }
-  }
-  registerSW();
-})();
-
-function registerSW() {
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').then(reg => {
-      reg.addEventListener('updatefound', () => {
-        const nw = reg.installing;
-        nw.addEventListener('statechange', () => {
-          if (nw.state === 'installed' && navigator.serviceWorker.controller) showUpdateBanner();
-        });
-      });
-    }).catch(()=>{});
-    navigator.serviceWorker.addEventListener('message', e => {
-      if (e.data && e.data.type === 'SW_UPDATED') showUpdateBanner();
-    });
-  }
-}
-
-function showUpdateBanner() {
-  if (document.getElementById('st-update-banner')) return;
-  const b = document.createElement('div');
-  b.id = 'st-update-banner';
-  b.innerHTML = '<div style="position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#231F17;border:1px solid #A0752A;padding:.65rem 1rem;border-radius:6px;display:flex;align-items:center;gap:.85rem;font-family:\'DM Sans\',sans-serif;font-size:.82rem;color:#D6CFC4;z-index:9999;box-shadow:0 8px 32px rgba(0,0,0,.5);white-space:nowrap;animation:fadeIn .3s ease"><span>✦ New version ready</span><button onclick="window.location.reload(true)" style="background:#A0752A;color:#18160F;border:none;padding:.28rem .75rem;border-radius:3px;cursor:pointer;font-size:.78rem;font-weight:500;font-family:\'DM Sans\',sans-serif">Update</button><button onclick="document.getElementById(\'st-update-banner\').remove()" style="background:none;border:none;color:#78716C;cursor:pointer;font-size:.95rem">✕</button></div>';
-  document.body.appendChild(b);
-  setTimeout(() => { if (b.parentNode) b.remove(); }, 12000);
-}
-
-
-// ══════════════════════════════════════════════════════════
-// ACCOUNT INTELLIGENCE
-// ══════════════════════════════════════════════════════════
 var _intelData = null;
 var _intelType = 'all';
 
 async function refreshIntelligence() {
   var btn = document.getElementById('intelRefreshBtn');
   var feed = document.getElementById('intelFeed');
-  var isManager = canSeeTeam(profile ? profile.role : '');
-  var repFilterEl = document.getElementById('intelRepFilter');
-  var repFilter = (isManager && repFilterEl) ? repFilterEl.value : '';
-  if (btn) { btn.textContent = '↻ Scanning…'; btn.disabled = true; }
-  if (feed) feed.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">Scanning ' + (repFilter ? 'this rep\'s' : 'your') + ' named accounts \u2014 AI signals + SAM pattern detection…</div>';
-
-  var days = parseInt((document.getElementById('intelDaysFilter') || {}).value || '30') || 30;
-  var aiData = null, samData = null, aiScopeError = false;
-
-  // SAM (rule-based) scan — runs independently of AI quota/availability, so
-  // it always has a chance to populate even when Gemini is exhausted.
+  if (btn) { btn.textContent = '↻ Extracting…'; btn.disabled = true; }
+  if (feed) feed.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">Scanning notetaker emails for your named accounts…</div>';
   try {
-    var rSam = await fetch(EDGE_FN_URL, {
+    var daysEl = document.getElementById('intelDaysFilter');
+    var r = await fetch(EDGE_FN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
-      body: JSON.stringify({ action: 'local_intelligence', rep_user_id: repFilter || undefined })
+      body: JSON.stringify({ action: 'extract_intelligence', days_back: parseInt(daysEl ? daysEl.value : '30') })
     });
-    samData = await rSam.json();
-  } catch(e) { samData = { ok: false, error: e.message }; }
-
-  // AI (Gemini) extraction — may fail on quota; that's fine, SAM results
-  // above are unaffected and already captured.
-  try {
-    var rAi = await fetch(EDGE_FN_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
-      body: JSON.stringify({ action: 'extract_intelligence', days_back: days, rep_user_id: repFilter || undefined })
-    });
-    aiData = await rAi.json();
-    if (aiData.scopeError) aiScopeError = true;
-  } catch(e) { aiData = { ok: false, error: e.message }; }
-
-  if (aiScopeError) {
-    if (feed) feed.innerHTML = '<div style="text-align:center;padding:48px 0">' +
-      '<div style="font-size:32px;margin-bottom:12px;opacity:0.5">🔒</div>' +
-      '<div style="font-size:14px;color:var(--text2);margin-bottom:6px;font-weight:600">Gmail permissions need to be re-granted</div>' +
-      '<div style="font-size:12px;color:var(--text3);max-width:380px;margin:0 auto;line-height:1.6">' + esc(repFilter ? 'This rep\'s' : 'Your') + ' Gmail connection is missing read access. ' + esc(repFilter ? 'They need' : 'Go') + ' to the SAM tab and click "Connect Gmail" again to re-grant permissions \u2014 simply refreshing the token will not fix this.</div>' +
-    '</div>';
-    if (btn) { btn.textContent = '↻ Refresh'; btn.disabled = false; }
-    return;
-  }
-
-  // Always load whatever intelligence now exists (AI rows, SAM rows, or
-  // both) — SAM rows persist via local_intelligence even if AI failed.
-  await loadIntelligence();
-
-  // Build a status banner reflecting what actually happened in each path.
-  var banners = '';
-  if (samData && samData.ok && samData.count > 0) {
-    banners += '<div style="background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.25);border-radius:var(--radius);padding:10px 14px;margin-bottom:8px;font-size:12px;color:var(--text2)">⚡ <strong style="color:var(--green)">SAM Intelligence</strong> \u2014 ' + samData.count + ' account' + (samData.count>1?'s':'') + ' scanned (no AI quota used)</div>';
-  }
-  if (aiData && aiData.geminiQuotaExhausted && aiData.message) {
-    banners += '<div style="background:rgba(160,117,42,0.1);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 14px;margin-bottom:8px;font-size:12px;color:var(--text2);line-height:1.6">⏳ <strong style="color:var(--gold)">AI Tool Signals limited</strong> \u2014 ' + esc(aiData.message) + '</div>';
-  } else if (aiData && aiData.ok && aiData.processed > 0) {
-    banners += '<div style="background:rgba(160,117,42,0.08);border:1px solid rgba(160,117,42,0.25);border-radius:var(--radius);padding:10px 14px;margin-bottom:8px;font-size:12px;color:var(--text2)">🤖 <strong style="color:var(--gold)">AI Tool Signals</strong> \u2014 ' + aiData.processed + ' meeting' + (aiData.processed>1?'s':'') + ' analysed</div>';
-  }
-  if (banners && feed) {
-    var bannerWrap = document.createElement('div');
-    bannerWrap.innerHTML = banners;
-    feed.insertBefore(bannerWrap, feed.firstChild);
+    var data = await r.json();
+    if (!data.ok) throw new Error(data.error || 'Extraction failed');
+    if (data.processed === 0) {
+      if (feed) feed.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">No notetaker emails found for your named accounts.<br><span style="font-size:12px">Make sure you have accounts assigned in Org → Rep Accounts</span></div>';
+      if (btn) { btn.textContent = '↻ Refresh'; btn.disabled = false; }
+      return;
+    }
+    await loadIntelligence();
+  } catch(e) {
+    if (feed) feed.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--coral);font-size:13px">Error: ' + esc(e.message) + '</div>';
   }
   if (btn) { btn.textContent = '↻ Refresh'; btn.disabled = false; }
 }
 
-function renderIntelDebug(data) {
-  var debug = data.debug || [];
-  if (data.geminiQuotaExhausted && data.message) {
-    return '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">' +
-      '<div style="font-size:32px;margin-bottom:12px;opacity:0.5">⏳</div>' +
-      '<div style="font-weight:600;color:var(--gold);margin-bottom:8px">Gemini quota limit reached</div>' +
-      '<div style="max-width:420px;margin:0 auto;line-height:1.6;font-size:13px">' + esc(data.message) + '</div>' +
-    '</div>';
-  }
-  if (data.message) {
-    return '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">' + esc(data.message) + '<br><span style="font-size:12px">Add accounts in Org \u2192 Rep Accounts</span></div>';
-  }
-  if (!debug.length) {
-    return '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">No notetaker emails found for your named accounts.<br><span style="font-size:12px">Processed: ' + (data.processed||0) + ' \u00b7 Skipped: ' + (data.skipped||0) + '</span></div>';
-  }
-  var rows = debug.map(function(d) {
-    var parts = [];
-    if (d.strictSearchFound !== undefined) parts.push('strict: ' + d.strictSearchFound + ', fallback: ' + d.fallbackSearchFound);
-    if (d.notetakerEmailsFound !== undefined) parts.push('found: ' + d.notetakerEmailsFound + (d.usedFallback ? ' (fallback)' : ' (strict)'));
-    if (d.geminiKeyMissing) parts.push('<span style="color:var(--coral)">Gemini API key not set</span>');
-    if (d.geminiApiError) parts.push('<span style="color:var(--coral)">Gemini API error: ' + esc(JSON.stringify(d.geminiApiError)) + '</span>');
-    if (d.geminiNoMatch) parts.push('<span style="color:var(--amber)">Gemini returned no JSON-shaped text' + (d.geminiFinishReason ? ' (finish: '+esc(d.geminiFinishReason)+')' : '') + '</span>');
-    if (d.geminiJsonParseError) parts.push('<span style="color:var(--coral)">JSON parse failed: ' + esc(d.geminiJsonParseError) + (d.geminiFinishReason ? ' (finish: '+esc(d.geminiFinishReason)+')' : '') + '</span>');
-    if (d.geminiRawText) parts.push('<span style="color:var(--text3);font-style:italic">raw: ' + esc(d.geminiRawText.slice(0,200)) + '\u2026</span>');
-    if (d.geminiError) parts.push('<span style="color:var(--coral)">Gemini error: ' + esc(d.geminiError) + '</span>');
-    if (d.dbInsertError) parts.push('<span style="color:var(--coral)">DB insert failed (' + d.status + '): ' + esc(d.dbInsertError) + '</span>');
-    if (d.dbReadError) parts.push('<span style="color:var(--coral)">DB read failed: ' + esc(JSON.stringify(d.dbReadError)) + '</span>');
-    if (d.gmailApiError) parts.push('<span style="color:var(--coral)">Gmail API error: ' + esc(JSON.stringify(d.gmailApiError)) + '</span>');
-    if (d.subject) parts.push('subject: "' + esc(d.subject) + '"');
-    return '<div style="background:var(--surface2);border-radius:8px;padding:10px 14px;margin-bottom:8px;text-align:left">' +
-      '<div style="font-size:13px;font-weight:600;color:var(--text)">' + esc(d.account || '') + '</div>' +
-      '<div style="font-size:12px;color:var(--text3);margin-top:4px;line-height:1.6">' + parts.join('<br>') + '</div>' +
-    '</div>';
-  }).join('');
-  return '<div style="padding:24px 0">' +
-    '<div style="text-align:center;color:var(--text3);font-size:14px;margin-bottom:16px">No intelligence extracted \u2014 here\'s why, per account:</div>' +
-    rows +
-  '</div>';
-}
-
-// ── Pipeline Intelligence ────────────────────────────────────────────────────
-var _pipelineData = null;
-var _pipelineView = 'combined';
-var _pipelineDashTab = 'overview';
-var _pipelineFilters = { tier: '', product: '', stream: '', region: '' };
-
-function setPipelineView(view) {
-  _pipelineView = view;
-  document.querySelectorAll('.pv-btn').forEach(function(b) { b.classList.remove('active'); });
-  var btn = document.getElementById('pv-' + view);
-  if (btn) btn.classList.add('active');
-  if (_pipelineData) { renderPipelineChart(_pipelineData); renderPipelineDeals(_pipelineData); }
-}
-
-function setPipelineDashTab(tab) {
-  _pipelineDashTab = tab;
-  document.querySelectorAll('.pdt-btn').forEach(function(b) { b.classList.remove('active'); });
-  var btn = document.getElementById('pdt-' + tab);
-  if (btn) btn.classList.add('active');
-  if (_pipelineData) renderPipelineDashboard(_pipelineData);
-}
-
-function applyPipelineFilters() {
-  _pipelineFilters.tier    = document.getElementById('pipe-filter-tier')?.value || '';
-  _pipelineFilters.product = document.getElementById('pipe-filter-product')?.value || '';
-  _pipelineFilters.stream  = document.getElementById('pipe-filter-stream')?.value || '';
-  _pipelineFilters.region  = document.getElementById('pipe-filter-region')?.value || '';
-  if (_pipelineData) { renderPipelineDashboard(_pipelineData); renderPipelineChart(_pipelineData); renderPipelineDeals(_pipelineData); }
-}
-
-function clearPipelineFilters() {
-  _pipelineFilters = { tier:'', product:'', stream:'', region:'' };
-  ['pipe-filter-tier','pipe-filter-product','pipe-filter-stream','pipe-filter-region'].forEach(function(id) {
-    var el = document.getElementById(id); if (el) el.value = '';
-  });
-  if (_pipelineData) { renderPipelineDashboard(_pipelineData); renderPipelineChart(_pipelineData); renderPipelineDeals(_pipelineData); }
-}
-
-function getFilteredDeals(data) {
-  var all = [...(data.verified||[]), ...(data.partial||[]), ...(data.unverified||[])];
-  return all.filter(function(d) {
-    if (_pipelineFilters.tier && d.tier !== _pipelineFilters.tier) return false;
-    if (_pipelineFilters.product && d.product_id !== _pipelineFilters.product) return false;
-    if (_pipelineFilters.region && d.region !== _pipelineFilters.region) return false;
-    if (_pipelineFilters.stream) {
-      var streams = d.revenue_streams || [];
-      if (!streams.find(function(s) { return s.name === _pipelineFilters.stream || s.key === _pipelineFilters.stream; })) return false;
-    }
-    return true;
-  });
-}
-
-function populatePipelineFilters(data) {
-  // Products dropdown
-  var prodSel = document.getElementById('pipe-filter-product');
-  if (prodSel && _orgProducts?.length) {
-    var opts = '<option value="">All products</option>' +
-      _orgProducts.map(function(p) { return '<option value="'+p.id+'">'+esc(p.name)+'</option>'; }).join('');
-    prodSel.innerHTML = opts;
-  }
-  // Regions dropdown
-  var regSel = document.getElementById('pipe-filter-region');
-  if (regSel) {
-    var regions = new Set();
-    [...(data.verified||[]),(data.partial||[]),(data.unverified||[])].flat().forEach(function(d) { if (d.region) regions.add(d.region); });
-    regSel.innerHTML = '<option value="">All regions</option>' +
-      Array.from(regions).sort().map(function(r) { return '<option value="'+esc(r)+'">'+esc(r)+'</option>'; }).join('');
-  }
-  // Revenue stream types from org config
-  var streamSel = document.getElementById('pipe-filter-stream');
-  if (streamSel) {
-    var streamTypes = window._orgConfig?.revenue_stream_types || [];
-    streamSel.innerHTML = '<option value="">All revenue streams</option>' +
-      streamTypes.map(function(s) { return '<option value="'+esc(s.key||s.label)+'">'+esc(s.label)+'</option>'; }).join('');
-  }
-}
-
-function renderPipelineDashboard(data) {
-  var el = document.getElementById('pipelineDashboard');
-  if (!el) return;
-  var fmtUsd = function(v) { return !v ? '$0' : v >= 1000000 ? '$'+(v/1000000).toFixed(1)+'M' : v >= 1000 ? '$'+Math.round(v/1000)+'K' : '$'+v; };
-  var deals = getFilteredDeals(data);
-  var html = '';
-
-  if (_pipelineDashTab === 'byProduct') {
-    html += renderByProductChart(deals, fmtUsd);
-  } else if (_pipelineDashTab === 'byStream') {
-    html += renderByStreamChart(deals, fmtUsd);
-  } else if (_pipelineDashTab === 'byRegion') {
-    if (canSeeTeam(profile?.role)) html += renderRepBreakdown(data, deals, fmtUsd);
-  } else if (_pipelineDashTab === 'attention') {
-    html += renderAttentionPanel(deals, data, fmtUsd);
-  } else {
-    if (canSeeFullOrg(profile?.role)) html += renderExecInsights(data, deals, fmtUsd);
-    else if (canSeeCrossTeam(profile?.role)) html += renderDirectorInsights(data, deals, fmtUsd);
-    else if (canSeeTeam(profile?.role)) html += renderManagerInsights(data, deals, fmtUsd);
-    else html += renderRepInsights(data, deals, fmtUsd);
-  }
-
-  el.innerHTML = html;
-}
-
-// ── Shared bar chart helper ────────────────────────────────────────────────
-function mkBars(rows, maxVal, fmtUsd) {
-  var COLORS = ['#3A6EA8','#A07824','#4A8C5C','#C0523F','#7B5EA7','#2E8B8B'];
-  return rows.map(function(r, i) {
-    var pct = maxVal > 0 ? Math.max(3, r.val / maxVal * 100) : 3;
-    var color = r.color || COLORS[i % COLORS.length];
-    return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">' +
-      '<div style="font-size:12px;color:var(--text2);width:110px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+esc(r.label)+'">'+esc(r.label)+'</div>' +
-      '<div style="flex:1;height:9px;background:rgba(0,0,0,0.15);border-radius:5px;overflow:hidden">' +
-        '<div style="height:100%;width:'+pct+'%;background:'+color+';border-radius:5px;transition:width 0.4s ease"></div>' +
-      '</div>' +
-      '<div style="font-size:12px;color:var(--text);font-weight:500;width:50px;text-align:right;flex-shrink:0">'+fmtUsd(r.val)+'</div>' +
-    '</div>';
-  }).join('');
-}
-
-// ── Role header card wrapper ──────────────────────────────────────────────
-function mkRoleCard(roleLabel, roleColor, title, subtitle, content) {
-  return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:14px;overflow:hidden;margin-bottom:10px">' +
-    '<div style="padding:16px 18px 12px;border-bottom:1px solid var(--border)">' +
-      '<div style="display:flex;align-items:flex-start;justify-content:space-between">' +
-        '<div>' +
-          '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
-            '<span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;background:'+roleColor+';color:#fff">'+esc(roleLabel)+'</span>' +
-          '</div>' +
-          '<div style="font-size:17px;font-weight:700;color:var(--text)">'+esc(title)+'</div>' +
-          '<div style="font-size:12px;color:var(--text3);font-style:italic;margin-top:2px">'+esc(subtitle)+'</div>' +
-        '</div>' +
-        '<div style="font-size:18px;color:var(--text3);cursor:pointer;padding:4px">&#8943;</div>' +
-      '</div>' +
-    '</div>' +
-    '<div style="padding:16px 18px">'+content+'</div>' +
-  '</div>';
-}
-
-function mkMetricCard(label, value, sub, color) {
-  return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px">' +
-    '<div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;font-weight:600">'+esc(label)+'</div>' +
-    '<div style="font-size:28px;font-weight:700;color:'+(color||'var(--text)')+'">'+value+'</div>' +
-    (sub ? '<div style="font-size:11px;color:var(--text3);margin-top:3px">'+esc(sub)+'</div>' : '') +
-  '</div>';
-}
-
-function mkAlertRow(dot, text) {
-  return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">' +
-    (dot ? '<div style="width:8px;height:8px;border-radius:50%;background:'+dot+';flex-shrink:0"></div>' : '<div style="width:8px;height:8px;flex-shrink:0"></div>') +
-    '<div style="font-size:13px;color:var(--text)">'+text+'</div>' +
-  '</div>';
-}
-
-// ── AE / SDR ─────────────────────────────────────────────────────────────
-function renderRepInsights(data, deals, fmtUsd) {
-  var today = new Date();
-  var verified = deals.filter(function(d){return d.tier==='verified';});
-  var partial  = deals.filter(function(d){return d.tier==='partial';});
-  var unverif  = deals.filter(function(d){return d.tier==='unverified';});
-  var totalVal = deals.reduce(function(s,d){return s+d.deal_value_usd;},0);
-  var closing  = deals.filter(function(d){
-    if (!d.expected_close) return false;
-    var dt=new Date(d.expected_close), qEnd=new Date(today.getFullYear(),Math.floor(today.getMonth()/3)*3+3,0);
-    return dt<=qEnd;
-  });
-  var closingVal  = closing.reduce(function(s,d){return s+d.deal_value_usd;},0);
-  var closingW    = closing.reduce(function(s,d){return s+d.weighted_value_usd;},0);
-  var hot         = deals.filter(function(d){return (d.signal_score||0)>=60;});
-  var attn        = deals.filter(function(d){return d.expected_close && new Date(d.expected_close)<today;});
-  var needsAttn   = attn.length + unverif.filter(function(d){return d.deal_value_usd>5000;}).length;
-
-  // By product bars
-  var byProduct = {};
-  var PCOLS = ['#3A6EA8','#A07824','#4A8C5C','#C0523F','#7B5EA7','#2E8B8B'];
-  deals.forEach(function(d){var k=d.product_name||'No product';if(!byProduct[k])byProduct[k]={val:0,i:Object.keys(byProduct).length};byProduct[k].val+=d.deal_value_usd;});
-  var productRows = Object.entries(byProduct).sort(function(a,b){return b[1].val-a[1].val;}).slice(0,5).map(function(e){return {label:e[0],val:e[1].val,color:PCOLS[e[1].i%PCOLS.length]};});
-  var maxP = Math.max.apply(null,productRows.map(function(r){return r.val;})||[1]);
-
-  // Action items
-  var actionItems = [];
-  attn.forEach(function(d){actionItems.push({dot:'var(--coral)',text:esc(d.account)+' \u2014 close date passed ('+d.expected_close+')'});});
-  hot.slice(0,3).forEach(function(d){if(!attn.find(function(a){return a.id===d.id;}))actionItems.push({dot:'var(--amber)',text:esc(d.account)+' \u2014 score '+d.signal_score+' \uD83D\uDD25 follow up now'});});
-  unverif.filter(function(d){return d.deal_value_usd>5000;}).slice(0,2).forEach(function(d){actionItems.push({dot:'var(--blue)',text:esc(d.account)+' \u2014 confirm AI hint '+fmtUsd(d.deal_value_usd)});});
-  if (!actionItems.length) actionItems.push({dot:'var(--green)',text:'\u2705 No urgent actions \u2014 pipeline looks healthy'});
-
-  var inner = '';
-
-  // Top 3 metrics
-  inner += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px">' +
-    mkMetricCard('My pipeline', fmtUsd(totalVal), verified.length+' verified \u00b7 '+partial.length+' partial \u00b7 '+unverif.length+' unverified', 'var(--text)') +
-    mkMetricCard('Closing this quarter', fmtUsd(closingVal), closing.length+' deals \u00b7 weighted '+fmtUsd(closingW), 'var(--green)') +
-    mkMetricCard('Needs attention', needsAttn.toString(), 'Going cold or past close', needsAttn>0?'var(--amber)':'var(--green)') +
-  '</div>';
-
-  // Product bars + action items side by side
-  inner += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
-
-  if (productRows.length) {
-    inner += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px">' +
-      '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:12px">Pipeline by product</div>' +
-      mkBars(productRows, maxP, fmtUsd) +
-    '</div>';
-  }
-
-  inner += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px">' +
-    '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px">Action items</div>' +
-    actionItems.slice(0,5).map(function(a){return mkAlertRow(a.dot,a.text);}).join('') +
-  '</div>';
-
-  inner += '</div>';
-
-  return mkRoleCard('AE / SDR','#3B5BA5','My pipeline health','"Am I on track? What needs my attention today?"', inner);
-}
-
-// ── Manager ───────────────────────────────────────────────────────────────
-function renderManagerInsights(data, deals, fmtUsd) {
-  var today = new Date();
-  var verified = deals.filter(function(d){return d.tier==='verified';});
-  var verifiedVal = verified.reduce(function(s,d){return s+d.deal_value_usd;},0);
-  var totalVal = deals.reduce(function(s,d){return s+d.deal_value_usd;},0);
-  var pct = totalVal > 0 ? Math.round(verifiedVal/totalVal*100) : 0;
-  var pctColor = pct>=50?'var(--green)':pct>=35?'var(--amber)':'var(--coral)';
-
-  // Pipeline by rep — group by rep_user_id
-  var byRep = {};
-  deals.forEach(function(d){
-    var k = d.rep_email || d.rep_user_id?.slice(0,8) || 'Unknown';
-    if (!byRep[k]) byRep[k] = {val:0,verified:0};
-    byRep[k].val += d.deal_value_usd;
-    if (d.tier==='verified') byRep[k].verified += d.deal_value_usd;
-  });
-  var repRows = Object.entries(byRep).sort(function(a,b){return b[1].val-a[1].val;}).slice(0,6).map(function(e,i){
-    var verPct = e[1].val>0?e[1].verified/e[1].val:0;
-    var c = verPct>=0.5?'#4A8C5C':verPct>=0.3?'#A07824':'#888780';
-    return {label:e[0],val:e[1].val,color:c};
-  });
-  var maxR = Math.max.apply(null,repRows.map(function(r){return r.val;})||[1]);
-
-  // Coverage gaps
-  var gaps = [];
-  var noDeals = data.regionBreakdown?.filter(function(r){return r.verified_usd===0&&r.total_usd>0;}) || [];
-  if (noDeals.length) noDeals.forEach(function(r){gaps.push({dot:'var(--coral)',text:esc(r.region)+' region \u2014 '+fmtUsd(r.total_usd)+' with zero verified deals'});});
-  var atRisk = deals.filter(function(d){return d.expected_close&&new Date(d.expected_close)<today;});
-  if (atRisk.length) gaps.push({dot:'var(--amber)',text:atRisk.length+' deal'+(atRisk.length>1?'s':'') + ' past expected close date across team'});
-  var partial = deals.filter(function(d){return d.tier==='partial';});
-  if (partial.length > deals.length*0.5) gaps.push({dot:'var(--amber)',text:'>50% of pipeline is partial \u2014 coach reps to run SAM signals'});
-  var unverif = deals.filter(function(d){return d.tier==='unverified';});
-  if (unverif.length) gaps.push({dot:'var(--blue)',text:unverif.length+' AI hints ('+fmtUsd(unverif.reduce(function(s,d){return s+d.deal_value_usd;},0))+') awaiting rep confirmation'});
-  if (!gaps.length) gaps.push({dot:'var(--green)',text:'\u2705 No coverage gaps detected'});
-
-  var inner = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">';
-
-  // Rep bars
-  inner += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px">' +
-    '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:12px">Pipeline by rep</div>' +
-    (repRows.length ? mkBars(repRows, maxR, fmtUsd) : '<div style="font-size:12px;color:var(--text3)">No deal data yet</div>') +
-  '</div>';
-
-  // Coverage gaps
-  inner += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px">' +
-    '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px">Coverage gaps</div>' +
-    gaps.slice(0,5).map(function(g){return mkAlertRow(g.dot,g.text);}).join('') +
-  '</div>';
-
-  inner += '</div>';
-
-  // Bottom metrics
-  inner += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
-    '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px">' +
-      '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px">Verified pipeline (team)</div>' +
-      '<div style="font-size:28px;font-weight:700;color:var(--green)">'+fmtUsd(verifiedVal)+'</div>' +
-      '<div style="height:6px;background:rgba(0,0,0,0.15);border-radius:3px;margin:8px 0;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+pctColor+';border-radius:3px"></div></div>' +
-      '<div style="font-size:11px;color:var(--text3)">'+pct+'% of total \u2014 target: 60%</div>' +
-    '</div>' +
-    mkMetricCard('Deals at risk', atRisk.length.toString(), 'Past close date or going cold', atRisk.length>0?'var(--coral)':'var(--green)') +
-  '</div>';
-
-  return mkRoleCard('Manager','#A07824','Team performance','"Who needs coaching? Where are the gaps?"', inner);
-}
-
-// ── Director ──────────────────────────────────────────────────────────────
-function renderDirectorInsights(data, deals, fmtUsd) {
-  var regions = (data.regionBreakdown || []).slice(0,5);
-  var maxR = Math.max.apply(null, regions.map(function(r){return r.total_usd;})||[1]);
-  var regionRows = regions.map(function(r,i){return {label:r.region,val:r.total_usd,color:['#3A6EA8','#A07824','#4A8C5C','#C0523F','#7B5EA7'][i%5]};});
-
-  var verified = deals.filter(function(d){return d.tier==='verified';});
-  var verifiedVal = verified.reduce(function(s,d){return s+d.deal_value_usd;},0);
-  var totalVal = deals.reduce(function(s,d){return s+d.deal_value_usd;},0);
-  var confPct = totalVal>0?Math.round(verifiedVal/totalVal*100):0;
-  var weakRegions = regions.filter(function(r){return r.verified_usd===0;});
-
-  var inner = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">';
-
-  inner += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px">' +
-    '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:12px">Pipeline by region</div>' +
-    (regionRows.length ? mkBars(regionRows, maxR, fmtUsd) : '<div style="font-size:12px;color:var(--text3)">No regional data</div>') +
-  '</div>';
-
-  var alerts = weakRegions.map(function(r){return {dot:'var(--coral)',text:esc(r.region)+' \u2014 '+fmtUsd(r.total_usd)+' with no verified deals'};});
-  if (!alerts.length) alerts.push({dot:'var(--green)',text:'\u2705 All regions have verified pipeline'});
-  inner += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px">' +
-    '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px">Regional risk signals</div>' +
-    alerts.map(function(a){return mkAlertRow(a.dot,a.text);}).join('') +
-  '</div>';
-
-  inner += '</div>';
-
-  inner += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">' +
-    mkMetricCard('Total pipeline', fmtUsd(totalVal), deals.length+' deals across '+regions.length+' regions', 'var(--text)') +
-    mkMetricCard('Forecast confidence', confPct+'%', 'verified vs total pipeline', confPct>=50?'var(--green)':confPct>=35?'var(--amber)':'var(--coral)') +
-    mkMetricCard('Regions with no verified deals', weakRegions.length.toString(), weakRegions.map(function(r){return r.region;}).join(', ')||'All clear', weakRegions.length?'var(--coral)':'var(--green)') +
-  '</div>';
-
-  return mkRoleCard('Director','#3B5BA5','Cross-team pipeline intelligence','"Where is growth coming from? Where is the risk?"', inner);
-}
-
-// ── CXO / Exec ────────────────────────────────────────────────────────────
-function renderExecInsights(data, deals, fmtUsd) {
-  var s = data.summary || {};
-  var confPct = s.total_value_usd>0?Math.round(s.verified_value_usd/s.total_value_usd*100):0;
-  var weightedPct = s.total_value_usd>0?Math.round(s.weighted_value_usd/s.total_value_usd*100):0;
-  var pctColor = confPct>=50?'var(--green)':confPct>=35?'var(--amber)':'var(--coral)';
-
-  // Product performance bars
-  var byProduct = {};
-  var PCOLS = ['#3A6EA8','#A07824','#4A8C5C','#C0523F','#7B5EA7'];
-  deals.forEach(function(d){var k=d.product_name||'Unclassified';if(!byProduct[k])byProduct[k]={val:0,verified:0,i:Object.keys(byProduct).length};byProduct[k].val+=d.deal_value_usd;if(d.tier==='verified')byProduct[k].verified+=d.deal_value_usd;});
-  var productRows = Object.entries(byProduct).sort(function(a,b){return b[1].val-a[1].val;}).slice(0,5).map(function(e){return {label:e[0],val:e[1].val,color:PCOLS[e[1].i%PCOLS.length]};});
-  var maxP = Math.max.apply(null,productRows.map(function(r){return r.val;})||[1]);
-
-  var inner = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">' +
-    mkMetricCard('Total org pipeline', fmtUsd(s.total_value_usd||0), fmtUsd(s.weighted_value_usd||0)+' weighted \u00b7 '+fmtUsd(s.closing_this_quarter_usd||0)+' this quarter', 'var(--text)') +
-    mkMetricCard('Forecast confidence', confPct+'%', 'of pipeline is fully verified', pctColor) +
-    mkMetricCard('Win probability', weightedPct+'%', 'weighted vs total pipeline', 'var(--blue)') +
-  '</div>';
-
-  inner += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
-
-  if (productRows.length) {
-    inner += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px">' +
-      '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:12px">Product line performance</div>' +
-      mkBars(productRows, maxP, fmtUsd) +
-    '</div>';
-  }
-
-  // Top risk signals
-  var risks = [];
-  var unverif = deals.filter(function(d){return d.tier==='unverified';});
-  if (unverif.length) risks.push({dot:'var(--amber)',text:fmtUsd(unverif.reduce(function(s,d){return s+d.deal_value_usd;},0))+' unverified \u2014 awaiting rep confirmation'});
-  var noVerRegions = (data.regionBreakdown||[]).filter(function(r){return r.verified_usd===0&&r.total_usd>0;});
-  noVerRegions.forEach(function(r){risks.push({dot:'var(--coral)',text:esc(r.region)+' \u2014 '+fmtUsd(r.total_usd)+' pipeline, zero verified'});});
-  var today = new Date();
-  var atRisk = deals.filter(function(d){return d.expected_close&&new Date(d.expected_close)<today;});
-  if (atRisk.length) risks.push({dot:'var(--coral)',text:atRisk.length+' deal'+(atRisk.length>1?'s':'')+' past close date \u2014 need exec review'});
-  if (!risks.length) risks.push({dot:'var(--green)',text:'\u2705 No critical pipeline risks detected'});
-
-  inner += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px">' +
-    '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px">Top risk signals</div>' +
-    risks.slice(0,5).map(function(r){return mkAlertRow(r.dot,r.text);}).join('') +
-  '</div>';
-
-  inner += '</div>';
-
-  return mkRoleCard('CXO / Exec','#4A8C5C','Org pipeline intelligence','"Are we going to hit the number? Where is the risk?"', inner);
-}
-
-// ── Attention panel ───────────────────────────────────────────────────────
-function renderAttentionPanel(deals, data, fmtUsd) {
-  var today = new Date();
-  var alerts = [];
-  deals.forEach(function(d) {
-    if (d.expected_close && new Date(d.expected_close) < today)
-      alerts.push({dot:'var(--coral)', text:esc(d.account)+' \u2014 close date passed ('+d.expected_close+')'});
-  });
-  var unverifiedHV = deals.filter(function(d){return d.tier==='unverified'&&d.deal_value_usd>5000;});
-  if (unverifiedHV.length)
-    alerts.push({dot:'var(--amber)',text:unverifiedHV.length+' high-value AI hints need confirmation \u2014 '+fmtUsd(unverifiedHV.reduce(function(s,d){return s+d.deal_value_usd;},0))+' at stake'});
-  (data.regionBreakdown||[]).filter(function(r){return r.verified_usd===0&&r.total_usd>0;}).forEach(function(r){
-    alerts.push({dot:'var(--amber)',text:esc(r.region)+' \u2014 '+fmtUsd(r.total_usd)+' pipeline with zero verified deals'});
-  });
-  if (!alerts.length)
-    return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:20px;text-align:center;color:var(--green);font-size:14px;font-weight:600">\u2705 No immediate attention items \u2014 pipeline looks healthy.</div>';
-
-  return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:14px;overflow:hidden">' +
-    '<div style="padding:14px 18px;border-bottom:1px solid var(--border)">' +
-      '<div style="font-size:15px;font-weight:700;color:var(--text)">Action items</div>' +
-      '<div style="font-size:12px;color:var(--text3);font-style:italic">'+alerts.length+' items need your attention</div>' +
-    '</div>' +
-    '<div style="padding:8px 18px">' +
-      alerts.map(function(a){return mkAlertRow(a.dot,a.text);}).join('') +
-    '</div>' +
-  '</div>';
-}
-
-async function loadPipeline() {
-  var btn = document.getElementById('pipelineRefreshBtn');
-  if (btn) btn.textContent = '↻ Loading…';
-  var promptsEl = document.getElementById('pipelinePrompts');
-  var summaryEl = document.getElementById('pipelineSummary');
-  var chartEl = document.getElementById('pipelineChart');
-  var dealsEl = document.getElementById('pipelineDeals');
-  if (chartEl) chartEl.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:20px 0;text-align:center">Loading pipeline…</div>';
-
-  try {
-    var r = await fetch(EDGE_FN_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
-      body: JSON.stringify({ action: 'get_pipeline' })
-    });
-    _pipelineData = await r.json();
-    if (!_pipelineData.ok) { if (chartEl) chartEl.innerHTML = '<div style="color:var(--coral);font-size:12px">' + esc(_pipelineData.error || 'Failed to load pipeline') + '</div>'; return; }
-
-    // Prompts
-    if (promptsEl && _pipelineData.prompts?.length) {
-      promptsEl.innerHTML = _pipelineData.prompts.map(function(p) {
-        return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:8px 12px;margin-bottom:6px;font-size:12px;color:var(--text)">' + esc(p) + '</div>';
-      }).join('');
-    }
-
-    populatePipelineFilters(_pipelineData);
-    renderPipelineDashboard(_pipelineData);
-    renderPipelineChart(_pipelineData);
-    renderPipelineDeals(_pipelineData);
-  } catch(e) {
-    if (chartEl) chartEl.innerHTML = '<div style="color:var(--coral);font-size:12px">Error: ' + esc(e.message) + '</div>';
-  }
-  if (btn) btn.textContent = '↻ Refresh';
-}
-
-function renderPipelineChart(data) {
-  var chartEl = document.getElementById('pipelineChart');
-  if (!chartEl) return;
-
-  var regions = data.regionBreakdown || [];
-  if (!regions.length) { chartEl.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:16px 0;text-align:center">No pipeline data yet — add deal values to your accounts to see the chart.</div>'; return; }
-
-  // Stage colours from org config
-  var stageColors = { prospective: '#888780', value_prop: '#A07824', commercial: '#3B6D11', unknown: '#555' };
-  var dealStages = data.dealStages || [{ key:'prospective',label:'Prospective' },{ key:'value_prop',label:'Value Prop' },{ key:'commercial',label:'Commercial' }];
-  var fmtUsd = function(v) { return v >= 1000000 ? '$'+(v/1000000).toFixed(1)+'M' : '$'+Math.round(v/1000)+'K'; };
-
-  // Filter by current view
-  var filteredRegions = regions.map(function(r) {
-    var total = _pipelineView === 'verified'   ? r.verified_usd :
-                _pipelineView === 'partial'    ? r.partial_usd :
-                _pipelineView === 'unverified' ? r.unverified_usd : r.total_usd;
-    return Object.assign({}, r, { display_usd: total });
-  }).filter(function(r) { return r.display_usd > 0; }).sort(function(a, b) { return b.display_usd - a.display_usd; });
-
-  if (!filteredRegions.length) { chartEl.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:16px 0;text-align:center">No ' + _pipelineView + ' deals yet.</div>'; return; }
-
-  var maxUsd = Math.max.apply(null, filteredRegions.map(function(r) { return r.display_usd; }));
-
-  var html = '<div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Region × Stage pipeline</div>';
-
-  // Legend
-  html += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">';
-  dealStages.forEach(function(s) {
-    var color = stageColors[s.key] || '#888';
-    html += '<div style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:' + color + '"></div><span style="font-size:10px;color:var(--text3)">' + esc(s.label) + '</span></div>';
-  });
-  if (_pipelineView === 'combined') {
-    html += '<div style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:repeating-linear-gradient(45deg,#888,#888 1px,transparent 1px,transparent 5px);border:1px solid #888"></div><span style="font-size:10px;color:var(--text3)">Unverified (AI)</span></div>';
-  }
-  html += '</div>';
-
-  filteredRegions.forEach(function(r) {
-    var barWidth = maxUsd > 0 ? Math.max(4, r.display_usd / maxUsd * 100) : 0;
-    html += '<div style="margin-bottom:10px">';
-    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">';
-    html += '<span style="font-size:12px;font-weight:500;color:var(--text)">' + esc(r.region) + '</span>';
-    html += '<span style="font-size:11px;color:var(--text2)">' + fmtUsd(r.display_usd) + ' · ' + r.deals + ' deal' + (r.deals !== 1 ? 's' : '') + '</span>';
-    html += '</div>';
-
-    // Stacked bar
-    html += '<div style="height:22px;background:var(--surface);border-radius:4px;overflow:hidden;position:relative">';
-
-    // For stage breakdown within the bar
-    var stages = r.stages || {};
-    var stageTotal = Object.values(stages).reduce(function(s, st) { return s + (st.usd || 0); }, 0);
-    var x = 0;
-    dealStages.forEach(function(s) {
-      var st = stages[s.key];
-      if (!st || !st.usd) return;
-      var pct = stageTotal > 0 ? st.usd / stageTotal * barWidth : 0;
-      var color = stageColors[s.key] || '#888';
-      html += '<div style="position:absolute;top:0;left:' + x + '%;width:' + pct + '%;height:100%;background:' + color + '"></div>';
-      x += pct;
-    });
-
-    // Unverified overlay (hatched) in combined view
-    if (_pipelineView === 'combined' && r.unverified_usd > 0 && r.total_usd > 0) {
-      var unvPct = r.unverified_usd / r.total_usd * barWidth;
-      html += '<div style="position:absolute;top:0;right:0;width:' + unvPct + '%;height:100%;background:repeating-linear-gradient(45deg,rgba(136,135,128,0.3),rgba(136,135,128,0.3) 2px,transparent 2px,transparent 6px);border-left:1px solid rgba(255,255,255,0.3)"></div>';
-    }
-
-    html += '</div>';
-    html += '</div>';
-  });
-
-  // Closing this quarter highlight
-  var cq = (data.summary || {}).closing_this_quarter_usd || 0;
-  if (cq > 0) {
-    html += '<div style="margin-top:10px;padding:8px 12px;background:rgba(74,140,92,0.1);border:1px solid rgba(74,140,92,0.3);border-radius:8px;font-size:11px;color:var(--green)">📅 <strong>' + fmtUsd(cq) + '</strong> expected to close this quarter</div>';
-  }
-
-  chartEl.innerHTML = html;
-}
-
-function renderPipelineDeals(data) {
-  var el = document.getElementById('pipelineDeals');
-  if (!el) return;
-
-  var deals = _pipelineView === 'verified'   ? (data.verified || []) :
-              _pipelineView === 'partial'    ? (data.partial  || []) :
-              _pipelineView === 'unverified' ? (data.unverified || []) :
-              [...(data.verified || []), ...(data.partial || []), ...(data.unverified || [])];
-
-  deals.sort(function(a, b) { return (b.deal_value_usd || 0) - (a.deal_value_usd || 0); });
-
-  if (!deals.length) { el.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:16px 0;text-align:center">No deals in this view yet.</div>'; return; }
-
-  var stageColors = { prospective: '#888780', value_prop: '#A07824', commercial: '#3B6D11', unknown: '#555' };
-  var fmtUsd = function(v) { if (!v) return '—'; return v >= 1000000 ? '$'+(v/1000000).toFixed(1)+'M' : '$'+Math.round(v/1000)+'K'; };
-  var tierConfig = {
-    verified:   { icon: '✅', label: 'Verified',   color: 'var(--green)' },
-    partial:    { icon: '⚡', label: 'Partial',    color: 'var(--amber)' },
-    unverified: { icon: '〜', label: 'Unverified', color: 'var(--text3)' }
-  };
-
-  el.innerHTML = '<div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Deal breakdown</div>' +
-    deals.map(function(d) {
-      var stageColor = stageColors[d.stage] || 'var(--text3)';
-      var prob = d.close_probability || 0;
-      var tc = tierConfig[d.tier] || tierConfig.unverified;
-      var localValue = d.deal_value ? (d.deal_currency || 'USD') + ' ' + Number(d.deal_value).toLocaleString() : null;
-      var scoreBar = d.signal_score != null
-        ? '<div style="display:inline-flex;align-items:center;gap:4px;margin-left:6px"><div style="width:40px;height:4px;background:var(--border2);border-radius:2px;overflow:hidden"><div style="height:100%;background:' + (d.signal_score>=60?'var(--green)':d.signal_score>=40?'var(--amber)':'var(--coral)') + ';width:' + d.signal_score + '%"></div></div><span style="font-size:9px;color:var(--text3)">' + d.signal_score + '</span></div>'
-        : '';
-
-      return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;margin-bottom:6px">' +
-        '<div style="display:flex;align-items:flex-start;gap:10px">' +
-          '<div style="flex:1">' +
-            '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">' +
-              '<span style="font-size:13px;font-weight:500;color:var(--text)">' + esc(d.account) + '</span>' +
-              (d.region ? '<span style="font-size:9px;color:var(--text3);background:rgba(0,0,0,0.08);border-radius:4px;padding:1px 6px">' + esc(d.region) + '</span>' : '') +
-              '<span style="font-size:9px;font-weight:600;padding:1px 7px;border-radius:10px;background:' + stageColor + '22;color:' + stageColor + '">' + esc(d.stage) + '</span>' +
-            '</div>' +
-            '<div style="display:flex;align-items:center;gap:4px;margin-bottom:4px">' +
-              '<span style="font-size:10px;color:' + tc.color + ';font-weight:500">' + tc.icon + ' ' + tc.label + '</span>' +
-              scoreBar +
-            '</div>' +
-            '<div style="font-size:10px;color:var(--text3);font-style:italic;margin-bottom:4px">' + esc(d.verification_reason || '') + '</div>' +
-            (d.hint_context ? '<div style="font-size:11px;color:var(--text3);font-style:italic">"' + esc(d.hint_context.slice(0, 100)) + '"</div>' : '') +
-            '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:2px">' +
-              (localValue ? '<span style="font-size:11px;color:var(--text2)">Local: ' + localValue + '</span>' : '') +
-              (d.expected_close ? '<span style="font-size:11px;color:var(--text3)">Close: ' + d.expected_close + '</span>' : '') +
-              (d.licenses_units ? '<span style="font-size:11px;color:var(--text3)">' + d.licenses_units + ' units</span>' : '') +
-            '</div>' +
-          '</div>' +
-          '<div style="text-align:right;flex-shrink:0">' +
-            '<div style="font-size:16px;font-weight:600;color:var(--gold)">' + fmtUsd(d.deal_value_usd) + '</div>' +
-            '<div style="font-size:10px;color:var(--text3)">USD</div>' +
-            '<div style="margin-top:4px;font-size:10px;color:var(--text3)">' + prob + '% → ' + fmtUsd(d.weighted_value_usd) + '</div>' +
-            '<button onclick="' + (d.tier==='verified' ? 'openDealValueForm(\'' + d.id + '\',\'' + esc(d.account) + '\')' : d.tier==='partial' ? 'boostSignals(\'' + d.id + '\',\'' + esc(d.account) + '\')' : 'openDealValueForm(\'' + d.id + '\',\'' + esc(d.account) + '\')') + '" style="margin-top:6px;font-size:10px;padding:3px 10px;border-radius:4px;border:1px solid ' + (d.tier==='verified'?'var(--border2)':d.tier==='partial'?'var(--amber)':'var(--green)') + ';background:transparent;color:' + (d.tier==='verified'?'var(--text3)':d.tier==='partial'?'var(--amber)':'var(--green)') + ';cursor:pointer">' + (d.tier==='verified'?'Edit':d.tier==='partial'?'⚡ Boost signals':'Confirm') + '</button>' +
-          '</div>' +
-        '</div>' +
-      '</div>';
-    }).join('');
-}
-
-// ── Deal Value & Revenue Streams Modal ──────────────────────────────────────
-// ── Deal Modal State ──────────────────────────────────────────────────────────
-var _dealGroups    = [];
-var _dealAccountId = '';
-var _dealAccountName = '';
-var _dealOpportunityId = null;
-var _orgProducts   = [];
-var _orgStreamTypes = [  // populated fresh on modal open, fallback always has items
-  {key:'license_mrr',  label:'License MRR',          type:'MRR'},
-  {key:'impl',         label:'Implementation',        type:'one_time'},
-  {key:'support_qrr',  label:'Support & Maintenance', type:'QRR'},
-  {key:'training',     label:'Training',              type:'one_time'}
-];
-
-async function openDealValueForm(accountId, accountName, opportunityId) {
-  _dealAccountId    = accountId;
-  _dealAccountName  = accountName;
-  _dealOpportunityId = opportunityId || null;
-  document.getElementById('deal-value-modal')?.remove();
-
-  // Show brief loading state
-  var loader = document.createElement('div');
-  loader.id = 'deal-value-modal';
-  loader.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.3);display:flex;align-items:flex-end;justify-content:center;z-index:999';
-  loader.innerHTML = '<div style="background:var(--bg);border-radius:20px 20px 0 0;width:100%;max-width:560px;padding:24px;text-align:center"><div style="font-size:13px;color:var(--text3)">Loading\u2026</div></div>';
-  document.body.appendChild(loader);
-
-  // Always re-fetch org config + products to ensure stream types are fresh
-  try {
-    var [cfgRes, prodRes] = await Promise.all([
-      fetch(EDGE_FN_URL, { method:'POST',
-        headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
-        body:JSON.stringify({action:'get_org_config'}) }),
-      fetch(EDGE_FN_URL, { method:'POST',
-        headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
-        body:JSON.stringify({action:'get_products'}) })
-    ]);
-    var cfg  = await cfgRes.json();
-    var prod = await prodRes.json();
-    if (cfg.ok)  {
-      window._orgConfig = cfg;
-      if (cfg.revenueStreamTypes && cfg.revenueStreamTypes.length) {
-        _orgStreamTypes = cfg.revenueStreamTypes;
-      }
-    }
-    _orgProducts = prod.products || [];
-  } catch(e) { _orgProducts = []; }
-
-  // Start with one empty group
-  _dealGroups = [{ productId:'', streams:[{name:'',amount:'',currency:window._orgConfig?.defaultCurrency||'USD'}] }];
-  renderDealModal();
-}
-
-function renderDealModal() {
-  document.getElementById('deal-value-modal')?.remove();
-
-  // Use module-level variables — no closure scope issues
-  var ST = _orgStreamTypes; // guaranteed to have items (set in openDealValueForm)
-  var FX = {USD:1,INR:0.012,EUR:1.08,GBP:1.27,AED:0.272,SAR:0.267,SGD:0.74,AUD:0.65,CAD:0.73,MXN:0.058,BRL:0.19};
-  var CCY = ['USD','INR','EUR','GBP','AED','SAR','SGD','AUD','CAD','MXN','BRL'];
-  var TYPE_C = {MRR:'#3A6EA8',QRR:'#4A8C5C',ARR:'#7B5EA7',one_time:'#A07824'};
-
-  function fmt(v) { return !v?'$0':v>=1e6?'$'+(v/1e6).toFixed(1)+'M':v>=1000?'$'+Math.round(v/1000)+'K':'$'+Math.round(v); }
-
-  function getType(name) {
-    var d = ST.find(function(t){return (t.key||t.label)===name;});
-    return d ? d.type : 'one_time';
-  }
-
-  function groupTotal(g) {
-    return g.streams.reduce(function(sum,s){
-      var usd = (parseFloat(s.amount)||0) * (FX[s.currency]||1);
-      var t = getType(s.name);
-      return sum + (t==='MRR'?usd*12:t==='QRR'?usd*4:usd);
-    }, 0);
-  }
-
-  // Build stream options HTML — called with module-level ST, always has items
-  function streamOpts(selectedName) {
-    return '<option value="">\u2014 Select revenue stream \u2014</option>' +
-      ST.map(function(t) {
-        var val = t.key || t.label;
-        return '<option value="'+esc(val)+'"'+(selectedName===val?' selected':'')+'>'+esc(t.label)+'</option>';
-      }).join('');
-  }
-
-  function streamRow(s, si, gi, canRemove) {
-    var type = getType(s.name);
-    var tc = TYPE_C[type] || '#888';
-    var badge = type ? '<span style="display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:'+tc+'18;color:'+tc+';white-space:nowrap">'+type.replace('one_time','One-time')+'</span>' : '';
-    return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px">' +
-
-      // Line 1: stream selector + badge + remove button
-      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
-        '<select onchange="_dealGroups['+gi+'].streams['+si+'].name=this.value;renderDealModal()" '+
-          'style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 10px;'+
-          'color:var(--text);font-family:var(--sans);font-size:13px;outline:none">' +
-          streamOpts(s.name) +
-        '</select>' +
-        badge +
-        (canRemove ? '<button onclick="_dealGroups['+gi+'].streams.splice('+si+',1);renderDealModal()" '+
-          'style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:20px;line-height:1;padding:2px 4px;flex-shrink:0">\u00d7</button>' : '') +
-      '</div>' +
-
-      // Line 2: amount + currency
-      '<div style="display:flex;gap:8px;margin-bottom:8px">' +
-        '<input type="number" placeholder="Amount" value="'+(s.amount||'')+'" '+
-          'oninput="_dealGroups['+gi+'].streams['+si+'].amount=this.value;updateDealTotal()" '+
-          'style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;'+
-          'padding:9px 12px;color:var(--text);font-family:var(--sans);font-size:15px;outline:none;text-align:right;font-weight:600"/>' +
-        '<select onchange="_dealGroups['+gi+'].streams['+si+'].currency=this.value" '+
-          'style="width:75px;flex-shrink:0;background:var(--surface2);border:1px solid var(--border);border-radius:8px;'+
-          'padding:9px 6px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none">' +
-          CCY.map(function(c){return '<option'+(s.currency===c?' selected':'')+'>'+c+'</option>';}).join('') +
-        '</select>' +
-      '</div>' +
-
-      // Line 3: units/licenses (always visible, clearly labelled)
-      '<div style="display:flex;align-items:center;gap:8px">' +
-        '<div style="font-size:11px;color:var(--text3);flex-shrink:0">Units / licenses / outlets</div>' +
-        '<input type="number" placeholder="e.g. 500" value="'+(s.units||'')+'" '+
-          'oninput="_dealGroups['+gi+'].streams['+si+'].units=this.value" '+
-          'style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;'+
-          'padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;text-align:right"/>' +
-        '<div style="font-size:11px;color:var(--text3);flex-shrink:0">optional</div>' +
-      '</div>' +
-
-    '</div>';
-  }
-
-  function groupBlock(g, gi) {
-    var gTotal = groupTotal(g);
-    var prodOpts = '<option value="">\uD83D\uDCE6 Select product/offering\u2026</option>' +
-      _orgProducts.map(function(p){
-        return '<option value="'+p.id+'"'+(g.productId===p.id?' selected':'')+'>'+esc(p.name)+(p.category?' \u00b7 '+esc(p.category):'')+' </option>';
-      }).join('') +
-      (_orgProducts.length===0?'<option value="__none">No products — log as general deal</option>':'');
-
-    return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:14px 16px;margin-bottom:10px">' +
-      // Product selector header
-      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">' +
-        '<select onchange="_dealGroups['+gi+'].productId=this.value" '+
-          'style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;'+
-          'padding:9px 12px;color:var(--text);font-family:var(--sans);font-size:14px;font-weight:600;outline:none">' +
-          prodOpts +
-        '</select>' +
-        (gTotal>0 ? '<span style="font-size:14px;font-weight:700;color:var(--gold);flex-shrink:0">'+fmt(gTotal)+'</span>' : '') +
-        (_dealGroups.length>1 ? '<button onclick="_dealGroups.splice('+gi+',1);renderDealModal()" '+
-          'style="flex-shrink:0;background:none;border:none;border-radius:6px;color:var(--coral);cursor:pointer;font-size:12px;padding:4px 0">Remove</button>' : '') +
-      '</div>' +
-      // Stream rows
-      g.streams.map(function(s,si){ return streamRow(s, si, gi, g.streams.length>1); }).join('') +
-      // Add stream link
-      '<button onclick="_dealGroups['+gi+'].streams.push({name:\'\',amount:\'\',currency:_orgStreamTypes[0]&&\'USD\',units:\'\'}); renderDealModal()" '+
-        'style="font-size:12px;color:var(--text3);background:none;border:none;cursor:pointer;padding:4px 0;display:flex;align-items:center;gap:4px">'+
-        '+ Add another revenue stream to this offering</button>' +
-    '</div>';
-  }
-
-  // Grand total
-  var grand = _dealGroups.reduce(function(s,g){return s+groupTotal(g);},0);
-  var breakdown = _dealGroups.filter(function(g){return groupTotal(g)>0;}).map(function(g){
-    var pname = (_orgProducts.find(function(p){return p.id===g.productId;})||{}).name || 'General deal';
-    return '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-bottom:3px">'+
-      '<span>'+esc(pname)+'</span><span style="font-weight:600">'+fmt(groupTotal(g))+'</span></div>';
-  }).join('');
-
-  var overlay = document.createElement('div');
-  overlay.id = 'deal-value-modal';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);display:flex;align-items:flex-end;justify-content:center;z-index:999';
-
-  overlay.innerHTML =
-    '<div style="background:var(--bg);border-top:1px solid var(--border2);border-radius:20px 20px 0 0;'+
-      'width:100%;max-width:560px;max-height:92vh;overflow-y:auto;animation:slideUp 0.25s ease">' +
-
-      // ── Header ──
-      '<div style="position:sticky;top:0;background:var(--bg);z-index:1;padding:14px 20px;border-bottom:1px solid var(--border)">' +
-        '<div style="width:36px;height:4px;background:var(--border2);border-radius:2px;margin:0 auto 12px"></div>' +
-        '<div style="display:flex;align-items:flex-start;justify-content:space-between">' +
-          '<div>' +
-            '<div style="font-size:18px;font-weight:700;color:var(--text)">\uD83D\uDCB0 '+esc(_dealAccountName)+'</div>' +
-            '<div style="font-size:12px;color:var(--text3);margin-top:2px">Log each product being discussed separately</div>' +
-          '</div>' +
-          '<button onclick="document.getElementById(\'deal-value-modal\').remove()" '+
-            'style="background:var(--surface2);border:none;border-radius:50%;width:30px;height:30px;cursor:pointer;'+
-            'color:var(--text3);font-size:16px;display:flex;align-items:center;justify-content:center">\u00d7</button>' +
-        '</div>' +
-      '</div>' +
-
-      '<div style="padding:16px 20px">' +
-
-        // ── Offerings ──
-        '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">'+
-          'Offerings in discussion ('+_dealGroups.length+')</div>' +
-        _dealGroups.map(groupBlock).join('') +
-        '<button onclick="_dealGroups.push({productId:\'\',streams:[{name:\'\',amount:\'\',currency:\'USD\',units:\'\'}]});renderDealModal()" '+
-          'style="width:100%;padding:11px;background:transparent;border:1.5px dashed var(--border2);border-radius:10px;'+
-          'color:var(--gold);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">+ Add another offering</button>' +
-
-        // ── Total ──
-        '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:16px">' +
-          (breakdown || '') +
-          '<div style="'+(breakdown?'border-top:1px solid var(--border);margin-top:8px;padding-top:8px;':'')+
-            'display:flex;justify-content:space-between;align-items:center">' +
-            '<div>' +
-              '<div style="font-size:12px;color:var(--text3)">Total deal value (USD)</div>' +
-              '<div style="font-size:10px;color:var(--text3);margin-top:1px">MRR\u00d712 \u00b7 QRR\u00d74 \u00b7 One-time\u00d71</div>' +
-            '</div>' +
-            '<div id="deal-total-display" style="font-size:26px;font-weight:700;color:var(--gold)">'+fmt(grand)+'</div>' +
-          '</div>' +
-        '</div>' +
-
-        // ── Deal details ──
-        '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">Deal details</div>' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">' +
-          '<div><div style="font-size:11px;color:var(--text3);margin-bottom:5px">Expected close</div>'+
-            '<input id="dv-close" type="date" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/></div>' +
-          '<div><div style="font-size:11px;color:var(--text3);margin-bottom:5px">Deal type</div>'+
-            '<select id="dv-type" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none">'+
-              ['new_business','expansion','renewal','upsell'].map(function(t){return '<option value="'+t+'">'+t.replace('_',' ')+'</option>';}).join('')+
-            '</select></div>' +
-        '</div>' +
-
-        // ── Probability note ──
-        '<div style="background:var(--surface2);border-radius:10px;padding:10px 14px;margin-bottom:18px;display:flex;gap:10px">' +
-          '<span style="font-size:18px">\uD83E\uDDE0</span>' +
-          '<div style="font-size:12px;color:var(--text3)"><strong style="color:var(--text2)">Close probability</strong> is auto-derived from stage + conversation signals each time you scan channels.</div>' +
-        '</div>' +
-
-        // ── Save ──
-        '<button onclick="saveDealValue()" '+
-          'style="width:100%;padding:14px;background:var(--gold);border:none;border-radius:12px;'+
-          'color:#18160F;font-family:var(--sans);font-size:15px;font-weight:700;cursor:pointer">Save opportunities</button>' +
-        '<div id="dv-status" style="font-size:12px;margin-top:10px;text-align:center"></div>' +
-
-      '</div>' +
-    '</div>';
-
-  overlay.addEventListener('click', function(e){ if(e.target===overlay) overlay.remove(); });
-  document.body.appendChild(overlay);
-}
-
-function updateDealTotal() {
-  var FX = {USD:1,INR:0.012,EUR:1.08,GBP:1.27,AED:0.272,SAR:0.267,SGD:0.74,AUD:0.65,CAD:0.73,MXN:0.058,BRL:0.19};
-  var total = 0;
-  _dealGroups.forEach(function(g){
-    g.streams.forEach(function(s){
-      var usd = (parseFloat(s.amount)||0) * (FX[s.currency]||1);
-      var def = _orgStreamTypes.find(function(t){return (t.key||t.label)===s.name;});
-      var t = def ? def.type : 'one_time';
-      total += (t==='MRR'?usd*12:t==='QRR'?usd*4:usd);
-    });
-  });
-  var el = document.getElementById('deal-total-display');
-  if (el) el.textContent = total>=1000000?'$'+(total/1000000).toFixed(1)+'M':total>=1000?'$'+Math.round(total/1000)+'K':'$'+Math.round(total);
-  return total;
-}
-
-async function saveDealValue() {
-  var statusEl = document.getElementById('dv-status');
-  var FX = {USD:1,INR:0.012,EUR:1.08,GBP:1.27,AED:0.272,SAR:0.267,SGD:0.74,AUD:0.65,CAD:0.73,MXN:0.058,BRL:0.19};
-  var dealType  = document.getElementById('dv-type')?.value  || 'new_business';
-  var closeDate = document.getElementById('dv-close')?.value || null;
-
-  // Validate — at least one group with a value
-  var validGroups = _dealGroups.filter(function(g){
-    return g.streams.some(function(s){return s.name && parseFloat(s.amount)>0;});
-  });
-  if (!validGroups.length) {
-    if (statusEl){statusEl.textContent='Select a stream and enter an amount for at least one offering';statusEl.style.color='var(--coral)';} return;
-  }
-
-  if (statusEl){statusEl.textContent='Saving\u2026';statusEl.style.color='var(--text3)';}
-
-  var saved = 0;
-  var errors = [];
-
-  for (var gi=0; gi<validGroups.length; gi++) {
-    var g = validGroups[gi];
-    var validStreams = g.streams.filter(function(s){return s.name&&parseFloat(s.amount)>0;});
-    var groupUsd = validStreams.reduce(function(sum,s){
-      var usd=(parseFloat(s.amount)||0)*(FX[s.currency]||1);
-      var def=_orgStreamTypes.find(function(t){return (t.key||t.label)===s.name;});
-      var t=def?.type||'one_time';
-      return sum+(t==='MRR'?usd*12:t==='QRR'?usd*4:usd);
-    },0);
-    var primary = validStreams[0];
-    try {
-      var r = await fetch(EDGE_FN_URL, {
-        method:'POST',
-        headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
-        body: JSON.stringify({
-          action:'upsert_opportunity',
-          account_id: _dealAccountId,
-          product_id: g.productId||null,
-          deal_value: parseFloat(primary.amount),
-          deal_currency: primary.currency||'USD',
-          deal_value_usd: Math.round(groupUsd),
-          revenue_streams: validStreams.map(function(s){
-            var def=_orgStreamTypes.find(function(t){return (t.key||t.label)===s.name;});
-            return {key:def?.key||s.name,label:def?.label||s.name,type:def?.type||'one_time',amount:parseFloat(s.amount),currency:s.currency};
-          }),
-          deal_type: dealType,
-          expected_close: closeDate,
-          stage: 'prospective'
-        })
-      });
-      var d = await r.json();
-      if (d.ok) saved++; else errors.push(d.error||'Save failed');
-    } catch(e){ errors.push(e.message); }
-  }
-
-  if (errors.length) {
-    if (statusEl){statusEl.textContent='Saved '+saved+', '+errors.length+' error(s): '+errors[0];statusEl.style.color='var(--coral)';}
-  } else {
-    if (statusEl){statusEl.textContent='\u2713 Saved '+saved+' opportunit'+(saved===1?'y':'ies');statusEl.style.color='var(--green)';}
-    setTimeout(function(){ document.getElementById('deal-value-modal')?.remove(); loadMyAccounts(); if(typeof loadPipeline==='function') loadPipeline(); }, 1600);
-  }
-}
-
-function boostSignals(accountId, accountName) {
-  switchTab('signals');
-  setTimeout(function() {
-    var out = document.getElementById('samLocalIntelOutput');
-    if (out) out.innerHTML = '<div style="font-size:12px;color:var(--amber);padding:8px 0">⚡ Run "Scan channels" to generate signals for <strong>' + esc(accountName) + '</strong> and move it to verified pipeline.</div>';
-    var section = document.getElementById('samLocalIntelSection');
-    if (section) section.style.display = 'block';
-  }, 300);
-}
-
 async function loadIntelligence() {
   var feed = document.getElementById('intelFeed');
-  var isManager = canSeeTeam(profile ? profile.role : '');
-  var days = parseInt((document.getElementById('intelDaysFilter') || {}).value || '30') || 30;
-  if (isManager) await populateIntelRepFilter();
-  var repFilterEl = document.getElementById('intelRepFilter');
-  var repFilter = repFilterEl ? repFilterEl.value : '';
+  var isManager = ['manager','super_admin','admin','director','executive'].includes(profile ? profile.role : '');
+  var daysEl = document.getElementById('intelDaysFilter');
+  var days = parseInt(daysEl ? daysEl.value : '30');
   try {
     var r = await fetch(EDGE_FN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
-      body: JSON.stringify({ action: 'get_intelligence', days_back: days, view: 'accounts', rep_user_id: isManager && repFilter ? repFilter : (isManager ? null : undefined) })
+      body: JSON.stringify({ action: 'get_intelligence', days_back: days, view: isManager ? 'feed' : 'accounts' })
     });
     var data = await r.json();
     _intelData = data;
@@ -4734,158 +2851,88 @@ async function loadIntelligence() {
   }
 }
 
-let _intelRepsCache = null;
-async function populateIntelRepFilter() {
-  var sel = document.getElementById('intelRepFilter');
-  if (!sel || !profile?.org_id) return;
-  try {
-    if (!_intelRepsCache) {
-      var seeAllReps = ['super_admin','admin','director','executive'].includes(profile.role);
-      var q = 'user_profiles?org_id=eq.' + profile.org_id + '&select=user_id,email,role,manager_id&order=email';
-      var allMembers = await sbGet(q);
-      // Only show frontline reps (member/sdr/ae), never managers/admins/super_admins themselves.
-      var reps = (allMembers || []).filter(function(p) {
-        return ['member','sdr','ae'].includes(p.role);
-      });
-      // Plain managers only see their own direct reports; senior roles see the whole org's reps.
-      if (!seeAllReps) {
-        reps = reps.filter(function(p) { return p.manager_id === currentUser.id; });
-      }
-      _intelRepsCache = reps;
-    }
-    var current = sel.value;
-    sel.innerHTML = '<option value="">All reps</option>' + (_intelRepsCache || []).map(function(p) {
-      return '<option value="' + p.user_id + '">' + esc(p.email.split('@')[0]) + '</option>';
-    }).join('');
-    sel.value = current;
-  } catch(e) { /* keep default */ }
-}
-
-var _intelSource = 'all';
-function setIntelSource(source, btn) {
-  _intelSource = source;
-  ['all','ai','sam'].forEach(function(s) {
-    var b = document.getElementById('intel-src-' + s);
-    if (b) b.classList.toggle('active', s === source);
-  });
-  renderIntelFeed();
-}
-
 function setIntelType(type, btn) {
   _intelType = type;
-  // Scope to the category row only — querySelectorAll('.intel-tab') would
-  // otherwise also deactivate the source-row buttons above it, since both
-  // rows share the same CSS class.
-  var categoryRow = btn ? btn.parentElement : null;
-  if (categoryRow) {
-    categoryRow.querySelectorAll('.intel-tab').forEach(function(b) { b.classList.remove('active'); });
-  }
+  document.querySelectorAll('.intel-tab').forEach(function(b) { b.classList.remove('active'); });
   if (btn) btn.classList.add('active');
   renderIntelFeed();
 }
 
 function renderIntelligence() { loadIntelligence(); }
 
-function renderIntelFeed() {
-  var feed = document.getElementById('intelFeed');
-  var stats = document.getElementById('intelStats');
-  if (!feed || !_intelData) return;
-  var allRows = _intelData.rows || [];
-  var rows = _intelSource === 'all' ? allRows : allRows.filter(function(r) { return (r.source || 'ai') === _intelSource; });
+function buildTasksText() { var d=dayData(viewDate);var tasks=d.tasks||[];var done=tasks.filter(function(t){return t.done;});var pending=tasks.filter(function(t){return !t.done;});if(!done.length&&!pending.length)return '';var parts=[];var dt=viewDate.split('-');parts.push('\uD83D\uDCC5 '+dt[2]+'/'+dt[1]+'/'+dt[0]+' \u2014 My priorities');if(pending.length){parts.push('');parts.push('\uD83C\uDFAF Today:');pending.forEach(function(t,i){parts.push((i+1)+'. '+((t.text||'').startsWith('*')?(t.text||'').slice(1).trim():(t.text||'')));});}if(done.length){parts.push('');parts.push('\u2705 Done:');done.forEach(function(t){parts.push('\u2022 '+((t.text||'').startsWith('*')?(t.text||'').slice(1).trim():(t.text||'')));});}return parts.join('\n');}
+function shareWhatsApp(){var t=buildTasksText();if(t)window.open('https://wa.me/?text='+encodeURIComponent(t),'_blank');document.getElementById('share-menu-popup')?.remove();}
+function shareEmail(){var t=buildTasksText();var dt=viewDate.split('-');var sub='My priorities '+dt[2]+'/'+dt[1]+'/'+dt[0];if(t)window.location.href='mailto:?subject='+encodeURIComponent(sub)+'&body='+encodeURIComponent(t);document.getElementById('share-menu-popup')?.remove();}
+function copyTaskText(){var t=buildTasksText();if(!t)return;navigator.clipboard?.writeText(t).then(function(){var btn=document.getElementById('copy-tasks-btn');if(btn){btn.style.color='var(--green)';setTimeout(function(){btn.style.color='';},2000);}}).catch(function(){});}
+function shareTasksMenu(){var text=buildTasksText();if(!text){alert('No tasks to share today.');return;}var existing=document.getElementById('share-menu-popup');if(existing){existing.remove();return;}var parts=viewDate.split('-');var dateStr=parts[2]+'/'+parts[1]+'/'+parts[0];var overlay=document.createElement('div');overlay.id='share-menu-popup';overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.4);display:flex;align-items:flex-end;justify-content:center;z-index:999';overlay.innerHTML='<div style="background:var(--bg);border-top:1px solid var(--border2);border-radius:20px 20px 0 0;width:100%;max-width:480px;padding:0 0 24px;animation:slideUp 0.25s ease"><div style="width:40px;height:4px;background:var(--border2);border-radius:2px;margin:12px auto 16px"></div><div style="padding:0 20px"><div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px">Share today\'s priorities</div><div style="font-size:12px;color:var(--text3);margin-bottom:20px">'+dateStr+'</div><button onclick="shareWhatsApp()" style="width:100%;padding:13px 16px;background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.25);border-radius:var(--radius);color:#128C7E;font-family:var(--sans);font-size:14px;font-weight:500;cursor:pointer;margin-bottom:10px;text-align:left;display:flex;align-items:center;gap:12px"><span style="font-size:22px">&#x1F4AC;</span><div><div style="font-weight:600">Share via WhatsApp</div></div></button><button onclick="shareEmail()" style="width:100%;padding:13px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:var(--sans);font-size:14px;font-weight:500;cursor:pointer;margin-bottom:10px;text-align:left;display:flex;align-items:center;gap:12px"><span style="font-size:22px">&#x2709;&#xFE0F;</span><div><div style="font-weight:600">Share via Email</div></div></button><button onclick="copyTaskText()" id="copy-tasks-btn" style="width:100%;padding:13px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:var(--sans);font-size:14px;font-weight:500;cursor:pointer;margin-bottom:16px;text-align:left;display:flex;align-items:center;gap:12px"><span style="font-size:22px">&#x1F4CB;</span><div><div style="font-weight:600">Copy to clipboard</div></div></button><button onclick="document.getElementById(\'share-menu-popup\').remove()" style="width:100%;padding:11px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text3);font-family:var(--sans);font-size:13px;cursor:pointer">Cancel</button></div></div>';overlay.addEventListener('click',function(e){if(e.target===overlay)overlay.remove();});document.body.appendChild(overlay);}
 
-  if (stats) {
-    var counts = { product_feedback:0, pricing_signals:0, competitor_mentions:0, expansion_signals:0, risk_signals:0 };
-    rows.forEach(function(row) {
-      counts.product_feedback += (row.product_feedback||[]).length;
-      counts.pricing_signals += (row.pricing_signals||[]).length;
-      counts.competitor_mentions += (row.competitor_mentions||[]).length;
-      counts.expansion_signals += (row.expansion_signals||[]).length;
-      counts.risk_signals += (row.risk_signals||[]).length;
-    });
-    stats.innerHTML = [
-      { label:'Product', key:'product_feedback', color:'rgba(99,102,241,.8)' },
-      { label:'Pricing', key:'pricing_signals', color:'var(--coral)' },
-      { label:'Competitors', key:'competitor_mentions', color:'var(--amber)' },
-      { label:'Expansion', key:'expansion_signals', color:'var(--green)' },
-      { label:'Risk', key:'risk_signals', color:'var(--coral)' }
-    ].map(function(s) {
-      return '<div class="intel-stat-card"><div class="intel-stat-n" style="color:' + s.color + '">' + counts[s.key] + '</div><div class="intel-stat-l">' + s.label + '</div></div>';
-    }).join('');
-  }
+var _pipelineData=null;var _pipelineDashTab='overview';var _pipelineFilters={tier:'',product:'',stream:'',region:''};
+function setPipelineDashTab(tab){_pipelineDashTab=tab;document.querySelectorAll('.pdt-btn').forEach(function(b){b.classList.remove('active');});var btn=document.getElementById('pdt-'+tab);if(btn)btn.classList.add('active');if(_pipelineData)renderPipelineDashboard(_pipelineData);}
+function applyPipelineFilters(){_pipelineFilters.tier=document.getElementById('pipe-filter-tier')?.value||'';_pipelineFilters.product=document.getElementById('pipe-filter-product')?.value||'';_pipelineFilters.stream=document.getElementById('pipe-filter-stream')?.value||'';_pipelineFilters.region=document.getElementById('pipe-filter-region')?.value||'';if(_pipelineData){renderPipelineDashboard(_pipelineData);renderPipelineChart(_pipelineData);renderPipelineDeals(_pipelineData);}}
+function clearPipelineFilters(){_pipelineFilters={tier:'',product:'',stream:'',region:''};['pipe-filter-tier','pipe-filter-product','pipe-filter-stream','pipe-filter-region'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});if(_pipelineData){renderPipelineDashboard(_pipelineData);renderPipelineChart(_pipelineData);renderPipelineDeals(_pipelineData);}}
+function getFilteredDeals(data){var all=[...(data.verified||[]),(data.partial||[]),(data.unverified||[])].flat();return all.filter(function(d){if(_pipelineFilters.tier&&d.tier!==_pipelineFilters.tier)return false;if(_pipelineFilters.product&&d.product_id!==_pipelineFilters.product)return false;if(_pipelineFilters.region&&d.region!==_pipelineFilters.region)return false;return true;});}
+function populatePipelineFilters(data){var prodSel=document.getElementById('pipe-filter-product');if(prodSel&&_orgProducts?.length){prodSel.innerHTML='<option value="">All products</option>'+_orgProducts.map(function(p){return'<option value="'+p.id+'">'+esc(p.name)+'</option>';}).join('');}var regSel=document.getElementById('pipe-filter-region');if(regSel){var regions=new Set();[...(data.verified||[]),(data.partial||[]),(data.unverified||[])].flat().forEach(function(d){if(d.region)regions.add(d.region);});regSel.innerHTML='<option value="">All regions</option>'+Array.from(regions).sort().map(function(r){return'<option value="'+esc(r)+'">'+esc(r)+'</option>';}).join('');}}
 
-  if (!rows.length) {
-    var emptyMsg = _intelSource === 'sam' ? 'No SAM pattern signals yet.<br><span style="font-size:12px">Click \u21bb Refresh \u2014 SAM scans run instantly, no AI quota needed.</span>'
-      : _intelSource === 'ai' ? 'No AI-extracted intelligence yet.<br><span style="font-size:12px">Click \u21bb Refresh to scan named account meeting notes.</span>'
-      : 'No intelligence extracted yet.<br><span style="font-size:12px">Click \u21bb Refresh to scan named account meeting notes.</span>';
-    feed.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">' + emptyMsg + '</div>';
-    return;
-  }
+async function loadPipeline(){var btn=document.getElementById('pipelineRefreshBtn');if(btn)btn.textContent='\u21bb Loading\u2026';var promptsEl=document.getElementById('pipelinePrompts');var chartEl=document.getElementById('pipelineChart');var dealsEl=document.getElementById('pipelineDeals');if(chartEl)chartEl.innerHTML='<div style="font-size:12px;color:var(--text3);padding:20px 0;text-align:center">Loading\u2026</div>';try{var r=await fetch(EDGE_FN_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},body:JSON.stringify({action:'get_pipeline'})});_pipelineData=await r.json();if(!_pipelineData.ok){if(chartEl)chartEl.innerHTML='<div style="color:var(--coral);font-size:12px">'+esc(_pipelineData.error||'Failed')+'</div>';return;}if(promptsEl&&_pipelineData.prompts?.length)promptsEl.innerHTML=_pipelineData.prompts.map(function(p){return'<div style="background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:8px 12px;margin-bottom:6px;font-size:12px;color:var(--text)">'+esc(p)+'</div>';}).join('');populatePipelineFilters(_pipelineData);renderPipelineDashboard(_pipelineData);renderPipelineChart(_pipelineData);renderPipelineDeals(_pipelineData);}catch(e){if(chartEl)chartEl.innerHTML='<div style="color:var(--coral);font-size:12px">Error: '+esc(e.message)+'</div>';}if(btn)btn.textContent='\u21bb Refresh';}
 
-  var icons = { product_feedback:'🔧', pricing_signals:'💰', competitor_mentions:'⚔', expansion_signals:'📈', risk_signals:'⚠' };
-  var sourceBadgeHtml = function(row) {
-    var src = row.source || 'ai';
-    return src === 'sam'
-      ? '<span style="font-size:9px;font-weight:700;color:var(--green);background:rgba(74,140,92,0.12);border-radius:4px;padding:2px 6px;letter-spacing:0.03em">⚡ SAM</span>'
-      : '<span style="font-size:9px;font-weight:700;color:var(--gold);background:rgba(160,117,42,0.12);border-radius:4px;padding:2px 6px;letter-spacing:0.03em">🤖 AI</span>';
-  };
-  var cardsHtml = rows.map(function(row) {
-    var allRowSignals = [];
-    (row.product_feedback||[]).forEach(function(s) { allRowSignals.push(Object.assign({},s,{_type:'product_feedback'})); });
-    (row.pricing_signals||[]).forEach(function(s) { allRowSignals.push(Object.assign({},s,{_type:'pricing_signals'})); });
-    (row.competitor_mentions||[]).forEach(function(s) { allRowSignals.push(Object.assign({},s,{_type:'competitor_mentions'})); });
-    (row.expansion_signals||[]).forEach(function(s) { allRowSignals.push(Object.assign({},s,{_type:'expansion_signals'})); });
-    (row.risk_signals||[]).forEach(function(s) { allRowSignals.push(Object.assign({},s,{_type:'risk_signals'})); });
-    var filtered = allRowSignals.filter(function(s) { return _intelType === 'all' || s._type === _intelType; });
+function renderPipelineDashboard(data){var el=document.getElementById('pipelineDashboard');if(!el)return;var fmtUsd=function(v){return!v?'$0':v>=1e6?'$'+(v/1e6).toFixed(1)+'M':v>=1000?'$'+Math.round(v/1000)+'K':'$'+v;};var deals=getFilteredDeals(data);var s=data.summary||{};var html='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">'+[{label:'Total pipeline',val:fmtUsd(deals.reduce(function(s,d){return s+d.deal_value_usd},0)),sub:deals.length+' deals',c:'var(--gold)'},{label:'\u2705 Verified',val:fmtUsd(deals.filter(function(d){return d.tier==='verified'}).reduce(function(s,d){return s+d.deal_value_usd},0)),sub:deals.filter(function(d){return d.tier==='verified'}).length+' deals',c:'var(--green)'},{label:'\u26a1 Partial',val:fmtUsd(deals.filter(function(d){return d.tier==='partial'}).reduce(function(s,d){return s+d.deal_value_usd},0)),sub:deals.filter(function(d){return d.tier==='partial'}).length+' deals',c:'var(--amber)'},{label:'Weighted forecast',val:fmtUsd(deals.reduce(function(s,d){return s+d.weighted_value_usd},0)),sub:'probability-adjusted',c:'var(--blue)'}].map(function(c){return'<div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:12px 14px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">'+c.label+'</div><div style="font-size:18px;font-weight:600;color:'+c.c+'">'+c.val+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px">'+c.sub+'</div></div>';}).join('')+'</div>';el.innerHTML=html;}
+function renderPipelineChart(data){var chartEl=document.getElementById('pipelineChart');if(!chartEl)return;var regions=data.regionBreakdown||[];if(!regions.length){chartEl.innerHTML='<div style="font-size:12px;color:var(--text3);padding:16px 0;text-align:center">No pipeline data yet.</div>';return;}var fmtUsd=function(v){return v>=1e6?'$'+(v/1e6).toFixed(1)+'M':'$'+Math.round(v/1000)+'K';};var maxUsd=Math.max.apply(null,regions.map(function(r){return r.total_usd;}));var html='<div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Region pipeline</div>';regions.slice(0,8).forEach(function(r){var pct=maxUsd>0?Math.max(3,r.total_usd/maxUsd*100):0;html+='<div style="margin-bottom:10px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px"><span style="font-size:12px;font-weight:500;color:var(--text)">'+esc(r.region)+'</span><span style="font-size:11px;color:var(--text2)">'+fmtUsd(r.total_usd)+' \u00b7 '+r.deals+' deals</span></div><div style="height:16px;background:var(--surface);border-radius:4px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:var(--gold);opacity:0.7;border-radius:4px"></div></div></div>';});chartEl.innerHTML=html;}
+function renderPipelineDeals(data){var el=document.getElementById('pipelineDeals');if(!el)return;var all=[...(data.verified||[]),(data.partial||[]),(data.unverified||[])].flat().sort(function(a,b){return(b.deal_value_usd||0)-(a.deal_value_usd||0);});if(!all.length){el.innerHTML='<div style="font-size:12px;color:var(--text3);padding:16px 0;text-align:center">No deals yet.</div>';return;}var fmtUsd=function(v){return!v?'\u2014':v>=1e6?'$'+(v/1e6).toFixed(1)+'M':'$'+Math.round(v/1000)+'K';};var tc={verified:{icon:'\u2705',label:'Verified',color:'var(--green)'},partial:{icon:'\u26a1',label:'Partial',color:'var(--amber)'},unverified:{icon:'\u223c',label:'Unverified',color:'var(--text3)'}};el.innerHTML='<div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Deal breakdown</div>'+all.map(function(d){var t=tc[d.tier]||tc.unverified;return'<div style="background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;margin-bottom:6px;display:flex;align-items:flex-start;gap:10px"><div style="flex:1"><div style="font-size:13px;font-weight:500;color:var(--text)">'+esc(d.account)+(d.region?'<span style="font-size:9px;color:var(--text3);background:rgba(0,0,0,0.08);border-radius:4px;padding:1px 6px;margin-left:6px">'+esc(d.region)+'</span>':'')+'</div><div style="font-size:10px;color:'+t.color+';margin-top:2px">'+t.icon+' '+t.label+'</div></div><div style="text-align:right;flex-shrink:0"><div style="font-size:16px;font-weight:600;color:var(--gold)">'+fmtUsd(d.deal_value_usd)+'</div><button onclick="openDealValueForm(\''+d.id+'\',\''+esc(d.account)+'\')" style="margin-top:4px;font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer">Edit</button></div></div>';}).join('');}
 
-    if (!filtered.length) {
-      if (_intelType !== 'all' || !row.summary) return '';
-      return '<div class="intel-card" style="margin-bottom:12px">' +
-        '<div class="intel-card-head">' +
-          '<span class="intel-card-acct">' + esc(row.account_name) + ' ' + sourceBadgeHtml(row) + '</span>' +
-          '<span class="intel-card-meta">' + esc(row.meeting_date||'') + ' \u00b7 ' + esc(row.meeting_subject||'') + '</span>' +
-        '</div>' +
-        '<div class="intel-card-body">' +
-          '<div style="font-size:13px;color:var(--text2);font-style:italic">' + esc(row.summary) + '</div>' +
-        '</div>' +
-      '</div>';
-    }
+function mkBars(rows,maxVal,fmtUsd){var COLORS=['#3A6EA8','#A07824','#4A8C5C','#C0523F','#7B5EA7','#2E8B8B'];return rows.map(function(r,i){var pct=maxVal>0?Math.max(3,r.val/maxVal*100):3;return'<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px"><div style="font-size:11px;color:var(--text2);width:100px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(r.label)+'</div><div style="flex:1;height:10px;background:var(--surface);border-radius:5px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+(r.color||COLORS[i%COLORS.length])+';border-radius:5px"></div></div><div style="font-size:11px;color:var(--text);width:54px;text-align:right;flex-shrink:0">'+fmtUsd(r.val)+'</div></div>';}).join('');}
+function mkRoleCard(rl,rc,title,sub,content){return'<div style="background:var(--surface);border:1px solid var(--border2);border-radius:14px;overflow:hidden;margin-bottom:10px"><div style="padding:16px 18px 12px;border-bottom:1px solid var(--border)"><div style="display:flex;align-items:flex-start;justify-content:space-between"><div><span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;background:'+rc+';color:#fff;display:inline-block;margin-bottom:6px">'+esc(rl)+'</span><div style="font-size:17px;font-weight:700;color:var(--text)">'+esc(title)+'</div><div style="font-size:12px;color:var(--text3);font-style:italic;margin-top:2px">'+esc(sub)+'</div></div></div></div><div style="padding:16px 18px">'+content+'</div></div>';}
+function mkMetricCard(label,value,sub,color){return'<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;font-weight:600">'+esc(label)+'</div><div style="font-size:28px;font-weight:700;color:'+(color||'var(--text)')+'">'+value+'</div>'+(sub?'<div style="font-size:11px;color:var(--text3);margin-top:3px">'+esc(sub)+'</div>':'')+'</div>';}
+function mkAlertRow(dot,text){return'<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">'+(dot?'<div style="width:8px;height:8px;border-radius:50%;background:'+dot+';flex-shrink:0"></div>':'<div style="width:8px;height:8px;flex-shrink:0"></div>')+'<div style="font-size:13px;color:var(--text)">'+text+'</div></div>';}
 
-    var sentimentColor = { positive:'var(--green)', neutral:'var(--text3)', negative:'var(--coral)' }[row.sentiment] || 'var(--text3)';
-    return '<div class="intel-card" style="margin-bottom:12px">' +
-      '<div class="intel-card-head">' +
-        '<span class="intel-card-acct">' + esc(row.account_name) + ' ' + sourceBadgeHtml(row) + '</span>' +
-        '<span class="intel-card-meta" style="color:' + sentimentColor + '">' + (row.sentiment||'') + ' \u00b7 ' + esc(row.meeting_date||'') + ' \u00b7 ' + esc(row.meeting_subject||'') + '</span>' +
-      '</div>' +
-      '<div class="intel-card-body">' +
-        filtered.map(function(s) {
-          return '<div class="intel-signal">' +
-            '<span class="intel-signal-icon">' + (icons[s._type]||'○') + '</span>' +
-            '<span class="intel-signal-text">' + esc(s.quote || s.context || s.name || '') + '</span>' +
-          '</div>';
-        }).join('') +
-        (row.summary ? '<div style="font-size:12px;color:var(--text3);margin-top:8px;font-style:italic">' + esc(row.summary) + '</div>' : '') +
-      '</div>' +
-    '</div>';
-  }).join('');
-
-  if (!cardsHtml.trim()) {
-    feed.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">No signals found for this filter.<br><span style="font-size:12px">Try "All" or a different time range.</span></div>';
-    return;
-  }
-  feed.innerHTML = cardsHtml;
+function renderMemberDetail(d,m,tasks,wins,issues){
+  const ts='<div class="det-sec"><div class="det-lbl">Tasks</div>'+(tasks.length?tasks.map(t=>{const dn=t.done;const txt=t.text?.startsWith('*')?t.text.slice(1).trim():(t.text||'');return`<div class="det-item"><span class="di-dot" style="background:${dn?'var(--green)':'var(--border2)'}"></span><span style="${dn?'text-decoration:line-through;color:var(--text3)':''}">${esc(txt)}</span>${dn&&t.completedAt?`<span style="font-size:10px;color:var(--text3);margin-left:6px">\u2713 ${t.completedAt}</span>`:''}</div>`;}).join(''):'<div class="m-empty">None</div>')+'</div>';
+  const ws='<div class="det-sec"><div class="det-lbl">Wins</div>'+((d.wins||[]).length?(d.wins||[]).map(it=>{const dt=it.text?.startsWith('*')?it.text.slice(1).trim():(it.text||'');const tst=it.completedAt?'<span style="font-size:10px;color:var(--text3);margin-left:6px">\u00b7 '+it.completedAt+'</span>':'';const mt=(d.tasks||[]).find(t=>t.text===it.text&&t.completionNote);const nt=it.completionNote||(mt&&mt.completionNote)||'';const note=nt?'<div style="font-size:11px;color:var(--text2);background:var(--surface2);border-radius:5px;padding:3px 8px;margin-top:4px;font-style:italic">\uD83D\uDCAC '+esc(nt)+'</div>':'';return'<div class="det-item"><span class="di-dot" style="background:var(--green)"></span><div style="flex:1"><span>'+esc(dt)+'</span>'+tst+note+'</div></div>';}).join(''):'<div class="m-empty">None logged</div>')+'</div>';
+  const is='<div class="det-sec"><div class="det-lbl">Issues</div>'+(issues.length?issues.map(i=>'<div class="det-item"><span class="di-dot" style="background:var(--coral)"></span>'+esc(i.text||'')+'</div>').join(''):'<div class="m-empty">None</div>')+'</div>';
+  return`<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">${ts}${ws}${is}<div id="sam-${m.user_id}" style="display:none;margin-top:8px"></div><div id="cov-${m.user_id}" style="display:none;margin-top:8px"></div><div id="ivr-${m.user_id}" style="display:none;margin-top:8px"></div></div>`;
 }
 
+async function renderTeam() {
+  const tl = document.getElementById('teamList'); if (!tl) return;
+  const teamDateEl = document.getElementById('teamDateInput');
+  const selectedDate = (teamDateEl && teamDateEl.value) ? teamDateEl.value : todayKey();
+  tl.innerHTML = '<div class="empty"><div class="empty-icon">\u23f3</div>Loading\u2026</div>';
+  if (!SB_URL || !SB_KEY) { tl.innerHTML = '<div class="empty">Set up Supabase in Settings.</div>'; return; }
+  try {
+    let q;
+    const seeAll = ['super_admin','admin','director','executive'].includes(profile?.role);
+    if (seeAll) q = 'user_profiles?org_id=eq.'+profile.org_id+'&select=user_id,email,role,manager_id';
+    else q = 'user_profiles?org_id=eq.'+profile.org_id+'&manager_id=eq.'+currentUser.id+'&select=user_id,email,role,manager_id';
+    const members = await sbGet(q);
+    const others = (members||[]).filter(m => m.user_id !== currentUser.id);
+    if (!others.length) { tl.innerHTML = '<div class="empty">No team members found.</div>'; return; }
+    populateMgrRepSelect(others);
+    const uids = others.map(m => m.user_id);
+    const rows = await sbGet('daytrack?day_key=eq.'+selectedDate+'&user_id=in.('+uids.join(',')+')'+'&select=user_id,data');
+    const dataMap = {}; (rows||[]).forEach(r => { dataMap[r.user_id] = r.data; });
+    const roleLabelMap = {super_admin:'Admin',admin:'Admin',manager:'Manager',director:'Director',executive:'Executive',member:'Member',sdr:'SDR',ae:'AE'};
+    tl.innerHTML = others.map((m) => {
+      const d = dataMap[m.user_id] || {tasks:[],wins:[],issues:[],misses:[]};
+      const tasks = d.tasks||[]; const wins = d.wins||[]; const issues = d.issues||[];
+      const sc = calcDayScore(tasks);
+      const pct = sc.completion;
+      const barColor = pct>=80?'var(--green)':pct>=50?'var(--amber)':'var(--coral)';
+      const rl = roleLabelMap[m.role]||m.role||'Rep';
+      return `<div class="member-card" style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:10px"><div style="display:flex;align-items:flex-start;gap:12px"><div style="width:36px;height:36px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:var(--gold);flex-shrink:0">${esc(m.email[0].toUpperCase())}</div><div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:8px;margin-bottom:2px"><span style="font-size:13px;font-weight:600;color:var(--text)">${esc(m.email)}</span><span style="font-size:10px;color:var(--text3);background:var(--surface2);border-radius:4px;padding:1px 6px">${esc(rl)}</span></div><div style="font-size:12px;color:var(--text3)">Tasks ${tasks.length} Done ${tasks.filter(t=>t.done).length} Issues ${issues.length} Score <span style="color:${scoreColor(sc.score)}">${sc.score}</span></div></div><div style="text-align:right;flex-shrink:0"><div style="font-size:18px;font-weight:700;color:${barColor}">${pct}%</div><div style="font-size:10px;color:var(--text3)">complete</div></div></div><div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap"><button onclick="event.stopPropagation();togglePanel('sam-${m.user_id}',function(){runSamIntelligence('${m.user_id}','${m.email}','sam-${m.user_id}')})" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(160,117,42,0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">\u26a1 SAM Intelligence</button><button onclick="event.stopPropagation();togglePanel('cov-${m.user_id}',function(){runCoverageCheck('${m.user_id}','${m.email}','cov-${m.user_id}')})" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(160,117,42,0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">\uD83D\uDCC8 Coverage</button><button onclick="event.stopPropagation();togglePanel('ivr-${m.user_id}',function(){runIntentVsReality('${m.user_id}','ivr-${m.user_id}')})" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(192,82,63,0.08);border:1px solid var(--border2);color:var(--coral);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">\uD83C\uDFAF Intent vs Reality</button></div>${renderMemberDetail(d,m,tasks,wins,issues)}</div>`;
+    }).join('');
+    populateTeamFilters();
+  } catch(e) { tl.innerHTML = '<div class="empty" style="color:var(--coral)">Error: '+esc(e.message)+'</div>'; }
+}
 
-window.refreshIntelligence = refreshIntelligence;
-window.loadIntelligence = loadIntelligence;
-window.renderIntelligence = renderIntelligence;
-window.renderIntelFeed = renderIntelFeed;
-window.setIntelType = setIntelType;
-window.openCarryForward = typeof openCarryForward !== 'undefined' ? openCarryForward : function(){};
-window.openCarryFromTask = typeof openCarryFromTask !== 'undefined' ? openCarryFromTask : function(){};
-window.closeCarryForward = typeof closeCarryForward !== 'undefined' ? closeCarryForward : function(){};
-window.confirmCarryForward = typeof confirmCarryForward !== 'undefined' ? confirmCarryForward : function(){};
-window.selectCarryDate = typeof selectCarryDate !== 'undefined' ? selectCarryDate : function(){};
+function renderIntelFeed() {
+  var feed = document.getElementById('intelFeed'); if (!feed || !_intelData) return;
+  var items = _intelType === 'all' ? _intelData : _intelData.filter(function(i){return i.type===_intelType;});
+  if (!items.length) { feed.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text3);font-size:13px">No intelligence items for this filter.</div>'; return; }
+  feed.innerHTML = items.map(function(item) {
+    var typeColor = {hot:'var(--green)',warm:'var(--amber)',cold:'var(--coral)',neutral:'var(--text3)'}[item.type]||'var(--text3)';
+    var typeIcon  = {hot:'\uD83D\uDD25',warm:'\u26A1',cold:'\u2744',neutral:'\u25CB'}[item.type]||'\u25CB';
+    return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-bottom:8px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="font-size:16px">'+typeIcon+'</span><span style="font-size:13px;font-weight:600;color:var(--text)">'+esc(item.account||'')+'</span><span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:'+typeColor+'20;color:'+typeColor+'">'+esc(item.type||'')+'</span></div><div style="font-size:12px;color:var(--text2);margin-bottom:4px">'+esc(item.body||item.summary||'')+'</div>'+(item.action?'<div style="font-size:11px;color:var(--gold);margin-top:4px">\u2192 '+esc(item.action)+'</div>':'')+'</div>';
+  }).join('');
+}
 </script>
 
     <!-- Template Manager Modal -->
