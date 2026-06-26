@@ -2678,7 +2678,10 @@ function renderMemberDetail(d, memberId, memberEmail) {
   const winSection = '<div class="det-sec"><div class="det-lbl">Wins</div>' + ((d.wins||[]).length ? (d.wins||[]).map(it => {
     const displayTxt = it.text?.startsWith('*') ? it.text.slice(1).trim() : (it.text||'');
     const ts = it.completedAt ? '<span style="font-size:10px;color:var(--text3);margin-left:6px">· '+it.completedAt+'</span>' : '';
-    const note = it.completionNote ? '<div style="font-size:11px;color:var(--text2);background:var(--surface2);border-radius:5px;padding:3px 8px;margin-top:4px;font-style:italic">💬 '+esc(it.completionNote)+'</div>' : '';
+    // completionNote may be on the win directly (new saves) or on the matching task (pre-fix saves)
+    const matchingTask = (d.tasks||[]).find(function(t){ return t.text===it.text && t.completionNote; });
+    const noteText = it.completionNote || (matchingTask && matchingTask.completionNote) || '';
+    const note = noteText ? '<div style="font-size:11px;color:var(--text2);background:var(--surface2);border-radius:5px;padding:3px 8px;margin-top:4px;font-style:italic">💬 '+esc(noteText)+'</div>' : '';
     return '<div class="det-item"><span class="di-dot" style="background:var(--green)"></span><div style="flex:1"><span>'+esc(displayTxt)+'</span>'+ts+note+'</div></div>';
   }).join('') : '<div class="m-empty">None logged</div>') + '</div>';
   const delegateSection = canDelegate ? '<div class="det-sec"><div class="det-lbl">Delegate a task</div><div style="display:flex;gap:8px;margin-top:6px"><input class="setup-input" style="margin-bottom:0;font-size:12px;padding:7px 10px" id="delegate-input-' + memberId + '" placeholder="Task to delegate (min 25 chars)…" maxlength="300"/><button class="setup-btn" style="padding:7px 14px;font-size:12px;white-space:nowrap" onclick="delegateTask(\'' + memberId + '\',\'' + memberEmail + '\')">Send ↗</button></div></div>' : '';
