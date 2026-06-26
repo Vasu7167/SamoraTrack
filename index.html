@@ -1445,7 +1445,8 @@ function renderList(key, items) {
       const priorityBadge = isPriority ? '<span class="priority-badge">Priority</span>' : '';
       const delegatedBadge = isDelegated ? `<span class="delegated-badge">↓ from ${item.delegatedBy.split('@')[0]}</span>` : '';
       const winTs = item.completedAt ? `<div class="item-meta">${item.fromTask?'✦ completed · ':isDelegated?'↓ delegated · ':''}${item.completedAt}</div>` : (item.fromTask ? '<div class="item-meta">✦ from completed task</div>' : '');
-      return `<div class="item win-item ${extraClass}"><div class="idot dg"></div><div style="flex:1"><div class="item-text">${esc(displayText)} ${priorityBadge}${delegatedBadge}</div>${winTs}</div><button class="idel" onclick="del('wins',${i})">✕</button></div>`;
+      const noteHtml = item.completionNote ? `<div style="font-size:11px;color:var(--text2);background:var(--surface2);border-radius:5px;padding:4px 8px;margin-top:4px;font-style:italic">💬 ${esc(item.completionNote)}</div>` : '';
+      return `<div class="item win-item ${extraClass}"><div class="idot dg"></div><div style="flex:1"><div class="item-text">${esc(displayText)} ${priorityBadge}${delegatedBadge}</div>${winTs}${noteHtml}</div><button class="idel" onclick="del('wins',${i})">✕</button></div>`;
     }
     if (key === 'misses') {
       const missLabel = item.issueMiss ? '⚡ Unresolved issue' : '○ Incomplete task';
@@ -2853,9 +2854,14 @@ async function loadExecDashboard() {
     for (const rep of reps) {
       const dt = await sbGet('daytrack?user_id=eq.' + rep.user_id + '&day_key=gte.' + dateFrom + '&day_key=lte.' + dateTo + '&select=day_key,data&order=day_key.desc');
       const allTasks=[],allWins=[],allIssues=[];
-      (dt||[]).forEach(function(row){(row.data?.tasks||[]).forEach(function(t){allTasks.push(t);});(row.data?.wins||[]).forEach(function(w){allWins.push(w);});(row.data?.issues||[]).forEach(function(i){allIssues.push(i);});});
+      (dt||[]).forEach(function(row){
+        var date = row.date || viewDate;
+        (row.data?.tasks||[]).forEach(function(t){allTasks.push(t);});
+        (row.data?.wins||[]).forEach(function(w){allWins.push(Object.assign({},w,{date:date}));});
+        (row.data?.issues||[]).forEach(function(i){allIssues.push(i);});
+      });
       const sc = calcDayScore(allTasks);
-      repData.push({email:rep.email,role:rep.role,score:sc.score,completion:sc.completion,rhythm:sc.rhythm,tasks:allTasks.length,done:allTasks.filter(function(t){return t.done;}).length,pending:allTasks.filter(function(t){return !t.done;}).length,wins:allWins.length,issues:allIssues.length,gmailConnected:false});
+      repData.push({email:rep.email,role:rep.role,score:sc.score,completion:sc.completion,rhythm:sc.rhythm,tasks:allTasks.length,done:allTasks.filter(function(t){return t.done;}).length,pending:allTasks.filter(function(t){return !t.done;}).length,wins:allWins.length,winItems:allWins,issues:allIssues.length,gmailConnected:false});
     }
     const avgScore = repData.length?Math.round(repData.reduce(function(s,r){return s+r.score;},0)/repData.length):0;
     const totalTasks=repData.reduce(function(s,r){return s+r.tasks;},0);
@@ -2880,6 +2886,33 @@ async function loadExecDashboard() {
       html+='</div>';
     }
     html+='<button onclick="loadExecDashboard()" style="font-size:11px;color:var(--gold);background:none;border:none;cursor:pointer;font-family:var(--sans);padding:0">↻ Refresh</button>';
+
+    // ── Wins detail (with timestamps and completion notes) ─────────────────
+    const allWinsFlat = repData.flatMap(function(r){return (r.winItems||[]).map(function(w){return Object.assign({},w,{repEmail:r.email});});});
+    if (allWinsFlat.length) {
+      html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-top:12px">' +
+        '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">★ Team wins today ('+allWinsFlat.length+')</div>';
+      allWinsFlat.forEach(function(w) {
+        var repName = w.repEmail ? w.repEmail.split('@')[0] : '';
+        var displayText = w.text?.startsWith('*') ? w.text.slice(1).trim() : (w.text || '');
+        var ts = w.completedAt || w.addedAt || '';
+        var note = w.completionNote || '';
+        html += '<div style="padding:10px 12px;background:var(--bg);border-radius:8px;margin-bottom:6px;border-left:3px solid var(--green)">' +
+          '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">' +
+            '<div style="flex:1">' +
+              '<div style="font-size:13px;color:var(--text);font-weight:500">'+esc(displayText)+'</div>' +
+              (note ? '<div style="font-size:12px;color:var(--text2);margin-top:4px;font-style:italic;background:var(--surface2);border-radius:6px;padding:4px 8px">💬 '+esc(note)+'</div>' : '') +
+            '</div>' +
+            '<div style="text-align:right;flex-shrink:0">' +
+              '<div style="font-size:11px;color:var(--green);font-weight:600">'+esc(repName)+'</div>' +
+              (ts ? '<div style="font-size:10px;color:var(--text3);margin-top:2px">'+esc(ts)+'</div>' : '') +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      });
+      html += '</div>';
+    }
+
     container.innerHTML = html;
   } catch(e) { container.innerHTML = '<div style="padding:20px;font-size:13px;color:var(--coral)">Error: ' + esc(e.message) + '</div>'; }
 }
