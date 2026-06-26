@@ -2618,39 +2618,75 @@ async function runCoverageCheck(repId, repEmail, resultElId) {
     }
     const pct = s.coverageRate||0; const barColor = pct>=80?'var(--green)':pct>=50?'var(--amber)':'var(--coral)';
     let html = picker;
-    html += '<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="color:var(--text2)">'+s.coveredAccounts+'/'+s.totalAccounts+' accounts emailed \u00b7 '+s.totalLogged+' activities logged \u00b7 '+s.totalVerified+' verified</span><span style="color:'+barColor+';font-weight:600">'+pct+'%</span></div><div style="height:5px;background:var(--surface2);border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+barColor+';border-radius:3px;transition:width 0.4s"></div></div></div>';
+    html += '<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="color:var(--text2)">'+s.coveredAccounts+'/'+s.totalAccounts+' accounts reached · '+s.totalLogged+' logged · '+s.totalVerified+' verified</span><span style="color:'+barColor+';font-weight:600">'+pct+'%</span></div><div style="height:5px;background:var(--surface2);border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+barColor+';border-radius:3px;transition:width 0.4s"></div></div></div>';
 
-    // Outreach-by-account grid — logged (claimed in task text) vs verified
-    // (actually found in Gmail) counts per channel.
+    if (data.hasSeqData) {
+      html += '<div style="font-size:11px;color:var(--green);background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);border-radius:6px;padding:5px 10px;margin-bottom:10px">✓ SmartReach signals loaded — calls, LinkedIn and WhatsApp are now verified</div>';
+    }
+
     html += '<div style="margin-bottom:12px;border:1px solid var(--border);border-radius:8px;overflow:hidden">';
     html += '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;padding:8px 12px;background:var(--surface2);border-bottom:1px solid var(--border)">Outreach by account</div>';
     html += '<table style="width:100%;border-collapse:collapse;font-size:12px">';
     html += '<thead><tr style="background:var(--surface2)">' +
       '<th style="padding:6px 10px;text-align:left;color:var(--text3);font-weight:500">Account</th>' +
-      '<th style="padding:6px 6px;text-align:center;color:var(--text3);font-weight:500">📞 Calls</th>' +
-      '<th style="padding:6px 6px;text-align:center;color:var(--text3);font-weight:500">✉ Emails</th>' +
-      '<th style="padding:6px 6px;text-align:center;color:var(--text3);font-weight:500">📅 Meetings</th>' +
+      '<th style="padding:6px 6px;text-align:center;color:var(--text3);font-weight:500">✉ Email</th>' +
       '<th style="padding:6px 6px;text-align:center;color:var(--text3);font-weight:500">🔗 LinkedIn</th>' +
+      '<th style="padding:6px 6px;text-align:center;color:var(--text3);font-weight:500">📞 Calls</th>' +
       '<th style="padding:6px 6px;text-align:center;color:var(--text3);font-weight:500">💬 WhatsApp</th>' +
+      '<th style="padding:6px 6px;text-align:center;color:var(--text3);font-weight:500">↩ Replies</th>' +
       '</tr></thead><tbody>';
+
     grid.forEach(function(g) {
-      const cell = function(bucket, hasIntegration) {
-        if (!bucket.logged) return '<span style="color:var(--text3)">—</span>';
-        if (!hasIntegration) return '<span style="color:var(--text2);font-weight:600">'+bucket.logged+'</span><span style="color:var(--text3)" title="No integration yet to verify this channel"> (logged)</span>';
-        const color = bucket.verified >= bucket.logged ? 'var(--green)' : bucket.verified > 0 ? 'var(--amber)' : 'var(--coral)';
-        return '<span style="color:'+color+';font-weight:600">'+bucket.verified+'</span><span style="color:var(--text3)">/'+bucket.logged+'</span>';
+      // Generic cell renderer — shows verified/logged with source badge
+      var cell = function(bucket) {
+        if (!bucket.verified && !bucket.logged) return '<span style="color:var(--text3)">—</span>';
+        var html = '';
+        if (bucket.verified > 0) {
+          html += '<span style="color:var(--green);font-weight:600">'+bucket.verified+'</span>';
+          if (bucket.source) {
+            var src = bucket.source.replace('gmail+smartreach','G+SR').replace('smartreach','SR').replace('gmail','G');
+            html += '<span style="font-size:9px;color:var(--text3);margin-left:2px">'+src+'</span>';
+          }
+        } else if (bucket.logged) {
+          html += '<span style="color:var(--text2)">'+bucket.logged+'</span><span style="font-size:10px;color:var(--text3)"> lgd</span>';
+        }
+        return html;
       };
+
+      // Email cell with opens/clicks breakdown
+      var emailCell = function(b) {
+        if (!b.verified && !b.logged) return '<span style="color:var(--text3)">—</span>';
+        var h = '';
+        if (b.verified > 0) {
+          h += '<span style="color:var(--green);font-weight:600">'+b.verified+'</span>';
+          if (b.opens > 0) h += '<span style="font-size:9px;color:var(--text3);margin-left:3px">'+b.opens+' opens</span>';
+        } else {
+          h += '<span style="color:var(--text2)">'+b.logged+'</span><span style="font-size:10px;color:var(--text3)"> lgd</span>';
+        }
+        return h;
+      };
+
+      // Replies cell — Gmail replies + SmartReach replies
+      var seqReplies = g.seqReplies || 0;
+      var gmailReplies = (g.repliesReceived || 0) - seqReplies;
+      var replyCell = '';
+      if (g.repliesReceived > 0) {
+        replyCell = '<span style="color:var(--green);font-weight:600">'+g.repliesReceived+'</span>';
+        if (seqReplies > 0 && gmailReplies > 0) replyCell += '<span style="font-size:9px;color:var(--text3);margin-left:2px">G+SR</span>';
+        else if (seqReplies > 0) replyCell += '<span style="font-size:9px;color:var(--text3);margin-left:2px">SR</span>';
+      } else { replyCell = '<span style="color:var(--text3)">—</span>'; }
+
       html += '<tr style="border-top:1px solid var(--border)">' +
-        '<td style="padding:7px 10px;color:var(--text);font-weight:500">'+esc(g.account)+(g.repliesReceived>0?' <span style="color:var(--green);font-size:10px">'+g.repliesReceived+' repl'+(g.repliesReceived>1?'ies':'y')+'</span>':'')+'</td>' +
-        '<td style="padding:7px 6px;text-align:center">'+cell(g.call, false)+'</td>' +
-        '<td style="padding:7px 6px;text-align:center">'+cell(g.email, true)+'</td>' +
-        '<td style="padding:7px 6px;text-align:center">'+cell(g.meeting, false)+'</td>' +
-        '<td style="padding:7px 6px;text-align:center">'+cell(g.linkedin, false)+'</td>' +
-        '<td style="padding:7px 6px;text-align:center">'+cell(g.whatsapp, false)+'</td>' +
+        '<td style="padding:7px 10px;color:var(--text);font-weight:500">'+esc(g.account)+'</td>' +
+        '<td style="padding:7px 6px;text-align:center">'+emailCell(g.email)+'</td>' +
+        '<td style="padding:7px 6px;text-align:center">'+cell(g.linkedin)+'</td>' +
+        '<td style="padding:7px 6px;text-align:center">'+cell(g.call)+'</td>' +
+        '<td style="padding:7px 6px;text-align:center">'+cell(g.whatsapp)+'</td>' +
+        '<td style="padding:7px 6px;text-align:center">'+replyCell+'</td>' +
       '</tr>';
     });
     html += '</tbody></table></div>';
-    html += '<div style="font-size:10px;color:var(--text3);margin-bottom:10px;padding:0 2px">"Logged" = quantity stated in the task text (e.g. "10 emails"). Verified/Logged = actually found in Gmail. "(logged)" channels have no integration yet to verify against.</div>';
+    html += '<div style="font-size:10px;color:var(--text3);margin-bottom:10px;padding:0 2px">G = Gmail verified · SR = SmartReach verified · lgd = logged by rep, not yet verified</div>';
     out.innerHTML = html;
   } catch(e) { out.innerHTML = renderCoveragePeriodPicker(outputId) + '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>'; }
   if (btn) { btn.textContent = 'Refresh'; btn.disabled = false; }
