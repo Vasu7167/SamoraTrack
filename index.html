@@ -2621,7 +2621,7 @@ async function runCoverageCheck(repId, repEmail, resultElId) {
     html += '<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="color:var(--text2)">'+s.coveredAccounts+'/'+s.totalAccounts+' accounts reached · '+s.totalLogged+' logged · '+s.totalVerified+' verified</span><span style="color:'+barColor+';font-weight:600">'+pct+'%</span></div><div style="height:5px;background:var(--surface2);border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+barColor+';border-radius:3px;transition:width 0.4s"></div></div></div>';
 
     if (data.hasSeqData) {
-      html += '<div style="font-size:11px;color:var(--green);background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);border-radius:6px;padding:5px 10px;margin-bottom:10px">✓ SmartReach signals loaded — calls, LinkedIn and WhatsApp are now verified</div>';
+      html += '<div style="font-size:11px;color:var(--green);background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);border-radius:6px;padding:5px 10px;margin-bottom:10px">✓ SmartReach signals loaded — calls, LinkedIn and WhatsApp verified where data exists</div>';
     }
 
     html += '<div style="margin-bottom:12px;border:1px solid var(--border);border-radius:8px;overflow:hidden">';
@@ -2632,65 +2632,239 @@ async function runCoverageCheck(repId, repEmail, resultElId) {
       '<th style="padding:6px 6px;text-align:center;color:var(--text3);font-weight:500">✉ Email</th>' +
       '<th style="padding:6px 6px;text-align:center;color:var(--text3);font-weight:500">🔗 LinkedIn</th>' +
       '<th style="padding:6px 6px;text-align:center;color:var(--text3);font-weight:500">📞 Calls</th>' +
-      '<th style="padding:6px 6px;text-align:center;color:var(--text3);font-weight:500">💬 WhatsApp</th>' +
+      '<th style="padding:6px 6px;text-align:center;color:var(--text3);font-weight:500">💬 WA</th>' +
       '<th style="padding:6px 6px;text-align:center;color:var(--text3);font-weight:500">↩ Replies</th>' +
+      '<th style="padding:6px 8px;text-align:center;color:var(--text3);font-weight:500">Signal</th>' +
       '</tr></thead><tbody>';
 
     grid.forEach(function(g) {
-      // Generic cell renderer — shows verified/logged with source badge
+      // Generic verified/logged cell with source badge
       var cell = function(bucket) {
         if (!bucket.verified && !bucket.logged) return '<span style="color:var(--text3)">—</span>';
-        var html = '';
+        var h = '';
         if (bucket.verified > 0) {
-          html += '<span style="color:var(--green);font-weight:600">'+bucket.verified+'</span>';
+          h += '<span style="color:var(--green);font-weight:600">'+bucket.verified+'</span>';
           if (bucket.source) {
-            var src = bucket.source.replace('gmail+smartreach','G+SR').replace('smartreach','SR').replace('gmail','G');
-            html += '<span style="font-size:9px;color:var(--text3);margin-left:2px">'+src+'</span>';
+            var src = (bucket.source||'').replace('gmail+smartreach','G+SR').replace('smartreach','SR').replace('gmail','G');
+            h += '<span style="font-size:9px;color:var(--text3);margin-left:2px">'+src+'</span>';
           }
-        } else if (bucket.logged) {
-          html += '<span style="color:var(--text2)">'+bucket.logged+'</span><span style="font-size:10px;color:var(--text3)"> lgd</span>';
+        } else {
+          h += '<span style="color:var(--text2)">'+bucket.logged+'</span><span style="font-size:10px;color:var(--text3)"> lgd</span>';
         }
-        return html;
+        return h;
       };
 
-      // Email cell with opens/clicks breakdown
+      // Email cell — shows verified count + source + opens if available
       var emailCell = function(b) {
         if (!b.verified && !b.logged) return '<span style="color:var(--text3)">—</span>';
         var h = '';
         if (b.verified > 0) {
           h += '<span style="color:var(--green);font-weight:600">'+b.verified+'</span>';
-          if (b.opens > 0) h += '<span style="font-size:9px;color:var(--text3);margin-left:3px">'+b.opens+' opens</span>';
+          // Source badge
+          var src = (b.source||'').replace('gmail+smartreach','G+SR').replace('smartreach','SR').replace('gmail','G');
+          if (src) h += '<span style="font-size:9px;color:var(--text3);margin-left:2px">'+src+'</span>';
+          // Opens/clicks from SmartReach
+          if (b.opens > 0) h += '<br><span style="font-size:9px;color:var(--amber)">'+b.opens+' opens</span>';
         } else {
           h += '<span style="color:var(--text2)">'+b.logged+'</span><span style="font-size:10px;color:var(--text3)"> lgd</span>';
         }
         return h;
       };
 
-      // Replies cell — Gmail replies + SmartReach replies
-      var seqReplies = g.seqReplies || 0;
-      var gmailReplies = (g.repliesReceived || 0) - seqReplies;
-      var replyCell = '';
-      if (g.repliesReceived > 0) {
-        replyCell = '<span style="color:var(--green);font-weight:600">'+g.repliesReceived+'</span>';
-        if (seqReplies > 0 && gmailReplies > 0) replyCell += '<span style="font-size:9px;color:var(--text3);margin-left:2px">G+SR</span>';
-        else if (seqReplies > 0) replyCell += '<span style="font-size:9px;color:var(--text3);margin-left:2px">SR</span>';
-      } else { replyCell = '<span style="color:var(--text3)">—</span>'; }
+      // Replies cell
+      var seqR = g.seqReplies || 0;
+      var gmailR = Math.max(0, (g.repliesReceived||0) - seqR);
+      var replyCell = g.repliesReceived > 0
+        ? '<span style="color:var(--green);font-weight:600">'+g.repliesReceived+'</span>'
+          + (seqR>0&&gmailR>0?'<span style="font-size:9px;color:var(--text3);margin-left:2px">G+SR</span>':seqR>0?'<span style="font-size:9px;color:var(--text3);margin-left:2px">SR</span>':'')
+        : '<span style="color:var(--text3)">—</span>';
+
+      // ── Engagement quality signal ─────────────────────────────────────────
+      // Compute a quick per-account signal from what we know:
+      // - Has verified outreach AND got a reply → 🔥 Hot
+      // - Has opens but no reply → ⚡ Engaged, no reply
+      // - Verified outreach, no engagement → 💧 Sent, no signal
+      // - Only logged (no tool verification) → 📋 Unverified
+      // - No outreach at all → ○ Not touched
+      var totalVerifiedTouches = (g.email.verified||0) + (g.linkedin.verified||0) + (g.call.verified||0) + (g.whatsapp.verified||0);
+      var totalLoggedTouches   = (g.email.logged||0) + (g.linkedin.logged||0) + (g.call.logged||0) + (g.whatsapp.logged||0);
+      var emailOpens = g.email.opens || 0;
+      var replies    = g.repliesReceived || 0;
+      var channels   = [g.email,g.linkedin,g.call,g.whatsapp].filter(function(b){return b.verified>0;}).length;
+
+      var signal, sigColor, sigTitle;
+      if (replies > 0) {
+        signal='🔥'; sigColor='var(--green)'; sigTitle='Prospect responded — pursue now';
+      } else if (emailOpens > 0 && totalVerifiedTouches > 0) {
+        signal='👁'; sigColor='var(--amber)'; sigTitle='Opening but not replying — try a different hook or switch channel';
+      } else if (totalVerifiedTouches > 0 && channels >= 2) {
+        signal='⚡'; sigColor='var(--blue)'; sigTitle='Multichannel — good coverage, keep at it';
+      } else if (totalVerifiedTouches > 0) {
+        signal='💧'; sigColor='var(--text3)'; sigTitle='Verified outreach, no engagement signal yet';
+      } else if (totalLoggedTouches > 0) {
+        signal='📋'; sigColor='var(--text3)'; sigTitle='Rep logged activity but no tool verification';
+      } else {
+        signal='○'; sigColor='var(--text3)'; sigTitle='No outreach logged';
+      }
+
+      // Per-account action hint
+      var accountHint = '';
+      if (signal === '🔥')  accountHint = 'Hot — follow up today';
+      else if (signal === '👁') accountHint = 'Opening — change your hook or call';
+      else if (signal === '⚡') accountHint = 'Multichannel — stay consistent';
+      else if (signal === '💧') accountHint = 'No engagement — try a different channel';
+      else if (signal === '📋') accountHint = 'Unverified — sync SmartReach for accuracy';
+
+      var campaignTag = g.campaigns ? '<div style="font-size:9px;color:var(--text3);margin-top:2px">📨 '+esc(g.campaigns.slice(0,40))+'</div>' : '';
 
       html += '<tr style="border-top:1px solid var(--border)">' +
-        '<td style="padding:7px 10px;color:var(--text);font-weight:500">'+esc(g.account)+'</td>' +
+        '<td style="padding:7px 10px">' +
+          '<div style="color:var(--text);font-weight:500;font-size:12px">'+esc(g.account)+'</div>' +
+          '<div style="font-size:10px;color:'+sigColor+';margin-top:1px">'+accountHint+'</div>' +
+          campaignTag +
+        '</td>' +
         '<td style="padding:7px 6px;text-align:center">'+emailCell(g.email)+'</td>' +
         '<td style="padding:7px 6px;text-align:center">'+cell(g.linkedin)+'</td>' +
         '<td style="padding:7px 6px;text-align:center">'+cell(g.call)+'</td>' +
         '<td style="padding:7px 6px;text-align:center">'+cell(g.whatsapp)+'</td>' +
         '<td style="padding:7px 6px;text-align:center">'+replyCell+'</td>' +
+        '<td style="padding:7px 8px;text-align:center">' +
+          '<span style="font-size:16px" title="'+esc(sigTitle)+'">'+signal+'</span>' +
+        '</td>' +
       '</tr>';
     });
     html += '</tbody></table></div>';
-    html += '<div style="font-size:10px;color:var(--text3);margin-bottom:10px;padding:0 2px">G = Gmail verified · SR = SmartReach verified · lgd = logged by rep, not yet verified</div>';
+    html += '<div style="font-size:10px;color:var(--text3);margin-bottom:12px;padding:0 2px">G = Gmail verified · SR = SmartReach verified · lgd = rep logged, not tool-verified · Signal: 🔥 replied · 👁 opening · ⚡ multichannel · 💧 sent · ○ untouched</div>';
+
+    // ── Qualitative coaching (Gemini) ────────────────────────────────────────
+    // Build a concise data summary to send to Gemini
+    var coachingGrid = grid.map(function(g) {
+      return {
+        account:         g.account,
+        emails_verified: g.email.verified || 0,
+        emails_logged:   g.email.logged || 0,
+        opens:           g.email.opens || 0,
+        linkedin:        g.linkedin.verified || 0,
+        calls:           g.call.logged || 0,
+        whatsapp:        g.whatsapp.verified || 0,
+        replies:         g.repliesReceived || 0,
+        campaign:        g.campaigns || null,
+        signal:          g.signal || null
+      };
+    });
+
+    html += '<div id="cov-coaching-'+outputId+'" style="background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:12px 14px">';
+    html += '<div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">⚡ Coaching</div>';
+    html += '<div style="font-size:12px;color:var(--text3)">Analysing outreach quality…</div>';
+    html += '</div>';
+
     out.innerHTML = html;
+
+    // Async: fire Gemini coaching call after rendering table
+    getCoverageCoaching(coachingGrid, outputId, isManager ? repEmail : currentUser?.email);
   } catch(e) { out.innerHTML = renderCoveragePeriodPicker(outputId) + '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>'; }
   if (btn) { btn.textContent = 'Refresh'; btn.disabled = false; }
 }
+async function getCoverageCoaching(grid, outputId, repEmail) {
+  var coachEl = document.getElementById('cov-coaching-' + outputId);
+  if (!coachEl) return;
+
+  // Compute summary stats for context
+  var totalAccounts = grid.length;
+  var touchedAccounts = grid.filter(function(g){return g.emails_verified > 0 || g.linkedin > 0 || g.calls > 0 || g.whatsapp > 0;}).length;
+  var repliedAccounts = grid.filter(function(g){return g.replies > 0;}).length;
+  var totalEmails = grid.reduce(function(s,g){return s+g.emails_verified;}, 0);
+  var totalOpens = grid.reduce(function(s,g){return s+g.opens;}, 0);
+  var totalReplies = grid.reduce(function(s,g){return s+g.replies;}, 0);
+  var openRate = totalEmails > 0 ? Math.round(totalOpens/totalEmails*100) : 0;
+  var replyRate = totalEmails > 0 ? Math.round(totalReplies/totalEmails*100) : 0;
+  var multichannel = grid.filter(function(g){
+    var channels = [g.emails_verified>0, g.linkedin>0, g.calls>0, g.whatsapp>0].filter(Boolean).length;
+    return channels >= 2;
+  }).length;
+
+  // Hot accounts (replied), cold accounts (sent but no engagement), untouched
+  var hot = grid.filter(function(g){return g.replies > 0;}).map(function(g){return g.account;});
+  var opening = grid.filter(function(g){return g.opens > 0 && g.replies === 0;}).map(function(g){return g.account;});
+  var cold = grid.filter(function(g){return (g.emails_verified>0||g.linkedin>0) && g.opens === 0 && g.replies === 0;}).map(function(g){return g.account;});
+  var untouched = grid.filter(function(g){return g.emails_verified===0 && g.linkedin===0 && g.calls===0 && g.whatsapp===0;}).map(function(g){return g.account;});
+
+  var dataContext = 'SDR outreach data for ' + (repEmail||'rep') + ':\n' +
+    '- Accounts: ' + touchedAccounts + '/' + totalAccounts + ' touched\n' +
+    '- Verified email sends: ' + totalEmails + ' | Open rate: ' + openRate + '% | Reply rate: ' + replyRate + '%\n' +
+    '- Multichannel accounts (2+ channels): ' + multichannel + '/' + totalAccounts + '\n' +
+    (hot.length    ? '- 🔥 Replied: '             + hot.join(', ') + '\n' : '') +
+    (opening.length? '- 👁 Opening, not replying: ' + opening.join(', ') + '\n' : '') +
+    (cold.length   ? '- ❄ Sent, zero engagement: ' + cold.join(', ') + '\n' : '') +
+    (untouched.length ? '- ○ Not touched: '        + untouched.join(', ') + '\n' : '') +
+    '\nBenchmarks: cold email open rate 25-40%, reply rate 5-12%, LinkedIn reply rate 10-20%.\n';
+
+  var prompt = dataContext +
+    '\nYou are a sharp B2B sales coach. Provide coaching in exactly 4 sections. Keep each bullet to one punchy sentence. Name specific accounts. No preamble.\n\n' +
+    '1. WHAT\'S WORKING (max 2 bullets)\n' +
+    '2. WHAT TO FIX NOW (max 3 bullets — specific, actionable, account-level)\n' +
+    '3. THIS WEEK\'S PRIORITY (1 sentence — the single most important action)\n' +
+    '4. FORECAST (2 sentences — given current activity, what outcome should the rep realistically expect? Be honest but constructive. Address "will my inputs lead to results?")\n\n' +
+    'Be direct. Use sales language, not corporate speak. Do not pad with pleasantries.';
+
+  try {
+    var r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 500,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    var d = await r.json();
+    var coaching = d.content?.[0]?.text || '';
+
+    if (!coaching) { coachEl.innerHTML = '<div style="font-size:11px;color:var(--gold);font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">⚡ Coaching</div><div style="font-size:12px;color:var(--text3)">No coaching available</div>'; return; }
+
+    // Parse and render the three sections
+    var sections = [
+      { key: "WHAT'S WORKING",       color: 'var(--green)', icon: '✅' },
+      { key: 'WHAT TO FIX NOW',      color: 'var(--coral)', icon: '⚡' },
+      { key: "THIS WEEK'S PRIORITY", color: 'var(--gold)',  icon: '🎯' },
+      { key: 'FORECAST',             color: 'var(--blue)',  icon: '📈' }
+    ];
+
+    var rendered = '<div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">⚡ Coaching — '+esc(repEmail?repEmail.split('@')[0]:'you')+'</div>';
+
+    // Also render quick stats row
+    rendered += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border)">' +
+      '<span style="font-size:12px;color:var(--text2)"><strong style="color:'+( openRate>=25?'var(--green)':openRate>=10?'var(--amber)':'var(--coral)' )+'">'+openRate+'%</strong> open rate</span>' +
+      '<span style="font-size:12px;color:var(--text2)"><strong style="color:'+( replyRate>=8?'var(--green)':replyRate>=3?'var(--amber)':'var(--coral)' )+'">'+replyRate+'%</strong> reply rate</span>' +
+      '<span style="font-size:12px;color:var(--text2)"><strong style="color:var(--blue)">'+multichannel+'/'+ totalAccounts+'</strong> multichannel</span>' +
+      '<span style="font-size:12px;color:var(--text2)"><strong style="color:var(--green)">'+repliedAccounts+'</strong> replied</span>' +
+    '</div>';
+
+    // Render coaching text — split into sections
+    var lines = coaching.split('\n').filter(function(l){return l.trim();});
+    var currentSection = null;
+    var buf = '';
+
+    lines.forEach(function(line) {
+      var sectionMatch = sections.find(function(s){ return line.toUpperCase().includes(s.key); });
+      if (sectionMatch) {
+        if (currentSection && buf) rendered += buf + '</div>';
+        currentSection = sectionMatch;
+        buf = '<div style="margin-bottom:10px"><div style="font-size:11px;font-weight:600;color:'+sectionMatch.color+';margin-bottom:5px">'+sectionMatch.icon+' '+sectionMatch.key+'</div>';
+      } else if (line.match(/^[\-\•\*]/)) {
+        buf += '<div style="font-size:12px;color:var(--text);padding:3px 0 3px 12px;border-left:2px solid '+(currentSection?.color||'var(--border)')+';margin-bottom:4px">'+esc(line.replace(/^[\-\•\*]\s*/,''))+'</div>';
+      } else if (currentSection) {
+        buf += '<div style="font-size:12px;color:var(--text);font-weight:500">'+esc(line)+'</div>';
+      }
+    });
+    if (currentSection && buf) rendered += buf + '</div>';
+
+    coachEl.innerHTML = rendered;
+  } catch(e) {
+    coachEl.innerHTML = '<div style="font-size:11px;color:var(--gold);font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">⚡ Coaching</div><div style="font-size:12px;color:var(--text3)">Coaching unavailable: '+esc(e.message)+'</div>';
+  }
+}
+
 async function runSamQuery() {
   const inp = document.getElementById('samChatInput'); const out = document.getElementById('samChatOutput');
   const query = inp?.value?.trim(); if (!query || !out) return;
