@@ -3922,23 +3922,40 @@ function renderPipelineDashboard(data) {
 
 // ── Shared bar chart helper ────────────────────────────────────────────────
 function mkBars(rows, maxVal, fmtUsd) {
+  if (!rows.length) return '<div style="font-size:12px;color:var(--text3);padding:8px 0">No data</div>';
   var COLORS = ['#3A6EA8','#A07824','#4A8C5C','#C0523F','#7B5EA7','#2E8B8B'];
   return rows.map(function(r, i) {
-    var pct = maxVal > 0 ? Math.max(3, r.val / maxVal * 100) : 3;
+    var pct = maxVal > 0 ? Math.max(4, r.val / maxVal * 100) : 4;
     var color = r.color || COLORS[i % COLORS.length];
-    return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">' +
-      '<div style="font-size:12px;color:var(--text2);width:110px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+esc(r.label)+'">'+esc(r.label)+'</div>' +
-      '<div style="flex:1;height:9px;background:rgba(0,0,0,0.15);border-radius:5px;overflow:hidden">' +
-        '<div style="height:100%;width:'+pct+'%;background:'+color+';border-radius:5px;transition:width 0.4s ease"></div>' +
-      '</div>' +
-      '<div style="font-size:12px;color:var(--text);font-weight:500;width:50px;text-align:right;flex-shrink:0">'+fmtUsd(r.val)+'</div>' +
+    // Stacked bar: verified (green) + partial (amber) + unverified (grey) if breakdown available
+    var barHtml;
+    if (r.verified !== undefined) {
+      var verPct = r.val > 0 ? r.verified / r.val * pct : 0;
+      var parPct = r.val > 0 ? (r.partial || 0) / r.val * pct : 0;
+      var unvPct = Math.max(0, pct - verPct - parPct);
+      barHtml = '<div style="flex:1;height:10px;background:rgba(0,0,0,0.1);border-radius:5px;overflow:hidden;display:flex">' +
+        (verPct>0?'<div style="height:100%;width:'+verPct+'%;background:#4A8C5C"></div>':'') +
+        (parPct>0?'<div style="height:100%;width:'+parPct+'%;background:#A07824"></div>':'') +
+        (unvPct>0?'<div style="height:100%;width:'+unvPct+'%;background:#888780"></div>':'') +
+      '</div>';
+    } else {
+      barHtml = '<div style="flex:1;height:10px;background:rgba(0,0,0,0.1);border-radius:5px;overflow:hidden">' +
+        '<div style="height:100%;width:'+pct+'%;background:'+color+';border-radius:5px"></div>' +
+      '</div>';
+    }
+    return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:9px">' +
+      '<div style="font-size:12px;color:var(--text2);width:76px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+esc(r.label)+'">'+esc(r.label)+'</div>' +
+      barHtml +
+      '<div style="font-size:12px;color:var(--text);font-weight:600;width:46px;text-align:right;flex-shrink:0">'+fmtUsd(r.val)+'</div>' +
+      (r.count !== undefined ? '<div style="font-size:10px;color:var(--text3);width:22px;flex-shrink:0">'+r.count+'d</div>' : '') +
     '</div>';
   }).join('');
 }
 
 // ── Role header card wrapper ──────────────────────────────────────────────
 function mkRoleCard(roleLabel, roleColor, title, subtitle, content) {
-  return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:14px;overflow:hidden;margin-bottom:10px">' +
+  var cardId = 'rolecard-' + Math.random().toString(36).slice(2,7);
+  return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:14px;overflow:hidden;margin-bottom:10px" id="'+cardId+'">' +
     '<div style="padding:16px 18px 12px;border-bottom:1px solid var(--border)">' +
       '<div style="display:flex;align-items:flex-start;justify-content:space-between">' +
         '<div>' +
@@ -3948,11 +3965,31 @@ function mkRoleCard(roleLabel, roleColor, title, subtitle, content) {
           '<div style="font-size:17px;font-weight:700;color:var(--text)">'+esc(title)+'</div>' +
           '<div style="font-size:12px;color:var(--text3);font-style:italic;margin-top:2px">'+esc(subtitle)+'</div>' +
         '</div>' +
-        '<div style="font-size:18px;color:var(--text3);cursor:pointer;padding:4px">&#8943;</div>' +
+        '<div style="position:relative">' +
+          '<button onclick="togglePipelineCardMenu(\''+cardId+'\')" style="font-size:20px;color:var(--text3);cursor:pointer;padding:4px 8px;background:none;border:none;border-radius:6px;line-height:1" title="Options">&#8943;</button>' +
+          '<div id="menu-'+cardId+'" style="display:none;position:absolute;right:0;top:28px;background:var(--bg);border:1px solid var(--border2);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.2);z-index:99;min-width:160px;padding:4px 0">' +
+            '<button onclick="switchTab(\'pipeline\')" style="width:100%;text-align:left;padding:8px 14px;font-size:13px;color:var(--text);background:none;border:none;cursor:pointer;font-family:var(--sans)">📊 View pipeline</button>' +
+            '<button onclick="setPipelineDashTab(\'attention\')" style="width:100%;text-align:left;padding:8px 14px;font-size:13px;color:var(--text);background:none;border:none;cursor:pointer;font-family:var(--sans)">⚡ Needs attention</button>' +
+            '<button onclick="setPipelineDashTab(\'byRegion\')" style="width:100%;text-align:left;padding:8px 14px;font-size:13px;color:var(--text);background:none;border:none;cursor:pointer;font-family:var(--sans)">🌍 By region</button>' +
+            '<button onclick="setPipelineDashTab(\'byProduct\')" style="width:100%;text-align:left;padding:8px 14px;font-size:13px;color:var(--text);background:none;border:none;cursor:pointer;font-family:var(--sans)">📦 By product</button>' +
+          '</div>' +
+        '</div>' +
       '</div>' +
     '</div>' +
     '<div style="padding:16px 18px">'+content+'</div>' +
   '</div>';
+}
+
+function togglePipelineCardMenu(cardId) {
+  var menu = document.getElementById('menu-'+cardId);
+  if (!menu) return;
+  var isOpen = menu.style.display !== 'none';
+  // Close all other menus first
+  document.querySelectorAll('[id^="menu-rolecard"]').forEach(function(m){ m.style.display='none'; });
+  menu.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) {
+    setTimeout(function(){ document.addEventListener('click', function handler(e){ menu.style.display='none'; document.removeEventListener('click',handler); }); }, 10);
+  }
 }
 
 function mkMetricCard(label, value, sub, color) {
@@ -4040,20 +4077,24 @@ function renderManagerInsights(data, deals, fmtUsd) {
   var pct = totalVal > 0 ? Math.round(verifiedVal/totalVal*100) : 0;
   var pctColor = pct>=50?'var(--green)':pct>=35?'var(--amber)':'var(--coral)';
 
-  // Pipeline by rep — group by rep_user_id
+  // Pipeline by rep — group by email, show first name only
   var byRep = {};
   deals.forEach(function(d){
-    var k = d.rep_email || d.rep_user_id?.slice(0,8) || 'Unknown';
-    if (!byRep[k]) byRep[k] = {val:0,verified:0};
-    byRep[k].val += d.deal_value_usd;
-    if (d.tier==='verified') byRep[k].verified += d.deal_value_usd;
+    var email = d.rep_email || '';
+    var name = email ? email.split('@')[0].split('.')[0] : (d.rep_user_id?.slice(0,6) || 'Unknown');
+    name = name.charAt(0).toUpperCase() + name.slice(1); // capitalise
+    if (!byRep[name]) byRep[name] = {val:0,verified:0,partial:0,count:0};
+    byRep[name].val += d.deal_value_usd;
+    byRep[name].count++;
+    if (d.tier==='verified') byRep[name].verified += d.deal_value_usd;
+    if (d.tier==='partial') byRep[name].partial += d.deal_value_usd;
   });
-  var repRows = Object.entries(byRep).sort(function(a,b){return b[1].val-a[1].val;}).slice(0,6).map(function(e,i){
+  var repRows = Object.entries(byRep).sort(function(a,b){return b[1].val-a[1].val;}).slice(0,8).map(function(e){
     var verPct = e[1].val>0?e[1].verified/e[1].val:0;
     var c = verPct>=0.5?'#4A8C5C':verPct>=0.3?'#A07824':'#888780';
-    return {label:e[0],val:e[1].val,color:c};
+    return {label:e[0], val:e[1].val, verified:e[1].verified, partial:e[1].partial, color:c, count:e[1].count};
   });
-  var maxR = Math.max.apply(null,repRows.map(function(r){return r.val;})||[1]);
+  var maxR = Math.max.apply(null, repRows.map(function(r){return r.val;})||[1]);
 
   // Coverage gaps
   var gaps = [];
@@ -4073,6 +4114,11 @@ function renderManagerInsights(data, deals, fmtUsd) {
   inner += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px">' +
     '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:12px">Pipeline by rep</div>' +
     (repRows.length ? mkBars(repRows, maxR, fmtUsd) : '<div style="font-size:12px;color:var(--text3)">No deal data yet</div>') +
+    '<div style="display:flex;gap:10px;margin-top:8px;border-top:1px solid var(--border);padding-top:8px">' +
+      '<div style="display:flex;align-items:center;gap:4px"><div style="width:8px;height:8px;border-radius:2px;background:#4A8C5C"></div><span style="font-size:10px;color:var(--text3)">Verified</span></div>' +
+      '<div style="display:flex;align-items:center;gap:4px"><div style="width:8px;height:8px;border-radius:2px;background:#A07824"></div><span style="font-size:10px;color:var(--text3)">Partial</span></div>' +
+      '<div style="display:flex;align-items:center;gap:4px"><div style="width:8px;height:8px;border-radius:2px;background:#888780"></div><span style="font-size:10px;color:var(--text3)">Unverified</span></div>' +
+    '</div>' +
   '</div>';
 
   // Coverage gaps
