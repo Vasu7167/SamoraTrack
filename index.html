@@ -2660,11 +2660,12 @@ async function runCoverageCheck(repId, repEmail, resultElId) {
         var h = '';
         if (b.verified > 0) {
           h += '<span style="color:var(--green);font-weight:600">'+b.verified+'</span>';
-          // Source badge
           var src = (b.source||'').replace('gmail+smartreach','G+SR').replace('smartreach','SR').replace('gmail','G');
           if (src) h += '<span style="font-size:9px;color:var(--text3);margin-left:2px">'+src+'</span>';
-          // Opens/clicks from SmartReach
-          if (b.opens > 0) h += '<br><span style="font-size:9px;color:var(--amber)">'+b.opens+' opens</span>';
+          if (b.opens > 0) h += '<br><span style="font-size:9px;color:var(--amber)">'+b.opens+'\uD83D\uDC41</span>';
+          // Gap warning: rep claimed much more than tools verified
+          if (b.logged > b.verified * 2 && b.logged > 5)
+            h += '<br><span style="font-size:9px;color:var(--amber)" title="'+b.logged+' claimed in tasks, only '+b.verified+' found in Gmail/SmartReach">'+b.logged+' lgd \u26A0</span>';
         } else {
           h += '<span style="color:var(--text2)">'+b.logged+'</span><span style="font-size:10px;color:var(--text3)"> lgd</span>';
         }
@@ -2715,20 +2716,25 @@ async function runCoverageCheck(repId, repEmail, resultElId) {
       else if (signal === '💧') accountHint = 'No engagement — try a different channel';
       else if (signal === '📋') accountHint = 'Unverified — sync SmartReach for accuracy';
 
-      var campaignTag = g.campaigns ? '<div style="font-size:9px;color:var(--text3);margin-top:2px">📨 '+esc(g.campaigns.slice(0,40))+'</div>' : '';
+      var campaignTag = g.campaigns ? '<div style="font-size:9px;color:var(--text3);margin-top:1px">📨 '+esc(g.campaigns.slice(0,45))+'</div>' : '';
+
+      // Show individual task lines as sub-bullets so managers see detail like "16 SE Asia + 10 France"
+      var taskLines = (g.taskTexts || []).slice(0,4).map(function(t) {
+        return '<div style="font-size:10px;color:var(--text3);padding:1px 0 1px 8px;border-left:2px solid var(--border)">'+esc(t)+'</div>';
+      }).join('');
 
       html += '<tr style="border-top:1px solid var(--border)">' +
         '<td style="padding:7px 10px">' +
           '<div style="color:var(--text);font-weight:500;font-size:12px">'+esc(g.account)+'</div>' +
           '<div style="font-size:10px;color:'+sigColor+';margin-top:1px">'+accountHint+'</div>' +
-          campaignTag +
+          campaignTag + taskLines +
         '</td>' +
-        '<td style="padding:7px 6px;text-align:center">'+emailCell(g.email)+'</td>' +
-        '<td style="padding:7px 6px;text-align:center">'+cell(g.linkedin)+'</td>' +
-        '<td style="padding:7px 6px;text-align:center">'+cell(g.call)+'</td>' +
-        '<td style="padding:7px 6px;text-align:center">'+cell(g.whatsapp)+'</td>' +
-        '<td style="padding:7px 6px;text-align:center">'+replyCell+'</td>' +
-        '<td style="padding:7px 8px;text-align:center">' +
+        '<td style="padding:7px 6px;text-align:center;vertical-align:top">'+emailCell(g.email)+'</td>' +
+        '<td style="padding:7px 6px;text-align:center;vertical-align:top">'+cell(g.linkedin)+'</td>' +
+        '<td style="padding:7px 6px;text-align:center;vertical-align:top">'+cell(g.call)+'</td>' +
+        '<td style="padding:7px 6px;text-align:center;vertical-align:top">'+cell(g.whatsapp)+'</td>' +
+        '<td style="padding:7px 6px;text-align:center;vertical-align:top">'+replyCell+'</td>' +
+        '<td style="padding:7px 8px;text-align:center;vertical-align:top">' +
           '<span style="font-size:16px" title="'+esc(sigTitle)+'">'+signal+'</span>' +
         '</td>' +
       '</tr>';
