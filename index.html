@@ -4845,88 +4845,152 @@ function renderIntelFeed() {
   var allRows = _intelData.rows || [];
   var rows = _intelSource === 'all' ? allRows : allRows.filter(function(r) { return (r.source || 'ai') === _intelSource; });
 
+  // ── Stats bar ─────────────────────────────────────────────────────────────
   if (stats) {
     var counts = { product_feedback:0, pricing_signals:0, competitor_mentions:0, expansion_signals:0, risk_signals:0 };
     rows.forEach(function(row) {
-      counts.product_feedback += (row.product_feedback||[]).length;
-      counts.pricing_signals += (row.pricing_signals||[]).length;
+      counts.product_feedback   += (row.product_feedback||[]).length;
+      counts.pricing_signals    += (row.pricing_signals||[]).length;
       counts.competitor_mentions += (row.competitor_mentions||[]).length;
-      counts.expansion_signals += (row.expansion_signals||[]).length;
-      counts.risk_signals += (row.risk_signals||[]).length;
+      counts.expansion_signals  += (row.expansion_signals||[]).length;
+      counts.risk_signals       += (row.risk_signals||[]).length;
     });
     stats.innerHTML = [
-      { label:'Product', key:'product_feedback', color:'rgba(99,102,241,.8)' },
-      { label:'Pricing', key:'pricing_signals', color:'var(--coral)' },
-      { label:'Competitors', key:'competitor_mentions', color:'var(--amber)' },
-      { label:'Expansion', key:'expansion_signals', color:'var(--green)' },
-      { label:'Risk', key:'risk_signals', color:'var(--coral)' }
+      { label:'Product',     key:'product_feedback',    color:'rgba(99,102,241,.8)' },
+      { label:'Pricing',     key:'pricing_signals',     color:'var(--coral)' },
+      { label:'Competitors', key:'competitor_mentions',  color:'var(--amber)' },
+      { label:'Expansion',   key:'expansion_signals',   color:'var(--green)' },
+      { label:'Risk',        key:'risk_signals',        color:'var(--coral)' }
     ].map(function(s) {
-      return '<div class="intel-stat-card"><div class="intel-stat-n" style="color:' + s.color + '">' + counts[s.key] + '</div><div class="intel-stat-l">' + s.label + '</div></div>';
+      return '<div class="intel-stat-card"><div class="intel-stat-n" style="color:'+s.color+'">'+counts[s.key]+'</div><div class="intel-stat-l">'+s.label+'</div></div>';
     }).join('');
   }
 
   if (!rows.length) {
-    var emptyMsg = _intelSource === 'sam' ? 'No SAM pattern signals yet.<br><span style="font-size:12px">Click \u21bb Refresh \u2014 SAM scans run instantly, no AI quota needed.</span>'
-      : _intelSource === 'ai' ? 'No AI-extracted intelligence yet.<br><span style="font-size:12px">Click \u21bb Refresh to scan named account meeting notes.</span>'
-      : 'No intelligence extracted yet.<br><span style="font-size:12px">Click \u21bb Refresh to scan named account meeting notes.</span>';
-    feed.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">' + emptyMsg + '</div>';
+    feed.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">No intelligence yet.<br><span style="font-size:12px">Click ↻ Refresh to scan meeting notes.</span></div>';
     return;
   }
 
-  var icons = { product_feedback:'🔧', pricing_signals:'💰', competitor_mentions:'⚔', expansion_signals:'📈', risk_signals:'⚠' };
-  var sourceBadgeHtml = function(row) {
-    var src = row.source || 'ai';
-    return src === 'sam'
-      ? '<span style="font-size:9px;font-weight:700;color:var(--green);background:rgba(74,140,92,0.12);border-radius:4px;padding:2px 6px;letter-spacing:0.03em">⚡ SAM</span>'
-      : '<span style="font-size:9px;font-weight:700;color:var(--gold);background:rgba(160,117,42,0.12);border-radius:4px;padding:2px 6px;letter-spacing:0.03em">🤖 AI</span>';
-  };
-  var cardsHtml = rows.map(function(row) {
-    var allRowSignals = [];
-    (row.product_feedback||[]).forEach(function(s) { allRowSignals.push(Object.assign({},s,{_type:'product_feedback'})); });
-    (row.pricing_signals||[]).forEach(function(s) { allRowSignals.push(Object.assign({},s,{_type:'pricing_signals'})); });
-    (row.competitor_mentions||[]).forEach(function(s) { allRowSignals.push(Object.assign({},s,{_type:'competitor_mentions'})); });
-    (row.expansion_signals||[]).forEach(function(s) { allRowSignals.push(Object.assign({},s,{_type:'expansion_signals'})); });
-    (row.risk_signals||[]).forEach(function(s) { allRowSignals.push(Object.assign({},s,{_type:'risk_signals'})); });
-    var filtered = allRowSignals.filter(function(s) { return _intelType === 'all' || s._type === _intelType; });
+  // ── Group all rows by account ─────────────────────────────────────────────
+  var byAccount = {};
+  rows.forEach(function(row) {
+    var acct = row.account_name || 'Unknown';
+    if (!byAccount[acct]) byAccount[acct] = { name: acct, rows: [], signals: [], sentiment: {} };
+    byAccount[acct].rows.push(row);
 
-    if (!filtered.length) {
-      if (_intelType !== 'all' || !row.summary) return '';
-      return '<div class="intel-card" style="margin-bottom:12px">' +
-        '<div class="intel-card-head">' +
-          '<span class="intel-card-acct">' + esc(row.account_name) + ' ' + sourceBadgeHtml(row) + '</span>' +
-          '<span class="intel-card-meta">' + esc(row.meeting_date||'') + ' \u00b7 ' + esc(row.meeting_subject||'') + '</span>' +
-        '</div>' +
-        '<div class="intel-card-body">' +
-          '<div style="font-size:13px;color:var(--text2);font-style:italic">' + esc(row.summary) + '</div>' +
-        '</div>' +
-      '</div>';
-    }
+    // Collect all signals with type tags
+    var types = ['product_feedback','pricing_signals','competitor_mentions','expansion_signals','risk_signals'];
+    types.forEach(function(t) {
+      (row[t]||[]).forEach(function(s) {
+        byAccount[acct].signals.push(Object.assign({}, s, { _type: t, _date: row.meeting_date, _subject: row.meeting_subject, _source: row.source || 'ai' }));
+      });
+    });
 
-    var sentimentColor = { positive:'var(--green)', neutral:'var(--text3)', negative:'var(--coral)' }[row.sentiment] || 'var(--text3)';
-    return '<div class="intel-card" style="margin-bottom:12px">' +
-      '<div class="intel-card-head">' +
-        '<span class="intel-card-acct">' + esc(row.account_name) + ' ' + sourceBadgeHtml(row) + '</span>' +
-        '<span class="intel-card-meta" style="color:' + sentimentColor + '">' + (row.sentiment||'') + ' \u00b7 ' + esc(row.meeting_date||'') + ' \u00b7 ' + esc(row.meeting_subject||'') + '</span>' +
-      '</div>' +
-      '<div class="intel-card-body">' +
-        filtered.map(function(s) {
-          return '<div class="intel-signal">' +
-            '<span class="intel-signal-icon">' + (icons[s._type]||'○') + '</span>' +
-            '<span class="intel-signal-text">' + esc(s.quote || s.context || s.name || '') + '</span>' +
+    // Track sentiment
+    if (row.sentiment) byAccount[acct].sentiment[row.sentiment] = (byAccount[acct].sentiment[row.sentiment]||0) + 1;
+  });
+
+  var icons  = { product_feedback:'\uD83D\uDD27', pricing_signals:'\uD83D\uDCB0', competitor_mentions:'\u2694', expansion_signals:'\uD83D\uDCC8', risk_signals:'\u26A0' };
+  var labels = { product_feedback:'Product', pricing_signals:'Pricing', competitor_mentions:'Competitor', expansion_signals:'Expansion', risk_signals:'Risk' };
+  var typeColor = { product_feedback:'rgba(99,102,241,.85)', pricing_signals:'var(--coral)', competitor_mentions:'var(--amber)', expansion_signals:'var(--green)', risk_signals:'var(--coral)' };
+
+  var cardsHtml = Object.values(byAccount).map(function(acct, acctIdx) {
+    var filtered = acct.signals.filter(function(s) { return _intelType === 'all' || s._type === _intelType; });
+    if (!filtered.length && _intelType !== 'all') return '';
+
+    // Dominant sentiment
+    var sentEntries = Object.entries(acct.sentiment).sort(function(a,b){return b[1]-a[1];});
+    var domSent = sentEntries.length ? sentEntries[0][0] : 'neutral';
+    var sentColor = { positive:'var(--green)', neutral:'var(--text3)', negative:'var(--coral)' }[domSent] || 'var(--text3)';
+    var sentIcon  = { positive:'\uD83D\uDCC5', neutral:'\u25CB', negative:'\u26A0\uFE0F' }[domSent] || '\u25CB';
+
+    // Signal type count summary
+    var typeSummary = ['product_feedback','pricing_signals','competitor_mentions','expansion_signals','risk_signals'].map(function(t) {
+      var n = filtered.filter(function(s){return s._type===t;}).length;
+      if (!n) return '';
+      return '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:'+typeColor[t]+'20;color:'+typeColor[t]+';margin-right:4px">'+icons[t]+' '+n+' '+labels[t]+'</span>';
+    }).join('');
+
+    // Sources
+    var hasSAM = acct.rows.some(function(r){return r.source==='sam';});
+    var hasAI  = acct.rows.some(function(r){return r.source==='ai'||!r.source;});
+    var srcBadge = (hasSAM ? '<span style="font-size:9px;font-weight:700;color:var(--green);background:rgba(74,140,92,0.12);border-radius:4px;padding:2px 6px">\u26A1 SAM</span> ' : '') +
+                   (hasAI  ? '<span style="font-size:9px;font-weight:700;color:var(--gold);background:rgba(160,117,42,0.12);border-radius:4px;padding:2px 6px">\uD83E\uDD16 AI</span>' : '');
+
+    // Aggregate summary — use the most recent row's summary, or compose from signal count
+    var summaries = acct.rows.map(function(r){return r.summary||'';}).filter(Boolean);
+    var aggSummary = summaries.length ? summaries[summaries.length-1] : (filtered.length + ' signal' + (filtered.length!==1?'s':'') + ' across ' + acct.rows.length + ' meeting' + (acct.rows.length!==1?'s':''));
+
+    var drillId = 'intel-drill-' + acctIdx;
+
+    // Build drill-down: group by meeting date
+    var byMeeting = {};
+    filtered.forEach(function(s) {
+      var key = (s._date||'Unknown date') + ' · ' + (s._subject||'');
+      if (!byMeeting[key]) byMeeting[key] = [];
+      byMeeting[key].push(s);
+    });
+
+    var drillHtml = Object.entries(byMeeting).map(function(entry) {
+      var meetingLabel = entry[0];
+      var sigs = entry[1];
+      return '<div style="margin-bottom:10px;padding:10px 12px;background:var(--surface2);border-radius:8px">' +
+        '<div style="font-size:11px;color:var(--text3);margin-bottom:6px;font-weight:600">' + esc(meetingLabel) + '</div>' +
+        sigs.map(function(s) {
+          return '<div style="display:flex;align-items:flex-start;gap:8px;padding:5px 0;border-top:1px solid var(--border)">' +
+            '<span style="font-size:13px;flex-shrink:0">' + (icons[s._type]||'\u25CB') + '</span>' +
+            '<div style="flex:1">' +
+              '<span style="font-size:10px;font-weight:600;color:'+typeColor[s._type]+'">' + labels[s._type] + '</span>' +
+              '<div style="font-size:12px;color:var(--text);margin-top:2px">' + esc(s.quote||s.context||s.name||'') + '</div>' +
+            '</div>' +
           '</div>';
         }).join('') +
-        (row.summary ? '<div style="font-size:12px;color:var(--text3);margin-top:8px;font-style:italic">' + esc(row.summary) + '</div>' : '') +
+      '</div>';
+    }).join('');
+
+    return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;margin-bottom:10px;overflow:hidden">' +
+      // ── Account header ───────────────────────────────────────────────────
+      '<div style="padding:14px 16px;cursor:pointer" onclick="toggleIntelDrill(\''+drillId+'\')">' +
+        '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:6px">' +
+          '<div>' +
+            '<div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px">'+esc(acct.name)+'</div>' +
+            '<div style="font-size:11px;color:var(--text3)">' +
+              sentIcon + ' <span style="color:'+sentColor+'">'+domSent+'</span>' +
+              ' \u00b7 <strong style="color:var(--text)">'+filtered.length+'</strong> signals' +
+              ' \u00b7 '+acct.rows.length+' meeting'+(acct.rows.length!==1?'s':'')+
+              ' \u00b7 ' + srcBadge +
+            '</div>' +
+          '</div>' +
+          '<span style="font-size:18px;color:var(--text3);padding:0 4px" id="chevron-'+drillId+'">›</span>' +
+        '</div>' +
+        // Signal type badges
+        (typeSummary ? '<div style="margin-bottom:6px">'+typeSummary+'</div>' : '') +
+        // Aggregate summary
+        '<div style="font-size:12px;color:var(--text2);font-style:italic;line-height:1.5">'+esc(aggSummary)+'</div>' +
+      '</div>' +
+      // ── Drill-down (hidden by default) ───────────────────────────────────
+      '<div id="'+drillId+'" style="display:none;padding:0 16px 14px">' +
+        '<div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Signal detail by meeting</div>' +
+        drillHtml +
       '</div>' +
     '</div>';
   }).join('');
 
   if (!cardsHtml.trim()) {
-    feed.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">No signals found for this filter.<br><span style="font-size:12px">Try "All" or a different time range.</span></div>';
+    feed.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">No signals for this filter.</div>';
     return;
   }
   feed.innerHTML = cardsHtml;
 }
 
+function toggleIntelDrill(id) {
+  var el = document.getElementById(id);
+  var chevron = document.getElementById('chevron-'+id);
+  if (!el) return;
+  var open = el.style.display !== 'none';
+  el.style.display = open ? 'none' : 'block';
+  if (chevron) chevron.style.transform = open ? '' : 'rotate(90deg)';
+}
 
 window.refreshIntelligence = refreshIntelligence;
 window.loadIntelligence = loadIntelligence;
