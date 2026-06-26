@@ -663,13 +663,15 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
       <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
           <div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em">⚡ SAM Intelligence</div>
-          <div style="display:flex;gap:6px">
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
             <button onclick="runLocalIntelligence()" id="localIntelBtn" style="padding:5px 12px;border-radius:20px;background:rgba(160,117,42,0.1);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Scan channels</button>
             <button onclick="runExternalSignals()" id="externalSignalsBtn" style="padding:5px 12px;border-radius:20px;background:rgba(58,110,168,0.1);border:1px solid var(--border2);color:var(--blue);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">🌐 Market signals</button>
+            <button onclick="syncSequencing()" id="seqSyncBtn" style="padding:5px 12px;border-radius:20px;background:rgba(74,140,92,0.1);border:1px solid var(--border2);color:var(--green);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">↺ Sync sequences</button>
           </div>
         </div>
-        <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Deal pipeline from channels + external market signals (news, hiring, funding).</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Gmail signals · market intelligence · sequencing activity (email/LinkedIn/calls/WhatsApp).</div>
         <div id="samLocalIntelOutput"></div>
+        <div id="seqSyncOutput" style="margin-top:10px"></div>
         <div id="externalSignalsOutput" style="margin-top:10px"></div>
       </div>
     </div>
@@ -2413,6 +2415,50 @@ var SIGNAL_TYPE_CONFIG = {
   restructuring:  { icon: '⚠', label: 'Restructuring',   color: 'var(--coral)' },
   product_launch: { icon: '🚀', label: 'Product launch',  color: 'var(--amber)' }
 };
+
+async function syncSequencing() {
+  var btn = document.getElementById('seqSyncBtn');
+  var out = document.getElementById('seqSyncOutput');
+  if (btn) { btn.textContent = '↺ Syncing…'; btn.disabled = true; }
+  if (out) out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">Connecting to sequencing tool…</div>';
+
+  try {
+    var r = await fetch(EDGE_FN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
+      body: JSON.stringify({ action: 'sync_sequencing' })
+    });
+    var d = await r.json();
+
+    if (!d.ok) {
+      if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral);padding:6px 0">⚠ ' + esc(d.error || 'Sync failed') + '</div>';
+      return;
+    }
+
+    var html = '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-top:6px">' +
+      '<div style="font-size:11px;font-weight:600;color:var(--green);margin-bottom:6px">↺ ' + esc(d.provider) + ' synced successfully</div>' +
+      '<div style="display:flex;gap:12px;flex-wrap:wrap">' +
+        '<span style="font-size:12px;color:var(--text2)">📊 ' + (d.campaigns_fetched || 0) + ' campaigns</span>' +
+        '<span style="font-size:12px;color:var(--text2)">⚡ ' + (d.signals_synced || 0) + ' signals synced</span>' +
+      '</div>';
+
+    if (d.errors && d.errors.length) {
+      html += '<div style="font-size:11px;color:var(--amber);margin-top:4px">⚠ ' + d.errors.length + ' partial error(s)</div>';
+    }
+    html += '<div style="font-size:10px;color:var(--text3);margin-top:4px">Signals mapped to accounts · visible in Pipeline → Account cards</div>';
+    html += '</div>';
+
+    if (out) out.innerHTML = html;
+
+    // Reload pipeline if visible
+    if (typeof loadPipeline === 'function' && document.getElementById('panel-pipeline')?.classList.contains('active')) {
+      loadPipeline();
+    }
+  } catch(e) {
+    if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>';
+  }
+  if (btn) { btn.textContent = '↺ Sync sequences'; btn.disabled = false; }
+}
 
 async function runExternalSignals(repId, resultElId) {
   var out = document.getElementById(resultElId || 'externalSignalsOutput');
