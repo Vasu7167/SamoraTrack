@@ -2048,10 +2048,11 @@ function renderSamAlerts() {
 async function loadMyAccounts() {
   const list = document.getElementById('myAccountsList'); if (!list || !currentUser?.token || !profile?.org_id) return;
   try {
-    const rows = await sbGet('org_accounts?user_id=eq.' + currentUser.id + '&org_id=eq.' + profile.org_id + '&select=id,account_name,domain,region,deal_value,deal_value_usd&order=account_name');
+    const rows = await sbGet('org_accounts?user_id=eq.' + currentUser.id + '&org_id=eq.' + profile.org_id + '&select=id,account_name,domain,additional_domains,region,deal_value,deal_value_usd&order=account_name');
     if (!rows || !rows.length) { list.innerHTML = '<div style="font-size:12px;color:var(--text3);font-style:italic">No accounts assigned yet.</div>'; return; }
     list.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:6px">' + rows.map(r => {
       var hasValue = r.deal_value != null;
+      var extraDomains = (r.additional_domains || []).length;
       var valueTag = hasValue
         ? '<span style="font-size:10px;color:var(--green);font-weight:500">$' + (r.deal_value_usd ? Math.round(r.deal_value_usd/1000)+'K' : r.deal_value) + '</span>'
         : '';
@@ -2060,12 +2061,85 @@ async function loadMyAccounts() {
         (r.region ? '<span style="font-size:10px;color:var(--text3);background:rgba(0,0,0,0.1);border-radius:4px;padding:1px 5px">' + esc(r.region) + '</span>' : '') +
         valueTag +
         '<button onclick="openDealValueForm(\'' + r.id + '\',\'' + esc(r.account_name) + '\')" style="background:none;border:none;color:' + (hasValue ? 'var(--text3)' : 'var(--amber)') + ';cursor:pointer;font-size:11px;padding:0" title="' + (hasValue ? 'Edit deal value' : 'Add deal value') + '">' + (hasValue ? '💰' : '+ $') + '</button>' +
+        '<button onclick="openDomainManager(\'' + r.id + '\',\'' + esc(r.account_name) + '\',\'' + esc(r.domain||'') + '\',' + JSON.stringify(r.additional_domains||[]) + ')" style="background:none;border:none;color:' + (extraDomains ? 'var(--green)' : 'var(--text3)') + ';cursor:pointer;font-size:11px;padding:0" title="Manage email domains for signal matching">🌐' + (extraDomains ? '<sup style=\'font-size:8px\'>+'+extraDomains+'</sup>' : '') + '</button>' +
         '<button onclick="removeMyAccount(\'' + r.id + '\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:0">✕</button>' +
       '</div>';
     }).join('') + '</div>';
   } catch(e) { list.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>'; }
 }
 function toggleAddMyAccount() { const row = document.getElementById('myAccountAddRow'); if (row) row.style.display = row.style.display === 'none' ? 'flex' : 'none'; }
+
+// ── Domain Manager ────────────────────────────────────────────────────────────
+// Lets reps add alternative email domains for an account so signal matching
+// catches all country-specific variants (in.lactalis.com, lactalis.fr, etc.)
+// Brand root matching handles most cases automatically — this is the manual
+// override for edge cases where the root alone isn't distinctive enough.
+var _dmAccountId = null;
+function openDomainManager(accountId, accountName, primaryDomain, extraDomains) {
+  _dmAccountId = accountId;
+  document.getElementById('dm-modal')?.remove();
+  var existing = (extraDomains || []);
+  var rows = existing.map(function(d, i) {
+    return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
+      '<input value="' + esc(d) + '" placeholder="e.g. in.lactalis.com" style="flex:1;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:var(--sans);outline:none" class="dm-domain-input" />' +
+      '<button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;padding:4px">✕</button>' +
+    '</div>';
+  }).join('');
+
+  var modal = document.createElement('div');
+  modal.id = 'dm-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  modal.innerHTML = '<div style="background:var(--bg);border-radius:16px 16px 0 0;width:100%;max-width:480px;padding:20px;max-height:85vh;overflow-y:auto" onclick="event.stopPropagation()">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">' +
+      '<div>' +
+        '<div style="font-size:15px;font-weight:700;color:var(--text)">🌐 Domain aliases</div>' +
+        '<div style="font-size:12px;color:var(--text3);margin-top:2px">' + esc(accountName) + (primaryDomain ? ' · primary: ' + primaryDomain : '') + '</div>' +
+      '</div>' +
+      '<button onclick="document.getElementById(\'dm-modal\').remove()" style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer;padding:4px">✕</button>' +
+    '</div>' +
+    '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--text3);line-height:1.5">' +
+      '<strong style="color:var(--text2)">How brand root matching works:</strong> SAM automatically detects that <em>in.lactalis.com</em>, <em>lactalis.fr</em> and <em>lactalis.sa</em> all belong to Lactalis by stripping the country subdomain and TLD. ' +
+      'Only add domains here if automatic matching misses them — for example when the company uses a completely different domain for a specific region.' +
+    '</div>' +
+    '<div id="dm-domain-rows">' + rows + '</div>' +
+    '<button onclick="addDmRow()" style="width:100%;padding:9px;border:1px dashed var(--border2);border-radius:8px;background:none;color:var(--text3);font-size:13px;cursor:pointer;margin-bottom:14px">+ Add another domain</button>' +
+    '<button onclick="saveDomains()" style="width:100%;padding:12px;border:none;border-radius:10px;background:var(--gold);color:#18160F;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--sans)">Save domains</button>' +
+    '<p style="font-size:11px;color:var(--text3);text-align:center;margin-top:8px">Changes take effect on next Coverage check or SmartReach sync</p>' +
+  '</div>';
+  modal.addEventListener('click', function() { modal.remove(); });
+  document.body.appendChild(modal);
+}
+
+function addDmRow() {
+  var container = document.getElementById('dm-domain-rows');
+  if (!container) return;
+  var row = document.createElement('div');
+  row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:6px';
+  row.innerHTML = '<input placeholder="e.g. lactalis-international.fr" style="flex:1;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:var(--sans);outline:none" class="dm-domain-input" />' +
+    '<button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;padding:4px">✕</button>';
+  container.appendChild(row);
+  row.querySelector('input').focus();
+}
+
+async function saveDomains() {
+  if (!_dmAccountId) return;
+  var inputs = document.querySelectorAll('#dm-domain-rows .dm-domain-input');
+  var domains = [];
+  inputs.forEach(function(inp) {
+    var v = inp.value.trim().toLowerCase().replace(/^https?:\/\//, '');
+    if (v) domains.push(v);
+  });
+  try {
+    await fetch(SB_URL + '/rest/v1/org_accounts?id=eq.' + _dmAccountId, {
+      method: 'PATCH',
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ additional_domains: domains })
+    });
+    document.getElementById('dm-modal')?.remove();
+    loadMyAccounts();
+    showToast('Domain aliases saved');
+  } catch(e) { alert('Save failed: ' + e.message); }
+}
 async function addMyAccount() {
   const name = document.getElementById('myAccountName')?.value?.trim();
   const region = document.getElementById('myAccountRegion')?.value?.trim() || null;
