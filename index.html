@@ -2195,7 +2195,7 @@ function renderSourceBadge(source) {
   return '<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;color:' + cfg.color + ';background:rgba(0,0,0,0.12);border-radius:4px;padding:2px 7px;letter-spacing:0.02em">' + cfg.icon + ' ' + cfg.label + '</span>';
 }
 
-var _ivrPeriod = {}, _ivrRepId = {};
+var _ivrPeriod = {}, _ivrRepId = {}, _ivrData = {};
 function setIvrPeriod(outputId, period, btn) {
   _ivrPeriod[outputId] = period;
   var wrap = document.getElementById('ivrperiod-' + outputId);
@@ -2221,76 +2221,148 @@ function renderIvrPeriodPicker(outputId) {
       '<button onclick="runIntentVsReality(\''+(_ivrRepId[outputId]||'')+'\',\''+outputId+'\')" style="padding:5px 12px;border-radius:6px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Apply</button>' +
     '</div>';
 }
+var _ivrAllResults = {};
+var _ivrFilter = {};
+function setIvrFilter(outputId, filter) {
+  _ivrFilter[outputId] = filter;
+  renderIvrResults(outputId);
+}
+function renderIvrResults(outputId) {
+  var out = document.getElementById(outputId || 'ivrOutput');
+  if (!out) return;
+  var allResults = _ivrAllResults[outputId] || [];
+  var filter = _ivrFilter[outputId] || 'all';
+  var isManager = !!(_ivrRepId[outputId]);
+  var data = _ivrData[outputId] || {};
+  var s = data.summary || {};
+  var picker = isManager ? renderIvrPeriodPicker(outputId) : '';
+  var pct = s.verificationRate || 0;
+  var barColor = pct >= 80 ? 'var(--green)' : pct >= 50 ? 'var(--amber)' : 'var(--coral)';
+
+  // ── Stat boxes — clickable to filter ─────────────────────────────────────
+  var mkBox = function(label, value, color, filterKey) {
+    var isActive = filter === filterKey;
+    return '<div onclick="setIvrFilter(\'' + outputId + '\',\'' + filterKey + '\')" style="background:' + (isActive ? color.replace('var(--','rgba(').replace(')',',.15)') : 'var(--surface2)') + ';border-radius:8px;padding:10px 6px;text-align:center;cursor:pointer;border:2px solid ' + (isActive ? color : 'transparent') + ';transition:all 0.15s">' +
+      '<div style="font-size:20px;font-weight:700;color:' + color + '">' + value + '</div>' +
+      '<div style="font-size:10px;color:var(--text3);margin-top:2px">' + label + '</div>' +
+    '</div>';
+  };
+
+  var html = picker;
+  html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px">';
+  html += mkBox('All tasks', s.total || 0, 'var(--text)', 'all');
+  html += mkBox('Verified', s.verified || 0, 'var(--green)', 'verified');
+  html += mkBox('Gaps', s.gaps || 0, 'var(--coral)', 'gap');
+  html += mkBox('Unverified', s.unverified || 0, 'var(--amber)', 'unverified');
+  html += '</div>';
+  html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><div style="flex:1;height:5px;background:var(--surface2);border-radius:3px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + barColor + ';border-radius:3px"></div></div><div style="font-size:12px;font-weight:600;color:' + barColor + '">' + pct + '% verified</div></div>';
+
+  // Filter results
+  var filtered = filter === 'all' ? allResults :
+    filter === 'verified' ? allResults.filter(function(r) { return r.signal === 'verified' || r.signal === 'verified_hot'; }) :
+    filter === 'gap'      ? allResults.filter(function(r) { return r.signal === 'gap'; }) :
+    filter === 'unverified' ? allResults.filter(function(r) { return r.signal === 'unverified' || r.signal === 'no_source'; }) :
+    allResults;
+
+  if (!filtered.length) {
+    html += '<div style="font-size:12px;color:var(--text3);padding:12px 0;text-align:center">No tasks match this filter.</div>';
+    out.innerHTML = html; return;
+  }
+
+  var sigMap = {
+    gap:           { icon: '🚨', color: 'var(--coral)',  bg: 'rgba(192,82,63,0.08)',  badge: 'Not done · not found in Gmail' },
+    unverified:    { icon: '⚠',  color: 'var(--amber)',  bg: 'rgba(160,117,42,0.08)', badge: 'Done · not found in Gmail' },
+    verified:      { icon: '✓',  color: 'var(--green)',  bg: 'rgba(74,140,92,0.08)',  badge: 'Email sent' },
+    verified_hot:  { icon: '🔥', color: 'var(--green)',  bg: 'rgba(74,140,92,0.12)', badge: 'Email sent · reply received' },
+    done_not_logged: { icon: '💡', color: 'var(--text3)', bg: 'var(--surface2)',        badge: 'Found in Gmail · not logged' },
+    no_source:     { icon: '○',  color: 'var(--text3)',  bg: 'var(--surface2)',        badge: 'No integration available' },
+  };
+
+  filtered.forEach(function(r) {
+    var sig = r.signal || 'unknown';
+    var cfg = sigMap[sig] || { icon: '○', color: 'var(--text3)', bg: 'var(--surface2)', badge: '' };
+    var sourceBadge = (r.source && r.source !== 'none') ? renderSourceBadge(r.source) : '';
+
+    // Reply analysis — show reasoning for how the reply was classified
+    var replyAnalysisHtml = '';
+    if (r.replyAnalysis) {
+      var ra = r.replyAnalysis;
+      var raColor = ra.type === 'positive' ? 'var(--green)' : ra.type === 'ooo' ? 'var(--amber)' : ra.type === 'negative' ? 'var(--coral)' : 'var(--text3)';
+      var raIcon  = ra.type === 'positive' ? '↩' : ra.type === 'ooo' ? '🏖' : ra.type === 'negative' ? '✗' : '?';
+      var raLabel = ra.type === 'positive' ? 'Positive reply' : ra.type === 'ooo' ? 'Out of office' : ra.type === 'negative' ? 'Negative / opt-out' : 'Neutral reply';
+      replyAnalysisHtml = '<div style="margin-top:5px;padding:5px 8px;background:rgba(0,0,0,0.06);border-radius:5px;display:flex;gap:6px;align-items:flex-start">' +
+        '<span style="font-size:11px;font-weight:700;color:' + raColor + ';flex-shrink:0">' + raIcon + ' ' + raLabel + '</span>' +
+        (ra.snippet ? '<span style="font-size:11px;color:var(--text3);font-style:italic">"' + esc(ra.snippet.slice(0, 100)) + (ra.snippet.length > 100 ? '…' : '') + '"</span>' : '') +
+      '</div>';
+    }
+
+    var noSourceNote = sig === 'no_source' ? '<div style="font-size:11px;color:var(--text3);margin-top:4px;font-style:italic">Completed — no integration exists yet to verify calls</div>' : '';
+
+    html += '<div style="border-left:3px solid ' + cfg.color + ';padding:9px 12px;margin-bottom:5px;background:' + cfg.bg + ';border-radius:0 7px 7px 0">' +
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">' +
+        '<div style="font-size:12px;font-weight:500;color:var(--text);flex:1">' + cfg.icon + ' ' + esc(r.text || '') + '</div>' +
+        sourceBadge +
+      '</div>' +
+      (r.account ? '<div style="font-size:10px;color:var(--text3);margin-top:3px">Account: ' + esc(r.account) + '</div>' : '') +
+      (r.emailSubject ? '<div style="font-size:11px;color:var(--text3);margin-top:3px;font-style:italic">"' + esc(r.emailSubject.slice(0, 80)) + '"</div>' : '') +
+      replyAnalysisHtml +
+      noSourceNote +
+    '</div>';
+  });
+
+  out.innerHTML = html;
+}
+
 async function runIntentVsReality(repId, outputId) {
   _ivrRepId[outputId || 'ivrOutput'] = repId;
-  const isManager = !!repId; const out = document.getElementById(outputId || 'ivrOutput'); const btn = document.getElementById('ivrBtn');
+  var isManager = !!repId;
+  var out = document.getElementById(outputId || 'ivrOutput');
+  var btn = document.getElementById('ivrBtn');
   if (!out) return;
   if (btn && !isManager) { btn.textContent = 'Scanning…'; btn.disabled = true; }
-  const today = todayKey();
-  let dateFrom, dateTo, periodLabel;
+  var today = todayKey();
+  var dateFrom, dateTo, periodLabel;
   if (isManager) {
-    // Team mode: use the same period-picker state we maintain for this
-    // output panel — defaults to 'week' so the first click gives a
-    // meaningful range rather than a single day.
-    const period = _ivrPeriod[outputId] || 'week';
-    const teamDateEl = document.getElementById('teamDateInput');
-    const viewingDate = (teamDateEl && teamDateEl.value) ? teamDateEl.value : today;
+    var period = _ivrPeriod[outputId] || 'week';
+    var teamDateEl = document.getElementById('teamDateInput');
+    var viewingDate = (teamDateEl && teamDateEl.value) ? teamDateEl.value : today;
     if (period === 'today') {
       dateFrom = dateTo = viewingDate; periodLabel = viewingDate === today ? 'today' : viewingDate;
     } else if (period === 'week') {
-      const d = parseDate(viewingDate); const day = d.getDay();
-      const monday = new Date(d); monday.setDate(d.getDate() - (day===0?6:day-1));
+      var d = parseDate(viewingDate); var day = d.getDay();
+      var monday = new Date(d); monday.setDate(d.getDate() - (day===0?6:day-1));
       dateFrom = dateKey(monday); dateTo = viewingDate; periodLabel = 'this week';
     } else if (period === 'month') {
-      const d = parseDate(viewingDate);
-      dateFrom = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01'; dateTo = viewingDate; periodLabel = 'this month';
+      var d2 = parseDate(viewingDate);
+      dateFrom = d2.getFullYear()+'-'+String(d2.getMonth()+1).padStart(2,'0')+'-01'; dateTo = viewingDate; periodLabel = 'this month';
     } else if (period === 'custom') {
       dateFrom = document.getElementById('ivrfrom-'+outputId)?.value || viewingDate;
       dateTo = document.getElementById('ivrto-'+outputId)?.value || viewingDate;
       periodLabel = dateFrom + ' → ' + dateTo;
     } else {
-      const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate()-7);
-      dateFrom = weekAgo.toISOString().split('T')[0]; dateTo = today; periodLabel = 'this week';
+      var wa = new Date(); wa.setDate(wa.getDate()-7);
+      dateFrom = wa.toISOString().split('T')[0]; dateTo = today; periodLabel = 'this week';
     }
   } else {
-    const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate()-7);
-    dateFrom = weekAgo.toISOString().split('T')[0]; dateTo = today; periodLabel = 'this week';
+    var wa2 = new Date(); wa2.setDate(wa2.getDate()-7);
+    dateFrom = wa2.toISOString().split('T')[0]; dateTo = today; periodLabel = 'this week';
   }
-  const picker = isManager ? renderIvrPeriodPicker(outputId) : '';
+  var picker = isManager ? renderIvrPeriodPicker(outputId) : '';
   out.innerHTML = picker + '<div style="font-size:12px;color:var(--text3);padding:8px 0">Checking intent vs reality for ' + esc(periodLabel) + '…</div>';
   try {
-    const r = await fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify({ action: 'intent_vs_reality', rep_user_id: isManager?repId:null, date_from: dateFrom, date_to: dateTo }) });
-    const data = await r.json();
-    if (data.scopeError) { out.innerHTML = picker + '<div style="font-size:12px;color:var(--coral);padding:8px 0">🔒 ' + esc(data.error || 'Gmail permissions need to be re-granted — reconnect Gmail.') + '</div>'; if (btn&&!isManager){btn.textContent='Check this week';btn.disabled=false;} return; }
-    if (data.reconnectNeeded) { out.innerHTML = picker + '<div style="font-size:12px;color:var(--coral);padding:8px 0">⚠️ ' + esc(data.error || 'Gmail connection expired — reconnect Gmail.') + '</div>'; if (btn&&!isManager){btn.textContent='Check this week';btn.disabled=false;} return; }
+    var r2 = await fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify({ action: 'intent_vs_reality', rep_user_id: isManager?repId:null, date_from: dateFrom, date_to: dateTo }) });
+    var data = await r2.json();
+    if (data.scopeError) { out.innerHTML = picker + '<div style="font-size:12px;color:var(--coral);padding:8px 0">🔒 ' + esc(data.error || 'Gmail permissions need to be re-granted.') + '</div>'; if (btn&&!isManager){btn.textContent='Check this week';btn.disabled=false;} return; }
+    if (data.reconnectNeeded) { out.innerHTML = picker + '<div style="font-size:12px;color:var(--coral);padding:8px 0">⚠️ ' + esc(data.error || 'Gmail connection expired.') + '</div>'; if (btn&&!isManager){btn.textContent='Check this week';btn.disabled=false;} return; }
     if (!data.connected) { out.innerHTML = picker + '<div style="font-size:12px;color:var(--text3)">Gmail not connected'+(isManager?' for this rep':'')+'</div>'; if (btn&&!isManager){btn.textContent='Check this week';btn.disabled=false;} return; }
-    const s = data.summary||{}; const results = data.results||[];
-    if (data.debug) { console.log('IVR diagnostic:', data.debug); }
+    var results = data.results || [];
+    if (data.debug) console.log('IVR diagnostic:', data.debug);
     if (!results.length) { out.innerHTML = picker + '<div style="font-size:12px;color:var(--text3)">No outreach tasks found for ' + esc(periodLabel) + '</div>'; if (btn&&!isManager){btn.textContent='Check this week';btn.disabled=false;} return; }
-    const pct = s.verificationRate||0; const barColor = pct>=80?'var(--green)':pct>=50?'var(--amber)':'var(--coral)';
-    let html = picker + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px">';
-    html += '<div style="background:var(--surface2);border-radius:6px;padding:8px;text-align:center"><div style="font-size:18px;font-weight:500;color:var(--text)">'+(s.total||0)+'</div><div style="font-size:10px;color:var(--text3)">Tasks</div></div>';
-    html += '<div style="background:var(--surface2);border-radius:6px;padding:8px;text-align:center"><div style="font-size:18px;font-weight:500;color:var(--green)">'+(s.verified||0)+'</div><div style="font-size:10px;color:var(--text3)">Verified</div></div>';
-    html += '<div style="background:var(--surface2);border-radius:6px;padding:8px;text-align:center"><div style="font-size:18px;font-weight:500;color:var(--coral)">'+(s.gaps||0)+'</div><div style="font-size:10px;color:var(--text3)">Gaps</div></div>';
-    html += '<div style="background:var(--surface2);border-radius:6px;padding:8px;text-align:center"><div style="font-size:18px;font-weight:500;color:var(--amber)">'+(s.unverified||0)+'</div><div style="font-size:10px;color:var(--text3)">Unverified</div></div></div>';
-    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><div style="flex:1;height:5px;background:var(--surface2);border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+barColor+';border-radius:3px"></div></div><div style="font-size:12px;font-weight:600;color:'+barColor+'">'+pct+'% verified</div></div>';
-    results.slice(0,10).forEach(function(r) {
-      const sig = r.signal||'unknown';
-      const sigMap = {gap:{icon:'🚨',color:'var(--coral)',bg:'rgba(192,82,63,0.08)'},unverified:{icon:'⚠',color:'var(--amber)',bg:'rgba(160,117,42,0.08)'},verified:{icon:'✓',color:'var(--green)',bg:'rgba(74,140,92,0.08)'},verified_hot:{icon:'🔥',color:'var(--green)',bg:'rgba(74,140,92,0.12)'},done_not_logged:{icon:'💡',color:'var(--text3)',bg:'var(--surface2)'},no_source:{icon:'○',color:'var(--text3)',bg:'var(--surface2)'}};
-      const cfg = sigMap[sig]||{icon:'○',color:'var(--text3)',bg:'var(--surface2)'};
-      const sourceBadge = (r.source && r.source !== 'none') ? renderSourceBadge(r.source) : '';
-      const noSourceNote = sig === 'no_source' ? '<div style="font-size:11px;color:var(--text3);margin-top:4px;font-style:italic">Completed \u2014 no integration exists yet to verify calls</div>' : '';
-      html += '<div style="border-left:3px solid '+cfg.color+';padding:8px 12px;margin-bottom:5px;background:'+cfg.bg+';border-radius:0 6px 6px 0">' +
-        '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">' +
-          '<div style="font-size:12px;font-weight:500;color:var(--text);flex:1">'+cfg.icon+' '+esc(r.text||'')+'</div>' +
-          sourceBadge +
-        '</div>' +
-        (r.account ? '<div style="font-size:10px;color:var(--text3);margin-top:3px">Account: '+esc(r.account)+'</div>' : '') +
-        (r.emailSubject ? '<div style="font-size:11px;color:var(--text3);margin-top:4px;font-style:italic">"'+esc(r.emailSubject.slice(0,80))+'"</div>' : '') +
-        noSourceNote +
-      '</div>';
-    });
-    out.innerHTML = html;
+    // Store results for filter rendering
+    _ivrAllResults[outputId || 'ivrOutput'] = results;
+    _ivrData[outputId || 'ivrOutput'] = data;
+    _ivrFilter[outputId || 'ivrOutput'] = 'all';
+    renderIvrResults(outputId || 'ivrOutput');
   } catch(e) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>'; }
   if (btn&&!isManager) { btn.textContent = 'Refresh'; btn.disabled = false; }
 }
@@ -3173,7 +3245,7 @@ async function renderTeam() {
       const pct = total ? Math.round(done/total*100) : 0;
       const sc = calcDayScore(taskArr);
       return '<div class="member-card">' +
-        '<div class="member-hdr" onclick="toggleMember(' + idx + ')">' +
+        '<div class="member-hdr" onclick="toggleMember(' + idx + ',\'' + m.user_id + '\')">' +
           '<div class="m-avatar">' + m.email[0].toUpperCase() + '</div>' +
           '<div class="m-info"><div class="m-name">' + esc(m.email) + ' <span class="role-pill" style="font-size:10px">' + (roleLabelMap[m.role]||'Member') + '</span></div>' +
           '<div class="m-stats"><div class="mst">Tasks <span>' + total + '</span></div><div class="mst">Done <span>' + done + '</span></div><div class="mst">Issues <span>' + (d.issues?.length||0) + '</span></div><div class="mst">Score <span style="color:' + scoreColor(sc.score) + '">' + sc.score + '</span></div></div></div>' +
@@ -3246,7 +3318,19 @@ async function delegateTask(memberId, memberEmail) {
     inp.value = ''; alert('Task delegated to ' + memberEmail + ' ✓'); renderTeam();
   } catch(e) { alert('Failed to delegate: ' + e.message); }
 }
-function toggleMember(idx) { const det = document.getElementById('mdet-'+idx); const tog = document.getElementById('mtog-'+idx); const open = det.classList.toggle('open'); tog.classList.toggle('open', open); }
+function toggleMember(idx, userId) {
+  const det = document.getElementById('mdet-'+idx);
+  const tog = document.getElementById('mtog-'+idx);
+  const open = det.classList.toggle('open');
+  tog.classList.toggle('open', open);
+  // When collapsing, also clear the action panels so they don't stay open
+  if (!open && userId) {
+    ['sami-','cov-','ivr-'].forEach(function(prefix) {
+      var el = document.getElementById(prefix + userId);
+      if (el) { el.innerHTML = ''; _panelOpenState[prefix + userId] = false; }
+    });
+  }
+}
 
 let mgrSearchPeriod = 'all';
 function setMgrPeriod(period, btn) {
