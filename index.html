@@ -2313,12 +2313,15 @@ function renderIvrResults(outputId) {
   }
 
   var sigMap = {
-    gap:           { icon: '🚨', color: 'var(--coral)',  bg: 'rgba(192,82,63,0.08)',  badge: 'Not done · not found in Gmail' },
-    unverified:    { icon: '⚠',  color: 'var(--amber)',  bg: 'rgba(160,117,42,0.08)', badge: 'Done · not found in Gmail' },
-    verified:      { icon: '✓',  color: 'var(--green)',  bg: 'rgba(74,140,92,0.08)',  badge: 'Email sent' },
-    verified_hot:  { icon: '🔥', color: 'var(--green)',  bg: 'rgba(74,140,92,0.12)', badge: 'Email sent · reply received' },
-    done_not_logged: { icon: '💡', color: 'var(--text3)', bg: 'var(--surface2)',        badge: 'Found in Gmail · not logged' },
-    no_source:     { icon: '○',  color: 'var(--text3)',  bg: 'var(--surface2)',        badge: 'No integration available' },
+    gap:             { icon: '🚨', color: 'var(--coral)',  bg: 'rgba(192,82,63,0.08)',  badge: 'Not done · not found in Gmail' },
+    unverified:      { icon: '⚠',  color: 'var(--amber)',  bg: 'rgba(160,117,42,0.08)', badge: 'Done · not found in Gmail' },
+    verified:        { icon: '✓',  color: 'var(--green)',  bg: 'rgba(74,140,92,0.08)',  badge: 'Email sent' },
+    verified_hot:    { icon: '🔥', color: 'var(--green)',  bg: 'rgba(74,140,92,0.12)',  badge: 'Email sent · reply received' },
+    partial_count:   { icon: '◑',  color: 'var(--amber)',  bg: 'rgba(160,117,42,0.08)', badge: 'Fewer emails found than claimed' },
+    done_not_logged: { icon: '💡', color: 'var(--text3)',  bg: 'var(--surface2)',        badge: 'Found in Gmail · not logged' },
+    no_source:       { icon: '○',  color: 'var(--text3)',  bg: 'var(--surface2)',        badge: 'No integration available' },
+    internal:        { icon: '📋', color: 'var(--text3)',  bg: 'var(--surface2)',        badge: 'Internal task · not externally verifiable' },
+    internal_pending:{ icon: '📋', color: 'var(--text3)',  bg: 'var(--surface2)',        badge: 'Internal task · not done yet' },
   };
 
   filtered.forEach(function(r) {
@@ -2339,7 +2342,31 @@ function renderIvrResults(outputId) {
       '</div>';
     }
 
-    var noSourceNote = sig === 'no_source' ? '<div style="font-size:11px;color:var(--text3);margin-top:4px;font-style:italic">Completed — no integration exists yet to verify calls</div>' : '';
+    // Intent badge for non-obvious classifications
+    var intentBadge = '';
+    if (r.intent === 'internal' || r.intent === 'internal_pending') {
+      intentBadge = '<div style="font-size:10px;color:var(--text3);margin-top:3px;font-style:italic">📋 Internal task — not externally verifiable</div>';
+    } else if (r.intent === 'linkedin') {
+      intentBadge = '<div style="font-size:10px;color:var(--text3);margin-top:3px">🔗 LinkedIn — verified via Gmail notifications where available</div>';
+    } else if (r.intent === 'call') {
+      intentBadge = '<div style="font-size:10px;color:var(--text3);margin-top:3px">📞 Call — log outcome when marking done</div>';
+    }
+
+    // Quantity mismatch display
+    var quantityNote = '';
+    if (r.quantityClaimed > 1) {
+      var found = r.emailsFound || 0;
+      var claimed = r.quantityClaimed;
+      var ratio = r.verificationRatio || 0;
+      var qColor = ratio >= 60 ? 'var(--green)' : ratio >= 30 ? 'var(--amber)' : 'var(--coral)';
+      if (r.signal === 'partial_count') {
+        quantityNote = '<div style="font-size:11px;margin-top:4px;padding:4px 8px;background:rgba(160,117,42,0.1);border-radius:5px;color:var(--amber)">◑ ' + found + ' of ' + claimed + ' emails found in Gmail (' + ratio + '%) — ' + (claimed - found) + ' unverified</div>';
+      } else if (found > 0) {
+        quantityNote = '<div style="font-size:10px;color:var(--text3);margin-top:3px">' + found + '/' + claimed + ' emails verified in Gmail</div>';
+      }
+    }
+
+    var noSourceNote = sig === 'no_source' ? '<div style="font-size:11px;color:var(--text3);margin-top:4px;font-style:italic">Completed — log the outcome when marking done for a self-attested signal</div>' : '';
 
     html += '<div style="border-left:3px solid ' + cfg.color + ';padding:9px 12px;margin-bottom:5px;background:' + cfg.bg + ';border-radius:0 7px 7px 0">' +
       '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">' +
@@ -2349,6 +2376,8 @@ function renderIvrResults(outputId) {
       (r.account ? '<div style="font-size:10px;color:var(--text3);margin-top:3px">Account: ' + esc(r.account) + '</div>' : '') +
       (r.emailSubject ? '<div style="font-size:11px;color:var(--text3);margin-top:3px;font-style:italic">"' + esc(r.emailSubject.slice(0, 80)) + '"</div>' : '') +
       replyAnalysisHtml +
+      intentBadge +
+      quantityNote +
       noSourceNote +
     '</div>';
   });
