@@ -666,12 +666,14 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
           <div style="display:flex;gap:6px;flex-wrap:wrap">
             <button onclick="runLocalIntelligence()" id="localIntelBtn" style="padding:5px 12px;border-radius:20px;background:rgba(160,117,42,0.1);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Scan channels</button>
             <button onclick="runExternalSignals()" id="externalSignalsBtn" style="padding:5px 12px;border-radius:20px;background:rgba(58,110,168,0.1);border:1px solid var(--border2);color:var(--blue);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">🌐 Market signals</button>
-            <button onclick="syncSequencing()" id="seqSyncBtn" style="padding:5px 12px;border-radius:20px;background:rgba(74,140,92,0.1);border:1px solid var(--border2);color:var(--green);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">↺ Sync sequences</button>
+            <button onclick="syncSequencing()" id="seqSyncBtn" style="padding:5px 12px;border-radius:20px;background:rgba(74,140,92,0.1);border:1px solid var(--border2);color:var(--green);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">↺ Sync</button>
+            <button onclick="loadSequencingStats()" id="seqStatsBtn" style="padding:5px 12px;border-radius:20px;background:rgba(74,140,92,0.1);border:1px solid var(--border2);color:var(--green);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">📊 Seq stats</button>
           </div>
         </div>
         <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Gmail signals · market intelligence · sequencing activity (email/LinkedIn/calls/WhatsApp).</div>
         <div id="samLocalIntelOutput"></div>
         <div id="seqSyncOutput" style="margin-top:10px"></div>
+        <div id="seqStatsOutput" style="margin-top:10px"></div>
         <div id="externalSignalsOutput" style="margin-top:10px"></div>
       </div>
     </div>
@@ -2415,6 +2417,195 @@ var SIGNAL_TYPE_CONFIG = {
   restructuring:  { icon: '⚠', label: 'Restructuring',   color: 'var(--coral)' },
   product_launch: { icon: '🚀', label: 'Product launch',  color: 'var(--amber)' }
 };
+
+async function loadSequencingStats() {
+  var btn = document.getElementById('seqStatsBtn');
+  var out = document.getElementById('seqStatsOutput');
+  if (!out) return;
+  if (btn) { btn.textContent = '📊 Loading…'; btn.disabled = true; }
+  out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0">Crunching sequencing signals…</div>';
+
+  try {
+    var r = await fetch(EDGE_FN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
+      body: JSON.stringify({ action: 'get_sequencing_stats', days: 90 })
+    });
+    var d = await r.json();
+    if (!d.ok) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">⚠ ' + esc(d.error||'Failed to load stats') + '</div>'; return; }
+
+    var s = d.org_summary;
+    var bm = d.benchmarks;
+    var html = '';
+
+    // ── Rate indicator helper ─────────────────────────────────────────────
+    var rateColor = function(rate, good, avg) {
+      return rate >= good ? 'var(--green)' : rate >= avg ? 'var(--amber)' : 'var(--coral)';
+    };
+    var rateLabel = function(rate, good, avg) {
+      return rate >= good ? '↑ above benchmark' : rate >= avg ? '≈ avg' : '↓ below benchmark';
+    };
+
+    // ── Org summary strip ─────────────────────────────────────────────────
+    html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px">' +
+      '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">' +
+        '📊 Sequencing overview · last 90 days' +
+        (d.synced_at ? '<span style="font-weight:400;margin-left:8px">Last sync: '+new Date(d.synced_at).toLocaleDateString()+'</span>' : '') +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">' +
+        ['Prospects','Sent','Opened','Replied'].map(function(label, i) {
+          var vals = [s.total_prospects, s.sent, s.opened, s.replied];
+          var rates = [null, null, s.open_rate, s.reply_rate];
+          var goods = [null, null, bm.open_rate.good, bm.reply_rate.good];
+          var avgs  = [null, null, bm.open_rate.avg,  bm.reply_rate.avg];
+          var color = rates[i] !== null ? rateColor(rates[i], goods[i], avgs[i]) : 'var(--text)';
+          var sub   = rates[i] !== null ? rates[i]+'% · '+rateLabel(rates[i],goods[i],avgs[i]) : (i===3&&s.bounced?s.bounced+' bounced':'');
+          return '<div style="background:var(--surface);border-radius:8px;padding:10px;text-align:center">' +
+            '<div style="font-size:20px;font-weight:700;color:'+color+'">'+vals[i]+'</div>' +
+            '<div style="font-size:11px;color:var(--text3)">'+label+'</div>' +
+            (sub?'<div style="font-size:9px;color:'+color+';margin-top:2px">'+sub+'</div>':'') +
+          '</div>';
+        }).join('') +
+      '</div>' +
+      // Benchmark bar
+      '<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">' +
+        '<div style="font-size:10px;color:var(--text3);margin-bottom:6px">'+bm.open_rate.label+' · '+bm.reply_rate.label+'</div>' +
+        '<div style="display:flex;gap:4px;height:6px">' +
+          '<div style="flex:'+s.replied+';background:var(--green);border-radius:3px" title="Replied"></div>' +
+          '<div style="flex:'+(s.opened-s.replied)+';background:var(--amber);border-radius:3px" title="Opened, not replied"></div>' +
+          '<div style="flex:'+(s.sent-s.opened-s.bounced)+';background:var(--border2);border-radius:3px" title="Sent, not opened"></div>' +
+          '<div style="flex:'+s.bounced+';background:var(--coral);opacity:0.5;border-radius:3px" title="Bounced"></div>' +
+        '</div>' +
+        '<div style="display:flex;gap:10px;margin-top:4px">' +
+          '<span style="font-size:9px;color:var(--green)">■ Replied</span>' +
+          '<span style="font-size:9px;color:var(--amber)">■ Opened</span>' +
+          '<span style="font-size:9px;color:var(--text3)">■ Sent</span>' +
+          '<span style="font-size:9px;color:var(--coral)">■ Bounced</span>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+    // ── Hot signals (replied prospects) ───────────────────────────────────
+    if (d.hot_signals && d.hot_signals.length) {
+      html += '<div style="background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.25);border-radius:10px;padding:12px 14px;margin-bottom:10px">' +
+        '<div style="font-size:10px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">🔥 Replied prospects ('+d.hot_signals.length+') · Act now</div>' +
+        d.hot_signals.map(function(h) {
+          return '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-top:1px solid rgba(74,140,92,0.15)">' +
+            '<div>' +
+              '<div style="font-size:12px;font-weight:600;color:var(--text)">'+(h.prospect_name||h.prospect_email||'Unknown')+'</div>' +
+              '<div style="font-size:11px;color:var(--text3)">'+(h.prospect_company||'')+(h.account_name&&h.account_name!==h.prospect_company?' · matched: <strong>'+esc(h.account_name)+'</strong>':'')+'</div>' +
+              '<div style="font-size:10px;color:var(--text3);margin-top:1px">📨 '+esc(h.campaign_name||'')+(h.opens?' · '+h.opens+' opens':'')+'</div>' +
+            '</div>' +
+            '<div style="text-align:right;flex-shrink:0">' +
+              '<span style="font-size:10px;font-weight:700;color:var(--green);background:rgba(74,140,92,0.12);border-radius:5px;padding:3px 8px">↩ Replied</span>' +
+              (h.account_id ? '' : '<div style="font-size:9px;color:var(--amber);margin-top:3px">⚠ Not linked to account</div>') +
+            '</div>' +
+          '</div>';
+        }).join('') +
+      '</div>';
+    }
+
+    // ── By rep table ──────────────────────────────────────────────────────
+    if (d.by_rep && d.by_rep.length) {
+      html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px">' +
+        '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">👤 By rep</div>' +
+        '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
+        '<thead><tr style="border-bottom:1px solid var(--border)">' +
+          '<th style="text-align:left;padding:4px 8px;color:var(--text3);font-weight:500">Rep</th>' +
+          '<th style="text-align:center;padding:4px 6px;color:var(--text3);font-weight:500">Prospects</th>' +
+          '<th style="text-align:center;padding:4px 6px;color:var(--text3);font-weight:500">Sent</th>' +
+          '<th style="text-align:center;padding:4px 6px;color:var(--text3);font-weight:500">Open %</th>' +
+          '<th style="text-align:center;padding:4px 6px;color:var(--text3);font-weight:500">Reply %</th>' +
+          '<th style="text-align:left;padding:4px 6px;color:var(--text3);font-weight:500">Campaigns</th>' +
+        '</tr></thead><tbody>' +
+        d.by_rep.map(function(rep) {
+          var oc = rateColor(rep.open_rate, bm.open_rate.good, bm.open_rate.avg);
+          var rc = rateColor(rep.reply_rate, bm.reply_rate.good, bm.reply_rate.avg);
+          return '<tr style="border-bottom:1px solid var(--border)">' +
+            '<td style="padding:7px 8px"><div style="font-weight:600;color:var(--text)">'+esc(rep.rep_name)+'</div><div style="font-size:10px;color:var(--text3)">'+esc(rep.rep_email.split('@')[0])+'</div></td>' +
+            '<td style="text-align:center;padding:7px 6px;color:var(--text)">'+rep.prospects+'</td>' +
+            '<td style="text-align:center;padding:7px 6px;color:var(--text)">'+rep.sent+'</td>' +
+            '<td style="text-align:center;padding:7px 6px"><span style="color:'+oc+';font-weight:600">'+rep.open_rate+'%</span></td>' +
+            '<td style="text-align:center;padding:7px 6px"><span style="color:'+rc+';font-weight:600">'+rep.reply_rate+'%</span></td>' +
+            '<td style="padding:7px 6px;font-size:10px;color:var(--text3)">'+esc((rep.campaigns||[]).slice(0,2).join(', '))+'</td>' +
+          '</tr>';
+        }).join('') +
+        '</tbody></table></div>';
+    }
+
+    // ── By account ────────────────────────────────────────────────────────
+    if (d.by_account && d.by_account.length) {
+      html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px">' +
+        '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">🏢 By account</div>';
+
+      d.by_account.forEach(function(acct) {
+        var sigColor = acct.signal==='hot'?'var(--green)':acct.signal==='warm'?'var(--amber)':'var(--text3)';
+        var sigIcon  = acct.signal==='hot'?'🔥':acct.signal==='warm'?'👁':'💧';
+        var oc = rateColor(acct.open_rate, bm.open_rate.good, bm.open_rate.avg);
+        var rc = rateColor(acct.reply_rate, bm.reply_rate.good, bm.reply_rate.avg);
+
+        html += '<div style="padding:10px 0;border-bottom:1px solid var(--border)">' +
+          '<div style="display:flex;justify-content:space-between;align-items:flex-start">' +
+            '<div>' +
+              '<div style="font-size:12px;font-weight:600;color:var(--text)">'+sigIcon+' '+esc(acct.account_name||acct.prospect_company||'Unknown')+'</div>' +
+              '<div style="font-size:10px;color:var(--text3);margin-top:2px">'+acct.contacts+' contact'+(acct.contacts!==1?'s':'')+' · '+(acct.campaigns||[]).slice(0,2).join(', ')+'</div>' +
+            '</div>' +
+            '<div style="display:flex;gap:10px;text-align:center">' +
+              '<div><div style="font-size:13px;font-weight:600;color:var(--text)">'+acct.sent+'</div><div style="font-size:9px;color:var(--text3)">sent</div></div>' +
+              '<div><div style="font-size:13px;font-weight:600;color:'+oc+'">'+acct.open_rate+'%</div><div style="font-size:9px;color:var(--text3)">opens</div></div>' +
+              '<div><div style="font-size:13px;font-weight:600;color:'+rc+'">'+acct.reply_rate+'%</div><div style="font-size:9px;color:var(--text3)">replies</div></div>' +
+            '</div>' +
+          '</div>' +
+          // Contact detail rows (show replied/opened status per contact)
+          (acct.contacts_detail && acct.contacts_detail.length ?
+            '<div style="margin-top:6px;padding-left:12px">' +
+            acct.contacts_detail.slice(0,4).map(function(c) {
+              var badge = c.replied ? '<span style="font-size:9px;font-weight:700;color:var(--green);background:rgba(74,140,92,0.12);border-radius:4px;padding:1px 5px">↩ replied</span>'
+                        : c.opened ? '<span style="font-size:9px;color:var(--amber)">👁 opened'+(c.opens>1?' ×'+c.opens:'')+'</span>'
+                        : '<span style="font-size:9px;color:var(--text3)">sent</span>';
+              return '<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:11px;color:var(--text2)">' +
+                '<span>'+esc(c.name||c.email||'—')+'</span>'+badge+'</div>';
+            }).join('') +
+            (acct.contacts_detail.length>4?'<div style="font-size:10px;color:var(--text3)">+'+( acct.contacts_detail.length-4)+' more</div>':'') +
+            '</div>' : '') +
+        '</div>';
+      });
+      html += '</div>';
+    }
+
+    // ── By campaign ───────────────────────────────────────────────────────
+    if (d.by_campaign && d.by_campaign.length) {
+      html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px">' +
+        '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">📨 By campaign (sorted by reply rate)</div>' +
+        d.by_campaign.map(function(c) {
+          var bar = c.sent > 0 ? Math.max(4, Math.round(c.open_rate / 100 * 100)) : 4;
+          var rc = rateColor(c.reply_rate, bm.reply_rate.good, bm.reply_rate.avg);
+          return '<div style="padding:8px 0;border-bottom:1px solid var(--border)">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
+              '<div style="font-size:12px;font-weight:500;color:var(--text)">'+esc(c.campaign_name||c.campaign_id)+'</div>' +
+              '<div style="display:flex;gap:8px;font-size:11px">' +
+                '<span style="color:var(--text3)">'+c.prospects+' prospects</span>' +
+                '<span style="color:var(--amber)">'+c.open_rate+'% open</span>' +
+                '<span style="color:'+rc+';font-weight:600">'+c.reply_rate+'% reply</span>' +
+              '</div>' +
+            '</div>' +
+            '<div style="height:4px;background:var(--surface);border-radius:3px;overflow:hidden;display:flex">' +
+              '<div style="width:'+Math.round(c.reply_rate/Math.max(c.open_rate||1,1)*bar)+'%;background:var(--green)"></div>' +
+              '<div style="width:'+Math.round((1-c.reply_rate/Math.max(c.open_rate||1,1))*bar)+'%;background:var(--amber)"></div>' +
+            '</div>' +
+            (c.hot_accounts&&c.hot_accounts.length?'<div style="font-size:10px;color:var(--green);margin-top:3px">🔥 Replies from: '+esc(c.hot_accounts.join(', '))+'</div>':'') +
+          '</div>';
+        }).join('') +
+      '</div>';
+    }
+
+    out.innerHTML = html || '<div style="font-size:12px;color:var(--text3)">No sequencing data yet. Run a sync first.</div>';
+
+  } catch(e) {
+    if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: '+esc(e.message)+'</div>';
+  }
+  if (btn) { btn.textContent = '📊 Seq stats'; btn.disabled = false; }
+}
 
 async function syncSequencing() {
   var btn = document.getElementById('seqSyncBtn');
