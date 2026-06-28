@@ -1766,19 +1766,62 @@ function toggleFromToday(i) {
     window._confirmDoneIdx = i;
     document.getElementById('doneConfirmText').textContent = t.text;
     document.getElementById('doneConfirmComment').value = '';
+
+    // Detect if this is an unverifiable channel task and show structured outcome fields
+    const lower = (t.text || '').toLowerCase();
+    const isLinkedIn  = /linkedin|li connect|inmail|connection request/i.test(lower);
+    const isWhatsApp  = /whatsapp|whatsapp|wp message/i.test(lower);
+    const isCall      = /\bcall(s|ing|ed)?\b|\bphone\b|\bdial\b/.test(lower) && !/\bemail\b|\bmail\b/.test(lower);
+    const isUnverifiable = isLinkedIn || isWhatsApp || isCall;
+
+    const structuredSection = document.getElementById('doneStructuredSection');
+    const outcomeSelect = document.getElementById('doneOutcomeSelect');
+    const channelHint = document.getElementById('doneChannelHint');
+
+    if (structuredSection && outcomeSelect && channelHint) {
+      if (isUnverifiable) {
+        structuredSection.style.display = 'block';
+        channelHint.textContent = isLinkedIn ? '🔗 LinkedIn activity' : isWhatsApp ? '💬 WhatsApp activity' : '📞 Call activity';
+        // Populate outcome options based on channel
+        const liOptions = '<option value="">Outcome…</option><option value="requests_sent">Requests sent</option><option value="connections_accepted">Connections accepted</option><option value="messages_sent">Messages sent</option><option value="replies_received">Replies received</option><option value="meeting_booked">Meeting booked</option>';
+        const waOptions = '<option value="">Outcome…</option><option value="messages_sent">Messages sent</option><option value="replies_received">Replies received</option><option value="meeting_booked">Meeting booked</option><option value="no_response">No response yet</option>';
+        const callOptions = '<option value="">Outcome…</option><option value="no_answer">No answer / voicemail</option><option value="spoke_briefly">Spoke briefly</option><option value="full_conversation">Full conversation</option><option value="meeting_booked">Meeting booked</option><option value="not_interested">Not interested</option>';
+        outcomeSelect.innerHTML = isLinkedIn ? liOptions : isWhatsApp ? waOptions : callOptions;
+      } else {
+        structuredSection.style.display = 'none';
+      }
+    }
+
     document.getElementById('doneConfirmModal').style.display = 'flex';
     return;
   }
   t.done = false; t.completedAt = null; t.addedToWins = false;
   runCarryOver(); renderToday(); render(); save(viewDate);
 }
+
 window._confirmDone = function() {
   var i = window._confirmDoneIdx;
   var t = dayData(viewDate).tasks[i];
   var comment = document.getElementById('doneConfirmComment').value.trim();
+  var outcome = document.getElementById('doneOutcomeSelect')?.value || '';
+  var count   = document.getElementById('doneCountInput')?.value?.trim() || '';
+
   t.done = true; t.addedToWins = false;
   var now = new Date(); t.completedAt = now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
-  if (comment) t.completionNote = comment;
+
+  // Build structured completion note for unverifiable channels
+  var structuredNote = '';
+  if (outcome) {
+    var outcomeLabels = { requests_sent:'Requests sent', connections_accepted:'Connections accepted', messages_sent:'Messages sent', replies_received:'Replies received', meeting_booked:'Meeting booked', no_response:'No response yet', no_answer:'No answer', spoke_briefly:'Spoke briefly', full_conversation:'Full conversation', not_interested:'Not interested' };
+    structuredNote = (outcomeLabels[outcome] || outcome) + (count ? ' · ' + count : '');
+    if (comment) structuredNote += ' · ' + comment;
+  } else {
+    structuredNote = comment;
+  }
+
+  if (structuredNote) t.completionNote = structuredNote;
+  if (outcome) t.activityOutcome = outcome;  // store structured outcome separately for scoring
+
   dayData(viewDate).wins = dayData(viewDate).wins.filter(function(w){ return !(w.text===t.text && w.fromTask); });
   document.getElementById('doneConfirmModal').style.display = 'none';
   runCarryOver(); renderToday(); render(); save(viewDate);
@@ -5489,7 +5532,18 @@ document.addEventListener('click', function(e) {
   <div style="background:var(--surface);border:1px solid var(--border2);border-radius:16px;width:100%;max-width:380px;padding:24px">
     <div style="font-family:'EB Garamond',Georgia,serif;font-size:18px;color:var(--text);margin-bottom:8px">Mark as done?</div>
     <div id="doneConfirmText" style="font-size:14px;color:var(--text2);margin-bottom:16px;padding:10px 12px;background:var(--surface2);border-radius:8px;border-left:3px solid var(--gold)"></div>
-    <textarea id="doneConfirmComment" placeholder="Add a completion note (optional)..." maxlength="200" style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;outline:none;resize:none;height:64px;line-height:1.5;margin-bottom:16px"></textarea>
+
+    <!-- Structured outcome section — shown only for LinkedIn/WhatsApp/Call tasks -->
+    <div id="doneStructuredSection" style="display:none;margin-bottom:14px">
+      <div id="doneChannelHint" style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em"></div>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <select id="doneOutcomeSelect" style="flex:2;padding:9px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none"><option value="">Outcome…</option></select>
+        <input id="doneCountInput" type="number" min="1" max="500" placeholder="Count" style="flex:1;padding:9px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none" />
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:8px">This replaces CRM updates — your outcome becomes a verified signal.</div>
+    </div>
+
+    <textarea id="doneConfirmComment" placeholder="Add a note (optional)..." maxlength="200" style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;outline:none;resize:none;height:60px;line-height:1.5;margin-bottom:16px"></textarea>
     <div style="display:flex;gap:10px">
       <button onclick="window._cancelDone()" style="flex:1;padding:11px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-family:'DM Sans',sans-serif;font-size:14px;cursor:pointer">Cancel</button>
       <button onclick="window._confirmDone()" style="flex:2;padding:11px;background:var(--gold);border:none;border-radius:8px;color:#18160F;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer">✓ Mark Done</button>
