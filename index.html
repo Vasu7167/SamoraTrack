@@ -694,6 +694,9 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
             <button onclick="syncSequencing()" id="seqSyncBtn" style="padding:5px 12px;border-radius:20px;background:rgba(74,140,92,0.1);border:1px solid var(--border2);color:var(--green);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">↺ Sync</button>
             <button onclick="loadSequencingStats()" id="seqStatsBtn" style="padding:5px 12px;border-radius:20px;background:rgba(74,140,92,0.1);border:1px solid var(--border2);color:var(--green);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">📊 Seq stats</button>
             <button onclick="computeIcpScores()" id="icp-score-btn" style="padding:5px 12px;border-radius:20px;background:rgba(99,102,241,0.1);border:1px solid var(--border2);color:#6366f1;font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">✦ Score ICP fit</button>
+            <button onclick="syncNotetaker()" id="notetakerSyncBtn" style="padding:5px 12px;border-radius:20px;background:rgba(160,117,42,0.1);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">🎙 Sync calls</button>
+            <button onclick="scanNotetakerEmails()" id="scanCallsBtn" style="padding:5px 12px;border-radius:20px;background:rgba(160,117,42,0.1);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">📧 Scan call emails</button>
+            <button onclick="openNotetakerConnect()" style="padding:5px 12px;border-radius:20px;background:rgba(74,140,92,0.1);border:1px solid var(--border2);color:var(--green);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">🔌 Connect notetaker</button>
             <button onclick="loadTimeAnalytics()" id="timeAnalyticsBtn" style="padding:5px 12px;border-radius:20px;background:rgba(58,110,168,0.1);border:1px solid var(--border2);color:var(--blue);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">🕐 Time by account</button>
           </div>
         </div>
@@ -3083,6 +3086,129 @@ async function loadTimeAnalytics() {
     out.innerHTML = html;
   } catch(e) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: '+esc(e.message)+'</div>'; }
   if (btn) { btn.textContent = '🕐 Time by account'; btn.disabled = false; }
+}
+
+async function scanNotetakerEmails() {
+  var btn = document.getElementById('scanCallsBtn');
+  var out = document.getElementById('seqSyncOutput');
+  if (btn) { btn.textContent = '📧 Scanning…'; btn.disabled = true; }
+  if (out) out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">Scanning Gmail for meeting notes from any notetaker tool…</div>';
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'scan_notetaker_emails', days:30}) });
+    var d = await r.json();
+    if (!d.ok) { if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral)">'+esc(d.error||'Scan failed')+'</div>'; return; }
+    if (out) out.innerHTML = '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-top:6px">' +
+      '<div style="font-size:11px;font-weight:600;color:var(--gold);margin-bottom:4px">📧 Email scan complete · '+d.processed+'/'+d.scanned+' notes extracted</div>' +
+      '<div style="font-size:10px;color:var(--text3)">Works with Fireflies, Fathom, Otter, Grain, tl;dv, Gong — any tool that emails you. Zero extra config needed.</div>' +
+      (d.titles&&d.titles.length?'<div style="font-size:10px;color:var(--text2);margin-top:4px">'+d.titles.slice(0,3).map(function(t){return esc(t)}).join(' · ')+'</div>':'') +
+    '</div>';
+  } catch(e) { if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: '+esc(e.message)+'</div>'; }
+  if (btn) { btn.textContent = '📧 Scan call emails'; btn.disabled = false; }
+}
+
+// ── Per-user notetaker connection ─────────────────────────────────────────────
+async function openNotetakerConnect() {
+  document.getElementById('notetaker-connect-modal')?.remove();
+  // Load existing connections
+  var existingConns = [];
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'get_user_connections'}) });
+    var d = await r.json();
+    existingConns = d.connections || [];
+  } catch(e) {}
+
+  var connList = existingConns.map(function(c) {
+    var provIcons = { fireflies:'🔥', fathom:'⚡', otter:'🦦', grain:'🌾', gong:'🎯' };
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--surface2);border-radius:8px;margin-bottom:6px">' +
+      '<div><span style="font-size:14px">'+(provIcons[c.provider]||'🔌')+'</span> <strong style="font-size:13px">'+esc(c.provider)+'</strong>'+(c.provider_email?' <span style="font-size:11px;color:var(--text3)">'+esc(c.provider_email)+'</span>':'')+'</div>' +
+      '<button onclick="disconnectNotetaker(\''+esc(c.provider)+'\')" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:11px;color:var(--coral);cursor:pointer;font-family:var(--sans)">Disconnect</button>' +
+    '</div>';
+  }).join('');
+
+  var providers = [
+    { id:'fireflies', name:'Fireflies.ai', icon:'🔥', help:'Settings → Integrations → API → Generate key' },
+    { id:'fathom',    name:'Fathom',       icon:'⚡', help:'Coming soon — use email scanning for now' },
+    { id:'otter',     name:'Otter.ai',     icon:'🦦', help:'Coming soon — use email scanning for now' },
+    { id:'grain',     name:'Grain',        icon:'🌾', help:'Coming soon — use email scanning for now' },
+  ].filter(function(p) { return !existingConns.some(function(c){return c.provider===p.id;}); });
+
+  var modal = document.createElement('div');
+  modal.id = 'notetaker-connect-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  modal.innerHTML = '<div style="background:var(--bg);border-radius:16px 16px 0 0;width:100%;max-width:500px;padding:20px;max-height:80vh;overflow-y:auto" onclick="event.stopPropagation()">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
+      '<div>' +
+        '<div style="font-size:15px;font-weight:700;color:var(--text)">🔌 Connect your notetaker</div>' +
+        '<div style="font-size:12px;color:var(--text3);margin-top:2px">Your personal connection — independent of your org. Direct API gives full transcripts + richer signals.</div>' +
+      '</div>' +
+      '<button onclick="document.getElementById(\'notetaker-connect-modal\').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3)">✕</button>' +
+    '</div>' +
+
+    // Email scan note — always available
+    '<div style="background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);border-radius:8px;padding:10px 12px;margin-bottom:14px">' +
+      '<div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:3px">📧 Email scanning always works — zero config</div>' +
+      '<div style="font-size:11px;color:var(--text3)">Fireflies, Fathom, Otter, Grain, tl;dv, Gong, Avoma — if it emails you a meeting summary, Samora parses it automatically. Use "Scan call emails" in SAM Intelligence. Direct API connection gives full transcripts with higher signal quality.</div>' +
+    '</div>' +
+
+    (existingConns.length ? '<div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:8px">CONNECTED</div>' + connList : '') +
+
+    (providers.length ? '<div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:10px">ADD CONNECTION</div>' +
+    providers.map(function(p) {
+      var available = p.id === 'fireflies';
+      return '<div style="padding:12px;background:var(--surface2);border-radius:10px;margin-bottom:8px">' +
+        '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px">'+p.icon+' '+p.name+(available?'':' <span style="font-size:10px;color:var(--text3)">(coming)</span>')+'</div>' +
+        (available ? '<div style="font-size:10px;color:var(--text3);margin-bottom:8px">'+p.help+'</div>' +
+        '<div style="display:flex;gap:8px">' +
+          '<input id="nt-key-'+p.id+'" type="password" placeholder="API key" style="flex:1;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:var(--sans);outline:none"/>' +
+          '<input id="nt-email-'+p.id+'" type="email" placeholder="Your email at '+p.name+'" style="flex:1;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:var(--sans);outline:none"/>' +
+        '</div>' +
+        '<button onclick="connectNotetaker(\''+p.id+'\')" style="width:100%;margin-top:8px;padding:9px;border:none;border-radius:8px;background:var(--gold);color:#18160F;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--sans)">Connect '+p.name+'</button>'
+        : '<div style="font-size:11px;color:var(--text3)">'+p.help+'</div>') +
+      '</div>';
+    }).join('') : '') +
+  '</div>';
+  modal.addEventListener('click', function() { modal.remove(); });
+  document.body.appendChild(modal);
+}
+
+async function connectNotetaker(provider) {
+  var apiKey = document.getElementById('nt-key-'+provider)?.value?.trim();
+  var email  = document.getElementById('nt-email-'+provider)?.value?.trim();
+  if (!apiKey) { alert('Please enter your API key'); return; }
+  try {
+    await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'save_user_connection', provider, api_key:apiKey, provider_email:email||null}) });
+    document.getElementById('notetaker-connect-modal')?.remove();
+    showToast('✓ '+provider+' connected — click "Sync calls" to pull transcripts');
+  } catch(e) { alert('Error: '+e.message); }
+}
+
+async function disconnectNotetaker(provider) {
+  if (!confirm('Disconnect '+provider+'?')) return;
+  try {
+    await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'delete_user_connection', provider}) });
+    openNotetakerConnect(); // refresh modal
+    showToast('Disconnected '+provider);
+  } catch(e) { alert('Error: '+e.message); }
+}
+
+async function syncNotetaker() {
+  var btn = document.getElementById('notetakerSyncBtn');
+  var out = document.getElementById('seqSyncOutput');
+  if (btn) { btn.textContent = '🎙 Syncing calls…'; btn.disabled = true; }
+  if (out) out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">Connecting to notetaker and analysing transcripts with Gemini…</div>';
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'sync_notetaker'}) });
+    var d = await r.json();
+    if (!d.ok) { if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral)">⚠ '+esc(d.error||'Sync failed')+'</div>'; return; }
+    var html = '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-top:6px">' +
+      '<div style="font-size:11px;font-weight:600;color:var(--gold);margin-bottom:6px">🎙 '+esc(d.provider)+' synced · '+d.transcripts_analysed+'/'+d.transcripts_found+' transcripts analysed via Gemini</div>' +
+      '<div style="font-size:10px;color:var(--text3)">Full transcript → exact quotes, budget signals, action items, signal score updates. Signals visible in Intelligence tab.</div>' +
+      (d.errors&&d.errors.length?'<div style="font-size:10px;color:var(--amber);margin-top:4px">⚠ '+d.errors.length+' partial errors</div>':'') +
+    '</div>';
+    if (out) out.innerHTML = html;
+    if (typeof loadPipeline === 'function') loadPipeline();
+  } catch(e) { if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: '+esc(e.message)+'</div>'; }
+  if (btn) { btn.textContent = '🎙 Sync calls'; btn.disabled = false; }
 }
 
 async function syncSequencing() {
