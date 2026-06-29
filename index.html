@@ -668,6 +668,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
             <button onclick="runExternalSignals()" id="externalSignalsBtn" style="padding:5px 12px;border-radius:20px;background:rgba(58,110,168,0.1);border:1px solid var(--border2);color:var(--blue);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">🌐 Market signals</button>
             <button onclick="syncSequencing()" id="seqSyncBtn" style="padding:5px 12px;border-radius:20px;background:rgba(74,140,92,0.1);border:1px solid var(--border2);color:var(--green);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">↺ Sync</button>
             <button onclick="loadSequencingStats()" id="seqStatsBtn" style="padding:5px 12px;border-radius:20px;background:rgba(74,140,92,0.1);border:1px solid var(--border2);color:var(--green);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">📊 Seq stats</button>
+            <button onclick="computeIcpScores()" id="icp-score-btn" style="padding:5px 12px;border-radius:20px;background:rgba(99,102,241,0.1);border:1px solid var(--border2);color:#6366f1;font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">✦ Score ICP fit</button>
           </div>
         </div>
         <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Gmail signals · market intelligence · sequencing activity (email/LinkedIn/calls/WhatsApp).</div>
@@ -4843,17 +4844,146 @@ function renderPipelineDeals(data) {
               (localValue ? '<span style="font-size:11px;color:var(--text2)">Local: ' + localValue + '</span>' : '') +
               (d.expected_close ? '<span style="font-size:11px;color:var(--text3)">Close: ' + d.expected_close + '</span>' : '') +
               (d.licenses_units ? '<span style="font-size:11px;color:var(--text3)">' + d.licenses_units + ' units</span>' : '') +
+              // ICP score badge
+              (d.icp_score != null ? '<span style="font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;background:' + (d.icp_score>=70?'rgba(74,140,92,.15)':d.icp_score>=40?'rgba(160,117,42,.15)':'rgba(136,135,128,.15)') + ';color:' + (d.icp_score>=70?'var(--green)':d.icp_score>=40?'var(--gold)':'var(--text3)') + '" title="ICP fit: ' + esc(d.icp_notes||'') + '">ICP ' + d.icp_score + '</span>' : '') +
             '</div>' +
           '</div>' +
           '<div style="text-align:right;flex-shrink:0">' +
             '<div style="font-size:16px;font-weight:600;color:var(--gold)">' + fmtUsd(d.deal_value_usd) + '</div>' +
             '<div style="font-size:10px;color:var(--text3)">USD</div>' +
             '<div style="margin-top:4px;font-size:10px;color:var(--text3)">' + prob + '% → ' + fmtUsd(d.weighted_value_usd) + '</div>' +
-            '<button onclick="' + (d.tier==='verified' ? 'openDealValueForm(\'' + d.id + '\',\'' + esc(d.account) + '\')' : d.tier==='partial' ? 'boostSignals(\'' + d.id + '\',\'' + esc(d.account) + '\')' : 'openDealValueForm(\'' + d.id + '\',\'' + esc(d.account) + '\')') + '" style="margin-top:6px;font-size:10px;padding:3px 10px;border-radius:4px;border:1px solid ' + (d.tier==='verified'?'var(--border2)':d.tier==='partial'?'var(--amber)':'var(--green)') + ';background:transparent;color:' + (d.tier==='verified'?'var(--text3)':d.tier==='partial'?'var(--amber)':'var(--green)') + ';cursor:pointer">' + (d.tier==='verified'?'Edit':d.tier==='partial'?'⚡ Boost signals':'Confirm') + '</button>' +
+            '<div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">' +
+              '<button onclick="' + (d.tier==='verified' ? 'openDealValueForm(\'' + d.id + '\',\'' + esc(d.account) + '\')' : d.tier==='partial' ? 'boostSignals(\'' + d.id + '\',\'' + esc(d.account) + '\')' : 'openDealValueForm(\'' + d.id + '\',\'' + esc(d.account) + '\')') + '" style="font-size:10px;padding:3px 10px;border-radius:4px;border:1px solid ' + (d.tier==='verified'?'var(--border2)':d.tier==='partial'?'var(--amber)':'var(--green)') + ';background:transparent;color:' + (d.tier==='verified'?'var(--text3)':d.tier==='partial'?'var(--amber)':'var(--green)') + ';cursor:pointer">' + (d.tier==='verified'?'Edit':d.tier==='partial'?'⚡ Boost':'Confirm') + '</button>' +
+              '<button onclick="openAccountTimeline(\'' + esc(d.id) + '\',\'' + esc(d.account) + '\')" style="font-size:10px;padding:3px 10px;border-radius:4px;border:1px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer">📋 Timeline</button>' +
+              '<button onclick="openCloseDeal(\'' + esc(d.id) + '\',\'' + esc(d.account) + '\')" style="font-size:10px;padding:3px 10px;border-radius:4px;border:1px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer">Close deal</button>' +
+            '</div>' +
           '</div>' +
         '</div>' +
       '</div>';
     }).join('');
+}
+
+// ── Close Deal Modal ──────────────────────────────────────────────────────────
+function openCloseDeal(opportunityId, accountName) {
+  document.getElementById('close-deal-modal')?.remove();
+  var modal = document.createElement('div');
+  modal.id = 'close-deal-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  modal.innerHTML = '<div style="background:var(--bg);border-radius:16px 16px 0 0;width:100%;max-width:480px;padding:22px 20px" onclick="event.stopPropagation()">' +
+    '<div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px">Close deal</div>' +
+    '<div style="font-size:12px;color:var(--text3);margin-bottom:16px">' + esc(accountName) + '</div>' +
+    '<div style="display:flex;gap:8px;margin-bottom:14px">' +
+      '<button id="cd-won-btn" onclick="setCloseStatus(\'won\')" style="flex:1;padding:12px;border-radius:10px;border:2px solid var(--border);background:var(--surface2);color:var(--text);font-family:var(--sans);font-size:14px;font-weight:600;cursor:pointer">🏆 Won</button>' +
+      '<button id="cd-lost-btn" onclick="setCloseStatus(\'lost\')" style="flex:1;padding:12px;border-radius:10px;border:2px solid var(--border);background:var(--surface2);color:var(--text);font-family:var(--sans);font-size:14px;font-weight:600;cursor:pointer">❌ Lost</button>' +
+    '</div>' +
+    '<div id="cd-won-fields" style="display:none;margin-bottom:12px">' +
+      '<label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">Actual close value (USD)</label>' +
+      '<input id="cd-actual-value" type="number" placeholder="e.g. 45000" style="width:100%;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--sans);font-size:14px;outline:none;box-sizing:border-box"/>' +
+    '</div>' +
+    '<div id="cd-lost-fields" style="display:none;margin-bottom:12px">' +
+      '<label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">Loss reason</label>' +
+      '<select id="cd-reason" style="width:100%;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none">' +
+        '<option value="">Select reason…</option>' +
+        '<option value="price">Price / budget</option>' +
+        '<option value="competitor">Lost to competitor</option>' +
+        '<option value="no_decision">No decision / shelved</option>' +
+        '<option value="timing">Bad timing</option>' +
+        '<option value="product_fit">Product fit</option>' +
+        '<option value="champion_left">Champion left the company</option>' +
+        '<option value="other">Other</option>' +
+      '</select>' +
+    '</div>' +
+    '<button onclick="confirmCloseDeal(\'' + esc(opportunityId) + '\')" style="width:100%;padding:13px;border:none;border-radius:10px;background:var(--gold);color:#18160F;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--sans)">Confirm close</button>' +
+    '<button onclick="document.getElementById(\'close-deal-modal\').remove()" style="width:100%;padding:10px;border:none;background:none;color:var(--text3);font-size:13px;cursor:pointer;font-family:var(--sans);margin-top:4px">Cancel</button>' +
+  '</div>';
+  modal.addEventListener('click', function() { modal.remove(); });
+  document.body.appendChild(modal);
+}
+var _cdStatus = '';
+function setCloseStatus(status) {
+  _cdStatus = status;
+  var wonBtn = document.getElementById('cd-won-btn'), lostBtn = document.getElementById('cd-lost-btn');
+  var wonF = document.getElementById('cd-won-fields'), lostF = document.getElementById('cd-lost-fields');
+  if (wonBtn) wonBtn.style.borderColor = status==='won' ? 'var(--green)' : 'var(--border)';
+  if (lostBtn) lostBtn.style.borderColor = status==='lost' ? 'var(--coral)' : 'var(--border)';
+  if (wonF) wonF.style.display = status==='won' ? 'block' : 'none';
+  if (lostF) lostF.style.display = status==='lost' ? 'block' : 'none';
+}
+async function confirmCloseDeal(opportunityId) {
+  if (!_cdStatus) { alert('Select Won or Lost'); return; }
+  var actualValue = document.getElementById('cd-actual-value')?.value;
+  var reason = document.getElementById('cd-reason')?.value;
+  try {
+    await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'close_opportunity', opportunity_id:opportunityId, status:_cdStatus, close_reason:reason||null, actual_value_usd:actualValue?parseFloat(actualValue):null })
+    });
+    document.getElementById('close-deal-modal')?.remove();
+    showToast(_cdStatus === 'won' ? '🏆 Deal marked Won' : '❌ Deal marked Lost');
+    if (typeof loadPipeline === 'function') loadPipeline();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+// ── Account Timeline ──────────────────────────────────────────────────────────
+async function openAccountTimeline(accountId, accountName) {
+  document.getElementById('timeline-modal')?.remove();
+  var modal = document.createElement('div');
+  modal.id = 'timeline-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  modal.innerHTML = '<div style="background:var(--bg);border-radius:16px 16px 0 0;width:100%;max-width:520px;padding:20px;max-height:80vh;overflow-y:auto" onclick="event.stopPropagation()">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">' +
+      '<div><div style="font-size:15px;font-weight:700;color:var(--text)">📋 Account timeline</div><div style="font-size:12px;color:var(--text3)">' + esc(accountName) + ' · last 90 days</div></div>' +
+      '<button onclick="document.getElementById(\'timeline-modal\').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3)">✕</button>' +
+    '</div>' +
+    '<div id="timeline-body"><div style="font-size:12px;color:var(--text3);padding:20px 0;text-align:center">Loading…</div></div>' +
+  '</div>';
+  modal.addEventListener('click', function() { modal.remove(); });
+  document.body.appendChild(modal);
+
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'get_account_timeline', account_id:accountId, days:90 }) });
+    var data = await r.json();
+    var body = document.getElementById('timeline-body');
+    if (!body) return;
+    var timeline = data.timeline || [];
+    if (!timeline.length) { body.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:20px 0;text-align:center">No signals found in the last 90 days.</div>'; return; }
+
+    var sentColors = { positive:'var(--green)', negative:'var(--coral)', neutral:'var(--text3)' };
+    body.innerHTML = timeline.map(function(e) {
+      var color = sentColors[e.sentiment] || 'var(--text3)';
+      var dateStr = e.date ? new Date(e.date).toLocaleDateString('en-GB',{day:'numeric',month:'short'}) : '';
+      return '<div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">' +
+        '<div style="width:40px;flex-shrink:0;text-align:right;font-size:10px;color:var(--text3);padding-top:2px">' + esc(dateStr) + '</div>' +
+        '<div style="width:3px;flex-shrink:0;background:' + color + ';border-radius:2px;self-align:stretch"></div>' +
+        '<div style="flex:1">' +
+          '<div style="font-size:12px;font-weight:600;color:var(--text)">' + esc(e.title||'') + '</div>' +
+          (e.body ? '<div style="font-size:11px;color:var(--text3);margin-top:2px">' + esc(e.body.slice(0,120)) + '</div>' : '') +
+          '<div style="font-size:10px;color:var(--text3);margin-top:2px;opacity:0.7">' + esc(e.source||'') + '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  } catch(e) {
+    var b = document.getElementById('timeline-body');
+    if (b) b.innerHTML = '<div style="color:var(--coral);font-size:12px">Error: ' + esc(e.message) + '</div>';
+  }
+}
+
+// ── ICP Scoring ───────────────────────────────────────────────────────────────
+async function computeIcpScores() {
+  var btn = document.getElementById('icp-score-btn');
+  if (btn) { btn.textContent = 'Scoring…'; btn.disabled = true; }
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'compute_icp_scores' }) });
+    var d = await r.json();
+    if (d.ok) {
+      showToast('ICP scored: ' + d.scored + ' accounts updated');
+      if (typeof loadPipeline === 'function') loadPipeline();
+    } else {
+      alert(d.error || 'ICP scoring failed');
+    }
+  } catch(e) { alert('Error: ' + e.message); }
+  if (btn) { btn.textContent = '✦ Score ICP fit'; btn.disabled = false; }
 }
 
 // ── Deal Value & Revenue Streams Modal ──────────────────────────────────────
