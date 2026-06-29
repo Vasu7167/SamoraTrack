@@ -650,6 +650,31 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
     <!-- ── SELF MODE ── -->
     <div id="samSelfMode">
     <div id="samAlerts" style="margin-bottom:8px"></div>
+
+    <!-- ── SAM Daily Brief ──────────────────────────────────────────────── -->
+    <div id="samBriefSection" style="margin-bottom:16px;display:none">
+      <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div>
+            <div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em">✦ SAM Brief</div>
+            <div id="samBriefDate" style="font-size:11px;color:var(--text3);margin-top:1px"></div>
+          </div>
+          <button onclick="loadSamBrief(true)" id="samBriefRefreshBtn" style="padding:4px 10px;border-radius:20px;background:rgba(160,117,42,0.1);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;cursor:pointer">↻</button>
+        </div>
+        <div id="samBriefOutput"><div style="font-size:12px;color:var(--text3)">Loading your brief…</div></div>
+      </div>
+    </div>
+
+    <!-- ── Sales Habits ──────────────────────────────────────────────────── -->
+    <div id="samHabitsSection" style="margin-bottom:16px;display:none">
+      <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em">⚡ Daily Habits</div>
+          <button onclick="openHabitEditor()" style="padding:4px 10px;border-radius:20px;background:rgba(160,117,42,0.1);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;cursor:pointer">+ Edit habits</button>
+        </div>
+        <div id="samHabitsOutput"><div style="font-size:12px;color:var(--text3);font-style:italic">No habits configured. Add recurring activities to auto-generate daily tasks.</div></div>
+      </div>
+    </div>
     <div id="samGmailStatus" style="margin-bottom:16px">
       <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px">
         <div>
@@ -669,12 +694,14 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
             <button onclick="syncSequencing()" id="seqSyncBtn" style="padding:5px 12px;border-radius:20px;background:rgba(74,140,92,0.1);border:1px solid var(--border2);color:var(--green);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">↺ Sync</button>
             <button onclick="loadSequencingStats()" id="seqStatsBtn" style="padding:5px 12px;border-radius:20px;background:rgba(74,140,92,0.1);border:1px solid var(--border2);color:var(--green);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">📊 Seq stats</button>
             <button onclick="computeIcpScores()" id="icp-score-btn" style="padding:5px 12px;border-radius:20px;background:rgba(99,102,241,0.1);border:1px solid var(--border2);color:#6366f1;font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">✦ Score ICP fit</button>
+            <button onclick="loadTimeAnalytics()" id="timeAnalyticsBtn" style="padding:5px 12px;border-radius:20px;background:rgba(58,110,168,0.1);border:1px solid var(--border2);color:var(--blue);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">🕐 Time by account</button>
           </div>
         </div>
         <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Gmail signals · market intelligence · sequencing activity (email/LinkedIn/calls/WhatsApp).</div>
         <div id="samLocalIntelOutput"></div>
         <div id="seqSyncOutput" style="margin-top:10px"></div>
         <div id="seqStatsOutput" style="margin-top:10px"></div>
+        <div id="timeAnalyticsOutput" style="margin-top:10px"></div>
         <div id="externalSignalsOutput" style="margin-top:10px"></div>
       </div>
     </div>
@@ -1634,6 +1661,15 @@ function setSamMode(mode) {
     renderSamAlerts(); loadSamSignals();
     const covSec = document.getElementById('samCoverageSection'); if (covSec) covSec.style.display = 'block';
     const localIntelSec = document.getElementById('samLocalIntelSection'); if (localIntelSec) localIntelSec.style.display = 'block';
+    // Show brief and habits
+    var briefSec = document.getElementById('samBriefSection'); if (briefSec) briefSec.style.display = 'block';
+    var habitsSec = document.getElementById('samHabitsSection'); if (habitsSec) habitsSec.style.display = 'block';
+    // Load brief if not already loaded today
+    var briefDate = document.getElementById('samBriefDate');
+    var today = new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
+    if (briefDate) briefDate.textContent = today;
+    loadSamBrief(false);
+    loadHabitsSection();
   }
 }
 function switchToOrgPanel() {
@@ -2824,6 +2860,229 @@ async function loadSequencingStats() {
     if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: '+esc(e.message)+'</div>';
   }
   if (btn) { btn.textContent = '📊 Seq stats'; btn.disabled = false; }
+}
+
+// ── SAM Daily Brief ───────────────────────────────────────────────────────────
+var _briefLoadedDate = '';
+var _userHabits = null;
+async function loadSamBrief(force) {
+  var todayKey2 = new Date().toISOString().split('T')[0];
+  if (!force && _briefLoadedDate === todayKey2) return; // already loaded today
+  var out = document.getElementById('samBriefOutput');
+  var btn = document.getElementById('samBriefRefreshBtn');
+  if (!out) return;
+  if (btn) btn.textContent = '↻…';
+  out.innerHTML = '<div style="font-size:12px;color:var(--text3)">SAM is reading your pipeline and calendar…</div>';
+  try {
+    var r = await fetch(EDGE_FN_URL, {
+      method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'generate_daily_brief' })
+    });
+    var d = await r.json();
+    if (!d.ok) { out.innerHTML = '<div style="font-size:12px;color:var(--text3)">'+esc(d.error||'Brief unavailable')+'</div>'; return; }
+    _briefLoadedDate = todayKey2;
+    // Parse sections from the brief
+    var brief = d.brief || '';
+    var sections = ['TOP 3 ACCOUNTS TODAY','CALENDAR PREP','COACHING SIGNAL','SINGLE PRIORITY BEFORE NOON'];
+    var secColors = ['var(--gold)','var(--blue)','var(--amber)','var(--green)'];
+    var secIcons  = ['📊','📅','⚡','🎯'];
+    var html = '';
+    sections.forEach(function(sec, i) {
+      var pattern = new RegExp(sec + '[:\\s]*([\\s\\S]*?)(?=' + (sections[i+1] ? sections[i+1] : '$') + ')', 'i');
+      var match = brief.match(pattern);
+      if (!match) return;
+      var content = match[1].trim();
+      html += '<div style="margin-bottom:12px">' +
+        '<div style="font-size:10px;font-weight:700;color:'+secColors[i]+';text-transform:uppercase;letter-spacing:0.06em;margin-bottom:5px">'+secIcons[i]+' '+sec+'</div>' +
+        '<div style="font-size:12px;color:var(--text2);line-height:1.6;white-space:pre-wrap">'+esc(content)+'</div>' +
+      '</div>';
+    });
+    if (!html) html = '<div style="font-size:12px;color:var(--text2);white-space:pre-wrap;line-height:1.6">'+esc(brief)+'</div>';
+    html += '<div style="font-size:10px;color:var(--text3);margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">' +
+      d.accounts.slice(0,3).map(function(a) {
+        var c = a.score >= 60 ? 'var(--green)' : a.score >= 35 ? 'var(--amber)' : 'var(--text3)';
+        return '<span style="margin-right:10px"><span style="color:'+c+';font-weight:600">'+(a.score||'?')+'</span> '+esc(a.name)+'</span>';
+      }).join('') +
+    '</div>';
+    out.innerHTML = html;
+  } catch(e) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: '+esc(e.message)+'</div>'; }
+  if (btn) btn.textContent = '↻';
+}
+
+// ── Sales Habits ──────────────────────────────────────────────────────────────
+var DEFAULT_HABITS = [
+  { id:'h1', title:'LinkedIn outreach', channel:'linkedin', days:[1,2,3,4,5], time_of_day:'morning', duration_mins:30, active:true },
+  { id:'h2', title:'Email batch / follow-ups', channel:'email', days:[1,2,3,4,5], time_of_day:'morning', duration_mins:45, active:true },
+  { id:'h3', title:'Pipeline review & SamoraTrack log', channel:'other', days:[1,5], time_of_day:'afternoon', duration_mins:20, active:true },
+];
+var CHANNEL_ICONS = { linkedin:'🔗', email:'✉', call:'📞', whatsapp:'💬', other:'⚙' };
+var DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+var TIME_LABELS = { morning:'Morning (8-12)', afternoon:'Afternoon (12-5)', evening:'Evening (5+)', anytime:'Anytime' };
+
+async function loadHabitsSection() {
+  if (_userHabits === null) {
+    try {
+      var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'get_habits'}) });
+      var d = await r.json();
+      _userHabits = d.habits || [];
+      if (!_userHabits.length) _userHabits = DEFAULT_HABITS; // seed defaults
+    } catch(e) { _userHabits = DEFAULT_HABITS; }
+  }
+  renderHabitsSection();
+  applyHabitsToToday();
+}
+
+function renderHabitsSection() {
+  var out = document.getElementById('samHabitsOutput'); if (!out) return;
+  var todayDow = new Date().getDay();
+  var todayHabits = (_userHabits||[]).filter(function(h) { return h.active && (h.days||[]).includes(todayDow); });
+  if (!todayHabits.length) { out.innerHTML = '<div style="font-size:12px;color:var(--text3);font-style:italic">No habits for today. <button onclick="openHabitEditor()" style="background:none;border:none;color:var(--gold);cursor:pointer;font-family:var(--sans);font-size:12px">Configure habits →</button></div>'; return; }
+  out.innerHTML = todayHabits.map(function(h) {
+    return '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)">' +
+      '<span style="font-size:16px">'+(CHANNEL_ICONS[h.channel]||'⚙')+'</span>' +
+      '<div style="flex:1"><div style="font-size:12px;font-weight:500;color:var(--text)">'+esc(h.title)+'</div>' +
+      '<div style="font-size:10px;color:var(--text3)">'+(TIME_LABELS[h.time_of_day]||h.time_of_day)+' · '+h.duration_mins+' min</div></div>' +
+      '<span style="font-size:10px;color:var(--green);font-weight:600">AUTO</span>' +
+    '</div>';
+  }).join('') + '<div style="margin-top:6px"><button onclick="openHabitEditor()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-family:var(--sans);font-size:11px;padding:0">Edit habits →</button></div>';
+}
+
+function applyHabitsToToday() {
+  // Auto-inject today's habit tasks into SamoraTrack if not already there
+  var d = dayData(viewDate);
+  var todayDow = new Date().getDay();
+  var todayHabits = (_userHabits||[]).filter(function(h) { return h.active && (h.days||[]).includes(todayDow); });
+  todayHabits.forEach(function(h) {
+    var alreadyExists = (d.tasks||[]).some(function(t) { return t.text === h.title && t.fromHabit; });
+    if (!alreadyExists) {
+      d.tasks.push({ text:h.title, done:false, priority:false, fromHabit:true, habitId:h.id, addedAt: new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}) });
+    }
+  });
+  if (todayHabits.length) { save(viewDate); render(); }
+}
+
+function openHabitEditor() {
+  document.getElementById('habit-modal')?.remove();
+  var habits = _userHabits || [];
+  var modal = document.createElement('div');
+  modal.id = 'habit-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  var habitRows = habits.map(function(h, i) {
+    var dayBtns = [1,2,3,4,5,6,0].map(function(dow) {
+      var active = (h.days||[]).includes(dow);
+      return '<button onclick="toggleHabitDay('+i+','+dow+')" style="width:28px;height:24px;border-radius:4px;border:1px solid var(--border);background:'+(active?'var(--gold)':'transparent')+';color:'+(active?'#18160F':'var(--text3)')+';font-size:10px;cursor:pointer;font-family:var(--sans)">'+DAY_NAMES[dow]+'</button>';
+    }).join('');
+    return '<div style="padding:12px;background:var(--surface2);border-radius:10px;margin-bottom:8px">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
+        '<span style="font-size:18px">'+(CHANNEL_ICONS[h.channel]||'⚙')+'</span>' +
+        '<input value="'+esc(h.title)+'" onchange="_userHabits['+i+'].title=this.value" style="flex:1;padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>' +
+        '<button onclick="removeHabit('+i+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;padding:2px">✕</button>' +
+      '</div>' +
+      '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">'+dayBtns+'</div>' +
+      '<div style="display:flex;gap:8px">' +
+        '<select onchange="_userHabits['+i+'].channel=this.value" style="flex:1;padding:5px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;outline:none">' +
+          ['email','linkedin','call','whatsapp','other'].map(function(c){return '<option value="'+c+'"'+(h.channel===c?' selected':'')+'>'+(CHANNEL_ICONS[c]||'')+'  '+c+'</option>';}).join('') +
+        '</select>' +
+        '<select onchange="_userHabits['+i+'].time_of_day=this.value" style="flex:1;padding:5px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;outline:none">' +
+          ['morning','afternoon','evening','anytime'].map(function(t){return '<option value="'+t+'"'+(h.time_of_day===t?' selected':'')+'>'+TIME_LABELS[t]+'</option>';}).join('') +
+        '</select>' +
+        '<input type="number" value="'+h.duration_mins+'" min="5" max="240" onchange="_userHabits['+i+'].duration_mins=parseInt(this.value)" style="width:56px;padding:5px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;outline:none" placeholder="mins"/>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  modal.innerHTML = '<div style="background:var(--bg);border-radius:16px 16px 0 0;width:100%;max-width:500px;padding:20px;max-height:90vh;overflow-y:auto" onclick="event.stopPropagation()">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
+      '<div style="font-size:15px;font-weight:700;color:var(--text)">⚡ Sales Habits</div>' +
+      '<button onclick="document.getElementById(\'habit-modal\').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3)">✕</button>' +
+    '</div>' +
+    '<div style="font-size:12px;color:var(--text3);margin-bottom:14px">Habits auto-generate tasks in SamoraTrack on the days you choose. Set it once, forget it.</div>' +
+    '<div id="habit-rows">'+habitRows+'</div>' +
+    '<button onclick="addHabit()" style="width:100%;padding:9px;border:1px dashed var(--border2);border-radius:8px;background:none;color:var(--text3);font-size:13px;cursor:pointer;margin-bottom:12px">+ Add habit</button>' +
+    '<button onclick="saveHabits()" style="width:100%;padding:12px;border:none;border-radius:10px;background:var(--gold);color:#18160F;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--sans)">Save habits</button>' +
+  '</div>';
+  modal.addEventListener('click', function() { modal.remove(); });
+  document.body.appendChild(modal);
+}
+
+function toggleHabitDay(idx, dow) {
+  var h = _userHabits[idx]; if (!h) return;
+  var days = h.days || [];
+  var i = days.indexOf(dow);
+  if (i >= 0) days.splice(i,1); else days.push(dow);
+  h.days = days;
+  openHabitEditor(); // re-render with updated state
+}
+
+function removeHabit(idx) { _userHabits.splice(idx, 1); openHabitEditor(); }
+function addHabit() {
+  _userHabits.push({ id:'h'+Date.now(), title:'New habit', channel:'other', days:[1,2,3,4,5], time_of_day:'morning', duration_mins:30, active:true });
+  openHabitEditor();
+}
+
+async function saveHabits() {
+  try {
+    await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'save_habits',habits:_userHabits}) });
+    document.getElementById('habit-modal')?.remove();
+    renderHabitsSection();
+    applyHabitsToToday();
+    showToast('Habits saved');
+  } catch(e) { alert('Save failed: '+e.message); }
+}
+
+// ── Time-by-Account Analytics ─────────────────────────────────────────────────
+async function loadTimeAnalytics() {
+  var btn = document.getElementById('timeAnalyticsBtn');
+  var out = document.getElementById('timeAnalyticsOutput');
+  if (!out) return;
+  if (btn) { btn.textContent = '🕐 Analysing…'; btn.disabled = true; }
+  out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">Reading last 30 days of calendar…</div>';
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'get_time_analytics',days:30}) });
+    var d = await r.json();
+    if (!d.ok) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">'+esc(d.error||'Failed')+'</div>'; return; }
+
+    var html = '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px">' +
+      '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">🕐 How you spent your time · last 30 days</div>' +
+      '<div style="display:flex;gap:12px;margin-bottom:12px">' +
+        '<div style="text-align:center"><div style="font-size:20px;font-weight:700;color:var(--text)">'+d.customer_hours+'h</div><div style="font-size:10px;color:var(--text3)">Customer</div></div>' +
+        '<div style="text-align:center"><div style="font-size:20px;font-weight:700;color:var(--text3)">'+d.internal_hours+'h</div><div style="font-size:10px;color:var(--text3)">Internal</div></div>' +
+        '<div style="text-align:center"><div style="font-size:20px;font-weight:700;color:var(--text3)">'+d.unclassified_hours+'h</div><div style="font-size:10px;color:var(--text3)">Other</div></div>' +
+      '</div>';
+
+    // Mismatches — the most useful part
+    if (d.mismatches.over_invested.length || d.mismatches.under_invested.length) {
+      html += '<div style="padding:8px 10px;border-radius:7px;margin-bottom:10px;background:rgba(160,117,42,0.08)">';
+      if (d.mismatches.under_invested.length) html += '<div style="font-size:11px;color:var(--green);margin-bottom:3px">🔥 Hot accounts you\'re under-investing in: <strong>'+d.mismatches.under_invested.join(', ')+'</strong></div>';
+      if (d.mismatches.over_invested.length) html += '<div style="font-size:11px;color:var(--amber)">⚠ Cold accounts consuming your time: <strong>'+d.mismatches.over_invested.join(', ')+'</strong></div>';
+      html += '</div>';
+    }
+
+    var maxMins = Math.max.apply(null, (d.by_account||[]).map(function(a){return a.minutes;})||[1]);
+    html += d.by_account.slice(0,8).map(function(a) {
+      var pct = maxMins > 0 ? a.minutes/maxMins*100 : 0;
+      var sigColor = a.signal_score >= 60 ? 'var(--green)' : a.signal_score >= 35 ? 'var(--amber)' : 'var(--text3)';
+      var misColor = a.mismatch === 'under_invested' ? 'var(--green)' : a.mismatch === 'over_invested' ? 'var(--amber)' : 'transparent';
+      var misIcon  = a.mismatch === 'under_invested' ? '↑ invest more' : a.mismatch === 'over_invested' ? '↓ over-indexed' : '';
+      return '<div style="margin-bottom:7px">' +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:2px">' +
+          '<span style="font-size:12px;color:var(--text)">'+esc(a.account_name)+'</span>' +
+          '<div style="display:flex;gap:8px;align-items:center">' +
+            (misIcon ? '<span style="font-size:9px;color:'+misColor+';font-weight:700">'+misIcon+'</span>' : '') +
+            (a.signal_score != null ? '<span style="font-size:10px;color:'+sigColor+';font-weight:600">sig '+a.signal_score+'</span>' : '') +
+            '<span style="font-size:12px;color:var(--text2);font-weight:500">'+a.hours+'h</span>' +
+          '</div>' +
+        '</div>' +
+        '<div style="height:5px;background:var(--surface);border-radius:3px;overflow:hidden">' +
+          '<div style="height:100%;width:'+pct+'%;background:'+(a.mismatch==='over_invested'?'var(--amber)':a.mismatch==='under_invested'?'var(--green)':'var(--gold)')+';border-radius:3px"></div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    html += '</div>';
+    out.innerHTML = html;
+  } catch(e) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: '+esc(e.message)+'</div>'; }
+  if (btn) { btn.textContent = '🕐 Time by account'; btn.disabled = false; }
 }
 
 async function syncSequencing() {
