@@ -3118,7 +3118,7 @@ async function openNotetakerConnect() {
   } catch(e) {}
 
   var connList = existingConns.map(function(c) {
-    var provIcons = { fireflies:'🔥', fathom:'⚡', otter:'🦦', grain:'🌾', gong:'🎯' };
+    var provIcons = { fireflies:'🔥', read_ai:'👁', fathom:'⚡', otter:'🦦', grain:'🌾', gong:'🎯' };
     return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--surface2);border-radius:8px;margin-bottom:6px">' +
       '<div><span style="font-size:14px">'+(provIcons[c.provider]||'🔌')+'</span> <strong style="font-size:13px">'+esc(c.provider)+'</strong>'+(c.provider_email?' <span style="font-size:11px;color:var(--text3)">'+esc(c.provider_email)+'</span>':'')+'</div>' +
       '<button onclick="disconnectNotetaker(\''+esc(c.provider)+'\')" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:11px;color:var(--coral);cursor:pointer;font-family:var(--sans)">Disconnect</button>' +
@@ -3126,10 +3126,11 @@ async function openNotetakerConnect() {
   }).join('');
 
   var providers = [
-    { id:'fireflies', name:'Fireflies.ai', icon:'🔥', help:'Settings → Integrations → API → Generate key' },
-    { id:'fathom',    name:'Fathom',       icon:'⚡', help:'Coming soon — use email scanning for now' },
-    { id:'otter',     name:'Otter.ai',     icon:'🦦', help:'Coming soon — use email scanning for now' },
-    { id:'grain',     name:'Grain',        icon:'🌾', help:'Coming soon — use email scanning for now' },
+    { id:'fireflies', name:'Fireflies.ai', icon:'🔥', help:'Settings → Integrations → API → Generate key', available:true },
+    { id:'read_ai',   name:'Read.ai',      icon:'👁', help:'app.read.ai → Settings → API → Get access token', available:true },
+    { id:'fathom',    name:'Fathom',       icon:'⚡', help:'Coming soon — use email scanning for now', available:false },
+    { id:'otter',     name:'Otter.ai',     icon:'🦦', help:'Coming soon — use email scanning for now', available:false },
+    { id:'grain',     name:'Grain',        icon:'🌾', help:'Coming soon — use email scanning for now', available:false },
   ].filter(function(p) { return !existingConns.some(function(c){return c.provider===p.id;}); });
 
   var modal = document.createElement('div');
@@ -3154,12 +3155,12 @@ async function openNotetakerConnect() {
 
     (providers.length ? '<div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:10px">ADD CONNECTION</div>' +
     providers.map(function(p) {
-      var available = p.id === 'fireflies';
+      var available = p.available;
       return '<div style="padding:12px;background:var(--surface2);border-radius:10px;margin-bottom:8px">' +
         '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px">'+p.icon+' '+p.name+(available?'':' <span style="font-size:10px;color:var(--text3)">(coming)</span>')+'</div>' +
         (available ? '<div style="font-size:10px;color:var(--text3);margin-bottom:8px">'+p.help+'</div>' +
         '<div style="display:flex;gap:8px">' +
-          '<input id="nt-key-'+p.id+'" type="password" placeholder="API key" style="flex:1;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:var(--sans);outline:none"/>' +
+          '<input id="nt-key-'+p.id+'" type="password" placeholder="API key / access token" style="flex:1;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:var(--sans);outline:none"/>' +
           '<input id="nt-email-'+p.id+'" type="email" placeholder="Your email at '+p.name+'" style="flex:1;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:var(--sans);outline:none"/>' +
         '</div>' +
         '<button onclick="connectNotetaker(\''+p.id+'\')" style="width:100%;margin-top:8px;padding:9px;border:none;border-radius:8px;background:var(--gold);color:#18160F;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--sans)">Connect '+p.name+'</button>'
