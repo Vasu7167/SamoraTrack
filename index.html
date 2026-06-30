@@ -3470,6 +3470,11 @@ async function runCoverageCheck(repId, repEmail, resultElId) {
           // Gap warning: rep claimed much more than tools verified
           if (b.logged > b.verified * 2 && b.logged > 5)
             h += '<br><span style="font-size:9px;color:var(--amber)" title="'+b.logged+' claimed in tasks, only '+b.verified+' found in Gmail/SmartReach">'+b.logged+' lgd \u26A0</span>';
+          // SmartReach has a lifetime count for this account, but it's excluded
+          // from today's headline number because SmartReach doesn't expose
+          // per-event timestamps — that count would be misleading as "today's" activity.
+          if (b.seqNotDateAccurate && b.seqVerified > 0)
+            h += '<br><span style="font-size:9px;color:var(--text3)" title="SmartReach shows '+b.seqVerified+' total signals for this account, but SmartReach doesn\u2019t timestamp individual events \u2014 excluded from today\u2019s count to avoid showing stale activity as today\u2019s">SR: '+b.seqVerified+' lifetime (not dated)</span>';
         } else {
           h += '<span style="color:var(--text2)">'+b.logged+'</span><span style="font-size:10px;color:var(--text3)"> lgd</span>';
         }
