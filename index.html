@@ -3481,7 +3481,23 @@ async function runCoverageCheck(repId, repEmail, resultElId) {
         return h;
       };
 
-      // Replies cell
+      // Call cell — three-layer verification: SR step-level > calendar > self-attested
+      var callCell = function(b) {
+        if (!b.verified && !b.logged && !b.selfAttested) return '<span style="color:var(--text3)">—</span>';
+        var h = '';
+        if (b.verified > 0) {
+          h += '<span style="color:var(--green);font-weight:600">'+b.verified+'</span>';
+          var src = (b.source||'').replace('smartreach+calendar','SR+Cal').replace('smartreach','SR').replace('calendar','Cal');
+          if (src) h += '<span style="font-size:9px;color:var(--text3);margin-left:2px">'+src+'</span>';
+        } else if (b.selfAttested > 0) {
+          // Self-attested: rep confirmed outcome via close-out form — shown amber, not green
+          h += '<span style="color:var(--amber);font-weight:600">'+b.selfAttested+'</span>';
+          h += '<span style="font-size:9px;color:var(--amber);margin-left:2px" title="Rep logged outcome in SamoraTrack close-out form. Not verified by SmartReach or Calendar.">attested</span>';
+        } else if (b.logged > 0) {
+          h += '<span style="color:var(--text2)">'+b.logged+'</span><span style="font-size:10px;color:var(--text3)"> lgd</span>';
+        }
+        return h;
+      };
       var seqR = g.seqReplies || 0;
       var gmailR = Math.max(0, (g.repliesReceived||0) - seqR);
       var replyCell = g.repliesReceived > 0
@@ -3540,7 +3556,7 @@ async function runCoverageCheck(repId, repEmail, resultElId) {
         '</td>' +
         '<td style="padding:7px 6px;text-align:center;vertical-align:top">'+emailCell(g.email)+'</td>' +
         '<td style="padding:7px 6px;text-align:center;vertical-align:top">'+cell(g.linkedin)+'</td>' +
-        '<td style="padding:7px 6px;text-align:center;vertical-align:top">'+cell(g.call)+'</td>' +
+        '<td style="padding:7px 6px;text-align:center;vertical-align:top">'+callCell(g.call)+'</td>' +
         '<td style="padding:7px 6px;text-align:center;vertical-align:top">'+cell(g.whatsapp)+'</td>' +
         '<td style="padding:7px 6px;text-align:center;vertical-align:top">'+replyCell+'</td>' +
         '<td style="padding:7px 8px;text-align:center;vertical-align:top">' +
