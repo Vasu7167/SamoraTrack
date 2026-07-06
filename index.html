@@ -3534,20 +3534,26 @@ async function runCoverageCheck(repId, repEmail, resultElId) {
         return h;
       };
 
-      // Call cell — three-layer verification: SR step-level > calendar > self-attested
+      // Call cell — uses resolveChannelSignals priority: task-done > attested > calendar > seq
+      var CALL_SOURCE_LABELS = {
+        'attested':    { icon: '✓', color: 'var(--green)',  label: 'Outcome logged' },
+        'task-done':   { icon: '✓', color: 'var(--green)',  label: 'Task marked done' },
+        'calendar':    { icon: '📅', color: 'var(--blue)',   label: 'Calendar event' },
+        'seq':         { icon: '↺', color: 'var(--text3)',  label: 'Sequence step' },
+        'attested+calendar': { icon: '✓', color: 'var(--green)', label: 'Done + Calendar' }
+      };
       var callCell = function(b) {
-        if (!b.verified && !b.logged && !b.selfAttested) return '<span style="color:var(--text3)">—</span>';
+        if (!b.verified && !b.logged) return '<span style="color:var(--text3)">—</span>';
         var h = '';
         if (b.verified > 0) {
-          h += '<span style="color:var(--green);font-weight:600">'+b.verified+'</span>';
-          var src = (b.source||'').replace('smartreach+calendar','SR+Cal').replace('smartreach','SR').replace('calendar','Cal');
-          if (src) h += '<span style="font-size:9px;color:var(--text3);margin-left:2px">'+src+'</span>';
-        } else if (b.selfAttested > 0) {
-          // Self-attested: rep confirmed outcome via close-out form — shown amber, not green
-          h += '<span style="color:var(--amber);font-weight:600">'+b.selfAttested+'</span>';
-          h += '<span style="font-size:9px;color:var(--amber);margin-left:2px" title="Rep logged outcome in SamoraTrack close-out form. Not verified by SmartReach or Calendar.">attested</span>';
+          var cfg = CALL_SOURCE_LABELS[b.source] || { icon: '✓', color: 'var(--green)', label: b.source || 'verified' };
+          h += '<span style="color:'+cfg.color+';font-weight:600">'+b.verified+'</span>';
+          h += '<span style="font-size:9px;color:'+cfg.color+';margin-left:3px" title="'+esc(b.detail||'')+'">'+cfg.icon+' '+cfg.label+'</span>';
         } else if (b.logged > 0) {
-          h += '<span style="color:var(--text2)">'+b.logged+'</span><span style="font-size:10px;color:var(--text3)"> lgd</span>';
+          h += '<span style="color:var(--text3)">'+b.logged+' lgd</span>';
+        }
+        if (b.seqNotDateAccurate && b.seqVerified > 0) {
+          h += '<br><span style="font-size:9px;color:var(--text3)" title="Seq shows '+b.seqVerified+' total — excluded from today count (no per-event timestamp)">SR: '+b.seqVerified+' lifetime</span>';
         }
         return h;
       };
