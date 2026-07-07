@@ -707,6 +707,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
               <button onclick="loadTimeAnalytics()" id="timeAnalyticsBtn" style="padding:9px 10px;border-radius:10px;background:rgba(58,110,168,0.08);border:1px solid rgba(58,110,168,0.2);color:var(--blue);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">🕐 Time by account</button>
               <button onclick="computeIcpScores()" id="icp-score-btn" style="padding:9px 10px;border-radius:10px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);color:#6366f1;font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">✦ Score ICP fit</button>
               <button onclick="scanNotetakerEmails()" id="scanCallsBtn" style="padding:9px 10px;border-radius:10px;background:rgba(160,117,42,0.08);border:1px solid rgba(160,117,42,0.2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">📧 Scan call emails</button>
+              <button onclick="retagSeqChannels()" id="retagSeqBtn" style="padding:9px 10px;border-radius:10px;background:rgba(192,82,63,0.08);border:1px solid rgba(192,82,63,0.2);color:var(--coral);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">🏷 Fix channel tags</button>
             </div>
             <!-- Output areas -->
             <div id="samLocalIntelOutput" style="margin-top:12px"></div>
@@ -3527,6 +3528,24 @@ async function syncNotetaker() {
     if (typeof loadPipeline === 'function') loadPipeline();
   } catch(e) { if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: '+esc(e.message)+'</div>'; }
   if (btn) { btn.textContent = '🎙 Sync calls'; btn.disabled = false; }
+}
+
+async function retagSeqChannels() {
+  var btn = document.getElementById('retagSeqBtn');
+  var out = document.getElementById('seqSyncOutput');
+  if (btn) { btn.textContent = '🏷 Retagging…'; btn.disabled = true; }
+  if (out) out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">Scanning sequencing signals and fixing channel tags based on campaign names…</div>';
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'retag_seq_channels'}) });
+    var d = await r.json();
+    if (!d.ok) { if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral)">'+esc(d.error||'Failed')+'</div>'; return; }
+    if (out) out.innerHTML = '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px">' +
+      '<div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:4px">🏷 Channel tags fixed</div>' +
+      '<div style="font-size:11px;color:var(--text3)">Scanned '+d.total+' signals · retagged '+d.retagged+' as call/LinkedIn/WhatsApp based on campaign names</div>' +
+      (d.retagged > 0 ? '<div style="font-size:10px;color:var(--text3);margin-top:4px">Run Coverage again to see updated verification</div>' : '<div style="font-size:10px;color:var(--text3);margin-top:4px">All signals already correctly tagged. If calls still show unverified — campaign name doesn\'t contain call keywords. Rename the campaign in SmartReach to include "Call" or "Phone".</div>') +
+    '</div>';
+  } catch(e) { if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: '+esc(e.message)+'</div>'; }
+  if (btn) { btn.textContent = '🏷 Fix channel tags'; btn.disabled = false; }
 }
 
 async function syncSequencing() {
