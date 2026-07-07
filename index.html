@@ -152,6 +152,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 .panel.active{display:block}
 @keyframes fadeUp{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
 @keyframes slideIn{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 .add-box{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
 .add-box:focus-within{border-color:var(--gold)}
 .ab-row{display:flex;gap:0;align-items:center;background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:0;overflow:hidden;transition:border-color 0.2s}.ab-row:focus-within{border-color:var(--gold)}
@@ -644,6 +645,8 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 
   <!-- ── SAM Agent ── -->
   <div class="panel" id="panel-signals" style="padding-bottom:160px">
+
+    <!-- Self / Team toggle (managers only) -->
     <div id="samModeToggle" style="display:none;margin-bottom:14px">
       <div style="display:inline-flex;background:var(--surface2);border:1px solid var(--border2);border-radius:20px;padding:3px">
         <button id="samModeSelfBtn" onclick="setSamMode('self')" style="padding:6px 16px;border-radius:16px;border:none;background:var(--gold);color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Self</button>
@@ -651,126 +654,117 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
       </div>
     </div>
 
-    <!-- ── SELF MODE ── -->
+    <!-- ══ SELF MODE ══ -->
     <div id="samSelfMode">
-    <div id="samAlerts" style="margin-bottom:8px"></div>
+      <div id="samAlerts" style="margin-bottom:8px"></div>
 
-    <!-- ── SAM Daily Brief ──────────────────────────────────────────────── -->
-    <div id="samBriefSection" style="margin-bottom:16px;display:none">
-      <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-          <div>
-            <div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em">✦ SAM Brief</div>
-            <div id="samBriefDate" style="font-size:11px;color:var(--text3);margin-top:1px"></div>
+      <!-- ── SAM Brief Card ─────────────────────────────────────────────── -->
+      <div id="samBriefSection" style="display:none;margin-bottom:16px">
+        <div style="background:linear-gradient(135deg,rgba(160,117,42,0.08) 0%,rgba(160,117,42,0.03) 100%);border:1px solid rgba(160,117,42,0.25);border-radius:16px;padding:16px 18px;position:relative;overflow:hidden">
+          <div style="position:absolute;top:0;right:0;width:80px;height:80px;background:radial-gradient(circle,rgba(160,117,42,0.12) 0%,transparent 70%);pointer-events:none"></div>
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
+            <div>
+              <div style="font-family:'EB Garamond',Georgia,serif;font-size:15px;font-weight:600;color:var(--text)">✦ SAM Brief</div>
+              <div id="samBriefDate" style="font-size:11px;color:var(--text3);margin-top:1px"></div>
+            </div>
+            <button onclick="loadSamBrief(true)" id="samBriefRefreshBtn" title="Refresh brief" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;padding:2px 6px;border-radius:6px">↻</button>
           </div>
-          <button onclick="loadSamBrief(true)" id="samBriefRefreshBtn" style="padding:4px 10px;border-radius:20px;background:rgba(160,117,42,0.1);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;cursor:pointer">↻</button>
+          <div id="samBriefOutput"><div style="font-size:12px;color:var(--text3)">Loading your brief…</div></div>
         </div>
-        <div id="samBriefOutput"><div style="font-size:12px;color:var(--text3)">Loading your brief…</div></div>
       </div>
-    </div>
 
-    <!-- ── Sales Habits ──────────────────────────────────────────────────── -->
-    <div id="samHabitsSection" style="margin-bottom:16px;display:none">
-      <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-          <div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em">⚡ Daily Habits</div>
-          <button onclick="openHabitEditor()" style="padding:4px 10px;border-radius:20px;background:rgba(160,117,42,0.1);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;cursor:pointer">+ Edit habits</button>
-        </div>
-        <div id="samHabitsOutput"><div style="font-size:12px;color:var(--text3);font-style:italic">No habits configured. Add recurring activities to auto-generate daily tasks.</div></div>
-      </div>
-    </div>
-    <div id="samGmailStatus" style="margin-bottom:16px">
-      <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px">
-        <div>
-          <div style="font-size:13px;font-weight:500;color:var(--text)" id="samGmailLabel">Gmail not connected</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:2px" id="samGmailSub">Connect Gmail or Outlook to see live email signals</div>
-        </div>
-        <div style="display:flex;gap:6px;flex-shrink:0">
-          <button id="samGmailBtn" onclick="connectGmail()" style="padding:7px 14px;border-radius:var(--radius-sm);background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">Connect Gmail</button>
-          <button id="samOutlookBtn" onclick="connectOutlook()" style="padding:7px 14px;border-radius:var(--radius-sm);background:var(--blue);border:none;color:#fff;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">Connect Outlook</button>
+      <!-- Email connection status (compact, no connect buttons — those live in You tab) -->
+      <div id="samConnectionBanner" style="display:none;margin-bottom:12px">
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <div style="font-size:12px;color:var(--text3)" id="samGmailSub">Connect Gmail or Outlook to see signals</div>
+          <button onclick="switchTab('you')" style="padding:5px 12px;border-radius:8px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0">Connect →</button>
         </div>
       </div>
-    </div>
-    <div id="samLocalIntelSection" style="margin-bottom:16px;display:none">
-      <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-          <div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em">⚡ SAM Intelligence</div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <button onclick="runLocalIntelligence()" id="localIntelBtn" style="padding:5px 12px;border-radius:20px;background:rgba(160,117,42,0.1);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Scan channels</button>
-            <button onclick="runExternalSignals()" id="externalSignalsBtn" style="padding:5px 12px;border-radius:20px;background:rgba(58,110,168,0.1);border:1px solid var(--border2);color:var(--blue);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">🌐 Market signals</button>
-            <button onclick="syncSequencing()" id="seqSyncBtn" style="padding:5px 12px;border-radius:20px;background:rgba(74,140,92,0.1);border:1px solid var(--border2);color:var(--green);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">↺ Sync</button>
-            <button onclick="loadSequencingStats()" id="seqStatsBtn" style="padding:5px 12px;border-radius:20px;background:rgba(74,140,92,0.1);border:1px solid var(--border2);color:var(--green);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">📊 Seq stats</button>
-            <button onclick="computeIcpScores()" id="icp-score-btn" style="padding:5px 12px;border-radius:20px;background:rgba(99,102,241,0.1);border:1px solid var(--border2);color:#6366f1;font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">✦ Score ICP fit</button>
-            <button onclick="syncNotetaker()" id="notetakerSyncBtn" style="padding:5px 12px;border-radius:20px;background:rgba(160,117,42,0.1);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">🎙 Sync calls</button>
-            <button onclick="scanNotetakerEmails()" id="scanCallsBtn" style="padding:5px 12px;border-radius:20px;background:rgba(160,117,42,0.1);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">📧 Scan call emails</button>
-            <button onclick="openNotetakerConnect()" style="padding:5px 12px;border-radius:20px;background:rgba(74,140,92,0.1);border:1px solid var(--border2);color:var(--green);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">🔌 Connect notetaker</button>
-            <button onclick="loadTimeAnalytics()" id="timeAnalyticsBtn" style="padding:5px 12px;border-radius:20px;background:rgba(58,110,168,0.1);border:1px solid var(--border2);color:var(--blue);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">🕐 Time by account</button>
+      <!-- Hidden label kept for JS compatibility -->
+      <span id="samGmailLabel" style="display:none"></span>
+      <span id="samGmailBtn" style="display:none"></span>
+      <span id="samOutlookBtn" style="display:none"></span>
+
+      <!-- ── Sub-tab nav ──────────────────────────────────────────────────── -->
+      <div style="display:flex;gap:2px;background:var(--surface2);border-radius:12px;padding:3px;margin-bottom:16px" id="samSubNav">
+        <button id="ssTab-signal"   onclick="setSamSubTab('signal')"   style="flex:1;padding:8px 4px;border:none;border-radius:9px;background:var(--gold);color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">📊 Signal</button>
+        <button id="ssTab-coverage" onclick="setSamSubTab('coverage')" style="flex:1;padding:8px 4px;border:none;border-radius:9px;background:transparent;color:var(--text2);font-family:var(--sans);font-size:12px;font-weight:500;cursor:pointer">✅ Coverage</button>
+        <button id="ssTab-ivr"      onclick="setSamSubTab('ivr')"      style="flex:1;padding:8px 4px;border:none;border-radius:9px;background:transparent;color:var(--text2);font-family:var(--sans);font-size:12px;font-weight:500;cursor:pointer">🎯 Intent</button>
+      </div>
+
+      <!-- ══ Signal sub-tab ══ -->
+      <div id="samSub-signal">
+        <!-- Actions row: compact icon buttons -->
+        <div id="samLocalIntelSection" style="margin-bottom:14px;display:none">
+          <div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:12px 14px">
+            <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">Actions</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+              <button onclick="runLocalIntelligence()" id="localIntelBtn" style="padding:9px 10px;border-radius:10px;background:rgba(160,117,42,0.08);border:1px solid rgba(160,117,42,0.2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">⚡ Scan channels</button>
+              <button onclick="syncSequencing()" id="seqSyncBtn" style="padding:9px 10px;border-radius:10px;background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);color:var(--green);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">↺ Sync sequences</button>
+              <button onclick="runExternalSignals()" id="externalSignalsBtn" style="padding:9px 10px;border-radius:10px;background:rgba(58,110,168,0.08);border:1px solid rgba(58,110,168,0.2);color:var(--blue);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">🌐 Market signals</button>
+              <button onclick="syncNotetaker()" id="notetakerSyncBtn" style="padding:9px 10px;border-radius:10px;background:rgba(160,117,42,0.08);border:1px solid rgba(160,117,42,0.2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">🎙 Sync calls</button>
+              <button onclick="loadSequencingStats()" id="seqStatsBtn" style="padding:9px 10px;border-radius:10px;background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);color:var(--green);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">📊 Seq stats</button>
+              <button onclick="loadTimeAnalytics()" id="timeAnalyticsBtn" style="padding:9px 10px;border-radius:10px;background:rgba(58,110,168,0.08);border:1px solid rgba(58,110,168,0.2);color:var(--blue);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">🕐 Time by account</button>
+              <button onclick="computeIcpScores()" id="icp-score-btn" style="padding:9px 10px;border-radius:10px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);color:#6366f1;font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">✦ Score ICP fit</button>
+              <button onclick="scanNotetakerEmails()" id="scanCallsBtn" style="padding:9px 10px;border-radius:10px;background:rgba(160,117,42,0.08);border:1px solid rgba(160,117,42,0.2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">📧 Scan call emails</button>
+            </div>
+            <!-- Output areas -->
+            <div id="samLocalIntelOutput" style="margin-top:12px"></div>
+            <div id="seqSyncOutput" style="margin-top:10px"></div>
+            <div id="seqStatsOutput" style="margin-top:10px"></div>
+            <div id="timeAnalyticsOutput" style="margin-top:10px"></div>
+            <div id="externalSignalsOutput" style="margin-top:10px"></div>
           </div>
         </div>
-        <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Gmail signals · market intelligence · sequencing activity (email/LinkedIn/calls/WhatsApp).</div>
-        <div id="samLocalIntelOutput"></div>
-        <div id="seqSyncOutput" style="margin-top:10px"></div>
-        <div id="seqStatsOutput" style="margin-top:10px"></div>
-        <div id="timeAnalyticsOutput" style="margin-top:10px"></div>
-        <div id="externalSignalsOutput" style="margin-top:10px"></div>
-      </div>
-    </div>
-    <div id="samCoverageSection" style="margin-bottom:16px;display:none">
-      <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-          <div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em">⚡ Account Coverage</div>
-          <button onclick="runCoverageCheck()" id="coverageCheckBtn" style="padding:5px 12px;border-radius:20px;background:rgba(160,117,42,0.1);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Check today</button>
-        </div>
-        <div id="samCoverageOutput"></div>
-      </div>
-    </div>
-    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:16px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <div>
-          <div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em">⚡ Intent vs Reality</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:2px">Your logged tasks vs what actually happened</div>
-        </div>
-        <button onclick="runIntentVsReality()" id="ivrBtn" style="padding:5px 12px;border-radius:20px;background:rgba(160,117,42,0.1);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap">Check this week</button>
-      </div>
-      <div id="ivrOutput"></div>
-    </div>
-    <div id="samFeed">
-      <div style="text-align:center;padding:40px 20px;color:var(--text3)">
-        <div style="font-size:32px;margin-bottom:12px;opacity:0.4">⚡</div>
-        <div style="font-size:14px;font-weight:500;color:var(--text2);margin-bottom:6px">Loading signals…</div>
-        <div style="font-size:12px">Connect Gmail to see live email signals for your accounts</div>
-      </div>
-    </div>
-    <div style="margin:16px 0">
-      <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 14px;display:flex;gap:8px;margin-bottom:8px">
-        <input id="samSearchInput" placeholder="Search account — e.g. Ferrero, Marico…" style="flex:1;background:transparent;border:none;outline:none;font-family:var(--sans);font-size:14px;color:var(--text)" onkeydown="if(event.key==='Enter')runSamAccountSearch()"/>
-        <button onclick="runSamAccountSearch()" style="padding:6px 14px;border-radius:var(--radius-sm);background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Search</button>
-      </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
-        <span style="font-size:11px;color:var(--text3);align-self:center">Period:</span>
-        <button class="sam-period-btn active" id="period-all" onclick="setSamPeriod('all',this)">All time</button>
-        <button class="sam-period-btn" id="period-90" onclick="setSamPeriod('90',this)">90 days</button>
-        <button class="sam-period-btn" id="period-60" onclick="setSamPeriod('60',this)">60 days</button>
-        <button class="sam-period-btn" id="period-30" onclick="setSamPeriod('30',this)">30 days</button>
-        <button class="sam-period-btn" id="period-custom" onclick="setSamPeriod('custom',this)">Custom</button>
-      </div>
-      <div id="samCustomRange" style="display:none;gap:8px;align-items:center;flex-wrap:wrap">
-        <span style="font-size:11px;color:var(--text3)">From:</span>
-        <input type="date" id="samDateFrom" style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none"/>
-        <span style="font-size:11px;color:var(--text3)">To:</span>
-        <input type="date" id="samDateTo" style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none"/>
-        <button onclick="runSamAccountSearch()" style="padding:5px 12px;border-radius:var(--radius-sm);background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Apply</button>
-      </div>
-    </div>
-    <div id="samSearchOutput"></div>
-    <div class="sam-chat-bar" id="samChatBar">
-      <input class="sam-chat-input" id="samChatInput" placeholder="Ask SAM — check signals for Ferrero, who needs follow-up…" onkeydown="if(event.key==='Enter')runSamQuery()"/>
-      <button class="sam-chat-btn" onclick="runSamQuery()" style="font-family:'EB Garamond',Georgia,serif;font-size:18px;font-weight:600;letter-spacing:-0.02em">S</button>
-    </div>
-    <div id="samChatOutput" style="margin-top:12px"></div>
-    </div>
 
-    <!-- ── TEAM MODE ── -->
+        <!-- Signal feed + account search -->
+        <div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:10px 14px;display:flex;gap:8px;margin-bottom:8px">
+          <input id="samSearchInput" placeholder="Search account — Ferrero, Shell, Marico…" style="flex:1;background:transparent;border:none;outline:none;font-family:var(--sans);font-size:13px;color:var(--text)" onkeydown="if(event.key==='Enter')runSamAccountSearch()"/>
+          <button onclick="runSamAccountSearch()" style="padding:6px 14px;border-radius:8px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Search</button>
+        </div>
+        <div id="samSearchOutput"></div>
+        <div id="samFeed">
+          <div style="text-align:center;padding:40px 20px;color:var(--text3)">
+            <div style="font-size:32px;margin-bottom:12px;opacity:0.4">⚡</div>
+            <div style="font-size:14px;font-weight:500;color:var(--text2);margin-bottom:6px">Run "Scan channels" to see signals</div>
+            <div style="font-size:12px">Scans Gmail · Calendar · Sequences · Notetaker</div>
+          </div>
+        </div>
+        <div class="sam-chat-bar" id="samChatBar">
+          <input class="sam-chat-input" id="samChatInput" placeholder="Ask SAM anything about your pipeline…" onkeydown="if(event.key==='Enter')runSamQuery()"/>
+          <button class="sam-chat-btn" onclick="runSamQuery()" style="font-family:'EB Garamond',Georgia,serif;font-size:18px;font-weight:600;letter-spacing:-0.02em">S</button>
+        </div>
+        <div id="samChatOutput" style="margin-top:12px"></div>
+      </div>
+
+      <!-- ══ Coverage sub-tab ══ -->
+      <div id="samSub-coverage" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div style="font-size:13px;font-weight:600;color:var(--text)">✅ Account Coverage</div>
+          <button onclick="runCoverageCheck(null,null,'samCoverageOutput')" id="coverageCheckBtn" style="padding:7px 16px;border-radius:20px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Check today</button>
+        </div>
+        <div id="samCoverageSection">
+          <div id="samCoverageOutput"></div>
+        </div>
+      </div>
+
+      <!-- ══ Intent vs Reality sub-tab ══ -->
+      <div id="samSub-ivr" style="display:none">
+        <div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:14px 16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <div>
+              <div style="font-size:13px;font-weight:600;color:var(--text)">🎯 Intent vs Reality</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:2px">What you logged vs what actually happened</div>
+            </div>
+            <button onclick="runIntentVsReality(null,'ivrOutput')" id="ivrBtn" style="padding:7px 16px;border-radius:20px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Check last week</button>
+          </div>
+          <div id="ivrOutput"></div>
+        </div>
+      </div>
+
+    </div><!-- /samSelfMode -->
+
+    <!-- ══ TEAM MODE ══ -->
     <div id="samTeamMode" style="display:none">
       <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:12px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
@@ -794,14 +788,8 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
           <span style="font-size:11px;color:var(--text3)">Send to:</span>
-          <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
-            <input type="checkbox" id="digestToManager" checked style="accent-color:var(--gold)"/>
-            <span style="font-size:12px;color:var(--text2)">Manager</span>
-          </label>
-          <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
-            <input type="checkbox" id="digestToReps" checked style="accent-color:var(--gold)"/>
-            <span style="font-size:12px;color:var(--text2)">All reps</span>
-          </label>
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" id="digestToManager" checked style="accent-color:var(--gold)"/><span style="font-size:12px;color:var(--text2)">Manager</span></label>
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" id="digestToReps" checked style="accent-color:var(--gold)"/><span style="font-size:12px;color:var(--text2)">All reps</span></label>
         </div>
         <div style="display:flex;gap:8px;align-items:center">
           <input id="digestExtraEmails" placeholder="Add email IDs (comma separated)" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none"/>
@@ -811,25 +799,16 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
       <div id="digestOutput" style="margin-bottom:12px"></div>
       <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:16px">
         <div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">⚡ Account Search — Team</div>
-        <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Searches Gmail across every rep mapped to you, plus extracted product/pricing/competitor intelligence for the account</div>
         <div style="display:flex;gap:8px;margin-bottom:8px">
           <input id="mgrSearchInput" placeholder="Search account — Ferrero, Marico…" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none" onkeydown="if(event.key==='Enter')runManagerSearch()"/>
           <button onclick="runManagerSearch()" style="padding:7px 14px;border-radius:var(--radius-sm);background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0">Search</button>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
-          <span style="font-size:11px;color:var(--text3);align-self:center">Period:</span>
+          <span style="font-size:11px;color:var(--text3)">Period:</span>
           <button class="sam-period-btn active" id="mgr-period-all" onclick="setMgrPeriod('all',this)">All time</button>
           <button class="sam-period-btn" id="mgr-period-30" onclick="setMgrPeriod('30',this)">30 days</button>
           <button class="sam-period-btn" id="mgr-period-7" onclick="setMgrPeriod('7',this)">This week</button>
           <button class="sam-period-btn" id="mgr-period-today" onclick="setMgrPeriod('today',this)">Today</button>
-          <button class="sam-period-btn" id="mgr-period-custom" onclick="setMgrPeriod('custom',this)">Custom range</button>
-        </div>
-        <div id="mgrCustomRange" style="display:none;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:4px">
-          <span style="font-size:11px;color:var(--text3)">From:</span>
-          <input type="date" id="mgrDateFrom" style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none"/>
-          <span style="font-size:11px;color:var(--text3)">To:</span>
-          <input type="date" id="mgrDateTo" style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none"/>
-          <button onclick="runManagerSearch()" style="padding:5px 12px;border-radius:var(--radius-sm);background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Apply</button>
         </div>
         <div id="mgrSearchOutput" style="margin-top:10px"></div>
       </div>
@@ -1697,17 +1676,29 @@ function setSamMode(mode) {
     if (selfEl) selfEl.style.display = 'block';
     if (teamEl) teamEl.style.display = 'none';
     renderSamAlerts(); loadSamSignals();
-    const covSec = document.getElementById('samCoverageSection'); if (covSec) covSec.style.display = 'block';
-    const localIntelSec = document.getElementById('samLocalIntelSection'); if (localIntelSec) localIntelSec.style.display = 'block';
-    // Show brief and habits
+    // Show relevant sections
+    var localIntelSec = document.getElementById('samLocalIntelSection'); if (localIntelSec) localIntelSec.style.display = 'block';
     var briefSec = document.getElementById('samBriefSection'); if (briefSec) briefSec.style.display = 'block';
-    var habitsSec = document.getElementById('samHabitsSection'); if (habitsSec) habitsSec.style.display = 'block';
-    // Load brief if not already loaded today
+    // Init sub-tabs
+    setSamSubTab(_samSubTab || 'signal');
+    // Brief date
     var briefDate = document.getElementById('samBriefDate');
-    var today = new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
-    if (briefDate) briefDate.textContent = today;
+    if (briefDate) briefDate.textContent = new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
     loadSamBrief(false);
     loadHabitsSection();
+    // Show connection banner if not connected (non-blocking — check status async)
+    fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'get_email_provider'}) })
+      .then(function(r){ return r.json(); }).then(function(d) {
+        var banner = document.getElementById('samConnectionBanner');
+        var sub    = document.getElementById('samGmailSub');
+        if (d.connected) {
+          if (banner) banner.style.display = 'none';
+          if (sub) sub.textContent = '✓ ' + (d.provider==='microsoft'?'Outlook':'Gmail') + ' · ' + esc(d.email);
+        } else {
+          if (banner) banner.style.display = 'block';
+          if (sub) sub.textContent = 'Connect Gmail or Outlook in You tab to enable signal verification';
+        }
+      }).catch(function(){});
   }
 }
 function switchToOrgPanel() {
@@ -3104,9 +3095,96 @@ async function loadSequencingStats() {
   if (btn) { btn.textContent = '📊 Seq stats'; btn.disabled = false; }
 }
 
+// ── SAM Sub-tab navigation ─────────────────────────────────────────────────────
+var _samSubTab = 'signal';
+function setSamSubTab(tab) {
+  _samSubTab = tab;
+  ['signal','coverage','ivr'].forEach(function(t) {
+    var content = document.getElementById('samSub-'+t);
+    var btn     = document.getElementById('ssTab-'+t);
+    if (content) content.style.display = t === tab ? 'block' : 'none';
+    if (btn) {
+      btn.style.background = t === tab ? 'var(--gold)' : 'transparent';
+      btn.style.color      = t === tab ? '#18160F' : 'var(--text2)';
+      btn.style.fontWeight = t === tab ? '600' : '500';
+    }
+  });
+  // Auto-run coverage when switching to that tab for the first time
+  if (tab === 'coverage') {
+    var covOut = document.getElementById('samCoverageOutput');
+    if (covOut && !covOut.innerHTML.trim()) runCoverageCheck(null, null, 'samCoverageOutput');
+  }
+  // Auto-run IVR when switching to that tab
+  if (tab === 'ivr') {
+    var ivrOut = document.getElementById('ivrOutput');
+    if (ivrOut && !ivrOut.innerHTML.trim()) runIntentVsReality(null, 'ivrOutput');
+  }
+}
+
 // ── SAM Daily Brief ───────────────────────────────────────────────────────────
 var _briefLoadedDate = '';
-var _userHabits = null;
+async function loadSamBrief(force) {
+  var todayKey2 = new Date().toISOString().split('T')[0];
+  if (!force && _briefLoadedDate === todayKey2) return;
+  var out = document.getElementById('samBriefOutput');
+  var btn = document.getElementById('samBriefRefreshBtn');
+  if (!out) return;
+  if (btn) btn.textContent = '↻';
+  out.innerHTML = '<div style="font-size:12px;color:var(--text3);display:flex;align-items:center;gap:6px"><span style="animation:spin 1s linear infinite;display:inline-block">↻</span> SAM is reading your pipeline…</div>';
+  try {
+    var r = await fetch(EDGE_FN_URL, {
+      method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'generate_daily_brief' })
+    });
+    var d = await r.json();
+    if (!d.ok) { out.innerHTML = '<div style="font-size:12px;color:var(--text3)">'+esc(d.error||'Brief unavailable — check Gemini API key in Samora admin')+'</div>'; return; }
+    _briefLoadedDate = todayKey2;
+
+    var brief = d.brief;
+    var html = '';
+
+    if (d.brief_structured && brief && typeof brief === 'object') {
+      // Structured JSON — clean, reliable rendering
+      var topAccts = brief.top_accounts || [];
+      if (topAccts.length) {
+        html += '<div style="margin-bottom:12px">';
+        html += '<div style="font-size:10px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">📊 Top 3 accounts today</div>';
+        topAccts.slice(0,3).forEach(function(a) {
+          var scoreColor = a.score >= 60 ? 'var(--green)' : a.score >= 35 ? 'var(--amber)' : 'var(--text3)';
+          html += '<div style="padding:8px 10px;background:rgba(0,0,0,0.04);border-radius:8px;margin-bottom:5px">';
+          html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">';
+          html += '<span style="font-size:12px;font-weight:600;color:var(--text)">'+esc(a.name)+'</span>';
+          if (a.score) html += '<span style="font-size:10px;font-weight:700;color:'+scoreColor+';background:'+scoreColor+'18;padding:1px 6px;border-radius:4px">'+a.score+'</span>';
+          html += '</div>';
+          if (a.reason) html += '<div style="font-size:11px;color:var(--text3);margin-bottom:3px">'+esc(a.reason)+'</div>';
+          if (a.action) html += '<div style="font-size:11px;font-weight:600;color:var(--gold)">→ '+esc(a.action)+'</div>';
+          html += '</div>';
+        });
+        html += '</div>';
+      }
+      if (brief.calendar_prep && brief.calendar_prep !== 'null') {
+        html += '<div style="margin-bottom:10px"><div style="font-size:10px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px">📅 Calendar prep</div>';
+        html += '<div style="font-size:12px;color:var(--text2);line-height:1.5">'+esc(brief.calendar_prep)+'</div></div>';
+      }
+      if (brief.coaching_signal) {
+        html += '<div style="margin-bottom:10px"><div style="font-size:10px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px">⚡ Coaching</div>';
+        html += '<div style="font-size:12px;color:var(--text2);line-height:1.5">'+esc(brief.coaching_signal)+'</div></div>';
+      }
+      if (brief.priority_before_noon) {
+        html += '<div style="padding:8px 12px;background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);border-radius:8px">';
+        html += '<div style="font-size:10px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:3px">🎯 Priority before noon</div>';
+        html += '<div style="font-size:12px;font-weight:600;color:var(--text)">'+esc(brief.priority_before_noon)+'</div></div>';
+      }
+    } else if (typeof brief === 'string' && brief.length > 10) {
+      // Fallback: render raw text cleanly
+      html = '<div style="font-size:12px;color:var(--text2);white-space:pre-wrap;line-height:1.7">'+esc(brief)+'</div>';
+    } else {
+      html = '<div style="font-size:12px;color:var(--text3)">Brief could not be generated — run Scan channels first to build pipeline context.</div>';
+    }
+
+    out.innerHTML = html;
+  } catch(e) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: '+esc(e.message)+'</div>'; }
+}
 async function loadSamBrief(force) {
   var todayKey2 = new Date().toISOString().split('T')[0];
   if (!force && _briefLoadedDate === todayKey2) return; // already loaded today
