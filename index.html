@@ -485,6 +485,10 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
       <button class="today-section-btn" id="tsb-misses" onclick="setTodaySection('misses')">○ Misses</button>
     </div>
     <div class="add-box" id="today-add-box">
+      <div id="calendarSyncRow" style="display:none;margin-bottom:8px;padding:6px 8px;background:var(--surface2);border-radius:8px;font-size:12px;color:var(--text3)">
+        <span id="calSyncStatus">📅 Checking calendar…</span>
+        <button onclick="dismissCalSync()" style="float:right;background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;line-height:1">✕</button>
+      </div>
       <div id="today-anon-row" style="display:none;margin-bottom:8px">
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--text2)">
           <input type="checkbox" id="todayAnonToggle" style="accent-color:var(--gold);width:15px;height:15px">
@@ -1003,6 +1007,29 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
         <span>📋 Manage task templates</span><span class="you-arrow">›</span>
       </button>
     </div>
+    <div class="you-section-title" style="margin-top:16px">Email &amp; Calendar</div>
+    <div class="admin-card" style="margin-bottom:0">
+      <div style="margin-bottom:12px">
+        <div style="font-size:13px;font-weight:500;color:var(--text)" id="youEmailConnLabel">Not connected</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:2px" id="youEmailConnSub">Connect to enable Coverage verification, IVR, calendar sync and SAM Brief</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button id="youGmailBtn" onclick="connectGmail()" style="padding:7px 14px;border-radius:8px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">📧 Connect Gmail</button>
+        <button id="youOutlookBtn" onclick="connectOutlook()" style="padding:7px 14px;border-radius:8px;background:var(--blue);border:none;color:#fff;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">📧 Connect Outlook</button>
+      </div>
+    </div>
+    <div class="you-section-title" style="margin-top:16px">Notetaker</div>
+    <div class="admin-card" style="margin-bottom:0">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Connect your personal meeting recorder for direct transcript import and richer call signals.</div>
+      <div id="youNotetakerStatus" style="font-size:12px;color:var(--text3);margin-bottom:8px">No notetaker connected</div>
+      <button onclick="openNotetakerConnect()" style="padding:7px 14px;border-radius:8px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">🔌 Manage connections</button>
+    </div>
+    <div class="you-section-title" style="margin-top:16px">Daily Habits</div>
+    <div class="admin-card" style="margin-bottom:0">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Auto-generate daily tasks from recurring routines — LinkedIn outreach, email batches, pipeline reviews.</div>
+      <div id="youHabitsPreview" style="font-size:12px;color:var(--text3);font-style:italic;margin-bottom:8px">Loading…</div>
+      <button onclick="openHabitEditor()" style="padding:7px 14px;border-radius:8px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">⚡ Edit habits</button>
+    </div>
     <div class="you-section-title" style="margin-top:16px">Session</div>
     <div class="you-menu">
       <button class="you-menu-item danger" onclick="doLogout()">
@@ -1364,6 +1391,11 @@ function launchApp() {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   const todayNav = document.getElementById('nav-today'); if (todayNav) todayNav.classList.add('active');
   _lastCalDate = null; render();
+  // Sync calendar events into today's task suggestions after a short delay
+  setTimeout(function() {
+    if (currentUser?.token) syncCalendarTasks(false);
+    refreshYouTabConnections();
+  }, 1500);
   setTimeout(function() { _lastCalDate = null; renderCalStrip(); }, 0);
   setTimeout(initSortable, 200);
   if (SB_URL && SB_KEY) { syncDown().then(() => { runCarryOver(); _lastCalDate = null; render(); }); }
@@ -1633,7 +1665,7 @@ function switchTab(tab) {
   if (['tasks','issues','wins','misses'].includes(tab)) { if (tab !== 'misses') setTodaySection(tab); renderToday(); }
   if (tab === 'today') { setTodaySection('tasks'); renderToday(); }
   if (tab === 'settings') renderSettings();
-  if (tab === 'you') renderYouPanel();
+  if (tab === 'you') { renderYouPanel(); refreshYouTabConnections(); }
   if (tab === 'review') renderSummary();
   if (tab === 'exec') loadExecDashboard();
   if (tab === 'signals') {
@@ -1973,6 +2005,130 @@ async function handleMicrosoftCallback(code) {
     var btn2 = document.getElementById('samOutlookBtn');
     if (btn2) { btn2.textContent = 'Connect Outlook'; btn2.disabled = false; }
   }
+}
+
+// ── Calendar → Today task sync ─────────────────────────────────────────────────
+var _calTasksFetched = '';
+async function syncCalendarTasks(force) {
+  var today2 = todayKey();
+  if (!force && _calTasksFetched === today2) return;
+  var row = document.getElementById('calendarSyncRow');
+  var status = document.getElementById('calSyncStatus');
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'get_calendar_tasks', date: today2}) });
+    var d = await r.json();
+    if (!d.ok || !d.tasks || !d.tasks.length) return;
+    _calTasksFetched = today2;
+    var existing = (dayData(today2).tasks || []).map(function(t){return t.text.toLowerCase();});
+    var newTasks = d.tasks.filter(function(t){ return !existing.some(function(e){return e.includes(t.title.toLowerCase().slice(0,20));}); });
+    if (!newTasks.length) return;
+    if (row && status) {
+      row.style.display = 'block';
+      status.innerHTML = '📅 ' + newTasks.length + ' calendar event' + (newTasks.length!==1?'s':'') + ' today — ' +
+        newTasks.map(function(t){ return '<button onclick="addCalendarTask(\''+esc(t.text)+'\',\''+esc(t.account_name||'')+'\',\''+esc(t.agenda||'')+'\',\''+esc(t.calendar_event_id||'')+'\')" style="margin:0 3px;padding:2px 7px;border-radius:10px;background:rgba(160,117,42,0.15);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;cursor:pointer">+'+esc(t.title.slice(0,25))+'</button>'; }).join('') +
+        '<button onclick="addAllCalendarTasks('+JSON.stringify(newTasks).replace(/'/g,"&#39;")+')" style="margin-left:6px;padding:2px 8px;border-radius:10px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Add all</button>';
+    }
+  } catch(e) { /* non-fatal */ }
+}
+
+function addCalendarTask(text, accountName, agenda, calEventId) {
+  var d = dayData(viewDate);
+  d.tasks.push({ text, done:false, priority:false, source:'calendar', calendarEventId: calEventId||null, account:accountName||null, completionNote:agenda||null });
+  save(viewDate); render();
+  showToast('📅 Added from calendar');
+}
+
+function addAllCalendarTasks(tasks) {
+  var d = dayData(viewDate);
+  var existing = d.tasks.map(function(t){return t.text.toLowerCase();});
+  tasks.forEach(function(t) {
+    if (!existing.some(function(e){return e.includes(t.title.toLowerCase().slice(0,20));}))
+      d.tasks.push({ text:t.text, done:false, priority:false, source:'calendar', calendarEventId:t.calendar_event_id||null, account:t.account_name||null, completionNote:t.agenda||null });
+  });
+  save(viewDate); render();
+  var row = document.getElementById('calendarSyncRow'); if (row) row.style.display = 'none';
+  showToast('📅 Calendar events added as tasks');
+}
+
+function dismissCalSync() {
+  var row = document.getElementById('calendarSyncRow'); if (row) row.style.display = 'none';
+}
+
+// ── You tab refresh ────────────────────────────────────────────────────────────
+async function refreshYouTabConnections() {
+  // Sync connection status labels from edge function
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'get_email_provider'}) });
+    var d = await r.json();
+    var lbl = document.getElementById('youEmailConnLabel');
+    var sub = document.getElementById('youEmailConnSub');
+    var gmailBtn = document.getElementById('youGmailBtn');
+    var outlookBtn = document.getElementById('youOutlookBtn');
+    if (d.connected) {
+      var icon = d.provider === 'microsoft' ? '📧 Outlook' : '📧 Gmail';
+      if (lbl) lbl.innerHTML = '<span style="color:var(--green)">✓</span> ' + icon + ' connected — ' + esc(d.email);
+      if (sub) sub.textContent = 'Signals refreshed from your ' + (d.provider === 'microsoft' ? 'Outlook' : 'Gmail') + ' account';
+      if (gmailBtn && d.provider === 'google') { gmailBtn.textContent = '✓ Gmail connected'; gmailBtn.style.background = 'var(--green)'; }
+      if (outlookBtn && d.provider === 'microsoft') { outlookBtn.textContent = '✓ Outlook connected'; outlookBtn.style.background = 'var(--green)'; }
+    }
+    // Also update SAM tab label
+    var samLbl = document.getElementById('samGmailLabel'); var samSub = document.getElementById('samGmailSub');
+    if (d.connected) {
+      if (samLbl) samLbl.textContent = '✓ ' + (d.provider === 'microsoft' ? 'Outlook' : 'Gmail') + ' connected';
+      if (samSub) samSub.textContent = 'Signals refreshed · ' + esc(d.email);
+    }
+  } catch(e) {}
+
+  // Habits preview
+  if (_userHabits && _userHabits.length) {
+    var prev = document.getElementById('youHabitsPreview');
+    if (prev) prev.textContent = _userHabits.filter(function(h){return h.active;}).length + ' active habits — auto-generating tasks daily';
+  }
+
+  // Notetaker status
+  try {
+    var nr = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'get_user_connections'}) });
+    var nd = await nr.json();
+    var ns = document.getElementById('youNotetakerStatus');
+    if (ns && nd.connections && nd.connections.length) {
+      ns.innerHTML = nd.connections.map(function(c){ return '<span style="color:var(--green)">✓ '+esc(c.provider)+(c.provider_email?' ('+esc(c.provider_email)+')':'')+'</span>'; }).join(', ');
+    }
+  } catch(e) {}
+}
+
+// ── Fix market signals — show actual signal content ────────────────────────────
+// The previous implementation only showed the account summary ("4 signals").
+// Re-render the signal cards properly after fetch.
+function renderMarketSignalCard(s) {
+  if (!s) return '';
+  var SIGNAL_TYPE_CONFIG2 = {
+    hiring_signal: { icon: '👥', label: 'Hiring', color: 'var(--blue)' },
+    expansion:     { icon: '📈', label: 'Expansion', color: 'var(--green)' },
+    funding:       { icon: '💰', label: 'Funding', color: 'var(--green)' },
+    leadership:    { icon: '👤', label: 'Leadership change', color: 'var(--amber)' },
+    news:          { icon: '📰', label: 'News', color: 'var(--text3)' },
+    competitor:    { icon: '⚔',  label: 'Competitor move', color: 'var(--coral)' },
+    at_risk:       { icon: '🚨', label: 'Risk signal', color: 'var(--coral)' },
+    hot:           { icon: '🔥', label: 'Hot signal', color: 'var(--gold)' },
+  };
+  var ext = s.extracted || s.signal_payload || {};
+  var sType = s.signal_type || 'news';
+  var cfg = SIGNAL_TYPE_CONFIG2[sType] || { icon: '○', label: sType, color: 'var(--text3)' };
+  var headline = ext.headline || s.raw_text || s.summary || '';
+  var detail   = ext.detail   || s.detail   || '';
+  var sourceUrl = ext.source_url || s.source_url || '';
+  var sourceName = ext.source_name || s.source_name || '';
+  var acctName = s.account_name || '';
+  return '<div style="border-left:3px solid '+cfg.color+';padding:8px 10px;margin-bottom:6px;background:rgba(0,0,0,0.04);border-radius:0 6px 6px 0">' +
+    '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap">' +
+      (acctName ? '<span style="font-size:11px;font-weight:600;color:var(--text)">'+esc(acctName)+'</span><span style="font-size:10px;color:var(--text3)">·</span>' : '') +
+      '<span style="font-size:10px;padding:1px 7px;border-radius:10px;background:'+cfg.color+'20;color:'+cfg.color+';font-weight:600">'+cfg.icon+' '+cfg.label+'</span>' +
+      (s.confidence >= 80 ? '<span style="font-size:10px;color:var(--green)">High confidence</span>' : '') +
+    '</div>' +
+    '<div style="font-size:12px;color:var(--text);line-height:1.5">'+esc(headline.slice(0,160))+'</div>' +
+    (detail ? '<div style="font-size:11px;color:var(--text2);margin-top:3px;line-height:1.4">'+esc(detail.slice(0,180))+'</div>' : '') +
+    (sourceUrl ? '<a href="'+esc(sourceUrl)+'" target="_blank" rel="noopener" style="font-size:10px;color:var(--blue);text-decoration:none;margin-top:3px;display:inline-block">'+esc(sourceName||'Source')+' →</a>' : '') +
+  '</div>';
 }
 
 function connectGmail() {
@@ -2342,20 +2498,25 @@ function setIvrPeriod(outputId, period, btn) {
   if (period !== 'custom') runIntentVsReality(_ivrRepId[outputId], outputId);
 }
 function renderIvrPeriodPicker(outputId) {
-  const active = _ivrPeriod[outputId] || 'week';
-  const mk = function(period, label) {
-    const isActive = active === period;
+  var active = _ivrPeriod[outputId] || 'last_week';
+  var mk = function(period, label) {
+    var isActive = active === period;
     return '<button onclick="setIvrPeriod(\''+outputId+'\',\''+period+'\',this)" style="padding:4px 10px;border-radius:14px;font-size:11px;cursor:pointer;font-family:var(--sans);border:1px solid '+(isActive?'var(--gold)':'var(--border)')+';background:'+(isActive?'var(--gold)':'var(--surface2)')+';color:'+(isActive?'#18160F':'var(--text2)')+'">'+label+'</button>';
   };
-  return '<div id="ivrperiod-'+outputId+'" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">' +
-    mk('today','Today') + mk('week','This week') + mk('month','This month') + mk('custom','Custom') +
-    '</div>' +
-    '<div id="ivrcustom-'+outputId+'" style="display:'+(active==='custom'?'flex':'none')+';gap:8px;align-items:center;margin-bottom:10px">' +
-      '<input type="date" id="ivrfrom-'+outputId+'" style="background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px"/>' +
-      '<span style="font-size:11px;color:var(--text3)">to</span>' +
-      '<input type="date" id="ivrto-'+outputId+'" style="background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px"/>' +
-      '<button onclick="runIntentVsReality(\''+(_ivrRepId[outputId]||'')+'\',\''+outputId+'\')" style="padding:5px 12px;border-radius:6px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Apply</button>' +
-    '</div>';
+  return '<div id="ivrperiod-'+outputId+'" style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px">' +
+    mk('today','Today') +
+    mk('wtd','WTD') +
+    mk('last_week','Last week') +
+    mk('mtd','MTD') +
+    mk('qtd','QTD') +
+    mk('custom','Custom ↗') +
+  '</div>' +
+  '<div id="ivrcustom-'+outputId+'" style="display:'+(active==='custom'?'flex':'none')+';gap:8px;align-items:center;margin-bottom:10px">' +
+    '<input type="date" id="ivrfrom-'+outputId+'" style="background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px"/>' +
+    '<span style="font-size:11px;color:var(--text3)">to</span>' +
+    '<input type="date" id="ivrto-'+outputId+'" style="background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px"/>' +
+    '<button onclick="runIntentVsReality(\''+(_ivrRepId[outputId]||'')+'\',\''+outputId+'\')" style="padding:5px 12px;border-radius:6px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Apply</button>' +
+  '</div>';
 }
 var _ivrAllResults = {};
 var _ivrFilter = {};
@@ -2395,7 +2556,7 @@ function renderIvrResults(outputId) {
 
   // Filter results
   var filtered = filter === 'all' ? allResults :
-    filter === 'verified' ? allResults.filter(function(r) { return r.signal === 'verified' || r.signal === 'verified_hot'; }) :
+    filter === 'verified' ? allResults.filter(function(r) { return r.signal === 'verified' || r.signal === 'verified_hot' || r.signal === 'attested' || r.signal === 'task_done'; }) :
     filter === 'gap'      ? allResults.filter(function(r) { return r.signal === 'gap'; }) :
     filter === 'unverified' ? allResults.filter(function(r) { return r.signal === 'unverified' || r.signal === 'no_source'; }) :
     allResults;
@@ -2415,6 +2576,9 @@ function renderIvrResults(outputId) {
     no_source:       { icon: '○',  color: 'var(--text3)',  bg: 'var(--surface2)',        badge: 'No integration available' },
     internal:        { icon: '📋', color: 'var(--text3)',  bg: 'var(--surface2)',        badge: 'Internal task · not externally verifiable' },
     internal_pending:{ icon: '📋', color: 'var(--text3)',  bg: 'var(--surface2)',        badge: 'Internal task · not done yet' },
+    // Call / LinkedIn / WhatsApp rep-confirmed signals
+    attested:        { icon: '✓',  color: 'var(--green)',  bg: 'rgba(74,140,92,0.08)',  badge: 'Done · outcome logged (self-attested)' },
+    task_done:       { icon: '✓',  color: 'var(--blue)',   bg: 'rgba(58,110,168,0.08)', badge: 'Done · marked complete (no external verification available)' },
   };
 
   filtered.forEach(function(r) {
@@ -2439,10 +2603,16 @@ function renderIvrResults(outputId) {
     var intentBadge = '';
     if (r.intent === 'internal' || r.intent === 'internal_pending') {
       intentBadge = '<div style="font-size:10px;color:var(--text3);margin-top:3px;font-style:italic">📋 Internal task — not externally verifiable</div>';
+    } else if (r.signal === 'attested') {
+      var outcomeLabels = { no_answer:'No answer', spoke_briefly:'Spoke briefly', full_conversation:'Full conversation', meeting_booked:'Meeting booked 🎯', not_interested:'Not interested', requests_sent:'Requests sent', connections_accepted:'Connections accepted', messages_sent:'Messages sent', replies_received:'Replies received' };
+      var outcomeLabel = outcomeLabels[r.activityOutcome] || r.activityOutcome || '';
+      intentBadge = '<div style="font-size:11px;color:var(--green);margin-top:4px;font-weight:600">✓ ' + esc(outcomeLabel) + (r.completionNote ? ' — "' + esc(r.completionNote.slice(0,80)) + '"' : '') + '</div>';
+    } else if (r.signal === 'task_done') {
+      intentBadge = '<div style="font-size:10px;color:var(--blue);margin-top:3px">✓ Marked done — add outcome via "Log outcome" for stronger verification</div>';
     } else if (r.intent === 'linkedin') {
-      intentBadge = '<div style="font-size:10px;color:var(--text3);margin-top:3px">🔗 LinkedIn — verified via Gmail notifications where available</div>';
+      intentBadge = '<div style="font-size:10px;color:var(--text3);margin-top:3px">🔗 LinkedIn — use close-out form to log outcome</div>';
     } else if (r.intent === 'call') {
-      intentBadge = '<div style="font-size:10px;color:var(--text3);margin-top:3px">📞 Call — log outcome when marking done</div>';
+      intentBadge = '<div style="font-size:10px;color:var(--text3);margin-top:3px">📞 Call — use close-out form to log outcome when marking done</div>';
     }
 
     // Quantity mismatch display
@@ -2487,30 +2657,42 @@ async function runIntentVsReality(repId, outputId) {
   if (btn && !isManager) { btn.textContent = 'Scanning…'; btn.disabled = true; }
   var today = todayKey();
   var dateFrom, dateTo, periodLabel;
+  var _calcPeriod = function(period, refDate) {
+    var d = parseDate(refDate);
+    var dow = d.getDay(); // 0=Sun
+    if (period === 'today') return { from: refDate, to: refDate, label: refDate === today ? 'today' : refDate };
+    if (period === 'wtd') {
+      var mon = new Date(d); mon.setDate(d.getDate() - (dow===0?6:dow-1));
+      return { from: dateKey(mon), to: refDate, label: 'WTD' };
+    }
+    if (period === 'last_week') {
+      var thisMon = new Date(d); thisMon.setDate(d.getDate() - (dow===0?6:dow-1));
+      var lastMon = new Date(thisMon); lastMon.setDate(thisMon.getDate() - 7);
+      var lastSun = new Date(thisMon); lastSun.setDate(thisMon.getDate() - 1);
+      return { from: dateKey(lastMon), to: dateKey(lastSun), label: 'Last week' };
+    }
+    if (period === 'mtd') {
+      var m1 = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01';
+      return { from: m1, to: refDate, label: 'MTD' };
+    }
+    if (period === 'qtd') {
+      var qMonth = Math.floor(d.getMonth()/3)*3;
+      var q1 = d.getFullYear()+'-'+String(qMonth+1).padStart(2,'0')+'-01';
+      return { from: q1, to: refDate, label: 'QTD' };
+    }
+    // custom
+    return { from: document.getElementById('ivrfrom-'+outputId)?.value || refDate, to: document.getElementById('ivrto-'+outputId)?.value || refDate, label: 'Custom' };
+  };
+
   if (isManager) {
-    var period = _ivrPeriod[outputId] || 'week';
+    var period = _ivrPeriod[outputId] || 'last_week';
     var teamDateEl = document.getElementById('teamDateInput');
     var viewingDate = (teamDateEl && teamDateEl.value) ? teamDateEl.value : today;
-    if (period === 'today') {
-      dateFrom = dateTo = viewingDate; periodLabel = viewingDate === today ? 'today' : viewingDate;
-    } else if (period === 'week') {
-      var d = parseDate(viewingDate); var day = d.getDay();
-      var monday = new Date(d); monday.setDate(d.getDate() - (day===0?6:day-1));
-      dateFrom = dateKey(monday); dateTo = viewingDate; periodLabel = 'this week';
-    } else if (period === 'month') {
-      var d2 = parseDate(viewingDate);
-      dateFrom = d2.getFullYear()+'-'+String(d2.getMonth()+1).padStart(2,'0')+'-01'; dateTo = viewingDate; periodLabel = 'this month';
-    } else if (period === 'custom') {
-      dateFrom = document.getElementById('ivrfrom-'+outputId)?.value || viewingDate;
-      dateTo = document.getElementById('ivrto-'+outputId)?.value || viewingDate;
-      periodLabel = dateFrom + ' → ' + dateTo;
-    } else {
-      var wa = new Date(); wa.setDate(wa.getDate()-7);
-      dateFrom = wa.toISOString().split('T')[0]; dateTo = today; periodLabel = 'this week';
-    }
+    var calc = _calcPeriod(period, viewingDate);
+    dateFrom = calc.from; dateTo = calc.to; periodLabel = calc.label;
   } else {
-    var wa2 = new Date(); wa2.setDate(wa2.getDate()-7);
-    dateFrom = wa2.toISOString().split('T')[0]; dateTo = today; periodLabel = 'this week';
+    var calc2 = _calcPeriod(_ivrPeriod[outputId] || 'last_week', today);
+    dateFrom = calc2.from; dateTo = calc2.to; periodLabel = calc2.label;
   }
   var picker = isManager ? renderIvrPeriodPicker(outputId) : '';
   out.innerHTML = picker + '<div style="font-size:12px;color:var(--text3);padding:8px 0">Checking intent vs reality for ' + esc(periodLabel) + '…</div>';
@@ -3345,29 +3527,24 @@ async function runExternalSignals(repId, resultElId) {
       html += '<div style="font-size:11px;font-weight:600;color:var(--text);margin-top:8px;margin-bottom:4px">' + esc(r.account) + (r.region ? ' <span style="font-size:9px;color:var(--text3);background:rgba(0,0,0,0.08);border-radius:4px;padding:1px 5px">' + esc(r.region) + '</span>' : '') + ' <span style="font-size:10px;color:var(--text3);font-weight:400">\u2014 ' + r.signalsDetected + ' signals</span></div>';
     });
 
-    // Load the actual signals from the DB to show rich cards with source URLs
+    // Load signals from DB and render full content grouped by account
     try {
-      var sigRes = await fetch(SB_URL + '/rest/v1/account_signals?org_id=eq.' + profile.org_id + '&is_active=eq.true&source=eq.web_grounded&order=detected_at.desc&limit=25', {
+      var sigRes = await fetch(SB_URL + '/rest/v1/account_signals?org_id=eq.' + profile.org_id + '&is_active=eq.true&order=detected_at.desc&limit=30', {
         headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token }
       });
       var signals = await sigRes.json();
       if (Array.isArray(signals) && signals.length) {
-        signals.forEach(function(s) {
-          var cfg = SIGNAL_TYPE_CONFIG[s.signal_type] || { icon: '○', label: s.signal_type, color: 'var(--text3)' };
-          var ext = s.extracted || {};
-          html += '<div style="border-left:3px solid ' + cfg.color + ';padding:6px 10px;margin-bottom:4px;background:rgba(0,0,0,0.04);border-radius:0 6px 6px 0">' +
-            '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
-              '<span style="font-size:9px;padding:1px 6px;border-radius:10px;background:rgba(0,0,0,0.08);color:' + cfg.color + ';font-weight:600">' + cfg.icon + ' ' + cfg.label + '</span>' +
-              (s.confidence >= 80 ? '<span style="font-size:9px;color:var(--green)">High confidence</span>' : '') +
-              (ext.recency ? '<span style="font-size:9px;color:var(--text3)">' + esc(ext.recency) + '</span>' : '') +
-            '</div>' +
-            '<div style="font-size:12px;color:var(--text);margin-top:3px">' + esc((ext.headline || s.raw_text || '').slice(0, 140)) + '</div>' +
-            (ext.detail ? '<div style="font-size:11px;color:var(--text2);margin-top:2px">' + esc(ext.detail.slice(0, 160)) + '</div>' : '') +
-            (ext.source_url ? '<a href="' + esc(ext.source_url) + '" target="_blank" rel="noopener" style="font-size:10px;color:var(--blue);text-decoration:none;margin-top:2px;display:inline-block">' + esc(ext.source_name || 'Source') + ' \u2192</a>' : '') +
-          '</div>';
+        var byAcct2 = {};
+        signals.forEach(function(s) { var k = s.account_name||s.account_id||'Unknown'; if (!byAcct2[k]) byAcct2[k]=[]; byAcct2[k].push(s); });
+        html = '<div style="font-size:10px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">🌐 Market Signals · ' + signals.length + ' signals across ' + Object.keys(byAcct2).length + ' accounts</div>';
+        Object.entries(byAcct2).forEach(function(entry) {
+          var acct2 = entry[0]; var acctSigs2 = entry[1];
+          html += '<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px">'+esc(acct2)+' <span style="font-size:10px;color:var(--text3);font-weight:400">'+acctSigs2.length+' signal'+(acctSigs2.length!==1?'s':'')+'</span></div>';
+          acctSigs2.forEach(function(s) { html += renderMarketSignalCard(s); });
+          html += '</div>';
         });
       }
-    } catch(e) { /* non-fatal — summary already shown */ }
+    } catch(e) { /* non-fatal */ }
 
     out.innerHTML = html;
   } catch(e) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>'; }
