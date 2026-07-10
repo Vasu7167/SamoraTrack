@@ -3394,22 +3394,42 @@ var DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 var TIME_LABELS = { morning:'Morning (8-12)', afternoon:'Afternoon (12-5)', evening:'Evening (5+)', anytime:'Anytime' };
 
 async function loadHabitsSection() {
-  if (_userHabits === null) {
-    try {
-      var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'get_habits'}) });
-      var d = await r.json();
-      _userHabits = d.habits || [];
-      if (!_userHabits.length) _userHabits = DEFAULT_HABITS;
-    } catch(e) { _userHabits = DEFAULT_HABITS; }
-  }
-  // Update You tab habits preview
   var prev = document.getElementById('youHabitsPreview');
+  if (prev) prev.textContent = 'Loading…';
+
+  // Hard timeout — guarantees this never hangs, regardless of network/auth issues
+  var timeoutPromise = new Promise(function(resolve) {
+    setTimeout(function() { resolve({ timedOut: true }); }, 5000);
+  });
+
+  try {
+    if (_userHabits === null) {
+      var fetchPromise = fetch(EDGE_FN_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (currentUser?.token || ''), 'apikey': SB_KEY },
+        body: JSON.stringify({ action: 'get_habits' })
+      }).then(function(r) { return r.json(); });
+
+      var result = await Promise.race([fetchPromise, timeoutPromise]);
+
+      if (result.timedOut || !result || result.error) {
+        _userHabits = DEFAULT_HABITS;
+      } else {
+        _userHabits = (result.habits && result.habits.length) ? result.habits : DEFAULT_HABITS;
+      }
+    }
+  } catch (e) {
+    _userHabits = DEFAULT_HABITS;
+  }
+
+  // This ALWAYS runs now — no path skips it
   if (prev) {
-    var activeCount = (_userHabits||[]).filter(function(h){return h.active;}).length;
+    var activeCount = (_userHabits || []).filter(function(h){ return h.active; }).length;
     prev.textContent = activeCount > 0
-      ? activeCount + ' active habit' + (activeCount!==1?'s':'') + ' — auto-generating tasks daily'
+      ? activeCount + ' active habit' + (activeCount !== 1 ? 's' : '') + ' — auto-generating tasks daily'
       : 'No habits configured yet. Tap "Edit habits" to set up recurring activities.';
   }
+
   renderHabitsSection();
   applyHabitsToToday();
 }
