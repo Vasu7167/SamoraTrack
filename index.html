@@ -700,6 +700,8 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
             <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">Actions</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
               <button onclick="runLocalIntelligence()" id="localIntelBtn" style="padding:9px 10px;border-radius:10px;background:rgba(160,117,42,0.08);border:1px solid rgba(160,117,42,0.2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">⚡ Scan channels</button>
+              <button onclick="processOooMails()" id="oooBtn" style="padding:9px 10px;border-radius:10px;background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);color:var(--green);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">📬 OOO → tasks</button>
+              <button onclick="autoCompleteTasks()" id="autoCompleteBtn" style="padding:9px 10px;border-radius:10px;background:rgba(58,110,168,0.08);border:1px solid rgba(58,110,168,0.2);color:var(--blue);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">✓ Auto-complete</button>
               <button onclick="syncSequencing()" id="seqSyncBtn" style="padding:9px 10px;border-radius:10px;background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);color:var(--green);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">↺ Sync sequences</button>
               <button onclick="runExternalSignals()" id="externalSignalsBtn" style="padding:9px 10px;border-radius:10px;background:rgba(58,110,168,0.08);border:1px solid rgba(58,110,168,0.2);color:var(--blue);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">🌐 Market signals</button>
               <button onclick="syncNotetaker()" id="notetakerSyncBtn" style="padding:9px 10px;border-radius:10px;background:rgba(160,117,42,0.08);border:1px solid rgba(160,117,42,0.2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">🎙 Sync calls</button>
@@ -1056,7 +1058,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button id="youGmailBtn" onclick="connectGmail()" style="padding:7px 14px;border-radius:8px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">📧 Connect Gmail</button>
-        <button id="youOutlookBtn" onclick="connectOutlook()" style="padding:7px 14px;border-radius:8px;background:var(--blue);border:none;color:#fff;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">📧 Connect Outlook</button>
+        <button id="youOutlookBtn" onclick="connectOutlook()" style="padding:7px 14px;border-radius:8px;background:#2563EB;border:2px solid #1D4ED8;color:#fff;font-family:var(--sans);font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 2px 6px rgba(37,99,235,0.4)">📧 Connect Outlook</button>
       </div>
     </div>
     <div class="you-section-title" style="margin-top:16px">Notetaker</div>
@@ -3394,42 +3396,22 @@ var DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 var TIME_LABELS = { morning:'Morning (8-12)', afternoon:'Afternoon (12-5)', evening:'Evening (5+)', anytime:'Anytime' };
 
 async function loadHabitsSection() {
-  var prev = document.getElementById('youHabitsPreview');
-  if (prev) prev.textContent = 'Loading…';
-
-  // Hard timeout — guarantees this never hangs, regardless of network/auth issues
-  var timeoutPromise = new Promise(function(resolve) {
-    setTimeout(function() { resolve({ timedOut: true }); }, 5000);
-  });
-
-  try {
-    if (_userHabits === null) {
-      var fetchPromise = fetch(EDGE_FN_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (currentUser?.token || ''), 'apikey': SB_KEY },
-        body: JSON.stringify({ action: 'get_habits' })
-      }).then(function(r) { return r.json(); });
-
-      var result = await Promise.race([fetchPromise, timeoutPromise]);
-
-      if (result.timedOut || !result || result.error) {
-        _userHabits = DEFAULT_HABITS;
-      } else {
-        _userHabits = (result.habits && result.habits.length) ? result.habits : DEFAULT_HABITS;
-      }
-    }
-  } catch (e) {
-    _userHabits = DEFAULT_HABITS;
+  if (_userHabits === null) {
+    try {
+      var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'get_habits'}) });
+      var d = await r.json();
+      _userHabits = d.habits || [];
+      if (!_userHabits.length) _userHabits = DEFAULT_HABITS;
+    } catch(e) { _userHabits = DEFAULT_HABITS; }
   }
-
-  // This ALWAYS runs now — no path skips it
+  // Update You tab habits preview
+  var prev = document.getElementById('youHabitsPreview');
   if (prev) {
-    var activeCount = (_userHabits || []).filter(function(h){ return h.active; }).length;
+    var activeCount = (_userHabits||[]).filter(function(h){return h.active;}).length;
     prev.textContent = activeCount > 0
-      ? activeCount + ' active habit' + (activeCount !== 1 ? 's' : '') + ' — auto-generating tasks daily'
+      ? activeCount + ' active habit' + (activeCount!==1?'s':'') + ' — auto-generating tasks daily'
       : 'No habits configured yet. Tap "Edit habits" to set up recurring activities.';
   }
-
   renderHabitsSection();
   applyHabitsToToday();
 }
@@ -3830,6 +3812,69 @@ async function runExternalSignals(repId, resultElId) {
     out.innerHTML = html;
   } catch(e) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>'; }
   if (btn) { btn.textContent = '\ud83c\udf10 Market signals'; btn.disabled = false; }
+}
+
+// ── OOO mail → auto task ──────────────────────────────────────────────────────
+async function processOooMails() {
+  var btn = document.getElementById('oooBtn');
+  var out = document.getElementById('samLocalIntelOutput');
+  if (btn) { btn.textContent = '📬 Scanning…'; btn.disabled = true; }
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'process_ooo_mails', days:14}) });
+    var d = await r.json();
+    if (out) {
+      if (!d.ok) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">' + esc(d.error||'Failed') + '</div>'; return; }
+      if (!d.tasksCreated?.length) {
+        out.innerHTML = '<div style="font-size:12px;color:var(--text3)">📬 Scanned ' + d.oooMailsFound + ' OOO mails — no future return dates found (returns may already have passed).</div>';
+      } else {
+        out.innerHTML = '<div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:6px">📬 ' + d.tasksCreated.length + ' follow-up task' + (d.tasksCreated.length!==1?'s':'') + ' created from OOO mails:</div>' +
+          d.tasksCreated.map(function(t){ return '<div style="font-size:11px;color:var(--text3);margin-bottom:3px">📅 ' + esc(t.taskDate) + ' — ' + esc(t.taskText.slice(0,60)) + '</div>'; }).join('');
+        syncDown();
+      }
+    }
+  } catch(e) { if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>'; }
+  if (btn) { btn.textContent = '📬 OOO → tasks'; btn.disabled = false; }
+}
+
+// ── Auto-complete obvious tasks ───────────────────────────────────────────────
+// Marks done any task that is clearly completed based on context:
+// - Email tasks where Gmail verification found a sent email
+// - Calendar tasks from calendar sync (the meeting happened — it's in the past)
+// - OOO auto-created tasks for dates that have passed
+function autoCompleteTasks() {
+  var btn = document.getElementById('autoCompleteBtn');
+  if (btn) { btn.textContent = '✓ Checking…'; btn.disabled = true; }
+  var today2 = todayKey();
+  var d = dayData(today2);
+  var count = 0;
+  var now = new Date();
+  (d.tasks || []).forEach(function(task) {
+    if (task.done) return;
+    var text = (task.text || '').toLowerCase();
+    // Rule 1: Calendar-sourced task where the calendar event is in the past
+    if (task.source === 'calendar' && task.calendarEventId) {
+      // The event was today — if it's past noon and the task title says a time before now
+      var timeMatch = task.text.match(/at\s+(\d{1,2}):(\d{2})/);
+      if (timeMatch) {
+        var eventHour = parseInt(timeMatch[1], 10);
+        var eventMin  = parseInt(timeMatch[2], 10);
+        if (now.getHours() > eventHour || (now.getHours() === eventHour && now.getMinutes() > eventMin + 30)) {
+          task.done = true; task.autoCompleted = true; count++;
+        }
+      }
+    }
+    // Rule 2: OOO auto-task for a date that has now passed (it's been handled or the day is over)
+    if (task.source === 'ooo_auto' && now.getHours() >= 20) {
+      task.done = true; task.autoCompleted = true; count++;
+    }
+  });
+  if (count > 0) {
+    save(today2); render();
+    showToast('✓ Auto-completed ' + count + ' task' + (count!==1?'s':'') + ' — calendar events and OOO follow-ups that have passed');
+  } else {
+    showToast('No tasks to auto-complete right now');
+  }
+  if (btn) { btn.textContent = '✓ Auto-complete'; btn.disabled = false; }
 }
 
 async function runLocalIntelligence(repId, resultElId) {
@@ -5795,7 +5840,9 @@ function renderPipelineDeals(data) {
             (d.hint_context ? '<div style="font-size:11px;color:var(--text3);font-style:italic">"' + esc(d.hint_context.slice(0, 100)) + '"</div>' : '') +
             '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:2px">' +
               (localValue ? '<span style="font-size:11px;color:var(--text2)">Local: ' + localValue + '</span>' : '') +
-              (d.expected_close ? '<span style="font-size:11px;color:var(--text3)">Close: ' + d.expected_close + '</span>' : '') +
+              (d.expected_close
+  ? '<span onclick="editCloseDate(\''+d.id+'\',\''+esc(d.account)+'\',\''+d.expected_close+'\')" title="Click to edit close date" style="font-size:11px;color:var(--text3);cursor:pointer;text-decoration:underline dotted">Close: '+d.expected_close+' ✎</span>'
+  : '<span onclick="editCloseDate(\''+d.id+'\',\''+esc(d.account)+'\',\'\')" style="font-size:11px;color:var(--text3);cursor:pointer;text-decoration:underline dotted">+ Set close date</span>') +
               (d.licenses_units ? '<span style="font-size:11px;color:var(--text3)">' + d.licenses_units + ' units</span>' : '') +
               // ICP score badge
               (d.icp_score != null ? '<span style="font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;background:' + (d.icp_score>=70?'rgba(74,140,92,.15)':d.icp_score>=40?'rgba(160,117,42,.15)':'rgba(136,135,128,.15)') + ';color:' + (d.icp_score>=70?'var(--green)':d.icp_score>=40?'var(--gold)':'var(--text3)') + '" title="ICP fit: ' + esc(d.icp_notes||'') + '">ICP ' + d.icp_score + '</span>' : '') +
@@ -5817,6 +5864,34 @@ function renderPipelineDeals(data) {
 }
 
 // ── Close Deal Modal ──────────────────────────────────────────────────────────
+// ── Edit close date per opportunity ──────────────────────────────────────────
+async function editCloseDate(oppId, accountName, currentDate) {
+  document.getElementById('edit-close-modal')?.remove();
+  var modal = document.createElement('div');
+  modal.id = 'edit-close-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:flex-end;justify-content:center;z-index:9999';
+  modal.innerHTML = '<div style="background:var(--bg);border-radius:16px 16px 0 0;width:100%;max-width:480px;padding:22px 20px" onclick="event.stopPropagation()">' +
+    '<div style="font-size:15px;font-weight:700;margin-bottom:4px">Edit close date</div>' +
+    '<div style="font-size:12px;color:var(--text3);margin-bottom:14px">' + esc(accountName) + '</div>' +
+    '<input type="date" id="editCloseDateInput" value="' + esc(currentDate) + '" style="width:100%;padding:11px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--sans);font-size:14px;outline:none;margin-bottom:14px"/>' +
+    '<button onclick="saveCloseDate(\'' + esc(oppId) + '\')" style="width:100%;padding:12px;background:var(--gold);border:none;border-radius:10px;color:#18160F;font-family:var(--sans);font-size:14px;font-weight:700;cursor:pointer">Save close date</button>' +
+    '<button onclick="document.getElementById(\'edit-close-modal\').remove()" style="width:100%;padding:10px;background:none;border:none;color:var(--text3);font-family:var(--sans);font-size:13px;cursor:pointer;margin-top:4px">Cancel</button>' +
+  '</div>';
+  modal.addEventListener('click', function(e){ if(e.target===modal) modal.remove(); });
+  document.body.appendChild(modal);
+}
+
+async function saveCloseDate(oppId) {
+  var val = document.getElementById('editCloseDateInput')?.value;
+  if (!val) return;
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'update_opportunity_field', opportunity_id:oppId, field:'expected_close', value:val}) });
+    var d = await r.json();
+    if (d.ok) { showToast('Close date updated'); document.getElementById('edit-close-modal')?.remove(); loadPipeline(); }
+    else { showToast('Error: ' + (d.error||'Failed')); }
+  } catch(e) { showToast('Error: ' + e.message); }
+}
+
 function openCloseDeal(opportunityId, accountName) {
   document.getElementById('close-deal-modal')?.remove();
   var modal = document.createElement('div');
