@@ -499,7 +499,10 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
       <!-- Auto-complete row — always visible in task area -->
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
         <span style="font-size:11px;color:var(--text3)">Today's tasks</span>
-        <button id="autoCompleteBtn" onclick="autoCompleteTasks()" style="padding:3px 10px;border-radius:14px;background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);font-size:11px;cursor:pointer">✓ Auto-complete</button>
+        <div style="display:flex;gap:5px">
+          <button onclick="processOooMails()" style="padding:3px 8px;border-radius:14px;background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);font-size:11px;cursor:pointer" title="Scan inbox for Out-of-Office replies and create follow-up tasks">📬 OOO scan</button>
+          <button id="autoCompleteBtn" onclick="autoCompleteTasks()" style="padding:3px 10px;border-radius:14px;background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);font-size:11px;cursor:pointer">✓ Auto-complete</button>
+        </div>
       </div>
       <div id="today-anon-row" style="display:none;margin-bottom:8px">
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--text2)">
@@ -610,6 +613,9 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
         <option value="verified">✅ Verified</option>
         <option value="partial">⚡ Partial</option>
         <option value="unverified">〜 Unverified</option>
+      </select>
+      <select id="pipe-filter-rep" onchange="applyPipelineFilters()" style="font-size:11px;padding:4px 8px;border-radius:20px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);font-family:var(--sans)">
+        <option value="">All reps</option>
       </select>
       <select id="pipe-filter-product" onchange="applyPipelineFilters()" style="font-size:11px;padding:4px 8px;border-radius:20px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);font-family:var(--sans)">
         <option value="">All products</option>
@@ -5373,7 +5379,7 @@ function renderIntelDebug(data) {
 var _pipelineData = null;
 var _pipelineView = 'combined';
 var _pipelineDashTab = 'overview';
-var _pipelineFilters = { tier: '', product: '', stream: '', region: '' };
+var _pipelineFilters = { tier: '', product: '', stream: '', region: '', rep: '' };
 
 function setPipelineView(view) {
   _pipelineView = view;
@@ -5392,16 +5398,17 @@ function setPipelineDashTab(tab) {
 }
 
 function applyPipelineFilters() {
-  _pipelineFilters.tier    = document.getElementById('pipe-filter-tier')?.value || '';
+  _pipelineFilters.tier    = document.getElementById('pipe-filter-tier')?.value    || '';
   _pipelineFilters.product = document.getElementById('pipe-filter-product')?.value || '';
-  _pipelineFilters.stream  = document.getElementById('pipe-filter-stream')?.value || '';
-  _pipelineFilters.region  = document.getElementById('pipe-filter-region')?.value || '';
+  _pipelineFilters.stream  = document.getElementById('pipe-filter-stream')?.value  || '';
+  _pipelineFilters.region  = document.getElementById('pipe-filter-region')?.value  || '';
+  _pipelineFilters.rep     = document.getElementById('pipe-filter-rep')?.value     || '';
   if (_pipelineData) { renderPipelineDashboard(_pipelineData); renderPipelineChart(_pipelineData); renderPipelineDeals(_pipelineData); }
 }
 
 function clearPipelineFilters() {
-  _pipelineFilters = { tier:'', product:'', stream:'', region:'' };
-  ['pipe-filter-tier','pipe-filter-product','pipe-filter-stream','pipe-filter-region'].forEach(function(id) {
+  _pipelineFilters = { tier:'', product:'', stream:'', region:'', rep:'' };
+  ['pipe-filter-tier','pipe-filter-product','pipe-filter-stream','pipe-filter-region','pipe-filter-rep'].forEach(function(id) {
     var el = document.getElementById(id); if (el) el.value = '';
   });
   if (_pipelineData) { renderPipelineDashboard(_pipelineData); renderPipelineChart(_pipelineData); renderPipelineDeals(_pipelineData); }
@@ -5413,6 +5420,7 @@ function getFilteredDeals(data) {
     if (_pipelineFilters.tier && d.tier !== _pipelineFilters.tier) return false;
     if (_pipelineFilters.product && d.product_id !== _pipelineFilters.product) return false;
     if (_pipelineFilters.region && d.region !== _pipelineFilters.region) return false;
+    if (_pipelineFilters.rep && d.rep_user_id !== _pipelineFilters.rep) return false;
     if (_pipelineFilters.stream) {
       var streams = d.revenue_streams || [];
       if (!streams.find(function(s) { return s.name === _pipelineFilters.stream || s.key === _pipelineFilters.stream; })) return false;
@@ -5422,6 +5430,16 @@ function getFilteredDeals(data) {
 }
 
 function populatePipelineFilters(data) {
+  // Reps dropdown — built from deals data
+  var repSel = document.getElementById('pipe-filter-rep');
+  if (repSel) {
+    var repMap = {};
+    [...(data.verified||[]),(data.partial||[]),(data.unverified||[])].flat().forEach(function(d) {
+      if (d.rep_user_id && d.rep_email) repMap[d.rep_user_id] = d.rep_email.split('@')[0].replace(/\./g,' ').replace(/\b\w/g, function(c){return c.toUpperCase();});
+    });
+    repSel.innerHTML = '<option value="">All reps</option>' +
+      Object.entries(repMap).map(function(e){ return '<option value="'+esc(e[0])+'">'+esc(e[1])+'</option>'; }).join('');
+  }
   // Products dropdown
   var prodSel = document.getElementById('pipe-filter-product');
   if (prodSel && _orgProducts?.length) {
