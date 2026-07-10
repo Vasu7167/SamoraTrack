@@ -990,63 +990,44 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
     <div class="you-section-title" style="margin-top:16px">Connect to AI</div>
     <div class="admin-card" style="margin-bottom:0">
       <div id="connectorNotGenerated">
-        <div style="font-size:12px;color:var(--text3);margin-bottom:12px;line-height:1.5">Connect SamoraTrack to Claude, ChatGPT or Gemini. Your data stays scoped to your role.</div>
-        <button id="connectorBtn" onclick="getConnectorToken()" style="width:100%;padding:11px;border-radius:10px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:13px;font-weight:700;cursor:pointer">🔌 Connect to AI →</button>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:12px;line-height:1.5">Connect SamoraTrack to Claude, ChatGPT or Gemini. The AI fetches your live data — you just ask questions in the native chat.</div>
+        <button id="connectorBtn" onclick="getConnectorToken()" style="width:100%;padding:11px;border-radius:10px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:13px;font-weight:700;cursor:pointer">🔌 Get my connection details →</button>
         <div id="connectorStatus" style="font-size:12px;color:var(--text3);margin-top:8px"></div>
       </div>
-
       <div id="connectorGenerated" style="display:none">
-        <div style="font-size:11px;font-weight:700;color:var(--green);margin-bottom:14px">✓ Ready — choose your AI:</div>
-
-        <!-- Claude Desktop -->
-        <div style="background:var(--surface2);border-radius:10px;padding:14px;margin-bottom:10px">
-          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px">🟣 Claude Desktop</div>
-          <div style="font-size:11px;color:var(--text3);margin-bottom:10px">2 steps: copy config → paste once into Claude</div>
-          <div style="display:flex;gap:8px">
-            <button onclick="copyClaudeConfig()" style="flex:1;padding:9px;border-radius:8px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:700;cursor:pointer" id="copyClaudeBtn">📋 Copy config</button>
-            <button onclick="openClaudeInstructions()" style="flex:1;padding:9px;border-radius:8px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer">How to paste →</button>
-          </div>
+        <!-- Claude Teams - best option -->
+        <div style="background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.25);border-radius:10px;padding:14px;margin-bottom:10px">
+          <div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:6px">⭐ Easiest — Claude Teams/Enterprise</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:8px;line-height:1.5">Admin adds the server once in Claude admin panel. Entire team gets SamoraTrack in Claude automatically — no individual setup, no config, nothing.</div>
+          <div style="font-size:10px;color:var(--text3);margin-bottom:4px">Claude.ai → Settings → Integrations → Add MCP server → paste:</div>
+          <div id="claudeMcpUrl" onclick="copyField(this,'claudeMcpUrl')" title="Click to copy" style="font-size:10px;font-family:monospace;color:var(--blue);background:var(--bg);padding:7px 8px;border-radius:6px;border:1px solid var(--border2);cursor:pointer;word-break:break-all"></div>
+          <div style="font-size:10px;color:var(--text3);margin-top:4px">→ Ask Claude: "What is going wrong with my pipeline?" "Which rep needs coaching?" "Analyse last week's intent vs reality"</div>
         </div>
-
+        <!-- Claude Desktop - individual -->
+        <div style="background:var(--surface2);border-radius:10px;padding:14px;margin-bottom:10px">
+          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px">🟣 Claude Desktop (individual setup)</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:8px">One-time config — copy → paste → restart Claude. Then ask anything in the native Claude chat.</div>
+          <button id="copyClaudeBtn" onclick="copyClaudeConfig()" style="width:100%;padding:8px;border-radius:7px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:700;cursor:pointer">📋 Copy config → paste in Claude Settings → Developer → Edit Config</button>
+        </div>
         <!-- ChatGPT -->
         <div style="background:var(--surface2);border-radius:10px;padding:14px;margin-bottom:10px">
-          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px">🟢 ChatGPT</div>
-          <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Admin creates one GPT, shares link — team clicks and uses</div>
-          <button onclick="copyGPTInstructions()" style="width:100%;padding:9px;border-radius:8px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer">📋 Copy GPT setup instructions</button>
+          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px">🟢 ChatGPT (Custom GPT)</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Admin creates one GPT with SamoraTrack connected. Share the GPT link — team clicks, uses instantly. Native ChatGPT chat, live data.</div>
+          <button onclick="copyGPTSetup()" style="width:100%;padding:8px;border-radius:7px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">📋 Copy admin GPT setup steps</button>
         </div>
-
-        <!-- Claude Teams -->
-        <div style="background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);border-radius:10px;padding:14px;margin-bottom:10px">
-          <div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:4px">⭐ Best for teams — Claude Teams/Enterprise</div>
-          <div style="font-size:11px;color:var(--text3);line-height:1.5">Admin adds the MCP server once in Claude admin panel → entire team gets SamoraTrack automatically. No individual setup. Ask your Claude account manager to enable MCP integrations.</div>
+        <!-- Gemini -->
+        <div style="background:var(--surface2);border-radius:10px;padding:14px;margin-bottom:10px">
+          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px">🔵 Gemini (Gem)</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Create a Gem with SamoraTrack built in. Share the Gem link — native Gemini chat with live pipeline access.</div>
+          <button onclick="copyGeminiSetup()" style="width:100%;padding:8px;border-radius:7px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">📋 Copy admin Gemini setup steps</button>
         </div>
-
-        <!-- Token expiry -->
-        <div style="font-size:10px;color:var(--text3);margin-top:6px;display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:10px;color:var(--text3);text-align:center;display:flex;justify-content:space-between;margin-top:4px">
           <span id="connectorExpiry"></span>
-          <button onclick="getConnectorToken()" style="background:none;border:none;color:var(--text3);font-family:var(--sans);font-size:10px;cursor:pointer;text-decoration:underline">Refresh</button>
+          <button onclick="getConnectorToken()" style="background:none;border:none;color:var(--text3);font-size:10px;cursor:pointer;text-decoration:underline;font-family:var(--sans)">Refresh token</button>
         </div>
       </div>
     </div>
 
-    <!-- Claude setup instructions modal -->
-    <div id="claudeInstructionsModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:9999;display:none;align-items:flex-end;justify-content:center">
-      <div style="background:var(--bg);border-radius:16px 16px 0 0;width:100%;max-width:500px;padding:22px 20px;max-height:80vh;overflow-y:auto" onclick="event.stopPropagation()">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-          <div style="font-size:15px;font-weight:700">Paste into Claude Desktop</div>
-          <button onclick="closeClaudeInstructions()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3)">✕</button>
-        </div>
-        <div style="font-size:13px;color:var(--text2);line-height:1.8">
-          <div style="margin-bottom:10px">1. Open <strong>Claude Desktop</strong> app on your computer</div>
-          <div style="margin-bottom:10px">2. Click <strong>Claude</strong> in the top menu bar → <strong>Settings</strong></div>
-          <div style="margin-bottom:10px">3. Click <strong>Developer</strong> → <strong>Edit Config</strong></div>
-          <div style="margin-bottom:10px">4. A file opens. Replace <em>everything</em> in it with the config you copied, or add the "samoratrack" block inside "mcpServers" if you have other servers.</div>
-          <div style="margin-bottom:10px">5. Save the file → <strong>Quit Claude completely</strong> → Reopen</div>
-          <div style="background:rgba(74,140,92,0.1);border-radius:8px;padding:10px;font-size:12px;color:var(--green)">✓ You'll see a 🔨 hammer icon in the chat. Type "What's my pipeline?" to test.</div>
-        </div>
-        <button onclick="copyClaudeConfig();closeClaudeInstructions()" style="width:100%;margin-top:14px;padding:12px;border-radius:10px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:14px;font-weight:700;cursor:pointer">📋 Copy config again</button>
-      </div>
-    </div>
     <div class="admin-card" style="margin-bottom:0">
       <div style="margin-bottom:12px">
         <div style="font-size:13px;font-weight:500;color:var(--text)" id="youEmailConnLabel">Not connected</div>
@@ -2130,6 +2111,9 @@ async function getConnectorToken() {
     _connectorHost  = d.host || 'https://samoratrack.vercel.app';
     document.getElementById('connectorNotGenerated').style.display = 'none';
     document.getElementById('connectorGenerated').style.display    = 'block';
+    // Populate the Teams/MCP URL field
+    var mcpUrlEl = document.getElementById('claudeMcpUrl');
+    if (mcpUrlEl) mcpUrlEl.textContent = _connectorHost + '/api/connector/mcp?token=' + _connectorToken;
     var expiry = document.getElementById('connectorExpiry');
     if (expiry && d.expires_at) {
       var days = Math.round((d.expires_at - Date.now()) / 86400000);
@@ -2148,28 +2132,30 @@ function getClaudeConfig() {
 function copyClaudeConfig() {
   var btn = document.getElementById('copyClaudeBtn');
   navigator.clipboard.writeText(getClaudeConfig()).then(function() {
-    if (btn) { btn.textContent = '✓ Copied!'; btn.style.background = 'var(--green)'; }
-    setTimeout(function() { if (btn) { btn.textContent = '📋 Copy config'; btn.style.background = 'var(--gold)'; } }, 2000);
+    if (btn) { btn.textContent = '✓ Copied — paste in Claude Settings → Developer → Edit Config'; btn.style.background = 'var(--green)'; }
+    setTimeout(function() { if (btn) { btn.textContent = '📋 Copy config → paste in Claude Settings → Developer → Edit Config'; btn.style.background = 'var(--gold)'; } }, 3000);
   });
 }
 
-function copyGPTInstructions() {
-  var text = 'ChatGPT Custom GPT — SamoraTrack connector\n\n1. chat.openai.com → Explore GPTs → Create → Configure → Actions → Import from URL:\n   ' + _connectorHost + '/api/connector/openapi.json\n\n2. Authentication: API Key → Bearer → paste:\n   ' + _connectorToken + '\n\n3. Save GPT → share the GPT link with your team (team just clicks the link — no setup for them)';
-  navigator.clipboard.writeText(text).then(function() { showToast('GPT instructions copied'); });
-}
-
-function openClaudeInstructions() { var m=document.getElementById('claudeInstructionsModal'); if(m)m.style.display='flex'; }
-function closeClaudeInstructions() { var m=document.getElementById('claudeInstructionsModal'); if(m)m.style.display='none'; }
-
-function copyConnectorUrl(elemId) {
-  var el = document.getElementById(elemId);
+function copyField(el) {
   if (!el) return;
-  navigator.clipboard.writeText(el.textContent.split(' ')[0]).then(function() {
-    var orig = el.style.background; el.style.background='rgba(74,140,92,0.15)'; el.style.color='var(--green)';
-    setTimeout(function(){ el.style.background=orig; el.style.color='var(--blue)'; }, 1000);
+  navigator.clipboard.writeText(el.textContent).then(function() {
+    var orig = el.style.color; el.style.color = 'var(--green)';
+    setTimeout(function() { el.style.color = orig; }, 1500);
   });
 }
 
+function copyGPTSetup() {
+  var host = _connectorHost; var token = _connectorToken;
+  var text = 'SamoraTrack → ChatGPT Custom GPT (admin setup)\n\n1. chat.openai.com → My GPTs → Create a GPT → Configure tab\n2. Name: "SamoraTrack Intelligence"\n3. Actions → Create new action → Import from URL:\n   ' + host + '/api/connector/openapi.json\n4. Authentication: API Key → Bearer → token: ' + token + '\n5. Save → Publish → Share GPT link with team\n\nTeam clicks the link. No setup. Just chat.\n\nExample: "What is going wrong with my pipeline?", "Who needs coaching?", "Analyse last week IVR"';
+  navigator.clipboard.writeText(text).then(function() { showToast('ChatGPT setup steps copied'); });
+}
+
+function copyGeminiSetup() {
+  var host = _connectorHost; var token = _connectorToken;
+  var text = 'SamoraTrack → Gemini (admin setup)\n\nAPI base: ' + host + '/api/connector\nAuth: Authorization: Bearer ' + token + '\nSchema: GET ' + host + '/api/connector/gemini-tools\n\nEndpoints (POST):\n  /get_pipeline, /get_coverage, /get_intent_vs_reality\n  /get_team_overview, /get_daily_brief, /get_account_signals\n\nFor Gems: gemini.google.com → Gems → Create → add API config above → Share link';
+  navigator.clipboard.writeText(text).then(function() { showToast('Gemini setup steps copied'); });
+}
 
 async function refreshYouTabConnections() {
   // Sync connection status labels from edge function
