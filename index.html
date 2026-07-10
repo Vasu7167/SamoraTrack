@@ -1007,12 +1007,20 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
         <div style="background:var(--surface2);border-radius:10px;padding:14px;margin-bottom:10px">
           <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px">🟣 Claude Desktop (individual setup)</div>
           <div style="font-size:11px;color:var(--text3);margin-bottom:8px">One-time config — copy → paste → restart Claude. Then ask anything in the native Claude chat.</div>
-          <div style="font-size:11px;color:var(--text3);margin-bottom:6px">Claude Desktop — automatic installer (no JSON editing):</div>
-          <div style="display:flex;gap:6px">
-            <button id="copyClaudeBtn" onclick="downloadClaudeInstaller('mac')" style="flex:1;padding:9px;border-radius:8px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:700;cursor:pointer">🍎 Install on Mac</button>
-            <button onclick="downloadClaudeInstaller('windows')" style="flex:1;padding:9px;border-radius:8px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">🪟 Install on Windows</button>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Claude Desktop — automatic installer:</div>
+          <div style="display:flex;gap:6px;margin-bottom:10px">
+            <button id="copyClaudeBtn" onclick="showClaudeInstallCmd('mac')" style="flex:1;padding:9px;border-radius:8px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:700;cursor:pointer">🍎 Mac</button>
+            <button onclick="showClaudeInstallCmd('windows')" style="flex:1;padding:9px;border-radius:8px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">🪟 Windows</button>
           </div>
-          <div style="font-size:10px;color:var(--text3);margin-top:6px">Mac: double-click the downloaded file → Terminal runs → done. Windows: right-click → Run with PowerShell → done. Then restart Claude Desktop.</div>
+          <div id="claudeInstallCmdPanel" style="display:none;background:var(--bg);border:1px solid var(--border2);border-radius:10px;padding:12px">
+            <div style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:6px" id="claudeInstallPlatformLabel"></div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:8px" id="claudeInstallStep1"></div>
+            <div style="background:#1A1712;border-radius:8px;padding:10px;margin-bottom:8px;position:relative">
+              <div id="claudeInstallCmd" style="font-size:10px;font-family:monospace;color:#A07824;word-break:break-all;line-height:1.5;padding-right:50px"></div>
+              <button onclick="copyInstallCmd()" id="copyCmdBtn" style="position:absolute;top:8px;right:8px;background:var(--gold);border:none;border-radius:5px;color:#18160F;font-size:10px;font-weight:700;cursor:pointer;padding:3px 8px">Copy</button>
+            </div>
+            <div style="font-size:11px;color:var(--text3);line-height:1.6" id="claudeInstallStep2"></div>
+          </div>
         </div>
         <!-- ChatGPT -->
         <div style="background:var(--surface2);border-radius:10px;padding:14px;margin-bottom:10px">
@@ -2094,6 +2102,7 @@ function dismissCalSync() {
 // ── You tab refresh ────────────────────────────────────────────────────────────
 // ── AI Connector ──────────────────────────────────────────────────────────────
 var _connectorToken = null;
+var _currentInstallCmd  = '';
 var _connectorHost  = 'https://samoratrack.vercel.app';
 
 async function getConnectorToken() {
@@ -2134,132 +2143,34 @@ function getClaudeConfig() {
   return JSON.stringify({ mcpServers: { samoratrack: { url: _connectorHost + '/api/connector/mcp?token=' + _connectorToken } } }, null, 2);
 }
 
-function downloadClaudeInstaller(platform) {
+function showClaudeInstallCmd(platform) {
   var mcpUrl = _connectorHost + '/api/connector/mcp?token=' + _connectorToken;
-
+  var panel  = document.getElementById('claudeInstallCmdPanel');
+  var lbl    = document.getElementById('claudeInstallPlatformLabel');
+  var cmdEl  = document.getElementById('claudeInstallCmd');
+  var step1  = document.getElementById('claudeInstallStep1');
+  var step2  = document.getElementById('claudeInstallStep2');
+  if (!panel) return;
   if (platform === 'mac') {
-    // .command file — double-click to run in Terminal on Mac
-    var script = [
-      '#!/bin/bash',
-      '# SamoraTrack → Claude Desktop Installer',
-      '# Double-click this file on Mac to install automatically.',
-      '# It edits your Claude config and adds SamoraTrack as an MCP server.',
-      '',
-      'echo ""',
-      'echo "✦ SamoraTrack → Claude Desktop Installer"',
-      'echo "─────────────────────────────────────────"',
-      '',
-      'python3 << \'PYTHON\'',
-      'import json, os',
-      '',
-      'config_path = os.path.expanduser("~/Library/Application Support/Claude/claude_desktop_config.json")',
-      'mcp_url = "' + mcpUrl + '"',
-      '',
-      'os.makedirs(os.path.dirname(config_path), exist_ok=True)',
-      '',
-      'try:',
-      '    with open(config_path) as f:',
-      '        config = json.load(f)',
-      '    print("Found existing Claude config — merging...")',
-      'except:',
-      '    config = {}',
-      '    print("Creating new Claude config...")',
-      '',
-      'if "mcpServers" not in config:',
-      '    config["mcpServers"] = {}',
-      '',
-      'config["mcpServers"]["samoratrack"] = {"url": mcp_url}',
-      '',
-      'with open(config_path, "w") as f:',
-      '    json.dump(config, f, indent=2)',
-      '',
-      'print("")',
-      'print("✓ Done! SamoraTrack is now connected to Claude Desktop.")',
-      'print("")',
-      'print("Next steps:")',
-      'print("  1. Quit Claude Desktop completely (Cmd+Q)")',
-      'print("  2. Reopen Claude Desktop")',
-      'print("  3. Look for the 🔨 hammer icon in the chat input")',
-      'print("  4. Ask: What is my pipeline status?")',
-      'print("")',
-      'PYTHON',
-      '',
-      'echo ""',
-      'echo "Press Enter to close this window..."',
-      'read',
-    ].join('\n');
-
-    var blob = new Blob([script], { type: 'text/plain' });
-    var url  = URL.createObjectURL(blob);
-    var a    = document.createElement('a');
-    a.href = url; a.download = 'install-samoratrack-claude.command';
-    document.body.appendChild(a); a.click();
-    document.body.removeChild(a); URL.revokeObjectURL(url);
-    showToast('📥 Installer downloaded — double-click install-samoratrack-claude.command to run');
-
+    lbl.textContent   = '🍎 Mac — paste this in Terminal (no file download, no security warning)';
+    step1.innerHTML   = 'Step 1: Press <strong>Cmd + Space</strong> → type <strong>Terminal</strong> → press Enter';
+    _currentInstallCmd = "python3 -c \"import json,os; p=os.path.expanduser('~/Library/Application Support/Claude/claude_desktop_config.json'); c=json.load(open(p)) if os.path.exists(p) else {}; c.setdefault('mcpServers',{})['samoratrack']={'url':'" + mcpUrl + "'}; json.dump(c,open(p,'w'),indent=2); print('Done! Restart Claude Desktop.')\"";
+    step2.innerHTML   = 'Step 2: Paste the command above → press <strong>Enter</strong><br>Step 3: Quit Claude Desktop (Cmd+Q) → reopen → look for 🔨 in chat';
   } else {
-    // PowerShell script for Windows
-    var ps = [
-      '# SamoraTrack → Claude Desktop Installer (Windows)',
-      '# Right-click this file and select "Run with PowerShell"',
-      '',
-      'Write-Host ""',
-      'Write-Host "✦ SamoraTrack → Claude Desktop Installer" -ForegroundColor Yellow',
-      'Write-Host "─────────────────────────────────────────" -ForegroundColor Gray',
-      '',
-      '$configPath = "$env:APPDATA\\Claude\\claude_desktop_config.json"',
-      '$mcpUrl = "' + mcpUrl + '"',
-      '',
-      '# Create directory if needed',
-      'New-Item -ItemType Directory -Force -Path (Split-Path $configPath) | Out-Null',
-      '',
-      '# Load existing config or start fresh',
-      'if (Test-Path $configPath) {',
-      '    Write-Host "Found existing Claude config — merging..."',
-      '    $config = Get-Content $configPath -Raw | ConvertFrom-Json',
-      '} else {',
-      '    Write-Host "Creating new Claude config..."',
-      '    $config = [PSCustomObject]@{}',
-      '}',
-      '',
-      '# Add mcpServers if missing',
-      'if (-not ($config | Get-Member -Name "mcpServers" -MemberType NoteProperty)) {',
-      '    $config | Add-Member -NotePropertyName "mcpServers" -NotePropertyValue ([PSCustomObject]@{})',
-      '}',
-      '',
-      '# Add SamoraTrack server',
-      '$config.mcpServers | Add-Member -NotePropertyName "samoratrack" -NotePropertyValue @{url=$mcpUrl} -Force',
-      '',
-      '# Save',
-      '$config | ConvertTo-Json -Depth 10 | Set-Content $configPath -Encoding UTF8',
-      '',
-      'Write-Host ""',
-      'Write-Host "✓ Done! SamoraTrack is now connected to Claude Desktop." -ForegroundColor Green',
-      'Write-Host ""',
-      'Write-Host "Next steps:" -ForegroundColor White',
-      'Write-Host "  1. Close Claude Desktop completely"',
-      'Write-Host "  2. Reopen Claude Desktop"',
-      'Write-Host "  3. Look for the 🔨 hammer icon in the chat input"',
-      'Write-Host "  4. Ask: What is my pipeline status?"',
-      'Write-Host ""',
-      'Read-Host "Press Enter to close"',
-    ].join('\n');
-
-    var blob2 = new Blob([ps], { type: 'text/plain' });
-    var url2  = URL.createObjectURL(blob2);
-    var a2    = document.createElement('a');
-    a2.href = url2; a2.download = 'install-samoratrack-claude.ps1';
-    document.body.appendChild(a2); a2.click();
-    document.body.removeChild(a2); URL.revokeObjectURL(url2);
-    showToast('📥 Installer downloaded — right-click the .ps1 file and select Run with PowerShell');
+    lbl.textContent   = '🪟 Windows — paste this in PowerShell';
+    step1.innerHTML   = 'Step 1: Press <strong>Win + X</strong> → click <strong>Terminal</strong> or <strong>PowerShell</strong>';
+    _currentInstallCmd = '$p="$env:APPDATA\\Claude\\claude_desktop_config.json"; if(Test-Path $p){$c=Get-Content $p|ConvertFrom-Json}else{$c=[PSCustomObject]@{}}; if(!$c.mcpServers){$c|Add-Member mcpServers([PSCustomObject]@{})}; $c.mcpServers|Add-Member samoratrack @{url="' + mcpUrl + '"} -Force; $c|ConvertTo-Json -Depth 5|Set-Content $p; Write-Host "Done! Restart Claude Desktop."';
+    step2.innerHTML   = 'Step 2: Paste the command → press <strong>Enter</strong><br>Step 3: Close and reopen Claude Desktop → look for 🔨 in chat';
   }
+  cmdEl.textContent   = _currentInstallCmd;
+  panel.style.display = 'block';
 }
 
-function copyClaudeConfig() {
-  var btn = document.getElementById('copyClaudeBtn');
-  navigator.clipboard.writeText(getClaudeConfig()).then(function() {
-    if (btn) { btn.textContent = '✓ Copied — paste in Claude Settings → Developer → Edit Config'; btn.style.background = 'var(--green)'; }
-    setTimeout(function() { if (btn) { btn.textContent = '🍎 Install on Mac'; btn.style.background = 'var(--gold)'; } }, 3000);
+function copyInstallCmd() {
+  var btn = document.getElementById('copyCmdBtn');
+  navigator.clipboard.writeText(_currentInstallCmd).then(function() {
+    if (btn) { btn.textContent = '✓ Copied!'; btn.style.background = 'var(--green)'; }
+    setTimeout(function() { if (btn) { btn.textContent = 'Copy'; btn.style.background = 'var(--gold)'; } }, 2000);
   });
 }
 
