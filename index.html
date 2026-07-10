@@ -1706,7 +1706,7 @@ function switchTab(tab) {
   if (['tasks','issues','wins','misses'].includes(tab)) { if (tab !== 'misses') setTodaySection(tab); renderToday(); }
   if (tab === 'today') { setTodaySection('tasks'); renderToday(); }
   if (tab === 'settings') renderSettings();
-  if (tab === 'you') { renderYouPanel(); refreshYouTabConnections(); }
+  if (tab === 'you') { renderYouPanel(); refreshYouTabConnections(); loadHabitsSection(); }
   if (tab === 'review') renderSummary();
   if (tab === 'exec') loadExecDashboard();
   if (tab === 'signals') {
@@ -2062,6 +2062,8 @@ async function handleMicrosoftCallback(code) {
 
 // ── Calendar → Today task sync ─────────────────────────────────────────────────
 var _calTasksFetched = '';
+var _calendarTasksPending = [];
+
 async function syncCalendarTasks(force) {
   var today2 = todayKey();
   if (!force && _calTasksFetched === today2) return;
@@ -2075,32 +2077,68 @@ async function syncCalendarTasks(force) {
     var existing = (dayData(today2).tasks || []).map(function(t){return t.text.toLowerCase();});
     var newTasks = d.tasks.filter(function(t){ return !existing.some(function(e){return e.includes(t.title.toLowerCase().slice(0,20));}); });
     if (!newTasks.length) return;
+    // Store tasks in a global array — buttons reference by index only.
+    // Never embed raw agenda/title text into onclick attributes: meeting
+    // invite bodies (Zoom/Teams/Meet boilerplate) often contain quotes,
+    // newlines and HTML-breaking characters that corrupt inline attributes.
+    _calendarTasksPending = newTasks;
     if (row && status) {
       row.style.display = 'block';
-      status.innerHTML = '📅 ' + newTasks.length + ' calendar event' + (newTasks.length!==1?'s':'') + ' today — ' +
-        newTasks.map(function(t){ return '<button onclick="addCalendarTask(\''+esc(t.text)+'\',\''+esc(t.account_name||'')+'\',\''+esc(t.agenda||'')+'\',\''+esc(t.calendar_event_id||'')+'\')" style="margin:0 3px;padding:2px 7px;border-radius:10px;background:rgba(160,117,42,0.15);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;cursor:pointer">+'+esc(t.title.slice(0,25))+'</button>'; }).join('') +
-        '<button onclick="addAllCalendarTasks('+JSON.stringify(newTasks).replace(/'/g,"&#39;")+')" style="margin-left:6px;padding:2px 8px;border-radius:10px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Add all</button>';
+      var btnsHtml = newTasks.map(function(t, i) {
+        return '<button data-cal-idx="'+i+'" class="cal-add-btn" style="margin:0 3px;padding:2px 7px;border-radius:10px;background:rgba(160,117,42,0.15);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;cursor:pointer">+'+esc(t.title.slice(0,25))+'</button>';
+      }).join('');
+      status.innerHTML = '📅 ' + newTasks.length + ' calendar event' + (newTasks.length!==1?'s':'') + ' today — ' + btnsHtml +
+        '<button id="calAddAllBtn" style="margin-left:6px;padding:2px 8px;border-radius:10px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Add all</button>';
+      // Wire up listeners after HTML is inserted — no inline onclick with embedded data
+      status.querySelectorAll('.cal-add-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var idx = parseInt(btn.getAttribute('data-cal-idx'), 10);
+          addCalendarTaskByIndex(idx);
+        });
+      });
+      var addAllBtn = document.getElementById('calAddAllBtn');
+      if (addAllBtn) addAllBtn.addEventListener('click', addAllCalendarTasks);
     }
   } catch(e) { /* non-fatal */ }
 }
 
-function addCalendarTask(text, accountName, agenda, calEventId) {
+function addCalendarTaskByIndex(idx) {
+  var t = _calendarTasksPending[idx];
+  if (!t) return;
+  // Strip common meeting-invite boilerplate from the agenda before storing —
+  // "System reference", "For organizers:", "Privacy and security" etc. are
+  // Zoom/Teams/Meet footer text, not useful task context.
+  var cleanAgenda = stripMeetingBoilerplate(t.agenda);
   var d = dayData(viewDate);
-  d.tasks.push({ text, done:false, priority:false, source:'calendar', calendarEventId: calEventId||null, account:accountName||null, completionNote:agenda||null });
+  d.tasks.push({ text: t.text, done:false, priority:false, source:'calendar', calendarEventId: t.calendar_event_id||null, account: t.account_name||null, completionNote: cleanAgenda||null });
   save(viewDate); render();
   showToast('📅 Added from calendar');
 }
 
-function addAllCalendarTasks(tasks) {
+function addAllCalendarTasks() {
   var d = dayData(viewDate);
   var existing = d.tasks.map(function(t){return t.text.toLowerCase();});
-  tasks.forEach(function(t) {
-    if (!existing.some(function(e){return e.includes(t.title.toLowerCase().slice(0,20));}))
-      d.tasks.push({ text:t.text, done:false, priority:false, source:'calendar', calendarEventId:t.calendar_event_id||null, account:t.account_name||null, completionNote:t.agenda||null });
+  _calendarTasksPending.forEach(function(t) {
+    if (!existing.some(function(e){return e.includes(t.title.toLowerCase().slice(0,20));})) {
+      d.tasks.push({ text:t.text, done:false, priority:false, source:'calendar', calendarEventId:t.calendar_event_id||null, account:t.account_name||null, completionNote: stripMeetingBoilerplate(t.agenda)||null });
+    }
   });
   save(viewDate); render();
   var row = document.getElementById('calendarSyncRow'); if (row) row.style.display = 'none';
   showToast('📅 Calendar events added as tasks');
+}
+
+function stripMeetingBoilerplate(text) {
+  if (!text) return '';
+  // Cut off at common invite-footer markers — everything after these is
+  // boilerplate (join links, dial-in numbers, privacy notices) not agenda content
+  var cutMarkers = ['System reference', 'For organizers:', 'Privacy and security', 'Meeting options', '________________', 'Join Zoom Meeting', 'Join Microsoft Teams', 'Join with Google Meet'];
+  var cutIdx = text.length;
+  cutMarkers.forEach(function(marker) {
+    var i = text.indexOf(marker);
+    if (i > -1 && i < cutIdx) cutIdx = i;
+  });
+  return text.slice(0, cutIdx).trim().slice(0, 300);
 }
 
 function dismissCalSync() {
@@ -3343,49 +3381,6 @@ async function loadSamBrief(force) {
 
     out.innerHTML = html;
   } catch(e) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: '+esc(e.message)+'</div>'; }
-}
-async function loadSamBrief(force) {
-  var todayKey2 = new Date().toISOString().split('T')[0];
-  if (!force && _briefLoadedDate === todayKey2) return; // already loaded today
-  var out = document.getElementById('samBriefOutput');
-  var btn = document.getElementById('samBriefRefreshBtn');
-  if (!out) return;
-  if (btn) btn.textContent = '↻…';
-  out.innerHTML = '<div style="font-size:12px;color:var(--text3)">SAM is reading your pipeline and calendar…</div>';
-  try {
-    var r = await fetch(EDGE_FN_URL, {
-      method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
-      body: JSON.stringify({ action:'generate_daily_brief' })
-    });
-    var d = await r.json();
-    if (!d.ok) { out.innerHTML = '<div style="font-size:12px;color:var(--text3)">'+esc(d.error||'Brief unavailable')+'</div>'; return; }
-    _briefLoadedDate = todayKey2;
-    // Parse sections from the brief
-    var brief = d.brief || '';
-    var sections = ['TOP 3 ACCOUNTS TODAY','CALENDAR PREP','COACHING SIGNAL','SINGLE PRIORITY BEFORE NOON'];
-    var secColors = ['var(--gold)','var(--blue)','var(--amber)','var(--green)'];
-    var secIcons  = ['📊','📅','⚡','🎯'];
-    var html = '';
-    sections.forEach(function(sec, i) {
-      var pattern = new RegExp(sec + '[:\\s]*([\\s\\S]*?)(?=' + (sections[i+1] ? sections[i+1] : '$') + ')', 'i');
-      var match = brief.match(pattern);
-      if (!match) return;
-      var content = match[1].trim();
-      html += '<div style="margin-bottom:12px">' +
-        '<div style="font-size:10px;font-weight:700;color:'+secColors[i]+';text-transform:uppercase;letter-spacing:0.06em;margin-bottom:5px">'+secIcons[i]+' '+sec+'</div>' +
-        '<div style="font-size:12px;color:var(--text2);line-height:1.6;white-space:pre-wrap">'+esc(content)+'</div>' +
-      '</div>';
-    });
-    if (!html) html = '<div style="font-size:12px;color:var(--text2);white-space:pre-wrap;line-height:1.6">'+esc(brief)+'</div>';
-    html += '<div style="font-size:10px;color:var(--text3);margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">' +
-      d.accounts.slice(0,3).map(function(a) {
-        var c = a.score >= 60 ? 'var(--green)' : a.score >= 35 ? 'var(--amber)' : 'var(--text3)';
-        return '<span style="margin-right:10px"><span style="color:'+c+';font-weight:600">'+(a.score||'?')+'</span> '+esc(a.name)+'</span>';
-      }).join('') +
-    '</div>';
-    out.innerHTML = html;
-  } catch(e) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: '+esc(e.message)+'</div>'; }
-  if (btn) btn.textContent = '↻';
 }
 
 // ── Sales Habits ──────────────────────────────────────────────────────────────
