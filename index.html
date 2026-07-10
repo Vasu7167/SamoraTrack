@@ -999,7 +999,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
         <div style="background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.25);border-radius:10px;padding:14px;margin-bottom:10px">
           <div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:6px">⭐ Easiest — Claude Teams/Enterprise</div>
           <div style="font-size:11px;color:var(--text3);margin-bottom:8px;line-height:1.5">Admin adds the server once in Claude admin panel. Entire team gets SamoraTrack in Claude automatically — no individual setup, no config, nothing.</div>
-          <div style="font-size:10px;color:var(--text3);margin-bottom:4px">Claude.ai → Settings → Integrations → Add MCP server → paste:</div>
+          <div style="font-size:10px;color:var(--text3);margin-bottom:4px">Claude.ai → Settings → Connectors → Add connector → name it <strong>Samora</strong> → paste URL:</div>
           <div id="claudeMcpUrl" onclick="copyField(this,'claudeMcpUrl')" title="Click to copy" style="font-size:10px;font-family:monospace;color:var(--blue);background:var(--bg);padding:7px 8px;border-radius:6px;border:1px solid var(--border2);cursor:pointer;word-break:break-all"></div>
           <div style="font-size:10px;color:var(--text3);margin-top:4px">→ Ask Claude: "What is going wrong with my pipeline?" "Which rep needs coaching?" "Analyse last week's intent vs reality"</div>
         </div>
@@ -1025,7 +1025,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
           <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
             <div style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:6px">🌐 Claude.ai browser (Pro / Teams / Enterprise)</div>
             <div style="font-size:11px;color:var(--text3);margin-bottom:8px;line-height:1.5">No Desktop app needed. Works entirely in the browser — same live data, same AI analysis.</div>
-            <div style="font-size:10px;color:var(--text3);margin-bottom:6px">claude.ai → Settings → Integrations → Add integration → paste this URL:</div>
+            <div style="font-size:10px;color:var(--text3);margin-bottom:6px">claude.ai → Settings → Connectors → Add connector → name it <strong>Samora</strong> → paste this URL:</div>
             <div id="claudeBrowserUrl" onclick="copyField(this)" title="Click to copy" style="font-size:10px;font-family:monospace;color:var(--blue);background:var(--bg);padding:7px 8px;border-radius:6px;border:1px solid var(--border2);cursor:pointer;word-break:break-all;margin-bottom:6px"></div>
             <div style="font-size:10px;color:var(--text3)">⚠ Requires Claude Pro, Teams or Enterprise plan · Free tier does not support integrations</div>
           </div>
@@ -3404,17 +3404,28 @@ async function loadHabitsSection() {
       var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'get_habits'}) });
       var d = await r.json();
       _userHabits = d.habits || [];
-      if (!_userHabits.length) _userHabits = DEFAULT_HABITS; // seed defaults
+      if (!_userHabits.length) _userHabits = DEFAULT_HABITS;
     } catch(e) { _userHabits = DEFAULT_HABITS; }
+  }
+  // Update You tab habits preview
+  var prev = document.getElementById('youHabitsPreview');
+  if (prev) {
+    var activeCount = (_userHabits||[]).filter(function(h){return h.active;}).length;
+    prev.textContent = activeCount > 0
+      ? activeCount + ' active habit' + (activeCount!==1?'s':'') + ' — auto-generating tasks daily'
+      : 'No habits configured yet. Tap "Edit habits" to set up recurring activities.';
   }
   renderHabitsSection();
   applyHabitsToToday();
 }
 
 function renderHabitsSection() {
-  var out = document.getElementById('samHabitsOutput'); if (!out) return;
+  // samHabitsOutput was in the old SAM tab — habits now live in You tab (youHabitsPreview)
+  // Only renders in SAM tab if the div still exists (legacy)
+  var out = document.getElementById('samHabitsOutput');
   var todayDow = new Date().getDay();
   var todayHabits = (_userHabits||[]).filter(function(h) { return h.active && (h.days||[]).includes(todayDow); });
+  if (!out) return; // You tab is handled separately in loadHabitsSection
   if (!todayHabits.length) { out.innerHTML = '<div style="font-size:12px;color:var(--text3);font-style:italic">No habits for today. <button onclick="openHabitEditor()" style="background:none;border:none;color:var(--gold);cursor:pointer;font-family:var(--sans);font-size:12px">Configure habits →</button></div>'; return; }
   out.innerHTML = todayHabits.map(function(h) {
     return '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)">' +
@@ -6629,7 +6640,7 @@ document.addEventListener('click', function(e) {
       <div style="font-size:10px;color:var(--text3);margin-bottom:8px">This replaces CRM updates — your outcome becomes a verified signal.</div>
     </div>
 
-    <textarea id="doneConfirmComment" placeholder="Add a note (optional)..." maxlength="200" style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;outline:none;resize:none;height:60px;line-height:1.5;margin-bottom:16px"></textarea>
+    <textarea id="doneConfirmComment" placeholder="Add a note (optional)..." style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;outline:none;resize:none;height:80px;line-height:1.5;margin-bottom:16px"></textarea>
     <div style="display:flex;gap:10px">
       <button onclick="window._cancelDone()" style="flex:1;padding:11px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-family:'DM Sans',sans-serif;font-size:14px;cursor:pointer">Cancel</button>
       <button onclick="window._confirmDone()" style="flex:2;padding:11px;background:var(--gold);border:none;border-radius:8px;color:#18160F;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer">✓ Mark Done</button>
