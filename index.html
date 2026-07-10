@@ -486,9 +486,20 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
       <button class="today-section-btn" id="tsb-misses" onclick="setTodaySection('misses')">○ Misses</button>
     </div>
     <div class="add-box" id="today-add-box">
+      <!-- Calendar events sync row -->
       <div id="calendarSyncRow" style="display:none;margin-bottom:8px;padding:6px 8px;background:var(--surface2);border-radius:8px;font-size:12px;color:var(--text3)">
         <span id="calSyncStatus">📅 Checking calendar…</span>
         <button onclick="dismissCalSync()" style="float:right;background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;line-height:1">✕</button>
+      </div>
+      <!-- OOO tasks notification row — shown when OOO tasks were auto-added -->
+      <div id="oooSyncRow" style="display:none;margin-bottom:8px;padding:6px 8px;background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);border-radius:8px;font-size:12px;color:var(--green)">
+        <span id="oooSyncStatus"></span>
+        <button id="oooSyncDismiss" style="float:right;background:none;border:none;color:var(--green);cursor:pointer;font-size:14px;line-height:1">✕</button>
+      </div>
+      <!-- Auto-complete row — always visible in task area -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <span style="font-size:11px;color:var(--text3)">Today's tasks</span>
+        <button id="autoCompleteBtn" onclick="autoCompleteTasks()" style="padding:3px 10px;border-radius:14px;background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);font-size:11px;cursor:pointer">✓ Auto-complete</button>
       </div>
       <div id="today-anon-row" style="display:none;margin-bottom:8px">
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--text2)">
@@ -700,8 +711,6 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
             <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">Actions</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
               <button onclick="runLocalIntelligence()" id="localIntelBtn" style="padding:9px 10px;border-radius:10px;background:rgba(160,117,42,0.08);border:1px solid rgba(160,117,42,0.2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">⚡ Scan channels</button>
-              <button onclick="processOooMails()" id="oooBtn" style="padding:9px 10px;border-radius:10px;background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);color:var(--green);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">📬 OOO → tasks</button>
-              <button onclick="autoCompleteTasks()" id="autoCompleteBtn" style="padding:9px 10px;border-radius:10px;background:rgba(58,110,168,0.08);border:1px solid rgba(58,110,168,0.2);color:var(--blue);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">✓ Auto-complete</button>
               <button onclick="syncSequencing()" id="seqSyncBtn" style="padding:9px 10px;border-radius:10px;background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);color:var(--green);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">↺ Sync sequences</button>
               <button onclick="runExternalSignals()" id="externalSignalsBtn" style="padding:9px 10px;border-radius:10px;background:rgba(58,110,168,0.08);border:1px solid rgba(58,110,168,0.2);color:var(--blue);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">🌐 Market signals</button>
               <button onclick="syncNotetaker()" id="notetakerSyncBtn" style="padding:9px 10px;border-radius:10px;background:rgba(160,117,42,0.08);border:1px solid rgba(160,117,42,0.2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">🎙 Sync calls</button>
@@ -1434,9 +1443,12 @@ function launchApp() {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   const todayNav = document.getElementById('nav-today'); if (todayNav) todayNav.classList.add('active');
   _lastCalDate = null; render();
-  // Sync calendar events into today's task suggestions after a short delay
+  // Sync calendar events and scan OOO mails into today's task suggestions
   setTimeout(function() {
-    if (currentUser?.token) syncCalendarTasks(false);
+    if (currentUser?.token) {
+      syncCalendarTasks(false);
+      processOooMails();  // runs silently, adds tasks to future dates, shows banner if found
+    }
     refreshYouTabConnections();
   }, 1500);
   setTimeout(function() { _lastCalDate = null; renderCalStrip(); }, 0);
@@ -3815,25 +3827,30 @@ async function runExternalSignals(repId, resultElId) {
 }
 
 // ── OOO mail → auto task ──────────────────────────────────────────────────────
+// Runs automatically on app open. Scans inbox for OOO replies, creates
+// follow-up tasks on the first business day after the person returns.
+// Shows a quiet notification in the Today tab (not the SAM tab).
 async function processOooMails() {
-  var btn = document.getElementById('oooBtn');
-  var out = document.getElementById('samLocalIntelOutput');
-  if (btn) { btn.textContent = '📬 Scanning…'; btn.disabled = true; }
   try {
-    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'process_ooo_mails', days:14}) });
+    var r = await fetch(EDGE_FN_URL, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({action:'process_ooo_mails', days:14})
+    });
     var d = await r.json();
-    if (out) {
-      if (!d.ok) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">' + esc(d.error||'Failed') + '</div>'; return; }
-      if (!d.tasksCreated?.length) {
-        out.innerHTML = '<div style="font-size:12px;color:var(--text3)">📬 Scanned ' + d.oooMailsFound + ' OOO mails — no future return dates found (returns may already have passed).</div>';
-      } else {
-        out.innerHTML = '<div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:6px">📬 ' + d.tasksCreated.length + ' follow-up task' + (d.tasksCreated.length!==1?'s':'') + ' created from OOO mails:</div>' +
-          d.tasksCreated.map(function(t){ return '<div style="font-size:11px;color:var(--text3);margin-bottom:3px">📅 ' + esc(t.taskDate) + ' — ' + esc(t.taskText.slice(0,60)) + '</div>'; }).join('');
-        syncDown();
-      }
+    if (!d.ok || !d.tasksCreated?.length) return;
+    // Show quiet banner in Today tab
+    var row    = document.getElementById('oooSyncRow');
+    var status = document.getElementById('oooSyncStatus');
+    var dismiss = document.getElementById('oooSyncDismiss');
+    if (row && status) {
+      status.textContent = '📬 ' + d.tasksCreated.length + ' OOO follow-up task' + (d.tasksCreated.length!==1?'s':'') + ' added to your future dates';
+      row.style.display = 'block';
+      if (dismiss) dismiss.addEventListener('click', function(){ row.style.display='none'; });
     }
-  } catch(e) { if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>'; }
-  if (btn) { btn.textContent = '📬 OOO → tasks'; btn.disabled = false; }
+    // Refresh task list so new tasks appear immediately if they're for today
+    syncDown().then(function(){ render(); });
+  } catch(e) { /* silent — non-critical */ }
 }
 
 // ── Auto-complete obvious tasks ───────────────────────────────────────────────
@@ -3890,10 +3907,9 @@ async function autoCompleteTasks() {
 
   if (count > 0) {
     save(today2); render();
-    var logHtml = autoLog.map(function(l){return '<div style="font-size:11px;color:var(--text3);margin-bottom:3px">'+l+'</div>';}).join('');
-    if (out) out.innerHTML = '<div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:6px">✓ Auto-completed '+count+' task'+(count!==1?'s':'')+':</div>'+logHtml;
+    showToast('✓ Auto-completed ' + count + ' task' + (count!==1?'s':'') + (autoLog.length ? ' — ' + autoLog[0].replace(/<[^>]+>/g,'').slice(0,40) : ''));
   } else {
-    if (out) out.innerHTML = '<div style="font-size:12px;color:var(--text3)">No tasks auto-completed — no matching sent emails found today, and no past calendar events.</div>';
+    showToast('No tasks matched sent emails today');
   }
   if (btn) { btn.textContent = '✓ Auto-complete'; btn.disabled = false; }
 }
@@ -5074,6 +5090,100 @@ function confirmCarryForward(){
   const targetLabel=new Date(targetDate+'T12:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
   showCFToast('Carried forward to '+targetLabel+' ✓');
 }
+// ── showToast — global toast notification ─────────────────────────────────────
+function showToast(msg) {
+  var t = document.getElementById('samora-global-toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'samora-global-toast';
+    t.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surface);border:1px solid var(--gold);padding:10px 18px;border-radius:20px;font-size:13px;color:var(--text);z-index:9999;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;white-space:nowrap;font-family:var(--sans);box-shadow:0 4px 20px rgba(0,0,0,0.15)';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  requestAnimationFrame(function() { t.style.opacity = '1'; t.style.transform = 'translateX(-50%) translateY(0)'; });
+  clearTimeout(t._timer);
+  t._timer = setTimeout(function() { t.style.opacity = '0'; t.style.transform = 'translateX(-50%) translateY(10px)'; }, 3000);
+}
+
+// ── renderByProductChart ─────────────────────────────────────────────────────
+function renderByProductChart(deals, fmtUsd) {
+  var byProduct = {};
+  deals.forEach(function(d) {
+    // Use product_name from deal, or derive from revenue_streams
+    var streams = d.revenue_streams || [];
+    if (streams.length) {
+      streams.forEach(function(s) {
+        var k = s.product_name || s.product || 'Other';
+        if (!byProduct[k]) byProduct[k] = { val: 0, verified: 0, partial: 0, count: 0 };
+        var amt = (parseFloat(s.amount_usd) || parseFloat(s.amount) || 0);
+        byProduct[k].val      += amt || d.deal_value_usd || 0;
+        byProduct[k].count    += 1;
+        if (d.tier === 'verified') byProduct[k].verified += amt || d.deal_value_usd || 0;
+        else if (d.tier === 'partial') byProduct[k].partial += amt || d.deal_value_usd || 0;
+      });
+    } else {
+      var k2 = d.product_name || 'No product';
+      if (!byProduct[k2]) byProduct[k2] = { val: 0, verified: 0, partial: 0, count: 0 };
+      byProduct[k2].val     += d.deal_value_usd || 0;
+      byProduct[k2].count   += 1;
+      if (d.tier === 'verified') byProduct[k2].verified += d.deal_value_usd || 0;
+      else if (d.tier === 'partial') byProduct[k2].partial += d.deal_value_usd || 0;
+    }
+  });
+  var rows = Object.entries(byProduct).sort(function(a, b) { return b[1].val - a[1].val; }).map(function(e) {
+    return { label: e[0], val: e[1].val, verified: e[1].verified, partial: e[1].partial, count: e[1].count };
+  });
+  var maxVal = Math.max.apply(null, rows.map(function(r) { return r.val; }));
+  if (!rows.length) return '<div style="font-size:12px;color:var(--text3);padding:16px 0">No product data — add products in Admin settings and tag deals.</div>';
+  return '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Pipeline by product</div>' +
+    mkBars(rows, maxVal, fmtUsd);
+}
+
+// ── renderByStreamChart ─────────────────────────────────────────────────────
+function renderByStreamChart(deals, fmtUsd) {
+  var byStream = {};
+  deals.forEach(function(d) {
+    var streams = d.revenue_streams || [];
+    if (streams.length) {
+      streams.forEach(function(s) {
+        var k = s.name || s.key || s.type || 'Other';
+        if (!byStream[k]) byStream[k] = { val: 0, verified: 0, partial: 0 };
+        var amt = parseFloat(s.amount_usd) || parseFloat(s.amount) || d.deal_value_usd || 0;
+        byStream[k].val += amt;
+        if (d.tier === 'verified') byStream[k].verified += amt;
+        else if (d.tier === 'partial') byStream[k].partial += amt;
+      });
+    } else {
+      var k2 = d.deal_type || 'Unknown';
+      if (!byStream[k2]) byStream[k2] = { val: 0, verified: 0, partial: 0 };
+      byStream[k2].val += d.deal_value_usd || 0;
+      if (d.tier === 'verified') byStream[k2].verified += d.deal_value_usd || 0;
+      else if (d.tier === 'partial') byStream[k2].partial += d.deal_value_usd || 0;
+    }
+  });
+  var rows = Object.entries(byStream).sort(function(a, b) { return b[1].val - a[1].val; }).map(function(e) {
+    return { label: e[0], val: e[1].val, verified: e[1].verified, partial: e[1].partial };
+  });
+  var maxVal = Math.max.apply(null, rows.map(function(r) { return r.val; }));
+  if (!rows.length) return '<div style="font-size:12px;color:var(--text3);padding:16px 0">No revenue stream data — save deals with stream breakdowns to see this view.</div>';
+  return '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Pipeline by revenue stream</div>' +
+    mkBars(rows, maxVal, fmtUsd);
+}
+
+// ── Delegated click handler for pipeline edit-close-date buttons ─────────────
+// Using data attributes means no inline onclick with escaped strings.
+// One listener on the document catches all current and future pipeline cards.
+document.addEventListener('click', function(e) {
+  var btn = e.target.closest('.edit-close-date-btn');
+  if (btn) {
+    editCloseDate(
+      btn.getAttribute('data-opp-id'),
+      btn.getAttribute('data-account'),
+      btn.getAttribute('data-close')
+    );
+  }
+});
+
 function showCFToast(msg){let t=document.getElementById('cf-toast');if(!t){t=document.createElement('div');t.id='cf-toast';t.style.cssText='position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surface);border:1px solid var(--gold);padding:10px 18px;border-radius:8px;font-size:13px;color:var(--text);z-index:9998;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap;font-family:"DM Sans",sans-serif';document.body.appendChild(t);}t.textContent=msg;requestAnimationFrame(()=>{t.style.opacity='1';t.style.transform='translateX(-50%) translateY(0)';});clearTimeout(t._timer);t._timer=setTimeout(()=>{t.style.opacity='0';t.style.transform='translateX(-50%) translateY(10px)';},3000);}
 document.addEventListener('click',e=>{const m=document.getElementById('carryFwdModal');if(m&&e.target===m)closeCarryForward();});
 
@@ -5861,7 +5971,7 @@ function renderPipelineDeals(data) {
             (d.hint_context ? '<div style="font-size:11px;color:var(--text3);font-style:italic">"' + esc(d.hint_context.slice(0, 100)) + '"</div>' : '') +
             '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:2px">' +
               (localValue ? '<span style="font-size:11px;color:var(--text2)">Local: ' + localValue + '</span>' : '') +
-              (d.expected_close ? '<span onclick="editCloseDate('+JSON.stringify(d.id)+','+JSON.stringify(d.account)+','+JSON.stringify(d.expected_close)+')" title="Click to edit close date" style="font-size:11px;color:var(--gold);cursor:pointer;font-weight:600">✎ '+d.expected_close+'</span>' : '<span onclick="editCloseDate('+JSON.stringify(d.id)+','+JSON.stringify(d.account)+',\'\')" style="font-size:11px;color:var(--text3);cursor:pointer">+ Set close date</span>') +
+              '<span class="edit-close-date-btn" data-opp-id="'+esc(d.id||'')+'" data-account="'+esc(d.account||'')+'" data-close="'+esc(d.expected_close||'')+'" style="font-size:11px;color:'+(d.expected_close?'var(--gold)':'var(--text3)')+';cursor:pointer;'+(d.expected_close?'font-weight:600':'')+'">'+(d.expected_close?'✎ '+d.expected_close:'+ Set close date')+'</span>' +
               (d.licenses_units ? '<span style="font-size:11px;color:var(--text3)">' + d.licenses_units + ' units</span>' : '') +
               // ICP score badge
               (d.icp_score != null ? '<span style="font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;background:' + (d.icp_score>=70?'rgba(74,140,92,.15)':d.icp_score>=40?'rgba(160,117,42,.15)':'rgba(136,135,128,.15)') + ';color:' + (d.icp_score>=70?'var(--green)':d.icp_score>=40?'var(--gold)':'var(--text3)') + '" title="ICP fit: ' + esc(d.icp_notes||'') + '">ICP ' + d.icp_score + '</span>' : '') +
