@@ -5458,10 +5458,12 @@ function clearPipelineFilters() {
 }
 
 function getFilteredDeals(data) {
-  var all = [...(data.verified||[]), ...(data.partial||[]), ...(data.unverified||[])];
+  // data.deals is the primary array from get_pipeline response
+  // Fall back to legacy verified/partial/unverified arrays if present
+  var all = data.deals || [...(data.verified||[]), ...(data.partial||[]), ...(data.unverified||[])];
   return all.filter(function(d) {
     if (_pipelineFilters.tier && d.tier !== _pipelineFilters.tier) return false;
-    if (_pipelineFilters.product && d.product_id !== _pipelineFilters.product) return false;
+    if (_pipelineFilters.product && d.product_name !== _pipelineFilters.product) return false;
     if (_pipelineFilters.region && d.region !== _pipelineFilters.region) return false;
     if (_pipelineFilters.rep && d.rep_user_id !== _pipelineFilters.rep) return false;
     if (_pipelineFilters.stream) {
@@ -5477,37 +5479,46 @@ function populatePipelineFilters(data) {
   var repSel = document.getElementById('pipe-filter-rep');
   if (repSel) {
     var repMap = {};
-    [...(data.verified||[]),(data.partial||[]),(data.unverified||[])].flat().forEach(function(d) {
+    var allDeals = data.deals || [];
+    allDeals.forEach(function(d) {
       if (d.rep_user_id && d.rep_email) repMap[d.rep_user_id] = d.rep_email.split('@')[0].replace(/\./g,' ').replace(/\b\w/g, function(c){return c.toUpperCase();});
     });
     repSel.innerHTML = '<option value="">All reps</option>' +
       Object.entries(repMap).map(function(e){ return '<option value="'+esc(e[0])+'">'+esc(e[1])+'</option>'; }).join('');
   }
-  // Products dropdown — from product_name field or revenue_streams
+  // Region dropdown — from regionBreakdown or deal region field
+  var regSel = document.getElementById('pipe-filter-region');
+  if (regSel) {
+    var regions = {};
+    var allDeals3 = data.deals || [];
+    allDeals3.forEach(function(d) { if (d.region) regions[d.region] = true; });
+    regSel.innerHTML = '<option value="">All regions</option>' +
+      Object.keys(regions).sort().map(function(r){ return '<option value="'+esc(r)+'">'+esc(r)+'</option>'; }).join('');
+  }
+  // Products dropdown — from org_products if available, else from deal data
   var prodSel = document.getElementById('pipe-filter-product');
   if (prodSel) {
     var prods = {};
-    var allDeals = [...(data.verified||[]),(data.partial||[]),(data.unverified||[])].flat();
-    allDeals.forEach(function(d) {
+    var allDeals4 = data.deals || [];
+    allDeals4.forEach(function(d) {
       if (d.product_name) prods[d.product_name] = true;
-      (d.revenue_streams||[]).forEach(function(s) { if (s.product_name||s.product) prods[s.product_name||s.product]=true; });
     });
     var prodKeys = Object.keys(prods).filter(Boolean);
     prodSel.innerHTML = '<option value="">All products</option>' + prodKeys.map(function(p){ return '<option value="'+esc(p)+'">'+esc(p)+'</option>'; }).join('');
+    if (!prodKeys.length) prodSel.innerHTML = '<option value="">All products</option>';
   }
-  // Stream dropdown — from revenue_streams
+  // Stream dropdown — from revenue_streams on deal objects
   var strmSel = document.getElementById('pipe-filter-stream');
   if (strmSel) {
     var strms = {};
-    var allDeals2 = [...(data.verified||[]),(data.partial||[]),(data.unverified||[])].flat();
-    allDeals2.forEach(function(d) {
+    var allDeals5 = data.deals || [];
+    allDeals5.forEach(function(d) {
       (d.revenue_streams||[]).forEach(function(s) { var k=s.name||s.key||s.type; if(k) strms[k]=true; });
       if (!d.revenue_streams?.length && d.deal_type) strms[d.deal_type]=true;
     });
     var strmKeys = Object.keys(strms).filter(Boolean);
     strmSel.innerHTML = '<option value="">All revenue streams</option>' + strmKeys.map(function(k){ return '<option value="'+esc(k)+'">'+esc(k)+'</option>'; }).join('');
   }
-  var old_products_placeholder = '  // old Products dropdown'
   var prodSel = document.getElementById('pipe-filter-product');
   if (prodSel && _orgProducts?.length) {
     var opts = '<option value="">All products</option>' +
