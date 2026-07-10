@@ -3838,41 +3838,62 @@ async function processOooMails() {
 
 // ── Auto-complete obvious tasks ───────────────────────────────────────────────
 // Marks done any task that is clearly completed based on context:
-// - Email tasks where Gmail verification found a sent email
-// - Calendar tasks from calendar sync (the meeting happened — it's in the past)
-// - OOO auto-created tasks for dates that have passed
-function autoCompleteTasks() {
+// ── Auto-complete tasks via Gmail verification ────────────────────────────────
+async function autoCompleteTasks() {
   var btn = document.getElementById('autoCompleteBtn');
-  if (btn) { btn.textContent = '✓ Checking…'; btn.disabled = true; }
+  var out = document.getElementById('samLocalIntelOutput');
+  if (btn) { btn.textContent = '✓ Checking sent mail…'; btn.disabled = true; }
+  if (out) out.innerHTML = '<div style="font-size:12px;color:var(--text3)">Checking Gmail sent folder for completed email tasks…</div>';
   var today2 = todayKey();
   var d = dayData(today2);
   var count = 0;
   var now = new Date();
+  var autoLog = [];
+
+  // Phase 1: Calendar tasks past their scheduled time
   (d.tasks || []).forEach(function(task) {
-    if (task.done) return;
-    var text = (task.text || '').toLowerCase();
-    // Rule 1: Calendar-sourced task where the calendar event is in the past
-    if (task.source === 'calendar' && task.calendarEventId) {
-      // The event was today — if it's past noon and the task title says a time before now
-      var timeMatch = task.text.match(/at\s+(\d{1,2}):(\d{2})/);
-      if (timeMatch) {
-        var eventHour = parseInt(timeMatch[1], 10);
-        var eventMin  = parseInt(timeMatch[2], 10);
-        if (now.getHours() > eventHour || (now.getHours() === eventHour && now.getMinutes() > eventMin + 30)) {
-          task.done = true; task.autoCompleted = true; count++;
-        }
+    if (task.done || task.source !== 'calendar') return;
+    var timeMatch = task.text.match(/at\s+(\d{1,2}):(\d{2})/i);
+    if (timeMatch) {
+      var eh = parseInt(timeMatch[1], 10), em = parseInt(timeMatch[2], 10);
+      if (now.getHours() > eh || (now.getHours() === eh && now.getMinutes() > em + 30)) {
+        task.done = true; task.autoCompleted = true; count++;
+        autoLog.push('📅 ' + esc(task.text.slice(0, 50)));
       }
     }
-    // Rule 2: OOO auto-task for a date that has now passed (it's been handled or the day is over)
-    if (task.source === 'ooo_auto' && now.getHours() >= 20) {
-      task.done = true; task.autoCompleted = true; count++;
-    }
   });
+
+  // Phase 2: Email tasks — check Gmail sent folder for matching sent mail
+  var emailTasks = (d.tasks || []).filter(function(t) {
+    if (t.done) return false;
+    return /\bmail\b|\bsend\b|\bfollow.?up\b|\breach.?out\b|\bwrite\b|\bemail\b|\bshare\b|\bMOM\b|\bminutes\b|\bpointer\b/i.test(t.text);
+  });
+
+  if (emailTasks.length > 0) {
+    try {
+      var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'get_sent_today', date: today2}) });
+      var sentData = await r.json();
+      var sentEmails = sentData.emails || [];
+      emailTasks.forEach(function(task) {
+        var taskWords = task.text.toLowerCase().replace(/[^a-z0-9\s]/g,' ').split(/\s+/).filter(function(w){return w.length>3 && !['mail','send','from','with','that','this','have','will','been','they','team'].includes(w);});
+        var matched = sentEmails.find(function(e) {
+          var et = ((e.subject||'')+' '+(e.to||'')+' '+(e.snippet||'')).toLowerCase();
+          return taskWords.filter(function(w){return et.includes(w);}).length >= 2;
+        });
+        if (matched) {
+          task.done = true; task.autoCompleted = true; task.verifiedVia = 'gmail_sent'; count++;
+          autoLog.push('✉ '+esc(task.text.slice(0,50))+' → "'+esc((matched.subject||'').slice(0,40))+'"');
+        }
+      });
+    } catch(e) { /* non-fatal */ }
+  }
+
   if (count > 0) {
     save(today2); render();
-    showToast('✓ Auto-completed ' + count + ' task' + (count!==1?'s':'') + ' — calendar events and OOO follow-ups that have passed');
+    var logHtml = autoLog.map(function(l){return '<div style="font-size:11px;color:var(--text3);margin-bottom:3px">'+l+'</div>';}).join('');
+    if (out) out.innerHTML = '<div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:6px">✓ Auto-completed '+count+' task'+(count!==1?'s':'')+':</div>'+logHtml;
   } else {
-    showToast('No tasks to auto-complete right now');
+    if (out) out.innerHTML = '<div style="font-size:12px;color:var(--text3)">No tasks auto-completed — no matching sent emails found today, and no past calendar events.</div>';
   }
   if (btn) { btn.textContent = '✓ Auto-complete'; btn.disabled = false; }
 }
@@ -5840,9 +5861,7 @@ function renderPipelineDeals(data) {
             (d.hint_context ? '<div style="font-size:11px;color:var(--text3);font-style:italic">"' + esc(d.hint_context.slice(0, 100)) + '"</div>' : '') +
             '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:2px">' +
               (localValue ? '<span style="font-size:11px;color:var(--text2)">Local: ' + localValue + '</span>' : '') +
-              (d.expected_close
-  ? '<span onclick="editCloseDate(\''+d.id+'\',\''+esc(d.account)+'\',\''+d.expected_close+'\')" title="Click to edit close date" style="font-size:11px;color:var(--text3);cursor:pointer;text-decoration:underline dotted">Close: '+d.expected_close+' ✎</span>'
-  : '<span onclick="editCloseDate(\''+d.id+'\',\''+esc(d.account)+'\',\'\')" style="font-size:11px;color:var(--text3);cursor:pointer;text-decoration:underline dotted">+ Set close date</span>') +
+              (d.expected_close ? '<span onclick="editCloseDate('+JSON.stringify(d.id)+','+JSON.stringify(d.account)+','+JSON.stringify(d.expected_close)+')" title="Click to edit close date" style="font-size:11px;color:var(--gold);cursor:pointer;font-weight:600">✎ '+d.expected_close+'</span>' : '<span onclick="editCloseDate('+JSON.stringify(d.id)+','+JSON.stringify(d.account)+',\'\')" style="font-size:11px;color:var(--text3);cursor:pointer">+ Set close date</span>') +
               (d.licenses_units ? '<span style="font-size:11px;color:var(--text3)">' + d.licenses_units + ' units</span>' : '') +
               // ICP score badge
               (d.icp_score != null ? '<span style="font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;background:' + (d.icp_score>=70?'rgba(74,140,92,.15)':d.icp_score>=40?'rgba(160,117,42,.15)':'rgba(136,135,128,.15)') + ';color:' + (d.icp_score>=70?'var(--green)':d.icp_score>=40?'var(--gold)':'var(--text3)') + '" title="ICP fit: ' + esc(d.icp_notes||'') + '">ICP ' + d.icp_score + '</span>' : '') +
@@ -5871,14 +5890,16 @@ async function editCloseDate(oppId, accountName, currentDate) {
   modal.id = 'edit-close-modal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:flex-end;justify-content:center;z-index:9999';
   modal.innerHTML = '<div style="background:var(--bg);border-radius:16px 16px 0 0;width:100%;max-width:480px;padding:22px 20px" onclick="event.stopPropagation()">' +
-    '<div style="font-size:15px;font-weight:700;margin-bottom:4px">Edit close date</div>' +
-    '<div style="font-size:12px;color:var(--text3);margin-bottom:14px">' + esc(accountName) + '</div>' +
-    '<input type="date" id="editCloseDateInput" value="' + esc(currentDate) + '" style="width:100%;padding:11px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--sans);font-size:14px;outline:none;margin-bottom:14px"/>' +
-    '<button onclick="saveCloseDate(\'' + esc(oppId) + '\')" style="width:100%;padding:12px;background:var(--gold);border:none;border-radius:10px;color:#18160F;font-family:var(--sans);font-size:14px;font-weight:700;cursor:pointer">Save close date</button>' +
-    '<button onclick="document.getElementById(\'edit-close-modal\').remove()" style="width:100%;padding:10px;background:none;border:none;color:var(--text3);font-family:var(--sans);font-size:13px;cursor:pointer;margin-top:4px">Cancel</button>' +
+    '<div style="font-size:15px;font-weight:700;margin-bottom:4px">✎ Edit close date</div>' +
+    '<div style="font-size:12px;color:var(--text3);margin-bottom:14px">' + esc(String(accountName||'')) + '</div>' +
+    '<input type="date" id="editCloseDateInput" value="' + esc(String(currentDate||'')) + '" style="width:100%;padding:11px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--sans);font-size:14px;outline:none;margin-bottom:14px"/>' +
+    '<button id="saveCloseDateBtn" style="width:100%;padding:12px;background:var(--gold);border:none;border-radius:10px;color:#18160F;font-family:var(--sans);font-size:14px;font-weight:700;cursor:pointer">Save</button>' +
+    '<button id="cancelCloseDateBtn" style="width:100%;padding:10px;background:none;border:none;color:var(--text3);font-family:var(--sans);font-size:13px;cursor:pointer;margin-top:4px">Cancel</button>' +
   '</div>';
   modal.addEventListener('click', function(e){ if(e.target===modal) modal.remove(); });
   document.body.appendChild(modal);
+  document.getElementById('saveCloseDateBtn').addEventListener('click', function(){ saveCloseDate(oppId); });
+  document.getElementById('cancelCloseDateBtn').addEventListener('click', function(){ modal.remove(); });
 }
 
 async function saveCloseDate(oppId) {
