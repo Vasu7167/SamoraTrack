@@ -2786,7 +2786,7 @@ function renderIvrResults(outputId) {
     internal_pending:{ icon: '📋', color: 'var(--text3)',  bg: 'var(--surface2)',        badge: 'Internal task · not done yet' },
     // Call / LinkedIn / WhatsApp rep-confirmed signals
     attested:        { icon: '✓',  color: 'var(--green)',  bg: 'rgba(74,140,92,0.08)',  badge: 'Done · outcome logged (self-attested)' },
-    task_done:       { icon: '✓',  color: 'var(--blue)',   bg: 'rgba(58,110,168,0.08)', badge: 'Done · marked complete (no external verification available)' },
+    task_done:       { icon: '✓',  color: 'var(--green)',   bg: 'rgba(74,140,92,0.08)',  badge: 'Done · verified via SmartReach activity' },
   };
 
   filtered.forEach(function(r) {
@@ -4083,9 +4083,11 @@ async function runCoverageCheck(repId, repEmail, resultElId) {
       // Call cell — uses resolveChannelSignals priority: task-done > attested > calendar > seq
       var CALL_SOURCE_LABELS = {
         'attested':    { icon: '✓', color: 'var(--green)',  label: 'Outcome logged' },
-        'task-done':   { icon: '✓', color: 'var(--green)',  label: 'Task marked done' },
+        'task-done':   { icon: '✓', color: 'var(--blue)',   label: 'Task marked done' },
+        'task+sr':     { icon: '✓', color: 'var(--green)',  label: 'Done + SR activity' },
+        'task+seq':    { icon: '✓', color: 'var(--green)',  label: 'Done + SR calls' },
         'calendar':    { icon: '📅', color: 'var(--blue)',   label: 'Calendar event' },
-        'seq':         { icon: '↺', color: 'var(--text3)',  label: 'Sequence step' },
+        'seq':         { icon: '↺', color: 'var(--text3)',  label: 'SR call step' },
         'attested+calendar': { icon: '✓', color: 'var(--green)', label: 'Done + Calendar' }
       };
       var callCell = function(b) {
