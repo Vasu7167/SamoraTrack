@@ -602,7 +602,8 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
       <button onclick="setPipelineDashTab('byProduct')" id="pdt-byProduct" class="pdt-btn">By product</button>
       <button onclick="setPipelineDashTab('byRegion')" id="pdt-byRegion" class="pdt-btn">By region</button>
       <button onclick="setPipelineDashTab('byStream')" id="pdt-byStream" class="pdt-btn">By revenue stream</button>
-      <button onclick="setPipelineDashTab('attention')" id="pdt-attention" class="pdt-btn pdt-alert" id="pdt-attention">Needs attention</button>
+      <button onclick="setPipelineDashTab('winloss')" id="pdt-winloss" class="pdt-btn">Win / Loss</button>
+      <button onclick="setPipelineDashTab('attention')" id="pdt-attention" class="pdt-btn pdt-alert">Needs attention</button>
     </div>
 
     <!-- Filters -->
@@ -774,7 +775,14 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
               <div style="font-size:13px;font-weight:600;color:var(--text)">🎯 Intent vs Reality</div>
               <div style="font-size:11px;color:var(--text3);margin-top:2px">What you logged vs what actually happened</div>
             </div>
-            <button onclick="runIntentVsReality(null,'ivrOutput')" id="ivrBtn" style="padding:7px 16px;border-radius:20px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Check last week</button>
+          </div>
+          <!-- Period picker for self mode -->
+          <div id="ivrperiod-ivrOutput" style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px">
+            <button onclick="setSelfIvrPeriod('today',this)" style="padding:4px 10px;border-radius:14px;font-size:11px;cursor:pointer;font-family:var(--sans);border:1px solid var(--border);background:var(--surface2);color:var(--text2)">Today</button>
+            <button onclick="setSelfIvrPeriod('wtd',this)" style="padding:4px 10px;border-radius:14px;font-size:11px;cursor:pointer;font-family:var(--sans);border:1px solid var(--border);background:var(--surface2);color:var(--text2)">WTD</button>
+            <button onclick="setSelfIvrPeriod('last_week',this)" id="selfIvrLastWeekBtn" style="padding:4px 10px;border-radius:14px;font-size:11px;cursor:pointer;font-family:var(--sans);border:1px solid var(--gold);background:var(--gold);color:#18160F">Last week</button>
+            <button onclick="setSelfIvrPeriod('mtd',this)" style="padding:4px 10px;border-radius:14px;font-size:11px;cursor:pointer;font-family:var(--sans);border:1px solid var(--border);background:var(--surface2);color:var(--text2)">MTD</button>
+            <button onclick="setSelfIvrPeriod('qtd',this)" style="padding:4px 10px;border-radius:14px;font-size:11px;cursor:pointer;font-family:var(--sans);border:1px solid var(--border);background:var(--surface2);color:var(--text2)">QTD</button>
           </div>
           <div id="ivrOutput"></div>
         </div>
@@ -2875,7 +2883,7 @@ function renderIvrResults(outputId) {
   out.innerHTML = html;
 }
 
-async function runIntentVsReality(repId, outputId) {
+async function runIntentVsReality(repId, outputId, periodOverride) {
   _ivrRepId[outputId || 'ivrOutput'] = repId;
   var isManager = !!repId;
   var out = document.getElementById(outputId || 'ivrOutput');
@@ -2884,6 +2892,8 @@ async function runIntentVsReality(repId, outputId) {
   if (btn && !isManager) { btn.textContent = 'Scanning…'; btn.disabled = true; }
   var today = todayKey();
   var dateFrom, dateTo, periodLabel;
+  // Allow period override from self-mode period picker
+  if (!isManager && periodOverride) { _ivrPeriod[outputId || 'ivrOutput'] = periodOverride; }
   var _calcPeriod = function(period, refDate) {
     var d = parseDate(refDate);
     var dow = d.getDay(); // 0=Sun
@@ -3333,6 +3343,17 @@ async function loadSequencingStats() {
 
 // ── SAM Sub-tab navigation ─────────────────────────────────────────────────────
 var _samSubTab = 'signal';
+var _selfIvrPeriod = 'last_week';
+
+function setSelfIvrPeriod(period, btn) {
+  _selfIvrPeriod = period;
+  document.querySelectorAll('#ivrperiod-ivrOutput button').forEach(function(b) {
+    b.style.background = 'var(--surface2)'; b.style.borderColor = 'var(--border)'; b.style.color = 'var(--text2)';
+  });
+  if (btn) { btn.style.background = 'var(--gold)'; btn.style.borderColor = 'var(--gold)'; btn.style.color = '#18160F'; }
+  runIntentVsReality(null, 'ivrOutput', period);
+}
+
 function setSamSubTab(tab) {
   _samSubTab = tab;
   ['signal','coverage','ivr'].forEach(function(t) {
@@ -3353,12 +3374,14 @@ function setSamSubTab(tab) {
   // Auto-run IVR when switching to that tab
   if (tab === 'ivr') {
     var ivrOut = document.getElementById('ivrOutput');
-    if (ivrOut && !ivrOut.innerHTML.trim()) runIntentVsReality(null, 'ivrOutput');
+    if (ivrOut && !ivrOut.innerHTML.trim()) runIntentVsReality(null, 'ivrOutput', _selfIvrPeriod);
   }
 }
 
 // ── SAM Daily Brief ───────────────────────────────────────────────────────────
 var _briefLoadedDate = '';
+var _BRIEF_CACHE_KEY = 'samora_brief_cache';
+
 async function loadSamBrief(force) {
   var todayKey2 = new Date().toISOString().split('T')[0];
   if (!force && _briefLoadedDate === todayKey2) return;
@@ -3373,53 +3396,52 @@ async function loadSamBrief(force) {
       body: JSON.stringify({ action:'generate_daily_brief' })
     });
     var d = await r.json();
-    if (!d.ok) { out.innerHTML = '<div style="font-size:12px;color:var(--text3)">'+esc(d.error||'Brief unavailable — check Gemini API key in Samora admin')+'</div>'; return; }
-    _briefLoadedDate = todayKey2;
-
-    var brief = d.brief;
-    var html = '';
-
-    if (d.brief_structured && brief && typeof brief === 'object') {
-      // Structured JSON — clean, reliable rendering
-      var topAccts = brief.top_accounts || [];
-      if (topAccts.length) {
-        html += '<div style="margin-bottom:12px">';
-        html += '<div style="font-size:10px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">📊 Top 3 accounts today</div>';
-        topAccts.slice(0,3).forEach(function(a) {
-          var scoreColor = a.score >= 60 ? 'var(--green)' : a.score >= 35 ? 'var(--amber)' : 'var(--text3)';
-          html += '<div style="padding:8px 10px;background:rgba(0,0,0,0.04);border-radius:8px;margin-bottom:5px">';
-          html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">';
-          html += '<span style="font-size:12px;font-weight:600;color:var(--text)">'+esc(a.name)+'</span>';
-          if (a.score) html += '<span style="font-size:10px;font-weight:700;color:'+scoreColor+';background:'+scoreColor+'18;padding:1px 6px;border-radius:4px">'+a.score+'</span>';
-          html += '</div>';
-          if (a.reason) html += '<div style="font-size:11px;color:var(--text3);margin-bottom:3px">'+esc(a.reason)+'</div>';
-          if (a.action) html += '<div style="font-size:11px;font-weight:600;color:var(--gold)">→ '+esc(a.action)+'</div>';
-          html += '</div>';
-        });
-        html += '</div>';
+    if (!d.ok && (d.error||'').toLowerCase().includes('quota')) {
+      var cached = localStorage.getItem(_BRIEF_CACHE_KEY);
+      if (cached) {
+        try {
+          var c = JSON.parse(cached);
+          out.innerHTML = renderBriefHtml(c.brief, c.brief_structured) +
+            '<div style="font-size:10px;color:var(--amber);margin-top:8px;padding:4px 8px;background:rgba(160,117,42,0.1);border-radius:6px">⚠ Gemini quota reached — showing brief from ' + esc(c.date||'earlier') + '</div>';
+          return;
+        } catch(e2) {}
       }
-      if (brief.calendar_prep && brief.calendar_prep !== 'null') {
-        html += '<div style="margin-bottom:10px"><div style="font-size:10px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px">📅 Calendar prep</div>';
-        html += '<div style="font-size:12px;color:var(--text2);line-height:1.5">'+esc(brief.calendar_prep)+'</div></div>';
-      }
-      if (brief.coaching_signal) {
-        html += '<div style="margin-bottom:10px"><div style="font-size:10px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px">⚡ Coaching</div>';
-        html += '<div style="font-size:12px;color:var(--text2);line-height:1.5">'+esc(brief.coaching_signal)+'</div></div>';
-      }
-      if (brief.priority_before_noon) {
-        html += '<div style="padding:8px 12px;background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);border-radius:8px">';
-        html += '<div style="font-size:10px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:3px">🎯 Priority before noon</div>';
-        html += '<div style="font-size:12px;font-weight:600;color:var(--text)">'+esc(brief.priority_before_noon)+'</div></div>';
-      }
-    } else if (typeof brief === 'string' && brief.length > 10) {
-      // Fallback: render raw text cleanly
-      html = '<div style="font-size:12px;color:var(--text2);white-space:pre-wrap;line-height:1.7">'+esc(brief)+'</div>';
-    } else {
-      html = '<div style="font-size:12px;color:var(--text3)">Brief could not be generated — run Scan channels first to build pipeline context.</div>';
+      out.innerHTML = '<div style="font-size:12px;color:var(--amber)">⚠ Gemini quota reached for today. Brief will refresh tomorrow.</div>';
+      return;
     }
-
-    out.innerHTML = html;
+    if (!d.ok) { out.innerHTML = '<div style="font-size:12px;color:var(--text3)">'+esc(d.error||'Brief unavailable')+'</div>'; return; }
+    _briefLoadedDate = todayKey2;
+    try { localStorage.setItem(_BRIEF_CACHE_KEY, JSON.stringify({ brief: d.brief, brief_structured: d.brief_structured, date: todayKey2 })); } catch(e) {}
+    out.innerHTML = renderBriefHtml(d.brief, d.brief_structured);
   } catch(e) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: '+esc(e.message)+'</div>'; }
+}
+
+function renderBriefHtml(brief, brief_structured) {
+  var html = '';
+  if (brief_structured && brief && typeof brief === 'object') {
+    var topAccts = brief.top_accounts || [];
+    if (topAccts.length) {
+      html += '<div style="margin-bottom:12px"><div style="font-size:10px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">📊 Top 3 accounts today</div>';
+      topAccts.slice(0,3).forEach(function(a) {
+        var sc = a.score >= 60 ? 'var(--green)' : a.score >= 35 ? 'var(--amber)' : 'var(--text3)';
+        html += '<div style="padding:8px 10px;background:rgba(0,0,0,0.04);border-radius:8px;margin-bottom:5px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:3px"><span style="font-size:12px;font-weight:600;color:var(--text)">'+esc(a.name)+'</span>';
+        if (a.score) html += '<span style="font-size:10px;font-weight:700;color:'+sc+';background:'+sc+'18;padding:1px 6px;border-radius:4px">'+a.score+'</span>';
+        html += '</div>';
+        if (a.reason) html += '<div style="font-size:11px;color:var(--text3);margin-bottom:3px">'+esc(a.reason)+'</div>';
+        if (a.action) html += '<div style="font-size:11px;font-weight:600;color:var(--gold)">→ '+esc(a.action)+'</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+    if (brief.calendar_prep && brief.calendar_prep !== 'null') html += '<div style="margin-bottom:10px"><div style="font-size:10px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px">📅 Calendar prep</div><div style="font-size:12px;color:var(--text2);line-height:1.5">'+esc(brief.calendar_prep)+'</div></div>';
+    if (brief.coaching_signal) html += '<div style="margin-bottom:10px"><div style="font-size:10px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px">⚡ Coaching</div><div style="font-size:12px;color:var(--text2);line-height:1.5">'+esc(brief.coaching_signal)+'</div></div>';
+    if (brief.priority_before_noon) html += '<div style="padding:8px 12px;background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);border-radius:8px"><div style="font-size:10px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:3px">🎯 Priority before noon</div><div style="font-size:12px;font-weight:600;color:var(--text)">'+esc(brief.priority_before_noon)+'</div></div>';
+  } else if (typeof brief === 'string' && brief.length > 10) {
+    html = '<div style="font-size:12px;color:var(--text2);white-space:pre-wrap;line-height:1.7">'+esc(brief)+'</div>';
+  } else {
+    html = '<div style="font-size:12px;color:var(--text3)">Brief could not be generated — run Scan channels first to build pipeline context.</div>';
+  }
+  return html;
 }
 
 // ── Sales Habits ──────────────────────────────────────────────────────────────
@@ -5461,7 +5483,31 @@ function populatePipelineFilters(data) {
     repSel.innerHTML = '<option value="">All reps</option>' +
       Object.entries(repMap).map(function(e){ return '<option value="'+esc(e[0])+'">'+esc(e[1])+'</option>'; }).join('');
   }
-  // Products dropdown
+  // Products dropdown — from product_name field or revenue_streams
+  var prodSel = document.getElementById('pipe-filter-product');
+  if (prodSel) {
+    var prods = {};
+    var allDeals = [...(data.verified||[]),(data.partial||[]),(data.unverified||[])].flat();
+    allDeals.forEach(function(d) {
+      if (d.product_name) prods[d.product_name] = true;
+      (d.revenue_streams||[]).forEach(function(s) { if (s.product_name||s.product) prods[s.product_name||s.product]=true; });
+    });
+    var prodKeys = Object.keys(prods).filter(Boolean);
+    prodSel.innerHTML = '<option value="">All products</option>' + prodKeys.map(function(p){ return '<option value="'+esc(p)+'">'+esc(p)+'</option>'; }).join('');
+  }
+  // Stream dropdown — from revenue_streams
+  var strmSel = document.getElementById('pipe-filter-stream');
+  if (strmSel) {
+    var strms = {};
+    var allDeals2 = [...(data.verified||[]),(data.partial||[]),(data.unverified||[])].flat();
+    allDeals2.forEach(function(d) {
+      (d.revenue_streams||[]).forEach(function(s) { var k=s.name||s.key||s.type; if(k) strms[k]=true; });
+      if (!d.revenue_streams?.length && d.deal_type) strms[d.deal_type]=true;
+    });
+    var strmKeys = Object.keys(strms).filter(Boolean);
+    strmSel.innerHTML = '<option value="">All revenue streams</option>' + strmKeys.map(function(k){ return '<option value="'+esc(k)+'">'+esc(k)+'</option>'; }).join('');
+  }
+  var old_products_placeholder = '  // old Products dropdown'
   var prodSel = document.getElementById('pipe-filter-product');
   if (prodSel && _orgProducts?.length) {
     var opts = '<option value="">All products</option>' +
@@ -5498,6 +5544,8 @@ function renderPipelineDashboard(data) {
     html += renderByStreamChart(deals, fmtUsd);
   } else if (_pipelineDashTab === 'byRegion') {
     if (canSeeTeam(profile?.role)) html += renderRepBreakdown(data, deals, fmtUsd);
+  } else if (_pipelineDashTab === 'winloss') {
+    html += renderWinLossChart(data, fmtUsd);
   } else if (_pipelineDashTab === 'attention') {
     html += renderAttentionPanel(deals, data, fmtUsd);
   } else {
@@ -5508,6 +5556,75 @@ function renderPipelineDashboard(data) {
   }
 
   el.innerHTML = html;
+}
+
+// ── Win / Loss summary ────────────────────────────────────────────────────────
+function renderWinLossChart(data, fmtUsd) {
+  var won  = (data.won  || []);
+  var lost = (data.lost || []);
+  if (!won.length && !lost.length) {
+    return '<div style="text-align:center;padding:32px 0;color:var(--text3)">' +
+      '<div style="font-size:28px;margin-bottom:10px">🏆</div>' +
+      '<div style="font-size:14px;font-weight:500;color:var(--text2);margin-bottom:4px">No closed deals yet</div>' +
+      '<div style="font-size:12px">Mark deals as Won or Lost using the close deal button on each pipeline card.</div>' +
+    '</div>';
+  }
+  var wonVal  = won.reduce(function(s,d){return s+(d.actual_value_usd||d.deal_value_usd||0);},0);
+  var lostVal = lost.reduce(function(s,d){return s+(d.actual_value_usd||d.deal_value_usd||0);},0);
+  var total   = wonVal + lostVal;
+  var winRate = won.length + lost.length > 0 ? Math.round(won.length / (won.length + lost.length) * 100) : 0;
+  var html = '';
+  // KPI strip
+  html += '<div style="display:flex;gap:8px;margin-bottom:16px">' +
+    kpi('Win rate', winRate + '%', winRate >= 50 ? 'var(--green)' : 'var(--amber)') +
+    kpi('Deals won', won.length, 'var(--green)') +
+    kpi('Deals lost', lost.length, 'var(--coral)') +
+    kpi('Won value', fmtUsd(wonVal), 'var(--green)') +
+  '</div>';
+  // Win/loss bar
+  if (total > 0) {
+    var wonPct = Math.round(wonVal / total * 100);
+    html += '<div style="margin-bottom:16px">' +
+      '<div style="display:flex;height:14px;border-radius:7px;overflow:hidden;margin-bottom:4px">' +
+        '<div style="width:'+wonPct+'%;background:var(--green)"></div>' +
+        '<div style="flex:1;background:var(--coral)"></div>' +
+      '</div>' +
+      '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3)">' +
+        '<span style="color:var(--green)">Won: '+fmtUsd(wonVal)+'</span>' +
+        '<span style="color:var(--coral)">Lost: '+fmtUsd(lostVal)+'</span>' +
+      '</div></div>';
+  }
+  // Won deals
+  if (won.length) {
+    html += '<div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">🏆 Won deals</div>';
+    won.forEach(function(d) {
+      html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">' +
+        '<span style="font-size:14px">🏆</span>' +
+        '<div style="flex:1"><div style="font-size:12px;font-weight:600;color:var(--text)">'+esc(d.account)+'</div>' +
+        '<div style="font-size:10px;color:var(--text3)">'+(d.close_reason?esc(d.close_reason):'')+(d.won_at?' · '+d.won_at.slice(0,10):'')+'</div></div>' +
+        '<span style="font-size:12px;font-weight:600;color:var(--green)">'+fmtUsd(d.actual_value_usd||d.deal_value_usd||0)+'</span>' +
+      '</div>';
+    });
+  }
+  // Lost deals
+  if (lost.length) {
+    html += '<div style="font-size:11px;font-weight:700;color:var(--coral);text-transform:uppercase;letter-spacing:0.06em;margin:12px 0 8px">❌ Lost deals</div>';
+    lost.forEach(function(d) {
+      html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">' +
+        '<span style="font-size:14px">❌</span>' +
+        '<div style="flex:1"><div style="font-size:12px;font-weight:600;color:var(--text)">'+esc(d.account)+'</div>' +
+        '<div style="font-size:10px;color:var(--text3)">'+(d.close_reason?esc(d.close_reason):'')+(d.lost_at?' · '+d.lost_at.slice(0,10):'')+'</div></div>' +
+        '<span style="font-size:12px;color:var(--text3)">'+fmtUsd(d.deal_value_usd||0)+'</span>' +
+      '</div>';
+    });
+  }
+  return html;
+}
+
+function kpi(label, val, color) {
+  return '<div style="flex:1;background:var(--surface2);border-radius:10px;padding:10px;text-align:center">' +
+    '<div style="font-size:18px;font-weight:700;color:'+(color||'var(--text)')+'">'+val+'</div>' +
+    '<div style="font-size:10px;color:var(--text3);margin-top:2px">'+label+'</div></div>';
 }
 
 // ── Shared bar chart helper ────────────────────────────────────────────────
