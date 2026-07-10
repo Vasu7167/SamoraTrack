@@ -5156,34 +5156,15 @@ function showToast(msg) {
 
 // ── renderByProductChart ─────────────────────────────────────────────────────
 function renderByProductChart(deals, fmtUsd) {
-  var byProduct = {};
-  deals.forEach(function(d) {
-    // Use product_name from deal, or derive from revenue_streams
-    var streams = d.revenue_streams || [];
-    if (streams.length) {
-      streams.forEach(function(s) {
-        var k = s.product_name || s.product || 'Other';
-        if (!byProduct[k]) byProduct[k] = { val: 0, verified: 0, partial: 0, count: 0 };
-        var amt = (parseFloat(s.amount_usd) || parseFloat(s.amount) || 0);
-        byProduct[k].val      += amt || d.deal_value_usd || 0;
-        byProduct[k].count    += 1;
-        if (d.tier === 'verified') byProduct[k].verified += amt || d.deal_value_usd || 0;
-        else if (d.tier === 'partial') byProduct[k].partial += amt || d.deal_value_usd || 0;
-      });
-    } else {
-      var k2 = d.product_name || 'No product';
-      if (!byProduct[k2]) byProduct[k2] = { val: 0, verified: 0, partial: 0, count: 0 };
-      byProduct[k2].val     += d.deal_value_usd || 0;
-      byProduct[k2].count   += 1;
-      if (d.tier === 'verified') byProduct[k2].verified += d.deal_value_usd || 0;
-      else if (d.tier === 'partial') byProduct[k2].partial += d.deal_value_usd || 0;
-    }
-  });
-  var rows = Object.entries(byProduct).sort(function(a, b) { return b[1].val - a[1].val; }).map(function(e) {
-    return { label: e[0], val: e[1].val, verified: e[1].verified, partial: e[1].partial, count: e[1].count };
-  });
-  var maxVal = Math.max.apply(null, rows.map(function(r) { return r.val; }));
-  if (!rows.length) return '<div style="font-size:12px;color:var(--text3);padding:16px 0">No product data — add products in Admin settings and tag deals.</div>';
+  // Use productBreakdown from pipeline response — comes from account_opportunities
+  // joined to org_products, which is where products are actually defined and stored.
+  var breakdown = (_pipelineData && _pipelineData.productBreakdown) || {};
+  var rows = Object.entries(breakdown)
+    .filter(function(e){ return e[0] !== 'No product' && e[1].value > 0; })
+    .sort(function(a, b){ return b[1].value - a[1].value; })
+    .map(function(e){ return { label: e[0], val: e[1].value }; });
+  var maxVal = rows.length ? Math.max.apply(null, rows.map(function(r){return r.val;})) : 0;
+  if (!rows.length) return '<div style="font-size:12px;color:var(--text3);padding:16px 0">No product breakdown found. Assign products to deals using the deal breakdown section, or verify that products are set up in Admin → Products.</div>';
   return '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Pipeline by product</div>' +
     mkBars(rows, maxVal, fmtUsd);
 }
@@ -5458,66 +5439,50 @@ function clearPipelineFilters() {
 }
 
 function getFilteredDeals(data) {
-  // data.deals is the primary array from get_pipeline response
-  // Fall back to legacy verified/partial/unverified arrays if present
-  var all = data.deals || [...(data.verified||[]), ...(data.partial||[]), ...(data.unverified||[])];
+  // The live pipeline = verified + partial + unverified (excludes won/lost)
+  var all = [...(data.verified||[]), ...(data.partial||[]), ...(data.unverified||[])];
   return all.filter(function(d) {
     if (_pipelineFilters.tier && d.tier !== _pipelineFilters.tier) return false;
-    if (_pipelineFilters.product && d.product_name !== _pipelineFilters.product) return false;
     if (_pipelineFilters.region && d.region !== _pipelineFilters.region) return false;
     if (_pipelineFilters.rep && d.rep_user_id !== _pipelineFilters.rep) return false;
-    if (_pipelineFilters.stream) {
-      var streams = d.revenue_streams || [];
-      if (!streams.find(function(s) { return s.name === _pipelineFilters.stream || s.key === _pipelineFilters.stream; })) return false;
-    }
     return true;
   });
 }
 
 function populatePipelineFilters(data) {
-  // Reps dropdown — built from deals data
+  // Reps dropdown
   var repSel = document.getElementById('pipe-filter-rep');
   if (repSel) {
     var repMap = {};
-    var allDeals = data.deals || [];
+    var allDeals = [...(data.verified||[]), ...(data.partial||[]), ...(data.unverified||[])];
     allDeals.forEach(function(d) {
       if (d.rep_user_id && d.rep_email) repMap[d.rep_user_id] = d.rep_email.split('@')[0].replace(/\./g,' ').replace(/\b\w/g, function(c){return c.toUpperCase();});
     });
     repSel.innerHTML = '<option value="">All reps</option>' +
       Object.entries(repMap).map(function(e){ return '<option value="'+esc(e[0])+'">'+esc(e[1])+'</option>'; }).join('');
   }
-  // Region dropdown — from regionBreakdown or deal region field
+  // Region dropdown
   var regSel = document.getElementById('pipe-filter-region');
   if (regSel) {
     var regions = {};
-    var allDeals3 = data.deals || [];
-    allDeals3.forEach(function(d) { if (d.region) regions[d.region] = true; });
+    var allDeals2 = [...(data.verified||[]), ...(data.partial||[]), ...(data.unverified||[])];
+    allDeals2.forEach(function(d) { if (d.region) regions[d.region] = true; });
     regSel.innerHTML = '<option value="">All regions</option>' +
       Object.keys(regions).sort().map(function(r){ return '<option value="'+esc(r)+'">'+esc(r)+'</option>'; }).join('');
   }
-  // Products dropdown — from org_products if available, else from deal data
+  // Products dropdown — from productBreakdown in pipeline response
   var prodSel = document.getElementById('pipe-filter-product');
   if (prodSel) {
-    var prods = {};
-    var allDeals4 = data.deals || [];
-    allDeals4.forEach(function(d) {
-      if (d.product_name) prods[d.product_name] = true;
-    });
-    var prodKeys = Object.keys(prods).filter(Boolean);
+    var prodKeys = Object.keys(data.productBreakdown || {}).filter(function(k){ return k !== 'No product'; });
     prodSel.innerHTML = '<option value="">All products</option>' + prodKeys.map(function(p){ return '<option value="'+esc(p)+'">'+esc(p)+'</option>'; }).join('');
-    if (!prodKeys.length) prodSel.innerHTML = '<option value="">All products</option>';
   }
-  // Stream dropdown — from revenue_streams on deal objects
+  // Stream dropdown — from regionBreakdown deal_type breakdown
   var strmSel = document.getElementById('pipe-filter-stream');
   if (strmSel) {
     var strms = {};
-    var allDeals5 = data.deals || [];
-    allDeals5.forEach(function(d) {
-      (d.revenue_streams||[]).forEach(function(s) { var k=s.name||s.key||s.type; if(k) strms[k]=true; });
-      if (!d.revenue_streams?.length && d.deal_type) strms[d.deal_type]=true;
-    });
-    var strmKeys = Object.keys(strms).filter(Boolean);
-    strmSel.innerHTML = '<option value="">All revenue streams</option>' + strmKeys.map(function(k){ return '<option value="'+esc(k)+'">'+esc(k)+'</option>'; }).join('');
+    var allDeals3 = [...(data.verified||[]), ...(data.partial||[]), ...(data.unverified||[])];
+    allDeals3.forEach(function(d) { if (d.deal_type) strms[d.deal_type] = true; });
+    strmSel.innerHTML = '<option value="">All stages/streams</option>' + Object.keys(strms).sort().map(function(k){ return '<option value="'+esc(k)+'">'+esc(k)+'</option>'; }).join('');
   }
   var prodSel = document.getElementById('pipe-filter-product');
   if (prodSel && _orgProducts?.length) {
