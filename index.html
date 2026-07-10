@@ -956,6 +956,22 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
         <div class="admin-card-sub">Assign members to managers.</div>
         <div id="assignCard"><div class="empty"><div class="empty-icon">⏳</div>Loading…</div></div>
       </div>
+
+    <div class="admin-section" style="margin-top:24px">
+      <div class="admin-title">ICP — Ideal Customer Profile</div>
+      <div class="admin-card">
+        <div class="admin-card-title">ICP definition <span id="icpSavedBadge" style="display:none;font-size:10px;font-weight:600;color:var(--green);background:rgba(74,140,92,0.1);padding:2px 8px;border-radius:10px">Saved</span></div>
+        <div class="admin-card-sub">Describe your ideal customer in plain English. SAM uses this to score every account 0–100 on ICP fit. Be specific — industry, size, geography, use case, buying signals.</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:8px">Example: <em>"FMCG companies in Middle East and Africa with 300+ modern trade outlets, distribution-heavy operations, annual revenue $50M+, actively digitising their field sales teams."</em></div>
+        <textarea id="icpDefinitionInput" placeholder="Describe your ideal customer…" style="width:100%;min-height:120px;padding:10px 12px;background:var(--surface2);border:1px solid var(--border2);border-radius:10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;resize:vertical;line-height:1.6;margin-bottom:10px"></textarea>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button id="saveIcpBtn" onclick="saveIcpDefinition()" style="padding:9px 18px;border-radius:8px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer">Save ICP definition</button>
+          <button onclick="runIcpScoring()" style="padding:9px 18px;border-radius:8px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer">✦ Score accounts now</button>
+          <span id="icpScoreStatus" style="font-size:12px;color:var(--text3)"></span>
+        </div>
+        <div id="icpScoreResults" style="margin-top:12px"></div>
+      </div>
+    </div>
     </div>
   </div>
 
@@ -1438,7 +1454,10 @@ function launchApp() {
   const cls = { super_admin:'role-super', admin:'role-super', manager:'role-manager', director:'role-manager', executive:'role-manager', member:'role-member', sdr:'role-member', ae:'role-member' };
   rp.textContent = labels[role]; rp.className = 'role-pill ' + (cls[role]||'role-member');
   document.getElementById('uOrg').textContent = profile?.org_name || '';
-  const seniorRole = ['super_admin','admin','manager','director','executive'].includes(role);
+  // Load ICP definition for admin users
+  if (['super_admin','admin','manager','director','executive'].includes(role)) {
+    setTimeout(loadIcpDefinition, 2000);
+  }
   if (seniorRole) {
     const navExec = document.getElementById('nav-exec');
     if (navExec) navExec.style.display = ['director','executive','admin','super_admin'].includes(role) ? '' : 'none';
@@ -6147,23 +6166,67 @@ async function openAccountTimeline(accountId, accountName) {
   }
 }
 
-// ── ICP Scoring ───────────────────────────────────────────────────────────────
-async function computeIcpScores() {
-  var btn = document.getElementById('icp-score-btn');
-  if (btn) { btn.textContent = 'Scoring…'; btn.disabled = true; }
+// ── ICP Definition & Scoring ──────────────────────────────────────────────────
+async function loadIcpDefinition() {
   try {
-    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
-      body: JSON.stringify({ action:'compute_icp_scores' }) });
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'get_org_setting', key:'icp_definition'}) });
+    var d = await r.json();
+    var el = document.getElementById('icpDefinitionInput');
+    if (el && d.value) el.value = d.value;
+  } catch(e) { /* non-fatal */ }
+}
+
+async function saveIcpDefinition() {
+  var btn    = document.getElementById('saveIcpBtn');
+  var badge  = document.getElementById('icpSavedBadge');
+  var status = document.getElementById('icpScoreStatus');
+  var val    = document.getElementById('icpDefinitionInput')?.value?.trim();
+  if (!val) { showToast('Please enter an ICP definition first'); return; }
+  if (btn) { btn.textContent = 'Saving…'; btn.disabled = true; }
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'save_org_setting', key:'icp_definition', value:val}) });
     var d = await r.json();
     if (d.ok) {
-      showToast('ICP scored: ' + d.scored + ' accounts updated');
-      if (typeof loadPipeline === 'function') loadPipeline();
-    } else {
-      alert(d.error || 'ICP scoring failed');
-    }
-  } catch(e) { alert('Error: ' + e.message); }
-  if (btn) { btn.textContent = '✦ Score ICP fit'; btn.disabled = false; }
+      if (badge) badge.style.display = 'inline';
+      if (status) status.textContent = 'Saved — click "Score accounts now" to update ICP scores.';
+      showToast('ICP definition saved');
+    } else { showToast('Error: ' + (d.error || 'Save failed')); }
+  } catch(e) { showToast('Error: ' + e.message); }
+  if (btn) { btn.textContent = 'Save ICP definition'; btn.disabled = false; }
 }
+
+async function runIcpScoring() {
+  var btn     = document.querySelector('[onclick="runIcpScoring()"]');
+  var samBtn  = document.getElementById('icp-score-btn');
+  var status  = document.getElementById('icpScoreStatus');
+  var results = document.getElementById('icpScoreResults');
+  [btn, samBtn].forEach(function(b){ if(b){b.textContent='✦ Scoring…';b.disabled=true;} });
+  if (status) status.textContent = '✦ Gemini is scoring your accounts…';
+  if (results) results.innerHTML = '';
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'compute_icp_scores'}) });
+    var d = await r.json();
+    if (!d.ok) { if (status) status.textContent = 'Error: ' + (d.error||'Scoring failed'); return; }
+    if (status) status.textContent = '✓ Scored ' + (d.scored||0) + ' accounts';
+    showToast('ICP scored: ' + (d.scored||0) + ' accounts updated');
+    if (d.scores && d.scores.length && results) {
+      results.innerHTML = '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Results</div>' +
+        d.scores.sort(function(a,b){return (b.icp_score||0)-(a.icp_score||0);}).map(function(s) {
+          var c = (s.icp_score||0)>=70?'var(--green)':(s.icp_score||0)>=40?'var(--amber)':'var(--text3)';
+          return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">' +
+            '<span style="font-size:12px;font-weight:700;color:'+c+';min-width:30px;text-align:right">'+(s.icp_score??'?')+'</span>' +
+            '<span style="font-size:12px;color:var(--text);flex:1">'+esc(s.account_name||'')+'</span>' +
+            (s.icp_notes?'<span style="font-size:10px;color:var(--text3);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(s.icp_notes)+'">'+esc(s.icp_notes.slice(0,45))+'</span>':'') +
+          '</div>';
+        }).join('');
+    }
+    if (typeof loadPipeline === 'function') loadPipeline();
+  } catch(e) { if (status) status.textContent = 'Error: ' + e.message; }
+  [btn, samBtn].forEach(function(b){ if(b){b.textContent=b===samBtn?'✦ Score ICP fit':'✦ Score accounts now';b.disabled=false;} });
+}
+
+async function computeIcpScores() { runIcpScoring(); }  // alias for SAM tab button
+
 
 // ── Deal Value & Revenue Streams Modal ──────────────────────────────────────
 // ── Deal Modal State ──────────────────────────────────────────────────────────
