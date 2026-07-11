@@ -1598,17 +1598,18 @@ function runCarryOver() {
 
 let _lastCalDate = null;
 function render() {
-  // Always run renderToday first — it controls section visibility
-  // If anything else throws, sections will still show correctly
-  try { renderToday(); } catch(e) { console.error('renderToday error:', e); }
+  try { renderToday(); } catch(e) { console.error('renderToday:', e); }
+  try { updateHeader(); } catch(e) {}
+  try { updateBadges(); } catch(e) {}
+  try { if (_lastCalDate !== viewDate) { _lastCalDate = viewDate; renderCalStrip(); } } catch(e) {}
   try {
     const d = dayData(viewDate);
     renderList('tasks', d.tasks); renderList('issues', d.issues); renderList('wins', d.wins); renderList('misses', d.misses);
-    updateHeader(); updateBadges();
-    if (_lastCalDate !== viewDate) { _lastCalDate = viewDate; renderCalStrip(); }
-    renderSummary(); renderMomentum(); updateSectionPillCounts();
-    const tdi = document.getElementById('teamDateInput'); if (tdi) tdi.value = viewDate;
-  } catch(e) { console.error('render error:', e); }
+  } catch(e) {}
+  try { renderSummary(); } catch(e) {}
+  try { renderMomentum(); } catch(e) {}
+  try { updateSectionPillCounts(); } catch(e) {}
+  try { const tdi = document.getElementById('teamDateInput'); if (tdi) tdi.value = viewDate; } catch(e) {}
 }
 
 function renderList(key, items) {
@@ -1674,9 +1675,10 @@ function updateBadges() {
   ['tasks','issues','wins','misses'].forEach(k => { const el = document.getElementById('b-'+k); if(el) el.textContent = d[k]?.length||0; });
 }
 function renderSummary() {
+  const sg = document.getElementById('sumGrid'); if (!sg) return;
   const d = dayData(viewDate);
   const total = d.tasks.length, done = d.tasks.filter(t=>t.done).length;
-  document.getElementById('sumGrid').innerHTML = `
+  sg.innerHTML = `
     <div class="sstat"><div class="snum purple">${total}</div><div class="slbl">Tasks</div></div>
     <div class="sstat"><div class="snum green">${done}</div><div class="slbl">Done</div></div>
     <div class="sstat"><div class="snum coral">${d.issues.length}</div><div class="slbl">Issues</div></div>
