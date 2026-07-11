@@ -5547,7 +5547,7 @@ function _renderStakeholdersPane(stakeholders, deal) {
   } else {
     html += '<div style="font-size:12px;color:var(--text3);padding:12px 0;text-align:center">No stakeholders yet — enrich to find contacts.</div>';
   }
-  html += '<button onclick="enrichDeal(\''+esc(deal?.id||'')+'\',\''+esc(deal?.account||'')+'\')" style="width:100%;margin-top:12px;padding:10px;border-radius:8px;background:var(--surface2);border:1px dashed var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer">✦ Find contacts via Apollo / Lusha / Hunter</button>';
+  html += '<button onclick="enrichDeal(\''+esc(deal?.id||'')+'\',\''+esc(deal?.account||'')+'\')" style="width:100%;margin-top:12px;padding:10px;border-radius:8px;background:var(--surface2);border:1px dashed var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer" id="enrichDealBtn">✦ Find contacts from Gmail &amp; SmartReach activity</button>';
   html += '<div id="enrichDealStatus" style="font-size:11px;color:var(--text3);margin-top:6px;white-space:pre-line"></div>';
   body.innerHTML = html;
 }
@@ -5594,60 +5594,37 @@ async function saveMeddpiccField(accountId, field, value) {
 }
 
 async function enrichDeal(accountId, accountName) {
+  var body = document.getElementById('deal-detail-body');
+  var status = document.getElementById('enrichDealStatus');
   var btn = document.getElementById('enrichDealBtn');
-  var status = document.getElementById('enrichDealStatus');
-  if (btn) { btn.textContent = '↻ Searching…'; btn.disabled = true; }
-  // Show a domain input field so user can enter the correct domain
-  var body = document.getElementById('deal-detail-body'); if (!body) return;
-  var guessedDomain = (accountName||'').toLowerCase().replace(/\s+(india|middle east|mena|africa|sea|apac|emea|global|group|ltd|limited|pvt|inc)$/i,'').replace(/[^a-z0-9]/g,'') + '.com';
-
-  // Show domain confirmation before enriching
-  body.innerHTML += '<div id="enrichDomainRow" style="margin-top:12px;background:var(--surface2);border-radius:8px;padding:10px 12px">' +
-    '<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Confirm the company website domain to search:</div>' +
-    '<div style="display:flex;gap:8px">' +
-      '<input type="text" id="enrichDomainInput" value="' + esc(guessedDomain) + '" placeholder="e.g. ferrero.com" style="flex:1;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>' +
-      '<button onclick="_doEnrich(\'' + esc(accountId) + '\',\'' + esc(accountName) + '\')" style="padding:8px 14px;border-radius:8px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Search</button>' +
-    '</div>' +
-  '</div>';
-  return;
-}
-
-async function _doEnrich(accountId, accountName) {
-  var domainInput = document.getElementById('enrichDomainInput');
-  var domain = domainInput ? domainInput.value.trim().replace(/^https?:\/\//,'').replace(/\/.*$/,'') : '';
-  if (!domain) { showToast('Enter a domain first'); return; }
-  var btn = document.querySelector('#enrichDomainRow button');
-  var status = document.getElementById('enrichDealStatus');
-  if (btn) { btn.textContent = '↻ Searching…'; btn.disabled = true; }
+  if (btn) { btn.textContent = '↻ Scanning Gmail & SmartReach…'; btn.disabled = true; }
   try {
-    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'enrich_account', account_id:accountId, domain, account_name:accountName}) });
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({action:'enrich_account', account_id:accountId, account_name:accountName}) });
     var d = await r.json();
     if (d.ok && !d.cached) {
-      showToast('✓ Found ' + d.count + ' contacts via ' + d.provider);
-      var sRes = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'get_stakeholders', account_id:accountId}) });
+      showToast('✓ Found ' + d.count + ' contacts (' + (d.enriched||0) + ' enriched via ' + (d.providers||[]).join(', ') + ')');
+      var sRes = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+        body:JSON.stringify({action:'get_stakeholders', account_id:accountId}) });
       var sData = await sRes.json();
       if (_currentDealDetail) _currentDealDetail.stakeholders = sData.stakeholders||[];
       _renderStakeholdersPane(_currentDealDetail?.stakeholders||[], {id:accountId, account:accountName});
     } else if (d.cached) {
-      // Force refresh
-      var r2 = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'enrich_account', account_id:accountId, domain, account_name:accountName, refresh:true}) });
+      var r2 = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+        body:JSON.stringify({action:'enrich_account', account_id:accountId, account_name:accountName, refresh:true}) });
       var d2 = await r2.json();
-      if (d2.ok) { showToast('✓ Refreshed ' + d2.count + ' contacts via ' + d2.provider); }
-      var sRes2 = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'get_stakeholders', account_id:accountId}) });
-      var sData2 = await sRes2.json();
-      if (_currentDealDetail) _currentDealDetail.stakeholders = sData2.stakeholders||[];
+      if (d2.ok) showToast('✓ Refreshed ' + d2.count + ' contacts');
+      var sRes2 = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+        body:JSON.stringify({action:'get_stakeholders', account_id:accountId}) });
+      if (_currentDealDetail) _currentDealDetail.stakeholders = (await sRes2.json()).stakeholders||[];
       _renderStakeholdersPane(_currentDealDetail?.stakeholders||[], {id:accountId, account:accountName});
     } else {
-      // Show the actual API error so user knows what's wrong
-      var errMsg = d.error || 'No contacts found';
-      if (d.errors && d.errors.length) errMsg = d.errors.join('\n');
-      if (status) { status.style.color = 'var(--coral)'; status.textContent = errMsg; }
-      if (btn) { btn.textContent = 'Search'; btn.disabled = false; }
+      if (status) { status.style.color='var(--coral)'; status.textContent = d.error || 'No contacts found in Gmail or SmartReach. Send some emails to this account first.'; }
     }
   } catch(e) {
-    if (status) status.textContent = 'Error: ' + e.message;
-    if (btn) { btn.textContent = 'Search'; btn.disabled = false; }
+    if (status) { status.style.color='var(--coral)'; status.textContent = 'Error: ' + e.message; }
   }
+  if (btn) { btn.textContent = '✦ Find contacts from Gmail & SmartReach activity'; btn.disabled = false; }
 }
 
 
