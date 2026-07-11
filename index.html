@@ -1475,14 +1475,17 @@ function launchApp() {
   loadLocal(); runCarryOver();
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   const todayNav = document.getElementById('nav-today'); if (todayNav) todayNav.classList.add('active');
-  _lastCalDate = null; render();
-  // Show a subtle sync indicator while first sync happens
+  _lastCalDate = null;
+  render(); // first paint from local cache
+  renderCalStrip(); // render calendar strip immediately from allData
+
+  // Sync indicator
   var syncBadge = document.createElement('div');
   syncBadge.id = 'global-sync-badge';
-  syncBadge.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border2);border-radius:20px;padding:4px 12px;font-size:11px;color:var(--text3);font-family:var(--sans);z-index:9998;opacity:0;transition:opacity 0.3s';
+  syncBadge.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border2);border-radius:20px;padding:4px 12px;font-size:11px;color:var(--text3);font-family:var(--sans);z-index:9998;opacity:0;transition:opacity 0.3s;pointer-events:none';
   syncBadge.textContent = '↻ Syncing…';
   document.body.appendChild(syncBadge);
-  setTimeout(function() { syncBadge.style.opacity = '1'; }, 100);
+  requestAnimationFrame(function(){ syncBadge.style.opacity='1'; });
   // Sync calendar events and scan OOO mails into today's task suggestions
   setTimeout(function() {
     if (currentUser?.token) {
@@ -1491,13 +1494,18 @@ function launchApp() {
     }
     refreshYouTabConnections();
   }, 1500);
-  setTimeout(function() { _lastCalDate = null; renderCalStrip(); }, 0);
   setTimeout(initSortable, 200);
-  if (SB_URL && SB_KEY) { syncDown().then(() => {
-    runCarryOver(); _lastCalDate = null; render();
-    var badge = document.getElementById('global-sync-badge');
-    if (badge) { badge.style.opacity = '0'; setTimeout(function(){ badge.remove(); }, 400); }
-  }); }
+  if (SB_URL && SB_KEY) {
+    syncDown().then(() => {
+      runCarryOver(); _lastCalDate = null; render(); renderCalStrip();
+      var badge = document.getElementById('global-sync-badge');
+      if (badge) { badge.style.opacity = '0'; setTimeout(function(){ badge.remove(); }, 400); }
+    }).catch(function() {
+      // syncDown failed — still hide the badge and keep local data visible
+      var badge = document.getElementById('global-sync-badge');
+      if (badge) { badge.textContent = '⚠ Offline — showing local data'; setTimeout(function(){ badge.style.opacity='0'; setTimeout(function(){badge.remove();},400); }, 2000); }
+    });
+  }
 }
 
 function loadLocal() { try { const r = localStorage.getItem('dt-v4-'+currentUser?.id); if (r) allData = JSON.parse(r); } catch(e) {} }
@@ -1530,9 +1538,14 @@ async function save(k) {
 async function syncDown() {
   if (!SB_URL || !currentUser?.token) return;
   try {
+    // 8-second timeout — if Supabase doesn't respond, don't block the UI
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
     const r = await fetch(SB_URL + '/rest/v1/daytrack?user_id=eq.' + currentUser.id + '&select=day_key,data', {
-      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token }
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token },
+      signal: controller.signal
     });
+    clearTimeout(timer);
     const rows = await r.json();
     if (Array.isArray(rows)) {
       rows.forEach(row => {
