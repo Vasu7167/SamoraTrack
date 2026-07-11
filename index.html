@@ -3926,7 +3926,11 @@ async function processOooMails() {
     var status = document.getElementById('oooSyncStatus');
     var dismiss = document.getElementById('oooSyncDismiss');
     if (row && status) {
-      status.textContent = '📬 ' + d.tasksCreated.length + ' OOO follow-up task' + (d.tasksCreated.length!==1?'s':'') + ' added to your future dates';
+      var dateList = d.tasksCreated.map(function(t) {
+        var d2 = new Date(t.taskDate);
+        return d2.toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short' }) + ' (' + esc(t.senderName) + ')';
+      }).join(', ');
+      status.innerHTML = '📬 ' + d.tasksCreated.length + ' OOO follow-up task' + (d.tasksCreated.length!==1?'s':'') + ' created — <strong>' + dateList + '</strong>';
       row.style.display = 'block';
       if (dismiss) dismiss.addEventListener('click', function(){ row.style.display='none'; });
     }
