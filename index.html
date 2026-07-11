@@ -1407,7 +1407,10 @@ async function setupProfile(orgCode) {
 async function loadProfile() {
   if (!SB_URL) { const cached = localStorage.getItem('dt-profile-' + currentUser?.id); if (cached) profile = JSON.parse(cached); return; }
   try {
-    const rows = await sbGet(`user_profiles?user_id=eq.${currentUser.id}&select=role,org_id,manager_id`);
+    const rows = await Promise.race([
+      sbGet(`user_profiles?user_id=eq.${currentUser.id}&select=role,org_id,manager_id`),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
+    ]);
     if (rows && rows.length) {
       const p = rows[0];
       const orgs = await sbGet(`organisations?id=eq.${p.org_id}&select=org_code,name&limit=1`);
@@ -1415,22 +1418,11 @@ async function loadProfile() {
       localStorage.setItem('dt-profile-' + currentUser.id, JSON.stringify(profile));
     } else { await setupProfile(''); }
   } catch(e) { const cached = localStorage.getItem('dt-profile-' + currentUser?.id); if (cached) profile = JSON.parse(cached); }
-
-  // Fetch org config — sets the correct Google Client ID for this user's org
-  // so the Gmail OAuth popup uses the right consent screen (Genefied sees
-  // "Genefied Sales Tracker", Flick2Know sees their own, etc.)
+  // get_org_config fires in background — never blocks launchApp
   try {
-    const r = await fetch(EDGE_FN_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
-      body: JSON.stringify({ action: 'get_org_config' })
-    });
-    const cfg = await r.json();
-    if (cfg.ok) {
-      if (cfg.googleClientId) GOOGLE_CLIENT_ID_SAM = cfg.googleClientId;
-      window._orgConfig = cfg; // store for use throughout the app
-    }
-  } catch(e) { /* non-fatal — falls back to default client ID */ }
+    fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'get_org_config'}) })
+      .then(r=>r.json()).then(cfg=>{ if(cfg.ok){if(cfg.googleClientId)GOOGLE_CLIENT_ID_SAM=cfg.googleClientId;window._orgConfig=cfg;} }).catch(()=>{});
+  } catch(e) {}
 }
 function doLogout() {
   localStorage.removeItem('dt-user'); currentUser = null; profile = null; allData = {};
@@ -5281,36 +5273,24 @@ document.addEventListener('click',e=>{const m=document.getElementById('carryFwdM
   const saved = localStorage.getItem('dt-user');
   if (saved) {
     currentUser = JSON.parse(saved);
-    // Load profile from cache FIRST so UI shows immediately
+    // Always load profile from cache first so launchApp has role/org data
     const cachedProfile = localStorage.getItem('dt-profile-' + currentUser?.id);
-    if (cachedProfile) {
-      try { profile = JSON.parse(cachedProfile); } catch(e) {}
-    }
-    // If we have a cached profile, launch immediately — don't wait for network
-    if (profile) {
-      launchApp();
-    }
-    // Refresh token and reload profile in background
+    if (cachedProfile) { try { profile = JSON.parse(cachedProfile); } catch(e) {} }
+    // Refresh token if we have one (non-blocking — launchApp runs after)
     if (currentUser?.refresh_token) {
       const ok = await refreshToken();
       if (!ok) { localStorage.removeItem('dt-user'); currentUser = null; registerSW(); return; }
     }
+    // Load fresh profile from network (overwrites cache)
     await loadProfile();
     if (profile) {
-      if (!document.getElementById('appScreen')?.classList.contains('active')) {
-        launchApp(); // first time, profile wasn't cached
-      } else {
-        // Already launched — just re-render with fresh profile data
-        render();
-      }
+      launchApp();
       const pendingCode = sessionStorage.getItem('ms_pending_code');
       if (pendingCode) {
         sessionStorage.removeItem('ms_pending_code');
         setTimeout(function() { handleMicrosoftCallback(pendingCode); }, 500);
       }
-    } else if (!cachedProfile) {
-      localStorage.removeItem('dt-user');
-    }
+    } else { localStorage.removeItem('dt-user'); }
   }
   registerSW();
 })();
