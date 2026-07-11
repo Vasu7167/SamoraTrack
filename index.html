@@ -5279,21 +5279,36 @@ document.addEventListener('click',e=>{const m=document.getElementById('carryFwdM
   const saved = localStorage.getItem('dt-user');
   if (saved) {
     currentUser = JSON.parse(saved);
+    // Load profile from cache FIRST so UI shows immediately
+    const cachedProfile = localStorage.getItem('dt-profile-' + currentUser?.id);
+    if (cachedProfile) {
+      try { profile = JSON.parse(cachedProfile); } catch(e) {}
+    }
+    // If we have a cached profile, launch immediately — don't wait for network
+    if (profile) {
+      launchApp();
+    }
+    // Refresh token and reload profile in background
     if (currentUser?.refresh_token) {
       const ok = await refreshToken();
       if (!ok) { localStorage.removeItem('dt-user'); currentUser = null; registerSW(); return; }
     }
     await loadProfile();
     if (profile) {
-      launchApp();
-      // Exchange pending Microsoft OAuth code if present
+      if (!document.getElementById('appScreen')?.classList.contains('active')) {
+        launchApp(); // first time, profile wasn't cached
+      } else {
+        // Already launched — just re-render with fresh profile data
+        render();
+      }
       const pendingCode = sessionStorage.getItem('ms_pending_code');
       if (pendingCode) {
         sessionStorage.removeItem('ms_pending_code');
         setTimeout(function() { handleMicrosoftCallback(pendingCode); }, 500);
       }
+    } else if (!cachedProfile) {
+      localStorage.removeItem('dt-user');
     }
-    else { localStorage.removeItem('dt-user'); }
   }
   registerSW();
 })();
