@@ -1476,6 +1476,13 @@ function launchApp() {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   const todayNav = document.getElementById('nav-today'); if (todayNav) todayNav.classList.add('active');
   _lastCalDate = null; render();
+  // Show a subtle sync indicator while first sync happens
+  var syncBadge = document.createElement('div');
+  syncBadge.id = 'global-sync-badge';
+  syncBadge.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border2);border-radius:20px;padding:4px 12px;font-size:11px;color:var(--text3);font-family:var(--sans);z-index:9998;opacity:0;transition:opacity 0.3s';
+  syncBadge.textContent = '↻ Syncing…';
+  document.body.appendChild(syncBadge);
+  setTimeout(function() { syncBadge.style.opacity = '1'; }, 100);
   // Sync calendar events and scan OOO mails into today's task suggestions
   setTimeout(function() {
     if (currentUser?.token) {
@@ -1486,7 +1493,11 @@ function launchApp() {
   }, 1500);
   setTimeout(function() { _lastCalDate = null; renderCalStrip(); }, 0);
   setTimeout(initSortable, 200);
-  if (SB_URL && SB_KEY) { syncDown().then(() => { runCarryOver(); _lastCalDate = null; render(); }); }
+  if (SB_URL && SB_KEY) { syncDown().then(() => {
+    runCarryOver(); _lastCalDate = null; render();
+    var badge = document.getElementById('global-sync-badge');
+    if (badge) { badge.style.opacity = '0'; setTimeout(function(){ badge.remove(); }, 400); }
+  }); }
 }
 
 function loadLocal() { try { const r = localStorage.getItem('dt-v4-'+currentUser?.id); if (r) allData = JSON.parse(r); } catch(e) {} }
