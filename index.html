@@ -2817,14 +2817,16 @@ function renderIvrResults(outputId) {
   html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px">';
   html += mkBox('All tasks', s.total || 0, 'var(--text)', 'all');
   html += mkBox('Verified', s.verified || 0, 'var(--green)', 'verified');
+  html += mkBox('Self-reported', s.taskDone || 0, 'var(--blue)', 'task_done');
   html += mkBox('Gaps', s.gaps || 0, 'var(--coral)', 'gap');
-  html += mkBox('Unverified', s.unverified || 0, 'var(--amber)', 'unverified');
   html += '</div>';
   html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><div style="flex:1;height:5px;background:var(--surface2);border-radius:3px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + barColor + ';border-radius:3px"></div></div><div style="font-size:12px;font-weight:600;color:' + barColor + '">' + pct + '% verified</div></div>';
+  html += '<div style="font-size:10px;color:var(--text3);margin-bottom:10px">Self-reported = marked done with no external proof (LinkedIn, WhatsApp). Not counted in verified %.</div>';
 
   // Filter results
   var filtered = filter === 'all' ? allResults :
-    filter === 'verified' ? allResults.filter(function(r) { return r.signal === 'verified' || r.signal === 'verified_hot' || r.signal === 'attested' || r.signal === 'task_done'; }) :
+    filter === 'verified'  ? allResults.filter(function(r) { return ['verified','verified_hot','partial_count','attested'].includes(r.signal); }) :
+    filter === 'task_done' ? allResults.filter(function(r) { return r.signal === 'task_done'; }) :
     filter === 'gap'      ? allResults.filter(function(r) { return r.signal === 'gap'; }) :
     filter === 'unverified' ? allResults.filter(function(r) { return r.signal === 'unverified' || r.signal === 'no_source'; }) :
     allResults;
@@ -2846,7 +2848,7 @@ function renderIvrResults(outputId) {
     internal_pending:{ icon: '📋', color: 'var(--text3)',  bg: 'var(--surface2)',        badge: 'Internal task · not done yet' },
     // Call / LinkedIn / WhatsApp rep-confirmed signals
     attested:        { icon: '✓',  color: 'var(--green)',  bg: 'rgba(74,140,92,0.08)',  badge: 'Done · outcome logged (self-attested)' },
-    task_done:       { icon: '✓',  color: 'var(--green)',   bg: 'rgba(74,140,92,0.08)',  badge: 'Done · verified via SmartReach activity' },
+    task_done:       { icon: '✓',  color: 'var(--blue)',    bg: 'rgba(58,110,168,0.08)', badge: 'Marked done — no external verification (LinkedIn/WhatsApp/calls cannot be verified externally yet)' },
   };
 
   filtered.forEach(function(r) {
