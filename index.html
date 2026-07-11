@@ -5419,6 +5419,201 @@ function renderByStreamChart(deals, fmtUsd) {
     mkBars(rows, maxVal, fmtUsd);
 }
 
+// ── Deal card click → detail modal ────────────────────────────────────────────
+document.addEventListener('click', function(e) {
+  var card = e.target.closest('.deal-card-row');
+  if (!card) return;
+  if (e.target.closest('button') || e.target.closest('input') || e.target.closest('select')) return;
+  openDealDetail(card.getAttribute('data-deal-id'), card.getAttribute('data-deal-account'));
+});
+
+var _dealDetailTab = 'overview';
+var _currentDealDetail = null;
+
+async function openDealDetail(dealId, accountName) {
+  document.getElementById('deal-detail-modal')?.remove();
+  var deal = null;
+  if (_pipelineData) {
+    var all = [...(_pipelineData.verified||[]), ...(_pipelineData.partial||[]), ...(_pipelineData.unverified||[])];
+    deal = all.find(function(d) { return d.id === dealId; });
+  }
+  if (!deal) return;
+  _dealDetailTab = 'overview';
+  var modal = document.createElement('div');
+  modal.id = 'deal-detail-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  modal.innerHTML = _buildDealDetailHTML(deal);
+  modal.addEventListener('click', function(e){ if(e.target===modal) modal.remove(); });
+  document.body.appendChild(modal);
+  _loadDealDetailData(dealId, deal);
+}
+
+function _buildDealDetailHTML(deal) {
+  var fmtUsd = function(v) { return !v ? '—' : v>=1e6 ? '$'+(v/1e6).toFixed(1)+'M' : '$'+Math.round(v/1e3)+'K'; };
+  return '<div style="background:var(--bg);border-radius:16px 16px 0 0;width:100%;max-width:540px;max-height:85vh;overflow-y:auto" onclick="event.stopPropagation()">' +
+    '<div style="padding:16px 16px 0;position:sticky;top:0;background:var(--bg);border-bottom:1px solid var(--border);z-index:1">' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">' +
+        '<div><div style="font-size:16px;font-weight:600;color:var(--text)">' + esc(deal.account) + '</div>' +
+        '<div style="font-size:12px;color:var(--text3);margin-top:2px">' + fmtUsd(deal.deal_value_usd) + ' · ' + esc(deal.stage||'') + '</div></div>' +
+        '<button onclick="document.getElementById(\'deal-detail-modal\').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3)">✕</button>' +
+      '</div>' +
+      '<div style="display:flex;gap:0;margin-bottom:-1px">' +
+        _dealTab('overview','📊 Overview') + _dealTab('stakeholders','👥 Stakeholders') + _dealTab('meddpicc','🎯 MEDDPICC') +
+      '</div>' +
+    '</div>' +
+    '<div id="deal-detail-body" style="padding:16px">' + _buildDealOverviewHTML(deal) + '</div>' +
+  '</div>';
+}
+
+function _dealTab(key, label) {
+  var a = _dealDetailTab === key;
+  return '<button onclick="switchDealTab(\'' + key + '\')" id="ddtab-' + key + '" style="padding:7px 14px;border:none;border-bottom:2px solid ' + (a?'var(--gold)':'transparent') + ';background:none;color:' + (a?'var(--gold)':'var(--text3)') + ';font-family:var(--sans);font-size:12px;font-weight:' + (a?'600':'400') + ';cursor:pointer">' + label + '</button>';
+}
+
+function switchDealTab(tab) {
+  _dealDetailTab = tab;
+  ['overview','stakeholders','meddpicc'].forEach(function(t) {
+    var b = document.getElementById('ddtab-' + t); if (!b) return;
+    b.style.borderBottomColor = t===tab?'var(--gold)':'transparent';
+    b.style.color = t===tab?'var(--gold)':'var(--text3)';
+    b.style.fontWeight = t===tab?'600':'400';
+  });
+  var body = document.getElementById('deal-detail-body'); if (!body) return;
+  if (tab === 'overview'     && _currentDealDetail) { body.innerHTML = _buildDealOverviewHTML(_currentDealDetail.deal); return; }
+  if (tab === 'stakeholders' && _currentDealDetail) { _renderStakeholdersPane(_currentDealDetail.stakeholders, _currentDealDetail.deal); return; }
+  if (tab === 'meddpicc'     && _currentDealDetail) { _renderMeddpiccPane(_currentDealDetail.meddpicc, _currentDealDetail.deal); return; }
+  body.innerHTML = '<div style="font-size:12px;color:var(--text3)">Loading…</div>';
+}
+
+async function _loadDealDetailData(dealId, deal) {
+  try {
+    var [mRes, sRes] = await Promise.all([
+      fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'get_meddpicc', account_id:dealId}) }),
+      fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'get_stakeholders', account_id:dealId}) })
+    ]);
+    var mData = await mRes.json(); var sData = await sRes.json();
+    _currentDealDetail = { deal, meddpicc: mData.meddpicc||null, stakeholders: sData.stakeholders||[] };
+  } catch(e) { _currentDealDetail = { deal, meddpicc:null, stakeholders:[] }; }
+  var body = document.getElementById('deal-detail-body'); if (!body) return;
+  if (_dealDetailTab === 'overview')     body.innerHTML = _buildDealOverviewHTML(deal);
+  if (_dealDetailTab === 'stakeholders') _renderStakeholdersPane(_currentDealDetail.stakeholders, deal);
+  if (_dealDetailTab === 'meddpicc')     _renderMeddpiccPane(_currentDealDetail.meddpicc, deal);
+}
+
+function _buildDealOverviewHTML(deal) {
+  if (!deal) return '';
+  var fmtUsd = function(v) { return !v ? '—' : v>=1e6 ? '$'+(v/1e6).toFixed(1)+'M' : '$'+Math.round(v/1e3)+'K'; };
+  var rows = [['Deal value', fmtUsd(deal.deal_value_usd)],['Weighted', fmtUsd(deal.weighted_value_usd)],['Signal score', deal.signal_score!=null ? deal.signal_score+' / 100' : '—'],['Expected close', deal.expected_close||'—'],['Probability', deal.close_probability ? deal.close_probability+'%':'—'],['Rep', (deal.rep_email||'').split('@')[0]||'—'],['Region', deal.region||'—'],['ICP score', deal.icp_score!=null ? deal.icp_score+' / 100':'Not scored']];
+  var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">';
+  rows.forEach(function(r){ html += '<div style="background:var(--surface2);border-radius:8px;padding:9px 11px"><div style="font-size:10px;color:var(--text3);margin-bottom:2px">'+r[0]+'</div><div style="font-size:14px;font-weight:500;color:var(--text)">'+esc(String(r[1]))+'</div></div>'; });
+  html += '</div>';
+  html += '<div style="display:flex;gap:8px">';
+  html += '<button onclick="switchDealTab(\'stakeholders\')" style="flex:1;padding:9px;border-radius:8px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer">👥 Stakeholders</button>';
+  html += '<button onclick="switchDealTab(\'meddpicc\')" style="flex:1;padding:9px;border-radius:8px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer">🎯 MEDDPICC</button>';
+  html += '<button onclick="openCloseDeal(\''+esc(deal.id)+'\',\''+esc(deal.account)+'\')" style="flex:1;padding:9px;border-radius:8px;background:none;border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);font-size:12px;cursor:pointer">Close deal</button>';
+  html += '</div>';
+  return html;
+}
+
+function _renderStakeholdersPane(stakeholders, deal) {
+  var body = document.getElementById('deal-detail-body'); if (!body) return;
+  var roleLabels = {champion:'Champion',economic_buyer:'Economic buyer',blocker:'Blocker',decision_maker:'Decision maker',influencer:'Influencer',end_user:'End user'};
+  var roleBgs = {champion:'rgba(74,140,92,0.15)',economic_buyer:'rgba(58,110,168,0.15)',blocker:'rgba(192,82,63,0.15)'};
+  var statusColors = {engaged:'var(--green)',active:'var(--green)',dark:'var(--amber)',uncontacted:'var(--text3)'};
+  var html = '';
+  if (stakeholders && stakeholders.length) {
+    stakeholders.forEach(function(s) {
+      var initials = (s.full_name||'?').split(' ').map(function(w){return w[0]||'';}).slice(0,2).join('').toUpperCase();
+      html += '<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border)">' +
+        '<div style="width:34px;height:34px;border-radius:50%;background:var(--surface2);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--text2);flex-shrink:0">'+initials+'</div>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">' +
+            '<span style="font-size:13px;font-weight:500;color:var(--text)">'+esc(s.full_name||'')+'</span>' +
+            (s.meddpicc_role ? '<span style="font-size:10px;padding:1px 7px;border-radius:4px;background:'+(roleBgs[s.meddpicc_role]||'rgba(0,0,0,0.06)')+';color:var(--text2)">'+esc(roleLabels[s.meddpicc_role]||s.meddpicc_role)+'</span>' : '') +
+          '</div>' +
+          '<div style="font-size:11px;color:var(--text3);margin-bottom:4px">'+esc(s.title||'')+'</div>' +
+          '<div style="display:flex;gap:10px;flex-wrap:wrap">' +
+            (s.last_contacted_at ? '<span style="font-size:11px;color:'+(statusColors[s.signal_status]||'var(--text3)')+'">Last: '+s.last_contacted_at+'</span>' : '<span style="font-size:11px;color:var(--coral)">Not yet contacted</span>') +
+            (s.contact_count ? '<span style="font-size:11px;color:var(--text3)">'+s.contact_count+' emails</span>' : '') +
+            (s.meeting_count ? '<span style="font-size:11px;color:var(--text3)">'+s.meeting_count+' meetings</span>' : '') +
+            (s.linkedin_url  ? '<a href="'+esc(s.linkedin_url)+'" style="font-size:11px;color:var(--blue)">LinkedIn ↗</a>' : '') +
+          '</div>' +
+        '</div>' +
+        '<select onchange="saveStakeholderRole(\''+s.id+'\',this.value)" style="font-size:10px;padding:3px 6px;border-radius:6px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans)">' +
+          ['','champion','economic_buyer','decision_maker','influencer','blocker','end_user'].map(function(r){ return '<option value="'+r+'"'+(s.meddpicc_role===r?' selected':'')+'>'+( r ? roleLabels[r] : 'Set role…')+'</option>'; }).join('') +
+        '</select>' +
+      '</div>';
+    });
+  } else {
+    html += '<div style="font-size:12px;color:var(--text3);padding:12px 0;text-align:center">No stakeholders yet — enrich to find contacts.</div>';
+  }
+  html += '<button onclick="enrichDeal(\''+esc(deal?.id||'')+'\',\''+esc(deal?.account||'')+'\')" style="width:100%;margin-top:12px;padding:10px;border-radius:8px;background:var(--surface2);border:1px dashed var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer" id="enrichDealBtn">✦ Find contacts via Apollo / Lusha / Hunter</button>';
+  html += '<div id="enrichDealStatus" style="font-size:11px;color:var(--text3);margin-top:6px;text-align:center"></div>';
+  body.innerHTML = html;
+}
+
+function _renderMeddpiccPane(m, deal) {
+  var body = document.getElementById('deal-detail-body'); if (!body||!deal) return;
+  var fields = [
+    {key:'metrics',letter:'M',label:'Metrics',valKey:'metrics_value',hint:'What measurable outcome does the buyer want?'},
+    {key:'economic_buyer',letter:'E',label:'Economic buyer',valKey:'economic_buyer_name',hint:'Who has final budget authority?'},
+    {key:'decision_criteria',letter:'D',label:'Decision criteria',valKey:'decision_criteria_value',hint:'How will they evaluate solutions?'},
+    {key:'decision_process',letter:'D',label:'Decision process',valKey:'decision_process_value',hint:'Who approves, in what order?'},
+    {key:'paper_process',letter:'P',label:'Paper process',valKey:'paper_process_value',hint:'Legal, procurement, security needed?'},
+    {key:'identified_pain',letter:'I',label:'Identified pain',valKey:'identified_pain_value',hint:'What specific problem are they solving?'},
+    {key:'champion',letter:'C',label:'Champion',valKey:'champion_name',hint:'Who internally advocates for this deal?'},
+    {key:'competition',letter:'C',label:'Competition',valKey:'competition_value',hint:'What other options are they evaluating?'},
+  ];
+  var statusColors = {confirmed:'var(--green)',partial:'var(--amber)',missing:'var(--coral)',unknown:'var(--text3)'};
+  var html = '';
+  fields.forEach(function(f) {
+    var status = m ? (m[f.key+'_status']||'unknown') : 'unknown';
+    var value  = m ? (m[f.valKey]||'') : '';
+    html += '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:7px">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
+        '<span style="font-size:10px;color:var(--text3);font-weight:700;min-width:14px">'+f.letter+'</span>' +
+        '<span style="font-size:12px;font-weight:500;color:var(--text);flex:1">'+f.label+'</span>' +
+        '<select onchange="saveMeddpiccField(\''+deal.id+'\',\''+f.key+'_status\',this.value)" style="font-size:10px;padding:2px 5px;border-radius:5px;background:var(--surface);border:1px solid var(--border2);color:'+statusColors[status]+';font-family:var(--sans)">' +
+          ['unknown','confirmed','partial','missing'].map(function(o){ return '<option value="'+o+'"'+(status===o?' selected':'')+' style="color:var(--text)">'+o+'</option>'; }).join('') +
+        '</select>' +
+      '</div>' +
+      '<input type="text" value="'+esc(value)+'" placeholder="'+esc(f.hint)+'" onblur="saveMeddpiccField(\''+deal.id+'\',\''+f.valKey+'\',this.value)" style="width:100%;padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none"/>' +
+    '</div>';
+  });
+  body.innerHTML = html;
+}
+
+async function saveStakeholderRole(id, role) {
+  await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'save_stakeholder_role', stakeholder_id:id, role}) });
+  showToast('Role saved');
+}
+
+async function saveMeddpiccField(accountId, field, value) {
+  var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'save_meddpicc', account_id:accountId, fields:{[field]:value}}) });
+  var d = await r.json(); if (d.ok) showToast('Saved');
+}
+
+async function enrichDeal(accountId, accountName) {
+  var btn = document.getElementById('enrichDealBtn');
+  var status = document.getElementById('enrichDealStatus');
+  if (btn) { btn.textContent = '↻ Searching…'; btn.disabled = true; }
+  var domain = (accountName||'').toLowerCase().replace(/[^a-z0-9]/g,'') + '.com';
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'enrich_account', account_id:accountId, domain, account_name:accountName}) });
+    var d = await r.json();
+    if (d.ok && !d.cached) {
+      showToast('✓ Found ' + d.count + ' contacts via ' + d.provider);
+      var sRes = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'get_stakeholders', account_id:accountId}) });
+      var sData = await sRes.json();
+      if (_currentDealDetail) _currentDealDetail.stakeholders = sData.stakeholders||[];
+      _renderStakeholdersPane(_currentDealDetail?.stakeholders||[], {id:accountId, account:accountName});
+    } else {
+      if (status) status.textContent = d.error || 'Connect an enrichment provider in Admin or You tab first';
+      if (btn) { btn.textContent = '✦ Find contacts via Apollo / Lusha / Hunter'; btn.disabled = false; }
+    }
+  } catch(e) { if (status) status.textContent = e.message; if (btn) { btn.textContent = '✦ Find contacts'; btn.disabled = false; } }
+}
+
 // ── Delegated click handler for pipeline edit-close-date buttons ─────────────
 // Using data attributes means no inline onclick with escaped strings.
 // One listener on the document catches all current and future pipeline cards.
@@ -6309,7 +6504,7 @@ function renderPipelineDeals(data) {
         ? '<div style="display:inline-flex;align-items:center;gap:4px;margin-left:6px"><div style="width:40px;height:4px;background:var(--border2);border-radius:2px;overflow:hidden"><div style="height:100%;background:' + (d.signal_score>=60?'var(--green)':d.signal_score>=40?'var(--amber)':'var(--coral)') + ';width:' + d.signal_score + '%"></div></div><span style="font-size:9px;color:var(--text3)">' + d.signal_score + '</span></div>'
         : '';
 
-      return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;margin-bottom:6px">' +
+      return '<div class="deal-card-row" data-deal-id="' + esc(d.id) + '" data-deal-account="' + esc(d.account) + '" style="background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;margin-bottom:6px;cursor:pointer;transition:border-color 0.15s" onmouseenter="this.style.borderColor=\'var(--gold)\'" onmouseleave="this.style.borderColor=\'var(--border2)\'">' +
         '<div style="display:flex;align-items:flex-start;gap:10px">' +
           '<div style="flex:1">' +
             '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">' +
