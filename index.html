@@ -1454,6 +1454,7 @@ function launchApp() {
   const cls = { super_admin:'role-super', admin:'role-super', manager:'role-manager', director:'role-manager', executive:'role-manager', member:'role-member', sdr:'role-member', ae:'role-member' };
   rp.textContent = labels[role]; rp.className = 'role-pill ' + (cls[role]||'role-member');
   document.getElementById('uOrg').textContent = profile?.org_name || '';
+  const seniorRole = ['super_admin','admin','manager','director','executive'].includes(role);
   // Load ICP definition for admin users
   if (['super_admin','admin','manager','director','executive'].includes(role)) {
     setTimeout(loadIcpDefinition, 2000);
