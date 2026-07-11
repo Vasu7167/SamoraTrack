@@ -529,15 +529,15 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
       <div class="today-sec-header"><span class="today-sec-title">✦ Tasks</span></div>
       <div class="items" id="today-list-tasks"></div>
     </div>
-    <div id="today-issues-section" class="today-section">
+    <div id="today-issues-section" class="today-section" style="display:none">
       <div class="today-sec-header"><span class="today-sec-title">⚡ Issues</span></div>
       <div class="items" id="today-list-issues"></div>
     </div>
-    <div id="today-wins-section" class="today-section">
+    <div id="today-wins-section" class="today-section" style="display:none">
       <div class="today-sec-header"><span class="today-sec-title">★ Wins</span></div>
       <div class="items" id="today-list-wins"></div>
     </div>
-    <div id="today-misses-section" class="today-section">
+    <div id="today-misses-section" class="today-section" style="display:none">
       <div class="today-sec-header"><span class="today-sec-title">○ Misses</span></div>
       <div class="items" id="today-list-misses"></div>
     </div>
@@ -1476,8 +1476,9 @@ function launchApp() {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   const todayNav = document.getElementById('nav-today'); if (todayNav) todayNav.classList.add('active');
   _lastCalDate = null;
-  render(); // first paint from local cache
-  renderCalStrip(); // render calendar strip immediately from allData
+  renderToday();    // runs first — sets section visibility immediately from local data
+  renderCalStrip(); // calendar strip from local data
+  render();         // full render pass
 
   // Sync indicator
   var syncBadge = document.createElement('div');
@@ -1597,12 +1598,17 @@ function runCarryOver() {
 
 let _lastCalDate = null;
 function render() {
-  const d = dayData(viewDate);
-  renderList('tasks', d.tasks); renderList('issues', d.issues); renderList('wins', d.wins); renderList('misses', d.misses);
-  updateHeader(); updateBadges();
-  if (_lastCalDate !== viewDate) { _lastCalDate = viewDate; renderCalStrip(); }
-  renderSummary(); renderMomentum(); renderToday(); updateSectionPillCounts();
-  const tdi = document.getElementById('teamDateInput'); if (tdi) tdi.value = viewDate;
+  // Always run renderToday first — it controls section visibility
+  // If anything else throws, sections will still show correctly
+  try { renderToday(); } catch(e) { console.error('renderToday error:', e); }
+  try {
+    const d = dayData(viewDate);
+    renderList('tasks', d.tasks); renderList('issues', d.issues); renderList('wins', d.wins); renderList('misses', d.misses);
+    updateHeader(); updateBadges();
+    if (_lastCalDate !== viewDate) { _lastCalDate = viewDate; renderCalStrip(); }
+    renderSummary(); renderMomentum(); updateSectionPillCounts();
+    const tdi = document.getElementById('teamDateInput'); if (tdi) tdi.value = viewDate;
+  } catch(e) { console.error('render error:', e); }
 }
 
 function renderList(key, items) {
@@ -1887,6 +1893,14 @@ function addTodayItem() {
   runCarryOver(); renderToday(); render(); save(viewDate);
 }
 function renderToday() {
+  // Always set section visibility first — even if content rendering fails,
+  // the correct section will be shown. This is the default-safe approach.
+  var _secIds = { tasks:'today-tasks-section', issues:'today-issues-section', wins:'today-wins-section', misses:'today-misses-section' };
+  Object.keys(_secIds).forEach(function(k) {
+    var el = document.getElementById(_secIds[k]);
+    if (el) el.style.display = (k === todayActiveSection) ? '' : 'none';
+  });
+
   const d = dayData(viewDate);
   const sections = [
     { key:'tasks', listId:'today-list-tasks', secId:'today-tasks-section' },
