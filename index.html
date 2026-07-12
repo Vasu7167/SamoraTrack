@@ -5655,6 +5655,17 @@ async function _renderSignalsPane(deal) {
       html += '<div style="font-size:12px;color:var(--text3);padding:12px 0;text-align:center">No signals found. Enrich stakeholders first to unlock company data.</div>';
     }
 
+    // Show debug info if Gemini returned nothing
+    if (!d.signals?.length && !d.summary) {
+      html += '<div style="font-size:11px;color:var(--text3);background:var(--surface2);border-radius:6px;padding:8px;margin-top:8px">';
+      html += '<strong>Debug:</strong> ';
+      if (d._debug) {
+        html += 'API key: ' + (d._debug.hasAnthropicKey ? '✓ present' : '✗ missing') + ' · ';
+        html += 'Company: ' + esc(d._debug.companyName||'') + ' · ';
+        html += 'Signals returned: ' + (d._debug.geminiSignalCount||0);
+      }
+      html += '</div>';
+    }
     body.innerHTML = html;
   } catch(e) {
     body.innerHTML = '<div style="font-size:12px;color:var(--coral);padding:8px">Error: ' + esc(e.message) + '</div>';
