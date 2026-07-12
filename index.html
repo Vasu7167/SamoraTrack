@@ -5646,19 +5646,24 @@ async function _renderSignalsPane(deal) {
         + '</div>';
     }
 
-    var globalSigs   = d.signals         || [];
-    var regionalSigs = d.regional_signals || [];
-    var countrySigs  = d.country_signals  || [];
-    var globalSum    = (d.summary         || '').slice(0, 4000);
-    var regionalSum  = (d.regional_summary || '').slice(0, 4000);
-    var countrySum   = (d.country_summary  || '').slice(0, 4000);
-    var countryLabel = (d.deal_region || '').split(/[,\/ \-]/)[0].trim() || 'Country';
+    var globalSigs   = d.signals          || [];
+    var regionalSigs = d.regional_signals  || [];
+    var countrySigs  = d.country_signals   || [];
+    var globalSum    = d.summary           || '';
+    var regionalSum  = d.regional_summary  || '';
+    var countrySum   = d.country_summary   || '';
     var regionLabel  = d.deal_region || 'Regional';
+    var countryLabel = (d.deal_region || '').split(/[,\/ \-]/)[0].trim() || 'Country';
+    // Don't show III if country is same as region (e.g. both = "India")
+    var showCountry  = countryLabel && countryLabel.toLowerCase() !== regionLabel.toLowerCase();
 
     // ── I. Global ───────────────────────────────────────────────────────────
     html += '<div style="background:var(--surface2);border-radius:10px;padding:12px;margin-bottom:10px">';
     html += sectionHead('I.', 'Global', globalSigs.length);
-    if (globalSum) html += '<div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:10px">'+esc(globalSum)+'</div>';
+    if (globalSum) {
+      var sumStyle = globalSum.startsWith('AI parse error') || globalSum.startsWith('Signal fetch') ? 'color:var(--coral)' : 'color:var(--text2)';
+      html += '<div style="font-size:12px;line-height:1.6;margin-bottom:10px;'+sumStyle+'">'+esc(globalSum)+'</div>';
+    }
     html += renderSignalCards(globalSigs);
     html += '</div>';
 
@@ -5669,12 +5674,14 @@ async function _renderSignalsPane(deal) {
     html += renderSignalCards(regionalSigs);
     html += '</div>';
 
-    // ── III. Country ─────────────────────────────────────────────────────────
-    html += '<div style="background:var(--surface2);border-radius:10px;padding:12px;margin-bottom:10px">';
-    html += sectionHead('III.', countryLabel, countrySigs.length);
-    if (countrySum) html += '<div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:10px">'+esc(countrySum)+'</div>';
-    html += renderSignalCards(countrySigs);
-    html += '</div>';
+    // ── III. Country — only if different from region ────────────────────────
+    if (showCountry) {
+      html += '<div style="background:var(--surface2);border-radius:10px;padding:12px;margin-bottom:10px">';
+      html += sectionHead('III.', countryLabel, countrySigs.length);
+      if (countrySum) html += '<div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:10px">'+esc(countrySum)+'</div>';
+      html += renderSignalCards(countrySigs);
+      html += '</div>';
+    }
 
     body.innerHTML = html;
   } catch(e) {
