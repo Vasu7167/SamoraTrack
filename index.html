@@ -8,6 +8,7 @@
 <!-- v1780650752 -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="theme-color" content="#0f0f13">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="SamoraTrack">
@@ -1293,6 +1294,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 let SB_URL = localStorage.getItem('dt-sb-url') || 'https://gowpuicpmrwsohongosf.supabase.co';
 let SB_KEY = localStorage.getItem('dt-sb-key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdvd3B1aWNwbXJ3c29ob25nb3NmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzOTExMDgsImV4cCI6MjA5NTk2NzEwOH0.35CjODxyxOjAKp-xBOBx4oAXO_qjLyVttVaJEhp7YEg';
 let API_KEY = localStorage.getItem('dt-api-key') || '';
+var _userHabits = null;
 // EDGE_FN_URL is derived from SB_URL, not hardcoded — previously this stayed
 // fixed to one Supabase project regardless of what URL/key someone entered
 // in the setup screen, so a second tenant could configure their own
