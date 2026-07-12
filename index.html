@@ -5517,87 +5517,98 @@ function _buildDealOverviewHTML(deal) {
 
 function _renderStakeholdersPane(stakeholders, deal) {
   var body = document.getElementById('deal-detail-body'); if (!body) return;
-  var roleLabels = {champion:'Champion',economic_buyer:'Economic buyer',blocker:'Blocker',decision_maker:'Decision maker',influencer:'Influencer',end_user:'End user',not_relevant:'Not relevant'};
-  var roleBgs   = {champion:'rgba(74,140,92,0.15)',economic_buyer:'rgba(58,110,168,0.15)',blocker:'rgba(192,82,63,0.15)',not_relevant:'rgba(0,0,0,0.04)'};
-  var roleColors= {champion:'var(--green)',economic_buyer:'var(--blue)',blocker:'var(--coral)',not_relevant:'var(--text3)'};
-  var statusColors = {engaged:'var(--green)',active:'var(--green)',dark:'var(--amber)',uncontacted:'var(--text3)'};
+  var roleLabels = {champion:'Champion',economic_buyer:'Economic buyer',blocker:'Blocker',
+    decision_maker:'Decision maker',influencer:'Influencer',end_user:'End user',not_relevant:'Not relevant'};
+  var roleBgs = {champion:'rgba(74,140,92,0.15)',economic_buyer:'rgba(58,110,168,0.15)',blocker:'rgba(192,82,63,0.15)'};
+
   var html = '';
 
-  if (stakeholders && stakeholders.length) {
-    // Sort: has role first, then by recency (last_contacted_at desc), not_relevant last
+  if (!stakeholders || !stakeholders.length) {
+    html = '<div style="padding:16px 0;text-align:center;font-size:12px;color:var(--text3)">No contacts yet. Click below to find from Gmail activity.</div>';
+  } else {
+    // Sort: has role first → recency desc → not_relevant last
     var sorted = stakeholders.slice().sort(function(a, b) {
       if (a.meddpicc_role === 'not_relevant' && b.meddpicc_role !== 'not_relevant') return 1;
       if (b.meddpicc_role === 'not_relevant' && a.meddpicc_role !== 'not_relevant') return -1;
       if (a.meddpicc_role && !b.meddpicc_role) return -1;
       if (b.meddpicc_role && !a.meddpicc_role) return 1;
-      var da = a.last_contacted_at || '0000-00-00';
-      var db = b.last_contacted_at || '0000-00-00';
-      return db < da ? -1 : db > da ? 1 : 0;
+      var da = a.last_contacted_at || '0', db = b.last_contacted_at || '0';
+      return da > db ? -1 : da < db ? 1 : 0;
     });
 
-    // Summary line
-    var assigned  = sorted.filter(function(s){ return s.meddpicc_role && s.meddpicc_role !== 'not_relevant'; }).length;
-    var relevant  = sorted.filter(function(s){ return s.meddpicc_role !== 'not_relevant'; }).length;
-    html += '<div style="font-size:11px;color:var(--text3);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">' +
-      '<span>' + sorted.length + ' contacts found · <span style="color:var(--green)">' + assigned + ' with roles</span></span>' +
-      '<span style="font-size:10px;color:var(--text3)">Sort: recent first · not relevant hidden below</span>' +
-    '</div>';
+    var assigned = sorted.filter(function(s){ return s.meddpicc_role && s.meddpicc_role !== 'not_relevant'; }).length;
+    html += '<div style="font-size:11px;color:var(--text3);margin-bottom:10px">' + sorted.length + ' contacts · <span style="color:var(--green)">' + assigned + ' with roles</span></div>';
 
-    sorted.forEach(function(s) {
-      var isNotRelevant = s.meddpicc_role === 'not_relevant';
-      var initials = (s.full_name||'?').split(' ').map(function(w){return w[0]||'';}).slice(0,2).join('').toUpperCase();
-      var roleBg  = roleBgs[s.meddpicc_role]  || 'rgba(0,0,0,0.06)';
-      var roleCol = roleColors[s.meddpicc_role] || 'var(--text2)';
+    for (var si = 0; si < sorted.length; si++) {
+      var s = sorted[si];
+      var isNR = s.meddpicc_role === 'not_relevant';
+      var initials = (s.full_name || '?').split(' ').map(function(w){ return w[0] || ''; }).slice(0,2).join('').toUpperCase();
 
-      // Days since last contact
-      var recencyLabel = '';
+      // Recency
+      var recencyStr = 'Not yet contacted';
       var recencyColor = 'var(--text3)';
       if (s.last_contacted_at) {
-        var days = Math.floor((Date.now() - new Date(s.last_contacted_at).getTime()) / 86400000);
-        if (days === 0) { recencyLabel = 'Today'; recencyColor = 'var(--green)'; }
-        else if (days <= 7) { recencyLabel = days + 'd ago'; recencyColor = 'var(--green)'; }
-        else if (days <= 30) { recencyLabel = days + 'd ago'; recencyColor = 'var(--amber)'; }
-        else { recencyLabel = days + 'd ago'; recencyColor = 'var(--coral)'; }
+        var days = Math.round((Date.now() - new Date(s.last_contacted_at).getTime()) / 86400000);
+        if (days <= 0) { recencyStr = 'Today'; recencyColor = 'var(--green)'; }
+        else if (days <= 7) { recencyStr = days + 'd ago'; recencyColor = 'var(--green)'; }
+        else if (days <= 30) { recencyStr = days + 'd ago'; recencyColor = 'var(--amber)'; }
+        else { recencyStr = days + 'd ago'; recencyColor = 'var(--coral)'; }
       }
 
-      html += '<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border);opacity:' + (isNotRelevant ? '0.45' : '1') + '">' +
-        '<div style="width:34px;height:34px;border-radius:50%;background:var(--surface2);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--text2);flex-shrink:0">' + initials + '</div>' +
-        '<div style="flex:1;min-width:0">' +
-          '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">' +
-            '<span style="font-size:13px;font-weight:' + (isNotRelevant ? '400' : '500') + ';color:' + (isNotRelevant ? 'var(--text3)' : 'var(--text)') + '">' + esc(s.full_name||'') + '</span>' +
-            // LinkedIn icon — always shown; direct URL if available, else name search
-            '<a href="' + (s.linkedin_url ? esc(s.linkedin_url) : 'https://www.linkedin.com/search/results/people/?keywords=' + encodeURIComponent(s.full_name||'')) + '" target="_blank" title="' + (s.linkedin_url ? 'LinkedIn profile' : 'Search on LinkedIn') + '" style="display:inline-flex;align-items:center;flex-shrink:0;color:#0A66C2;opacity:' + (s.linkedin_url ? (isNotRelevant?'0.4':'1') : (isNotRelevant?'0.2':'0.35')) + '">' +
-              '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>' +
-            '</a>' +
-            (s.meddpicc_role && s.meddpicc_role !== 'not_relevant' ? '<span style="font-size:10px;padding:1px 7px;border-radius:4px;background:' + roleBg + ';color:' + roleCol + '">' + esc(roleLabels[s.meddpicc_role]) + '</span>' : '') +
-          '</div>' +
-          // Title + location row
-          '<div style="font-size:11px;color:var(--text3);margin-bottom:4px">' +
-            (s.title ? esc(s.title) : '<span style="color:var(--border2)">No title</span>') +
-            (s.location ? ' · <span style="color:var(--text3)">📍 ' + esc(s.location) + '</span>' : '') +
-          '</div>' +
-          // Activity signals row
-          '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
-            (recencyLabel ? '<span style="font-size:11px;color:' + recencyColor + '">✉ ' + recencyLabel + '</span>' : '<span style="font-size:11px;color:var(--text3)">Not yet contacted</span>') +
-            (s.contact_count > 0 ? '<span style="font-size:11px;color:var(--text3)">' + s.contact_count + ' emails</span>' : '') +
-            (s.meeting_count > 0 ? '<span style="font-size:11px;color:var(--text3)">📅 ' + s.meeting_count + ' meetings</span>' : '') +
-          '</div>' +
-        '</div>' +
-        '<select onchange="saveStakeholderRole(\'' + s.id + '\',this.value)" style="font-size:10px;padding:3px 6px;border-radius:6px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);flex-shrink:0">' +
-          ['','champion','economic_buyer','decision_maker','influencer','blocker','end_user','not_relevant'].map(function(r){
-            return '<option value="' + r + '"' + (s.meddpicc_role===r?' selected':'') + '>' + (r ? roleLabels[r] : 'Set role…') + '</option>';
-          }).join('') +
-        '</select>' +
-      '</div>';
-    });
-  } else {
-    html += '<div style="font-size:12px;color:var(--text3);padding:12px 0;text-align:center">No stakeholders yet — click below to find contacts from your emails.</div>';
+      // LinkedIn href and opacity
+      var liHref = s.linkedin_url ? s.linkedin_url : ('https://www.linkedin.com/search/results/people/?keywords=' + encodeURIComponent(s.full_name || ''));
+      var liOpacity = s.linkedin_url ? (isNR ? '0.4' : '1') : (isNR ? '0.2' : '0.35');
+      var liTitle = s.linkedin_url ? 'LinkedIn profile' : 'Search on LinkedIn';
+
+      // Role badge
+      var roleHtml = '';
+      if (s.meddpicc_role && s.meddpicc_role !== 'not_relevant') {
+        roleHtml = '<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:' + (roleBgs[s.meddpicc_role] || 'rgba(0,0,0,0.06)') + ';color:var(--text2);margin-left:4px">' + esc(roleLabels[s.meddpicc_role] || s.meddpicc_role) + '</span>';
+      }
+
+      html += '<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border);opacity:' + (isNR ? '0.45' : '1') + '">';
+      // Avatar
+      html += '<div style="width:34px;height:34px;border-radius:50%;background:var(--surface2);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--text2);flex-shrink:0">' + esc(initials) + '</div>';
+      // Info
+      html += '<div style="flex:1;min-width:0">';
+      // Name + LinkedIn icon + role badge
+      html += '<div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;flex-wrap:wrap">';
+      html += '<span style="font-size:13px;font-weight:500;color:var(--text)">' + esc(s.full_name || '') + '</span>';
+      html += '<a href="' + esc(liHref) + '" target="_blank" title="' + esc(liTitle) + '" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;color:#0A66C2;opacity:' + liOpacity + ';text-decoration:none">';
+      html += '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>';
+      html += '</a>';
+      html += roleHtml;
+      html += '</div>';
+      // Title + location
+      var titleStr = s.title ? esc(s.title) : '<span style="color:var(--border2);font-style:italic">No title</span>';
+      var locStr = s.location ? ' &nbsp;·&nbsp; <span>📍 ' + esc(s.location) + '</span>' : '';
+      html += '<div style="font-size:11px;color:var(--text3);margin-bottom:4px">' + titleStr + locStr + '</div>';
+      // Activity signals
+      html += '<div style="display:flex;gap:8px;flex-wrap:wrap">';
+      html += '<span style="font-size:11px;color:' + recencyColor + '">✉ ' + recencyStr + '</span>';
+      if (s.contact_count > 0) html += '<span style="font-size:11px;color:var(--text3)">' + s.contact_count + ' emails</span>';
+      if (s.meeting_count > 0) html += '<span style="font-size:11px;color:var(--text3)">📅 ' + s.meeting_count + ' mtgs</span>';
+      html += '</div>';
+      html += '</div>'; // info
+      // Role dropdown
+      html += '<select onchange="saveStakeholderRole(\'' + s.id + '\',this.value)" style="font-size:10px;padding:3px 6px;border-radius:6px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);flex-shrink:0">';
+      var roleOpts = ['','champion','economic_buyer','decision_maker','influencer','blocker','end_user','not_relevant'];
+      for (var ri = 0; ri < roleOpts.length; ri++) {
+        var rv = roleOpts[ri];
+        html += '<option value="' + rv + '"' + (s.meddpicc_role === rv ? ' selected' : '') + '>' + (rv ? (roleLabels[rv] || rv) : 'Set role…') + '</option>';
+      }
+      html += '</select>';
+      html += '</div>'; // row
+    }
   }
 
-  html += '<button onclick="enrichDeal(\'' + esc(deal?.id||'') + '\',\'' + esc(deal?.account||'') + '\')" style="width:100%;margin-top:12px;padding:10px;border-radius:8px;background:var(--surface2);border:1px dashed var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer" id="enrichDealBtn">✦ Find contacts from Gmail &amp; SmartReach activity</button>';
-  html += '<div id="enrichDealStatus" style="font-size:11px;color:var(--text3);margin-top:6px;white-space:pre-line"></div>';
+  // Enrich button
+  html += '<button onclick="enrichDeal(\'' + esc(deal && deal.id || '') + '\',\'' + esc(deal && deal.account || '') + '\')" id="enrichDealBtn" style="width:100%;margin-top:12px;padding:10px;border-radius:8px;background:var(--surface2);border:1px dashed var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer">✦ Find contacts from Gmail &amp; SmartReach activity</button>';
+  html += '<div id="enrichDealStatus" style="font-size:11px;color:var(--text3);margin-top:6px"></div>';
+
   body.innerHTML = html;
 }
+
 
 function _renderMeddpiccPane(m, deal) {
   var body = document.getElementById('deal-detail-body'); if (!body||!deal) return;
@@ -7555,7 +7566,7 @@ document.addEventListener('click', function(e) {
     <div style="font-family:'EB Garamond',Georgia,serif;font-size:18px;color:var(--text);margin-bottom:8px">Mark as done?</div>
     <div id="doneConfirmText" style="font-size:14px;color:var(--text2);margin-bottom:16px;padding:10px 12px;background:var(--surface2);border-radius:8px;border-left:3px solid var(--gold)"></div>
 
-    <!--- Structured outcome section — shown only for LinkedIn/WhatsApp/Call tasks -->
+    <!-- Structured outcome section — shown only for LinkedIn/WhatsApp/Call tasks -->
     <div id="doneStructuredSection" style="display:none;margin-bottom:14px">
       <div id="doneChannelHint" style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em"></div>
       <div style="display:flex;gap:8px;margin-bottom:10px">
