@@ -642,7 +642,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
     <div id="pipelineDeals"></div>
   </div>
 
-  <div class="panel" id="panel-review">
+  <div class="panel" id="panel-review" style="display:none">
     <div class="sum-card"><div class="sum-title">Day at a glance</div><div class="sum-grid" id="sumGrid"></div></div>
     <div class="review-tabs" style="display:flex;gap:8px;margin-bottom:14px">
       <button class="rtab active" id="rtab-daily" onclick="setReviewPeriod('daily')">Daily</button>
@@ -1201,6 +1201,60 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
       </div>
     </div>
 
+    <div class="admin-section" id="healthWeightsSection">
+      <div class="admin-title">Deal health score weights</div>
+      <div class="admin-card-sub" style="margin-bottom:12px;font-size:12px;color:var(--text3)">Adjust how health score is calculated for your sales context. Weights must add up to 100. Higher weight = more influence on the score.</div>
+      <div class="admin-card">
+        <div id="healthWeightsForm">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+            <div>
+              <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Signal score (email/meeting activity)</div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <input type="number" id="hw-signal" min="0" max="100" oninput="_updateHwTotal()" value="30" style="width:60px;padding:6px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>
+                <span style="font-size:12px;color:var(--text3)">%</span>
+              </div>
+            </div>
+            <div>
+              <div style="font-size:11px;color:var(--text3);margin-bottom:4px">MEDDPICC completeness</div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <input type="number" id="hw-meddpicc" min="0" max="100" oninput="_updateHwTotal()" value="25" style="width:60px;padding:6px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>
+                <span style="font-size:12px;color:var(--text3)">%</span>
+              </div>
+            </div>
+            <div>
+              <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Stakeholder recency</div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <input type="number" id="hw-recency" min="0" max="100" oninput="_updateHwTotal()" value="20" style="width:60px;padding:6px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>
+                <span style="font-size:12px;color:var(--text3)">%</span>
+              </div>
+            </div>
+            <div>
+              <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Champion identified</div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <input type="number" id="hw-champion" min="0" max="100" oninput="_updateHwTotal()" value="10" style="width:60px;padding:6px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>
+                <span style="font-size:12px;color:var(--text3)">%</span>
+              </div>
+            </div>
+            <div>
+              <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Close date proximity</div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <input type="number" id="hw-close" min="0" max="100" oninput="_updateHwTotal()" value="15" style="width:60px;padding:6px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>
+                <span style="font-size:12px;color:var(--text3)">%</span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:flex-end;padding-bottom:2px">
+              <div style="font-size:11px;color:var(--text3)">Total: <span id="hw-total" style="font-weight:600;color:var(--text)">100</span>%</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button onclick="saveHealthWeights()" style="padding:8px 16px;border-radius:8px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Save weights</button>
+            <button onclick="resetHealthWeights()" style="padding:8px 12px;border-radius:8px;background:none;border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);font-size:12px;cursor:pointer">Reset to default</button>
+            <span id="hw-status" style="font-size:12px;color:var(--text3);align-self:center"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="admin-section" id="enrichmentAdminSection">
       <div class="admin-title">Enrichment providers — org-wide</div>
       <div class="admin-card-sub" style="margin-bottom:12px;font-size:12px;color:var(--text3)">API keys set here apply to all reps. Individual reps can override with their own keys in the You tab. Keys are stored encrypted — never visible after saving.</div>
@@ -1274,10 +1328,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
       <span class="nav-icon">◈</span>
       <span class="nav-label">Pipeline</span>
     </button>
-    <button class="nav-btn" onclick="switchTab('review')" id="nav-review">
-      <span class="nav-icon">★</span>
-      <span class="nav-label">Review</span>
-    </button>
+
     <button class="nav-btn" onclick="switchTab('exec')" id="nav-exec" style="display:none">
       <span class="nav-icon">◈</span>
       <span class="nav-label">SAMagic</span>
@@ -1896,7 +1947,7 @@ function switchTab(tab) {
   if (navBtn) navBtn.classList.add('active');
   if (['tasks','issues','wins','misses'].includes(tab)) { if (tab !== 'misses') setTodaySection(tab); renderToday(); }
   if (tab === 'today') { setTodaySection('tasks'); renderToday(); }
-  if (tab === 'settings') renderSettings();
+  if (tab === 'settings') { renderSettings(); if (currentUser?.token) loadHealthWeights(); }
   if (tab === 'you') { renderYouPanel(); refreshYouTabConnections(); loadHabitsSection(); loadEnrichmentStatus(); }
   if (tab === 'review') renderSummary();
   if (tab === 'exec') loadExecDashboard();
@@ -2043,6 +2094,11 @@ function renderToday() {
   if (!_coachingAlertsLoaded && currentUser?.token) {
     _coachingAlertsLoaded = true;
     loadCoachingAlerts();
+    // Auto-generate fresh alerts silently on first Today tab load
+    fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({action:'generate_coaching_alerts'}) }).then(function(r){return r.json();}).then(function(d){
+      if (d.ok && d.alertsGenerated > 0) loadCoachingAlerts();
+    }).catch(function(){});
   }
 }
 
@@ -5566,11 +5622,17 @@ async function loadCoachingAlerts() {
       body:JSON.stringify({action:'get_coaching_alerts', role: profile?.role||'member'}) });
     var d = await r.json();
     var alerts = d.alerts || [];
-    if (!alerts.length) { panel.innerHTML = ''; return; }
+    if (!alerts.length) {
+      panel.innerHTML = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="font-size:11px;color:var(--text3)">No active alerts</span><button onclick="runCoachingAlerts()" style="font-size:10px;padding:2px 8px;border-radius:4px;background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);cursor:pointer">↻ Check now</button></div>';
+      return;
+    }
     var sevColor = {high:'var(--coral)', medium:'var(--amber)', low:'var(--blue)'};
     var typeIcon  = {dark_account:'🌑', no_champion:'👤', meddpicc_gap:'🎯', close_at_risk:'⏰', velocity_stall:'📉'};
     var html = '<div style="margin-bottom:10px">';
-    html += '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">⚡ Coaching alerts — ' + alerts.length + ' active</div>';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">';
+    html += '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">⚡ Coaching alerts — ' + alerts.length + ' active</div>';
+    html += '<button onclick="runCoachingAlerts()" style="font-size:10px;padding:2px 8px;border-radius:5px;background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);cursor:pointer">↻ Refresh</button>';
+    html += '</div>';
     alerts.slice(0, 5).forEach(function(a) {
       var col = sevColor[a.severity] || 'var(--text3)';
       html += '<div style="background:var(--surface);border:1px solid ' + col + '33;border-left:3px solid ' + col + ';border-radius:8px;padding:8px 10px;margin-bottom:5px;display:flex;align-items:flex-start;gap:8px">';
@@ -5959,9 +6021,17 @@ function _renderMeddpiccPane(m, deal) {
           ['unknown','confirmed','partial','missing'].map(function(o){ return '<option value="'+o+'"'+(status===o?' selected':'')+' style="color:var(--text)">'+o+'</option>'; }).join('') +
         '</select>' +
       '</div>' +
-      '<input type="text" value="'+esc(value)+'" placeholder="'+esc(f.hint)+'" onblur="saveMeddpiccField(\''+deal.id+'\',\''+f.valKey+'\',this.value)" style="width:100%;padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none"/>' +
+      '<input type="text" id="mf-'+f.valKey+'" value="'+esc(value)+'" placeholder="'+esc(f.hint)+'" ' +
+        'oninput="_meddpiccChanged(\'' + deal.id + '\')" ' +
+        'onblur="saveMeddpiccField(\'' + deal.id + '\',\'' + f.valKey + '\',this.value)" ' +
+        'style="width:100%;padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none"/>' +
     '</div>';
   });
+  // Save All button + status indicator
+  html += '<div style="margin-top:12px;display:flex;align-items:center;gap:8px">';
+  html += '<button id="meddpiccSaveBtn" onclick="_saveAllMeddpicc(\''+deal.id+'\')" style="padding:9px 18px;border-radius:8px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Save changes</button>';
+  html += '<span id="meddpiccSaveStatus" style="font-size:11px;color:var(--text3)"></span>';
+  html += '</div>';
   body.innerHTML = html;
 }
 
@@ -5972,7 +6042,96 @@ async function saveStakeholderRole(id, role) {
 
 async function saveMeddpiccField(accountId, field, value) {
   var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'save_meddpicc', account_id:accountId, fields:{[field]:value}}) });
-  var d = await r.json(); if (d.ok) showToast('Saved');
+  var d = await r.json();
+  if (d.ok) {
+    var st = document.getElementById('meddpiccSaveStatus');
+    if (st) { st.textContent = '✓ Saved'; st.style.color = 'var(--green)'; setTimeout(function(){ st.textContent=''; }, 2000); }
+  }
+}
+
+var _meddpiccDirty = false;
+function _meddpiccChanged(accountId) {
+  _meddpiccDirty = true;
+  var st = document.getElementById('meddpiccSaveStatus');
+  if (st) { st.textContent = 'Unsaved changes'; st.style.color = 'var(--amber)'; }
+}
+
+// ── Health score weights ──────────────────────────────────────────────────────
+function _updateHwTotal() {
+  var ids = ['hw-signal','hw-meddpicc','hw-recency','hw-champion','hw-close'];
+  var total = ids.reduce(function(s,id){ return s + (parseInt(document.getElementById(id)?.value||'0')||0); }, 0);
+  var el = document.getElementById('hw-total');
+  if (el) { el.textContent = String(total); el.style.color = total===100?'var(--green)':'var(--coral)'; }
+  return total;
+}
+
+async function saveHealthWeights() {
+  var total = _updateHwTotal();
+  if (total !== 100) { showToast('Weights must add up to 100 (currently ' + total + ')'); return; }
+  var weights = {
+    signal:   parseInt(document.getElementById('hw-signal')?.value||'30'),
+    meddpicc: parseInt(document.getElementById('hw-meddpicc')?.value||'25'),
+    recency:  parseInt(document.getElementById('hw-recency')?.value||'20'),
+    champion: parseInt(document.getElementById('hw-champion')?.value||'10'),
+    close:    parseInt(document.getElementById('hw-close')?.value||'15')
+  };
+  var st = document.getElementById('hw-status');
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({action:'save_org_setting', key:'health_score_weights', value:JSON.stringify(weights)}) });
+    var d = await r.json();
+    if (d.ok) { showToast('Health weights saved'); if(st){st.textContent='✓ Saved';st.style.color='var(--green)';setTimeout(function(){st.textContent='';},3000);} }
+  } catch(e) { showToast('Error: ' + e.message); }
+}
+
+async function loadHealthWeights() {
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({action:'get_org_setting', key:'health_score_weights'}) });
+    var d = await r.json();
+    if (d.value) {
+      var w = JSON.parse(d.value);
+      ['signal','meddpicc','recency','champion','close'].forEach(function(k) {
+        var el = document.getElementById('hw-' + k) ;
+        if (el && w[k] != null) el.value = String(w[k]);
+      });
+      _updateHwTotal();
+    }
+  } catch(e) {}
+}
+
+function resetHealthWeights() {
+  var defaults = {signal:30, meddpicc:25, recency:20, champion:10, close:15};
+  Object.entries(defaults).forEach(function(e) {
+    var el = document.getElementById('hw-' + e[0]) ;
+    if (el) el.value = String(e[1]);
+  });
+  _updateHwTotal();
+}
+
+async function _saveAllMeddpicc(accountId) {
+  var btn = document.getElementById('meddpiccSaveBtn');
+  var st  = document.getElementById('meddpiccSaveStatus');
+  if (btn) { btn.textContent = 'Saving…'; btn.disabled = true; }
+  // Collect all input values from the MEDDPICC pane
+  var fields = {};
+  document.querySelectorAll('[id^="mf-"]').forEach(function(el) {
+    var field = (el ).id.replace('mf-', '');
+    fields[field] = (el ).value;
+  });
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({action:'save_meddpicc', account_id:accountId, fields}) });
+    var d = await r.json();
+    if (d.ok) {
+      _meddpiccDirty = false;
+      if (st) { st.textContent = '✓ All saved'; st.style.color = 'var(--green)'; }
+      showToast('MEDDPICC saved');
+    }
+  } catch(e) {
+    if (st) { st.textContent = 'Save failed'; st.style.color = 'var(--coral)'; }
+  }
+  if (btn) { btn.textContent = 'Save changes'; btn.disabled = false; }
 }
 
 async function enrichDeal(accountId, accountName) {
