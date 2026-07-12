@@ -5660,9 +5660,13 @@ async function _renderSignalsPane(deal) {
       html += '<div style="font-size:11px;color:var(--text3);background:var(--surface2);border-radius:6px;padding:8px;margin-top:8px">';
       html += '<strong>Debug:</strong> ';
       if (d._debug) {
-        html += 'API key: ' + (d._debug.hasAnthropicKey ? '✓ present' : '✗ missing') + ' · ';
-        html += 'Company: ' + esc(d._debug.companyName||'') + ' · ';
-        html += 'Signals returned: ' + (d._debug.geminiSignalCount||0);
+        html += 'Engine: ' + esc(d._debug.engine||'none') + ' · ';
+        html += 'Key: ' + (d._debug.hasKey ? '✓' : '✗ missing') + ' · ';
+        html += 'Company: "' + esc(d._debug.companyName||'') + '" · ';
+        html += 'Signals: ' + (d._debug.signalCount||0) + ' · ';
+        html += 'Summary: ' + (d._debug.summaryLen||0) + ' chars';
+      } else {
+        html += 'No debug info returned — edge function may not have reached get_market_signals';
       }
       html += '</div>';
     }
