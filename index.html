@@ -5572,32 +5572,48 @@ async function saveCompanyLinkedIn(accountId, url) {
 
 async function _renderSignalsPane(deal) {
   var body = document.getElementById('deal-detail-body'); if (!body) return;
-  body.innerHTML = '<div style="padding:20px 0;text-align:center"><div style="font-size:13px;color:var(--text3)">↻ Researching ' + esc(deal.account) + '…</div><div style="font-size:11px;color:var(--text3);margin-top:4px">Scanning global · regional · country signals</div></div>';
+  body.innerHTML = '<div style="padding:20px 0;text-align:center;font-size:13px;color:var(--text3)">↻ Researching ' + esc(deal.account) + '…</div>';
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
       body:JSON.stringify({action:'get_market_signals', account_id:deal.id, account_name:deal.account, region:deal.region||''}) });
     var d = await r.json();
     var html = '';
+    var typeIcons = {hiring:'👥',funding:'💰',expansion:'🚀',contraction:'📉',leadership:'👤',technology:'⚙️',financial:'📊',competitive:'🏆'};
+    var sigColors = {positive:'var(--green)',negative:'var(--coral)',neutral:'var(--amber)'};
 
-    // Verdict banner
+    function renderSignalCards(signals) {
+      if (!signals || !signals.length) return '<div style="font-size:12px;color:var(--text3);padding:8px 0;font-style:italic">No signals found for this scope.</div>';
+      var h = '';
+      signals.forEach(function(s) {
+        var col = sigColors[s.signal] || 'var(--border)';
+        h += '<div style="background:var(--bg);border-radius:8px;padding:9px 11px;margin-bottom:6px;border-left:3px solid '+col+'">';
+        h += '<div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:3px">';
+        h += '<span style="font-size:13px;flex-shrink:0">'+(typeIcons[s.type]||'📌')+'</span>';
+        h += '<div style="flex:1"><div style="font-size:12px;font-weight:500;color:var(--text)">'+esc(s.title||'')+'</div>';
+        if (s.date||s.source) h += '<div style="font-size:10px;color:var(--text3);margin-top:1px">'+(s.date?esc(s.date):'')+(s.date&&s.source?' · ':'')+esc(s.source||'')+'</div>';
+        h += '</div>';
+        h += '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:'+col+'22;color:'+col+';flex-shrink:0">'+esc(s.signal||'')+'</span>';
+        h += '</div>';
+        if (s.detail) h += '<div style="font-size:11px;color:var(--text2);line-height:1.5;margin-bottom:3px">'+esc(s.detail)+'</div>';
+        if (s.why_it_matters) h += '<div style="font-size:11px;color:var(--amber);font-style:italic">💡 '+esc(s.why_it_matters)+'</div>';
+        h += '</div>';
+      });
+      return h;
+    }
+
+    // Verdict
     if (d.verdict) {
-      var vParts = d.verdict.split('|');
-      var vLabel = vParts[0]||'', vReason = vParts[1]||'';
-      var vColor = vLabel.includes('Approach') ? 'var(--green)' : vLabel.includes('Deprioritise') ? 'var(--coral)' : 'var(--amber)';
-      html += '<div style="border-radius:10px;border:1px solid '+vColor+';background:'+vColor+'18;padding:10px 14px;margin-bottom:12px">';
-      html += '<div style="font-size:11px;font-weight:700;color:'+vColor+';text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">'+esc(vLabel)+'</div>';
-      if (vReason) html += '<div style="font-size:12px;color:var(--text2)">'+esc(vReason)+'</div>';
+      var vp = d.verdict.split('|'), vl = vp[0]||'', vr = vp[1]||'';
+      var vc = vl.includes('Approach') ? 'var(--green)' : vl.includes('Deprioritise') ? 'var(--coral)' : 'var(--amber)';
+      html += '<div style="border-radius:10px;border:1px solid '+vc+';background:'+vc+'18;padding:10px 14px;margin-bottom:12px">';
+      html += '<div style="font-size:11px;font-weight:700;color:'+vc+';text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">'+esc(vl)+'</div>';
+      if (vr) html += '<div style="font-size:12px;color:var(--text2)">'+esc(vr)+'</div>';
       html += '</div>';
     }
 
-    // Company meta
-    var metaParts = [];
-    if (d.company_industry) metaParts.push(esc(d.company_industry));
-    if (d.company_size) metaParts.push(esc(d.company_size));
-    if (d.company_funding) metaParts.push('💰 '+esc(d.company_funding));
-    if (metaParts.length) html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">'+metaParts.map(function(m){return '<span style="font-size:11px;background:var(--surface2);border-radius:4px;padding:2px 8px">'+m+'</span>';}).join('')+'</div>';
-
-    // Tech stack
+    // Company meta + tech stack
+    var meta = [d.company_industry, d.company_size, d.company_funding].filter(Boolean);
+    if (meta.length) html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">'+meta.map(function(m){return '<span style="font-size:11px;background:var(--surface2);border-radius:4px;padding:2px 8px">'+esc(m)+'</span>';}).join('')+'</div>';
     if (d.company_technologies && d.company_technologies.length) {
       html += '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">';
       d.company_technologies.forEach(function(t){ html += '<span style="font-size:10px;background:rgba(58,110,168,0.1);color:var(--blue);border-radius:4px;padding:2px 6px">'+esc(String(t))+'</span>'; });
@@ -5607,11 +5623,11 @@ async function _renderSignalsPane(deal) {
     // Lusha intent
     if (d.intent_signals && d.intent_signals.length) {
       html += '<div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px">Research intent · Lusha</div>';
-      html += '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px">';
+      html += '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:14px">';
       d.intent_signals.forEach(function(s) {
-        var score = s.metadata && s.metadata.topicScore || 0;
+        var score = (s.metadata && s.metadata.topicScore) || 0;
         var trendRaw = s.metadata && s.metadata.topicTrend;
-        var trend = (trendRaw !== null && trendRaw !== undefined && !isNaN(parseInt(trendRaw))) ? parseInt(trendRaw) : 0;
+        var trend = (!isNaN(parseInt(trendRaw))) ? parseInt(trendRaw) : 0;
         var col = score >= 70 ? 'var(--green)' : score >= 40 ? 'var(--amber)' : 'var(--text3)';
         html += '<span style="font-size:11px;padding:3px 9px;border-radius:6px;background:var(--surface2);border-left:3px solid '+col+'">';
         html += esc(s.topicName||'') + ' <span style="color:'+col+'">'+score+'</span>';
@@ -5621,55 +5637,51 @@ async function _renderSignalsPane(deal) {
       html += '</div>';
     }
 
-    // Three-scope signal tabs: I Global · II Regional · III Country
-    var tabs = [
-      { key:'global',    label:'I · Global',   signals: d.signals||[],          summary: d.summary||'' },
-      { key:'regional',  label:'II · '+(d.deal_region||'Regional'),  signals: d.regional_signals||[], summary: d.regional_summary||'' },
-      { key:'country',   label:'III · '+(d.deal_region||'Country').split(/[,\/ -]/)[0].trim(), signals: d.country_signals||[], summary: d.country_summary||'' }
-    ];
-    var activeScope = 'global';
+    // Helper for section header
+    function sectionHead(numeral, label, count) {
+      return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;margin-top:4px">'
+        + '<span style="font-size:11px;font-weight:700;color:var(--text3);font-style:italic">'+numeral+'</span>'
+        + '<span style="font-size:12px;font-weight:600;color:var(--text)">'+label+'</span>'
+        + (count ? '<span style="font-size:10px;background:var(--surface2);border-radius:4px;padding:1px 6px;color:var(--text3)">'+count+' signals</span>' : '')
+        + '</div>';
+    }
 
-    html += '<div id="signalScopeTabs" style="display:flex;border-bottom:1px solid var(--border);margin-bottom:10px">';
-    tabs.forEach(function(t) {
-      var cnt = t.signals.length;
-      html += '<button onclick="_switchSignalScope(\''+t.key+'\')" id="sst-'+t.key+'" style="padding:6px 12px;border:none;border-bottom:2px solid '+(t.key===activeScope?'var(--gold)':'transparent')+';background:none;color:'+(t.key===activeScope?'var(--gold)':'var(--text3)')+';font-family:var(--sans);font-size:11px;font-weight:'+(t.key===activeScope?'600':'400')+';cursor:pointer">';
-      html += esc(t.label)+(cnt?' <span style="font-size:9px;opacity:.7">'+cnt+'</span>':'');
-      html += '</button>';
-    });
+    var globalSigs   = d.signals         || [];
+    var regionalSigs = d.regional_signals || [];
+    var countrySigs  = d.country_signals  || [];
+    var globalSum    = (d.summary         || '').slice(0, 4000);
+    var regionalSum  = (d.regional_summary || '').slice(0, 4000);
+    var countrySum   = (d.country_summary  || '').slice(0, 4000);
+    var countryLabel = (d.deal_region || '').split(/[,\/ \-]/)[0].trim() || 'Country';
+    var regionLabel  = d.deal_region || 'Regional';
+
+    // ── I. Global ───────────────────────────────────────────────────────────
+    html += '<div style="background:var(--surface2);border-radius:10px;padding:12px;margin-bottom:10px">';
+    html += sectionHead('I.', 'Global', globalSigs.length);
+    if (globalSum) html += '<div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:10px">'+esc(globalSum)+'</div>';
+    html += renderSignalCards(globalSigs);
     html += '</div>';
 
-    // Signal scope content areas
-    tabs.forEach(function(t) {
-      html += '<div id="ssc-'+t.key+'" style="display:'+(t.key===activeScope?'block':'none')+'">';
-      if (t.summary) html += '<div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:10px;padding:9px 12px;background:var(--surface2);border-radius:8px">'+esc(t.summary)+'</div>';
-      if (t.signals.length) {
-        var typeIcons = {hiring:'👥',funding:'💰',expansion:'🚀',contraction:'📉',leadership:'👤',technology:'⚙️',financial:'📊',competitive:'🏆'};
-        var sigColors = {positive:'var(--green)',negative:'var(--coral)',neutral:'var(--amber)'};
-        t.signals.forEach(function(s) {
-          var col = sigColors[s.signal]||'var(--border)';
-          html += '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:7px;border-left:3px solid '+col+'">';
-          html += '<div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:4px">';
-          html += '<span style="font-size:14px;flex-shrink:0">'+(typeIcons[s.type]||'📌')+'</span>';
-          html += '<div style="flex:1"><div style="font-size:12px;font-weight:500;color:var(--text);margin-bottom:1px">'+esc(s.title||'')+'</div>';
-          if (s.date||s.source) html += '<div style="font-size:10px;color:var(--text3)">'+(s.date?esc(s.date):'')+( s.date&&s.source?' · ':'')+( s.source?esc(s.source):'' )+'</div>';
-          html += '</div>';
-          html += '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:'+col+'22;color:'+col+';flex-shrink:0;white-space:nowrap">'+(s.signal||'')+'</span>';
-          html += '</div>';
-          if (s.detail) html += '<div style="font-size:11px;color:var(--text2);line-height:1.5;margin-bottom:4px">'+esc(s.detail)+'</div>';
-          if (s.why_it_matters) html += '<div style="font-size:11px;color:var(--amber);font-style:italic">💡 '+esc(s.why_it_matters)+'</div>';
-          html += '</div>';
-        });
-      } else {
-        html += '<div style="font-size:12px;color:var(--text3);padding:12px 0;text-align:center">'+(t.key==='global'?'No global signals found.':t.key==='regional'?'No regional signals found for '+esc(d.deal_region||'this region')+'.':'No country-level signals found.')+'</div>';
-      }
-      html += '</div>';
-    });
+    // ── II. Regional ────────────────────────────────────────────────────────
+    html += '<div style="background:var(--surface2);border-radius:10px;padding:12px;margin-bottom:10px">';
+    html += sectionHead('II.', regionLabel, regionalSigs.length);
+    if (regionalSum) html += '<div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:10px">'+esc(regionalSum)+'</div>';
+    html += renderSignalCards(regionalSigs);
+    html += '</div>';
+
+    // ── III. Country ─────────────────────────────────────────────────────────
+    html += '<div style="background:var(--surface2);border-radius:10px;padding:12px;margin-bottom:10px">';
+    html += sectionHead('III.', countryLabel, countrySigs.length);
+    if (countrySum) html += '<div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:10px">'+esc(countrySum)+'</div>';
+    html += renderSignalCards(countrySigs);
+    html += '</div>';
 
     body.innerHTML = html;
   } catch(e) {
     body.innerHTML = '<div style="font-size:12px;color:var(--coral);padding:8px">Error: '+esc(e.message)+'</div>';
   }
 }
+
 
 function _switchSignalScope(scope) {
   ['global','regional','country'].forEach(function(k) {
