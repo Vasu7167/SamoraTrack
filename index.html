@@ -1295,6 +1295,19 @@ let SB_URL = localStorage.getItem('dt-sb-url') || 'https://gowpuicpmrwsohongosf.
 let SB_KEY = localStorage.getItem('dt-sb-key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdvd3B1aWNwbXJ3c29ob25nb3NmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzOTExMDgsImV4cCI6MjA5NTk2NzEwOH0.35CjODxyxOjAKp-xBOBx4oAXO_qjLyVttVaJEhp7YEg';
 let API_KEY = localStorage.getItem('dt-api-key') || '';
 var _userHabits = null;
+// Cache buster — update this string on every deploy to purge stale service worker cache
+var APP_VERSION = '20260712-04';
+(function() {
+  if (localStorage.getItem('app-sw-version') !== APP_VERSION && 'serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(function(regs) {
+      Promise.all(regs.map(function(r){ return r.unregister(); })).then(function() {
+        if (window.caches) caches.keys().then(function(ks){ ks.forEach(function(k){ caches.delete(k); }); });
+        localStorage.setItem('app-sw-version', APP_VERSION);
+        window.location.reload(true);
+      });
+    });
+  }
+})();
 // EDGE_FN_URL is derived from SB_URL, not hardcoded — previously this stayed
 // fixed to one Supabase project regardless of what URL/key someone entered
 // in the setup screen, so a second tenant could configure their own
@@ -5495,7 +5508,27 @@ async function _loadDealDetailData(dealId, deal) {
       fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'get_stakeholders', account_id:dealId}) })
     ]);
     var mData = await mRes.json(); var sData = await sRes.json();
-    _currentDealDetail = { deal, meddpicc: mData.meddpicc||null, stakeholders: sData.stakeholders||[] };
+    var stakeholders = sData.stakeholders || [];
+
+    // Auto-refresh if contacts exist but ALL have no activity data (stale pre-signal enrichment)
+    // This silently re-enriches in background to pick up Gmail activity signals
+    var allUncontacted = stakeholders.length > 0 && stakeholders.every(function(s) {
+      return !s.last_contacted_at && !s.contact_count && !s.title;
+    });
+    if (allUncontacted) {
+      try {
+        var rr = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+          body:JSON.stringify({action:'enrich_account', account_id:dealId, account_name:deal.account, refresh:true}) });
+        var rrd = await rr.json();
+        if (rrd.ok) {
+          var sRes2 = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+            body:JSON.stringify({action:'get_stakeholders', account_id:dealId}) });
+          stakeholders = (await sRes2.json()).stakeholders || stakeholders;
+        }
+      } catch(e) {}
+    }
+
+    _currentDealDetail = { deal, meddpicc: mData.meddpicc||null, stakeholders };
   } catch(e) { _currentDealDetail = { deal, meddpicc:null, stakeholders:[] }; }
   var body = document.getElementById('deal-detail-body'); if (!body) return;
   if (_dealDetailTab === 'overview')     body.innerHTML = _buildDealOverviewHTML(deal);
