@@ -5439,7 +5439,7 @@ function renderByStreamChart(deals, fmtUsd) {
 document.addEventListener('click', function(e) {
   var card = e.target.closest('.deal-card-row');
   if (!card) return;
-  if (e.target.closest('button') || e.target.closest('input') || e.target.closest('select')) return;
+  if (e.target.closest('button') || e.target.closest('input') || e.target.closest('select') || e.target.closest('a')) return;
   openDealDetail(card.getAttribute('data-deal-id'), card.getAttribute('data-deal-account'));
 });
 
