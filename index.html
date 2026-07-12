@@ -720,7 +720,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
               <button onclick="runLocalIntelligence()" id="localIntelBtn" style="padding:9px 10px;border-radius:10px;background:rgba(160,117,42,0.08);border:1px solid rgba(160,117,42,0.2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">⚡ Scan channels</button>
               <button onclick="syncSequencing()" id="seqSyncBtn" style="padding:9px 10px;border-radius:10px;background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);color:var(--green);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">↺ Sync sequences</button>
-              <button onclick="runExternalSignals()" id="externalSignalsBtn" style="padding:9px 10px;border-radius:10px;background:rgba(58,110,168,0.08);border:1px solid rgba(58,110,168,0.2);color:var(--blue);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">🌐 Market signals</button>
+              <button onclick="runExternalSignals()" id="externalSignalsBtn" style="display:none"></button>
               <button onclick="syncNotetaker()" id="notetakerSyncBtn" style="padding:9px 10px;border-radius:10px;background:rgba(160,117,42,0.08);border:1px solid rgba(160,117,42,0.2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">🎙 Sync calls</button>
               <button onclick="loadSequencingStats()" id="seqStatsBtn" style="padding:9px 10px;border-radius:10px;background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);color:var(--green);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">📊 Seq stats</button>
               <button onclick="loadTimeAnalytics()" id="timeAnalyticsBtn" style="padding:9px 10px;border-radius:10px;background:rgba(58,110,168,0.08);border:1px solid rgba(58,110,168,0.2);color:var(--blue);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">🕐 Time by account</button>
@@ -733,7 +733,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
             <div id="seqSyncOutput" style="margin-top:10px"></div>
             <div id="seqStatsOutput" style="margin-top:10px"></div>
             <div id="timeAnalyticsOutput" style="margin-top:10px"></div>
-            <div id="externalSignalsOutput" style="margin-top:10px"></div>
+            <div id="externalSignalsOutput" style="display:none"></div>
           </div>
         </div>
 
@@ -2771,7 +2771,17 @@ async function runSamAccountSearch() {
       });
       html += '</div>';
     } else {
-      html += '<div style="font-size:11px;color:var(--text3);padding:8px 2px">No extracted intelligence for this account yet — run ↻ Refresh in the Intel tab to scan meeting notes.</div>';
+      html += '<div style=\"font-size:11px;color:var(--text3);padding:8px 2px\">No extracted intelligence for this account yet — run ↻ Refresh in the Intel tab to scan meeting notes.</div>';
+    }
+
+    // Find this account in pipeline to link to deal Signals tab
+    var matchedDeal = null;
+    if (_pipelineData) {
+      var allDeals = [...(_pipelineData.verified||[]),...(_pipelineData.partial||[]),...(_pipelineData.unverified||[])];
+      matchedDeal = allDeals.find(function(d) { return (d.account||'').toLowerCase().includes(query.toLowerCase()) || query.toLowerCase().includes((d.account||'').toLowerCase().split(' ')[0]); });
+    }
+    if (matchedDeal) {
+      html += '<button onclick="openDealDetail(\'' + esc(matchedDeal.id) + '\',\'' + esc(matchedDeal.account) + '\');setTimeout(function(){switchDealTab(\'signals\');},400)" style="width:100%;margin-top:10px;padding:9px;border-radius:8px;background:rgba(58,110,168,0.08);border:1px solid rgba(58,110,168,0.2);color:var(--blue);font-family:var(--sans);font-size:12px;font-weight:500;cursor:pointer;text-align:center">📡 View market signals for ' + esc(matchedDeal.account) + ' →</button>';
     }
 
     if (out) out.innerHTML = html;
