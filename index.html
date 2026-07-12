@@ -2426,6 +2426,7 @@ function copyGeminiSetup() {
 
 // ── Enrichment provider management ───────────────────────────────────────────
 var _enrichKeyProvider = '';
+var _userHabits = null;  // null = not yet loaded, [] = loaded but empty
 
 function showEnrichmentInput(provider) {
   _enrichKeyProvider = provider;
