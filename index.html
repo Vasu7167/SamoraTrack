@@ -5575,7 +5575,7 @@ async function _renderSignalsPane(deal) {
   body.innerHTML = '<div style="padding:20px 0;text-align:center"><div style="font-size:13px;color:var(--text3)">↻ Researching ' + esc(deal.account) + '…</div><div style="font-size:11px;color:var(--text3);margin-top:4px">Scanning hiring, funding, expansion, leadership signals</div></div>';
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
-      body:JSON.stringify({action:'get_market_signals', account_id:deal.id, account_name:deal.account}) });
+      body:JSON.stringify({action:'get_market_signals', account_id:deal.id, account_name:deal.account, region:deal.region||''}) });
     var d = await r.json();
     var html = '';
 
@@ -5641,6 +5641,7 @@ async function _renderSignalsPane(deal) {
         html += '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:7px;border-left:3px solid ' + col + '">';
         html += '<div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:4px">';
         html += '<span style="font-size:14px;flex-shrink:0">' + (typeIcons[s.type]||'📌') + '</span>';
+        if (s.scope === 'regional') html += '<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(160,117,42,0.15);color:var(--gold);margin-left:2px">regional</span>';
         html += '<div style="flex:1">';
         html += '<div style="font-size:12px;font-weight:500;color:var(--text);margin-bottom:2px">' + esc(s.title||'') + '</div>';
         if (s.date) html += '<span style="font-size:10px;color:var(--text3)">' + esc(s.date) + '</span>';
@@ -5655,21 +5656,7 @@ async function _renderSignalsPane(deal) {
       html += '<div style="font-size:12px;color:var(--text3);padding:12px 0;text-align:center">No signals found. Enrich stakeholders first to unlock company data.</div>';
     }
 
-    // Show debug info if Gemini returned nothing
-    if (!d.signals?.length && !d.summary) {
-      html += '<div style="font-size:11px;color:var(--text3);background:var(--surface2);border-radius:6px;padding:8px;margin-top:8px">';
-      html += '<strong>Debug:</strong> ';
-      if (d._debug) {
-        html += 'Engine: ' + esc(d._debug.engine||'none') + ' · ';
-        html += 'Key: ' + (d._debug.hasKey ? '✓' : '✗ missing') + ' · ';
-        html += 'Company: "' + esc(d._debug.companyName||'') + '" · ';
-        html += 'Signals: ' + (d._debug.signalCount||0) + ' · ';
-        html += 'Summary: ' + (d._debug.summaryLen||0) + ' chars';
-      } else {
-        html += 'No debug info returned — edge function may not have reached get_market_signals';
-      }
-      html += '</div>';
-    }
+
     body.innerHTML = html;
   } catch(e) {
     body.innerHTML = '<div style="font-size:12px;color:var(--coral);padding:8px">Error: ' + esc(e.message) + '</div>';
