@@ -5474,7 +5474,7 @@ function _buildDealDetailHTML(deal) {
         '<button onclick="document.getElementById(\'deal-detail-modal\').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3)">✕</button>' +
       '</div>' +
       '<div style="display:flex;gap:0;margin-bottom:-1px">' +
-        _dealTab('overview','📊 Overview') + _dealTab('stakeholders','👥 Stakeholders') + _dealTab('meddpicc','🎯 MEDDPICC') +
+        _dealTab('overview','📊 Overview') + _dealTab('stakeholders','👥 Stakeholders') + _dealTab('meddpicc','🎯 MEDDPICC') + _dealTab('signals','📡 Signals') +
       '</div>' +
     '</div>' +
     '<div id="deal-detail-body" style="padding:16px">' + _buildDealOverviewHTML(deal) + '</div>' +
@@ -5498,6 +5498,7 @@ function switchDealTab(tab) {
   if (tab === 'overview'     && _currentDealDetail) { body.innerHTML = _buildDealOverviewHTML(_currentDealDetail.deal); return; }
   if (tab === 'stakeholders' && _currentDealDetail) { _renderStakeholdersPane(_currentDealDetail.stakeholders, _currentDealDetail.deal); return; }
   if (tab === 'meddpicc'     && _currentDealDetail) { _renderMeddpiccPane(_currentDealDetail.meddpicc, _currentDealDetail.deal); return; }
+  if (tab === 'signals'      && _currentDealDetail) { _renderSignalsPane(_currentDealDetail.deal); return; }
   body.innerHTML = '<div style="font-size:12px;color:var(--text3)">Loading…</div>';
 }
 
@@ -5534,6 +5535,70 @@ async function _loadDealDetailData(dealId, deal) {
   if (_dealDetailTab === 'overview')     body.innerHTML = _buildDealOverviewHTML(deal);
   if (_dealDetailTab === 'stakeholders') _renderStakeholdersPane(_currentDealDetail.stakeholders, deal);
   if (_dealDetailTab === 'meddpicc')     _renderMeddpiccPane(_currentDealDetail.meddpicc, deal);
+  if (_dealDetailTab === 'signals')      _renderSignalsPane(deal);
+}
+
+async function _renderSignalsPane(deal) {
+  var body = document.getElementById('deal-detail-body'); if (!body) return;
+  body.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:16px 0;text-align:center">↻ Fetching market signals…</div>';
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({action:'get_market_signals', account_id:deal.id, account_name:deal.account}) });
+    var d = await r.json();
+    var html = '';
+
+    // Company header
+    var liUrl = d.company_linkedin_url;
+    if (liUrl || d.company_industry || d.company_size) {
+      html += '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:12px;display:flex;align-items:center;gap:10px">';
+      html += '<div style="flex:1">';
+      html += '<div style="font-size:13px;font-weight:500;color:var(--text)">' + esc(deal.account) + '</div>';
+      if (d.company_industry) html += '<div style="font-size:11px;color:var(--text3)">' + esc(d.company_industry) + (d.company_size ? ' · ' + esc(d.company_size) : '') + '</div>';
+      html += '</div>';
+      if (liUrl) html += '<a href="' + esc(liUrl) + '" target="_blank" style="display:inline-flex;align-items:center;gap:5px;padding:6px 10px;border-radius:6px;background:#0A66C2;color:#fff;font-size:11px;font-weight:500;text-decoration:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg> Company page</a>';
+      html += '</div>';
+    }
+
+    // Lusha intent signals
+    if (d.intent_signals && d.intent_signals.length) {
+      html += '<div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Research intent (Lusha)</div>';
+      html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">';
+      d.intent_signals.forEach(function(s) {
+        var trend = parseInt(s.metadata?.topicTrend || '0');
+        var score = s.metadata?.topicScore || 0;
+        var col = score >= 70 ? 'var(--green)' : score >= 40 ? 'var(--amber)' : 'var(--text3)';
+        html += '<div style="background:var(--surface2);border-radius:6px;padding:5px 10px;font-size:11px;border-left:3px solid ' + col + '">';
+        html += '<span style="color:var(--text);font-weight:500">' + esc(s.topicName) + '</span>';
+        html += '<span style="color:' + col + ';margin-left:6px">' + score + '</span>';
+        if (trend !== 0) html += '<span style="color:' + (trend > 0 ? 'var(--green)' : 'var(--coral)') + ';font-size:10px;margin-left:4px">' + (trend > 0 ? '↑' : '↓') + Math.abs(trend) + '</span>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+
+    // Gemini market signals
+    if (d.market_signals && d.market_signals.length) {
+      html += '<div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Market signals</div>';
+      var typeIcons = {hiring:'👥',funding:'💰',expansion:'🚀',contraction:'📉',leadership:'👤',product:'📦',partnership:'🤝'};
+      var signalColors = {positive:'var(--green)',negative:'var(--coral)',neutral:'var(--text3)'};
+      d.market_signals.forEach(function(s) {
+        html += '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:6px;border-left:3px solid ' + (signalColors[s.signal] || 'var(--border)') + '">';
+        html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">';
+        html += '<span>' + (typeIcons[s.type] || '📌') + '</span>';
+        html += '<span style="font-size:12px;font-weight:500;color:var(--text)">' + esc(s.title||'') + '</span>';
+        if (s.date) html += '<span style="font-size:10px;color:var(--text3);margin-left:auto">' + esc(s.date) + '</span>';
+        html += '</div>';
+        html += '<div style="font-size:11px;color:var(--text3);line-height:1.4">' + esc(s.summary||'') + '</div>';
+        html += '</div>';
+      });
+    } else if (!d.intent_signals?.length) {
+      html += '<div style="font-size:12px;color:var(--text3);padding:12px 0;text-align:center">No signals found. Enrich contacts first to capture company intelligence.</div>';
+    }
+
+    body.innerHTML = html;
+  } catch(e) {
+    body.innerHTML = '<div style="font-size:12px;color:var(--coral);padding:8px">Error loading signals: ' + e.message + '</div>';
+  }
 }
 
 function _buildDealOverviewHTML(deal) {
@@ -6667,6 +6732,7 @@ function renderPipelineDeals(data) {
           '<div style="flex:1">' +
             '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">' +
               '<span style="font-size:13px;font-weight:500;color:var(--text)">' + esc(d.account) + '</span>' +
+              (d.company_linkedin_url ? '<a href="' + esc(d.company_linkedin_url) + '" target="_blank" onclick="event.stopPropagation()" title="LinkedIn company page" style="display:inline-flex;align-items:center;color:#0A66C2;opacity:0.7;text-decoration:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></a>' : '') +
               (d.region ? '<span style="font-size:9px;color:var(--text3);background:rgba(0,0,0,0.08);border-radius:4px;padding:1px 6px">' + esc(d.region) + '</span>' : '') +
               '<span style="font-size:9px;font-weight:600;padding:1px 7px;border-radius:10px;background:' + stageColor + '22;color:' + stageColor + '">' + esc(d.stage) + '</span>' +
             '</div>' +
