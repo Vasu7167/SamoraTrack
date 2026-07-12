@@ -5610,7 +5610,8 @@ async function _renderSignalsPane(deal) {
       html += '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px">';
       d.intent_signals.forEach(function(s) {
         var score = s.metadata?.topicScore || 0;
-        var trend = parseInt(s.metadata?.topicTrend || '0');
+        var trendRaw = s.metadata?.topicTrend;
+        var trend = (trendRaw !== null && trendRaw !== undefined && !isNaN(parseInt(trendRaw))) ? parseInt(trendRaw) : 0;
         var col = score >= 70 ? 'var(--green)' : score >= 40 ? 'var(--amber)' : 'var(--text3)';
         html += '<span style="font-size:11px;padding:3px 9px;border-radius:6px;background:var(--surface2);border-left:3px solid ' + col + '">';
         html += esc(s.topicName) + ' <span style="color:' + col + '">' + score + '</span>';
