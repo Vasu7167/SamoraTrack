@@ -6732,7 +6732,12 @@ function renderPipelineDeals(data) {
           '<div style="flex:1">' +
             '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">' +
               '<span style="font-size:13px;font-weight:500;color:var(--text)">' + esc(d.account) + '</span>' +
-              (d.company_linkedin_url ? '<a href="' + esc(d.company_linkedin_url) + '" target="_blank" onclick="event.stopPropagation()" title="LinkedIn company page" style="display:inline-flex;align-items:center;color:#0A66C2;opacity:0.7;text-decoration:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></a>' : '') +
+              (function() {
+                var liUrl = d.company_linkedin_url ||
+                  'https://www.linkedin.com/search/results/companies/?keywords=' + encodeURIComponent((d.account||'').split(' ').slice(0,2).join(' '));
+                var isExact = !!d.company_linkedin_url;
+                return '<a href="' + esc(liUrl) + '" target="_blank" onclick="event.stopPropagation()" title="' + (isExact ? 'LinkedIn company page' : 'Search company on LinkedIn') + '" style="display:inline-flex;align-items:center;color:#0A66C2;opacity:' + (isExact ? '0.8' : '0.35') + ';text-decoration:none"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></a>';
+              })() +
               (d.region ? '<span style="font-size:9px;color:var(--text3);background:rgba(0,0,0,0.08);border-radius:4px;padding:1px 6px">' + esc(d.region) + '</span>' : '') +
               '<span style="font-size:9px;font-weight:600;padding:1px 7px;border-radius:10px;background:' + stageColor + '22;color:' + stageColor + '">' + esc(d.stage) + '</span>' +
             '</div>' +
