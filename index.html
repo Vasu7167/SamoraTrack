@@ -2334,7 +2334,7 @@ async function syncCalendarTasks(force) {
   var row = document.getElementById('calendarSyncRow');
   var status = document.getElementById('calSyncStatus');
   try {
-    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'get_calendar_tasks', date: today2}) });
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'get_calendar_tasks', date: today2, tz: Intl.DateTimeFormat().resolvedOptions().timeZone}) });
     var d = await r.json();
     if (!d.ok || !d.tasks || !d.tasks.length) return;
     _calTasksFetched = today2;
@@ -3575,6 +3575,16 @@ async function loadSequencingStats() {
             '<div>' +
               '<div style="font-size:12px;font-weight:600;color:var(--text)">'+sigIcon+' '+esc(acct.account_name||acct.prospect_company||'Unknown')+'</div>' +
               '<div style="font-size:10px;color:var(--text3);margin-top:2px">'+acct.contacts+' contact'+(acct.contacts!==1?'s':'')+' · '+(acct.campaigns||[]).slice(0,2).join(', ')+'</div>' +
+              // Collision flag — active deal found for this domain
+              (acct.collision && !acct.collision.is_same_user ?
+                '<div style="display:inline-flex;align-items:center;gap:4px;margin-top:4px;padding:3px 8px;background:rgba(160,117,42,0.12);border:1px solid rgba(160,117,42,0.25);border-radius:5px">' +
+                '<span style="font-size:10px">⚡</span>' +
+                '<span style="font-size:10px;color:var(--amber);font-weight:500">Active deal: <strong>' + esc(acct.collision.deal_name) + '</strong>' +
+                (acct.collision.deal_value ? ' ' + esc(acct.collision.deal_value) : '') +
+                ' · AE: ' + esc(acct.collision.ae) + ' — coordinate before outreach</span>' +
+                '</div>' : '') +
+              (acct.collision && acct.collision.is_same_user ?
+                '<div style="font-size:10px;color:var(--green);margin-top:3px">✓ Your own deal — sequences aligned</div>' : '') +
             '</div>' +
             '<div style="display:flex;gap:10px;text-align:center">' +
               '<div><div style="font-size:13px;font-weight:600;color:var(--text)">'+acct.sent+'</div><div style="font-size:9px;color:var(--text3)">sent</div></div>' +
@@ -3685,7 +3695,7 @@ async function loadSamBrief(force) {
   try {
     var r = await fetch(EDGE_FN_URL, {
       method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
-      body: JSON.stringify({ action:'generate_daily_brief' })
+      body: JSON.stringify({ action:'generate_daily_brief', tz: Intl.DateTimeFormat().resolvedOptions().timeZone })
     });
     var d = await r.json();
     if (!d.ok && (d.error||'').toLowerCase().includes('quota')) {
@@ -5880,8 +5890,19 @@ function _buildDealOverviewHTML(deal) {
   if (!deal) return '';
   var fmtUsd = function(v) { return !v ? '—' : v>=1e6 ? '$'+(v/1e6).toFixed(1)+'M' : '$'+Math.round(v/1e3)+'K'; };
   var rows = [['Deal value', fmtUsd(deal.deal_value_usd)],['Weighted', fmtUsd(deal.weighted_value_usd)],['Signal score', deal.signal_score!=null ? deal.signal_score+' / 100' : '—'],['Expected close', deal.expected_close||'—'],['Probability', deal.close_probability ? deal.close_probability+'%':'—'],['Rep', (deal.rep_email||'').split('@')[0]||'—'],['Region', deal.region||'—'],['ICP score', deal.icp_score!=null ? deal.icp_score+' / 100':'Not scored']];
-  var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">';
+  var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">';
   rows.forEach(function(r){ html += '<div style="background:var(--surface2);border-radius:8px;padding:9px 11px"><div style="font-size:10px;color:var(--text3);margin-bottom:2px">'+r[0]+'</div><div style="font-size:14px;font-weight:500;color:var(--text)">'+esc(String(r[1]))+'</div></div>'; });
+  html += '</div>';
+  // SDR attribution row
+  html += '<div style="background:var(--surface2);border-radius:8px;padding:8px 12px;margin-bottom:10px;display:flex;align-items:center;gap:8px">';
+  html += '<span style="font-size:11px;color:var(--text3);flex-shrink:0">🎯 Sourced by</span>';
+  if (deal.originated_by_name) {
+    html += '<span style="font-size:12px;font-weight:500;color:var(--text)">'+esc(deal.originated_by_name)+'</span>';
+    if (deal.converted_from_sequence) html += '<span style="font-size:10px;color:var(--text3)"> · via '+esc(deal.converted_from_sequence)+'</span>';
+    html += '<button onclick="clearDealAttribution(\''+esc(deal.id)+'\')" style="margin-left:auto;font-size:10px;background:none;border:none;color:var(--text3);cursor:pointer">✕</button>';
+  } else {
+    html += '<button onclick="showAttributionPicker(\''+esc(deal.id)+'\')" style="font-size:11px;padding:2px 10px;border-radius:5px;background:none;border:1px dashed var(--border2);color:var(--text3);font-family:var(--sans);cursor:pointer">+ Tag SDR origin</button>';
+  }
   html += '</div>';
   html += '<div style="display:flex;gap:8px;margin-bottom:10px">';
   html += '<button onclick="switchDealTab(\'stakeholders\')" style="flex:1;padding:9px;border-radius:8px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer">👥 Stakeholders</button>';
@@ -6244,6 +6265,84 @@ async function loadForecastPanel() {
     html += '</div>';
     container.innerHTML = html;
   } catch(e) { container.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>'; }
+}
+
+// ── SDR Attribution ───────────────────────────────────────────────────────────
+var _orgMembers = null;
+
+async function showAttributionPicker(dealId) {
+  // Load org members if not cached
+  if (!_orgMembers) {
+    try {
+      var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+        body:JSON.stringify({action:'get_org_members'}) });
+      var d = await r.json();
+      _orgMembers = d.members || [];
+    } catch(e) { _orgMembers = []; }
+  }
+  // Remove any existing picker
+  document.getElementById('attributionPickerPanel')?.remove();
+  var panel = document.createElement('div');
+  panel.id = 'attributionPickerPanel';
+  panel.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:99999;display:flex;align-items:center;justify-content:center';
+  var html = '<div style="background:var(--bg);border-radius:14px;padding:20px;width:320px;max-width:90vw" onclick="event.stopPropagation()">';
+  html += '<div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px">Tag SDR origin</div>';
+  html += '<div style="font-size:12px;color:var(--text3);margin-bottom:14px">Who sourced this deal? This is used for SDR attribution in pipeline reporting.</div>';
+  html += '<div style="margin-bottom:12px">';
+  html += '<div style="font-size:11px;color:var(--text3);margin-bottom:5px">Select SDR</div>';
+  html += '<select id="attrSdrSelect" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none">';
+  html += '<option value="">— Select team member —</option>';
+  (_orgMembers || []).forEach(function(m) {
+    var name = m.display_name || (m.email||'').split('@')[0];
+    html += '<option value="' + esc(m.user_id) + '">' + esc(name) + ' (' + esc(m.role||'') + ')</option>';
+  });
+  html += '</select></div>';
+  html += '<div style="margin-bottom:14px">';
+  html += '<div style="font-size:11px;color:var(--text3);margin-bottom:5px">Sequence / campaign (optional)</div>';
+  html += '<input type="text" id="attrSeqInput" placeholder="e.g. Ferrero EMEA Q3 sequence" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;box-sizing:border-box"/>';
+  html += '</div>';
+  html += '<div style="display:flex;gap:8px">';
+  html += '<button onclick="saveAttribution(\'' + esc(dealId) + '\')" style="flex:1;padding:9px;border-radius:8px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Save</button>';
+  html += '<button onclick="document.getElementById(\'attributionPickerPanel\').remove()" style="padding:9px 14px;border-radius:8px;background:none;border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);font-size:12px;cursor:pointer">Cancel</button>';
+  html += '</div></div>';
+  panel.innerHTML = html;
+  panel.addEventListener('click', function(e) { if (e.target === panel) panel.remove(); });
+  document.body.appendChild(panel);
+}
+
+async function saveAttribution(dealId) {
+  var sdrId = document.getElementById('attrSdrSelect')?.value;
+  var seq   = document.getElementById('attrSeqInput')?.value?.trim();
+  if (!sdrId) { showToast('Select a team member first'); return; }
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({action:'set_deal_attribution', account_id:dealId, originated_by:sdrId, converted_from_sequence:seq||null}) });
+    var d = await r.json();
+    if (d.ok) {
+      document.getElementById('attributionPickerPanel')?.remove();
+      showToast('SDR attribution saved');
+      // Update deal in local pipeline data
+      var member = (_orgMembers||[]).find(function(m) { return m.user_id === sdrId; });
+      if (_currentDealDetail && member) {
+        _currentDealDetail.deal.originated_by_name = member.display_name || (member.email||'').split('@')[0];
+        _currentDealDetail.deal.converted_from_sequence = seq || null;
+        document.getElementById('deal-detail-body').innerHTML = _buildDealOverviewHTML(_currentDealDetail.deal);
+      }
+    }
+  } catch(e) { showToast('Error: ' + e.message); }
+}
+
+async function clearDealAttribution(dealId) {
+  try {
+    await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({action:'set_deal_attribution', account_id:dealId, originated_by:null, converted_from_sequence:null}) });
+    if (_currentDealDetail) {
+      _currentDealDetail.deal.originated_by_name = null;
+      _currentDealDetail.deal.converted_from_sequence = null;
+      document.getElementById('deal-detail-body').innerHTML = _buildDealOverviewHTML(_currentDealDetail.deal);
+    }
+    showToast('Attribution cleared');
+  } catch(e) {}
 }
 
 async function loadHealthWeights() {
