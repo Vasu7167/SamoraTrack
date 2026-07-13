@@ -478,6 +478,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 
   <!-- ── TODAY ── -->
   <div class="panel active" id="panel-today">
+    <div id="meetingPrepSection" style="display:none;margin-bottom:12px"></div>
     <div id="productivityBanner" style="margin-bottom:12px"></div>
     <div id="coachingAlertsPanel" style="margin-bottom:12px"></div>
     <div id="nudgeBanner" style="display:none;background:rgba(160,117,42,0.08);border:1px solid rgba(160,117,42,0.25);border-radius:var(--radius);padding:10px 14px;margin-bottom:12px"><div style="display:flex;align-items:center;justify-content:space-between"><div id="nudgeText" style="font-size:12px;color:var(--text2)"></div><button onclick="this.parentElement.parentElement.style.display='none'" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:0 0 0 8px">✕</button></div></div>
@@ -796,6 +797,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 
     <!-- ══ TEAM MODE ══ -->
     <div id="samTeamMode" style="display:none">
+      <div id="forecastPanel" style="margin-bottom:12px"></div>
       <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:12px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
           <div>
@@ -1974,6 +1976,7 @@ function setSamMode(mode) {
     if (teamEl) teamEl.style.display = 'block';
     const tdi = document.getElementById('teamDateInput'); if (tdi) tdi.value = viewDate;
     renderTeam();
+    loadForecastPanel();
   } else {
     if (selfBtn) { selfBtn.style.background = 'var(--gold)'; selfBtn.style.color = '#18160F'; }
     if (teamBtn) { teamBtn.style.background = 'transparent'; teamBtn.style.color = 'var(--text2)'; }
@@ -2094,6 +2097,7 @@ function renderToday() {
   if (!_coachingAlertsLoaded && currentUser?.token) {
     _coachingAlertsLoaded = true;
     loadCoachingAlerts();
+    loadMeetingPrep();
     // Auto-generate fresh alerts silently on first Today tab load
     fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
       body:JSON.stringify({action:'generate_coaching_alerts'}) }).then(function(r){return r.json();}).then(function(d){
@@ -6084,6 +6088,164 @@ async function saveHealthWeights() {
   } catch(e) { showToast('Error: ' + e.message); }
 }
 
+// ── Feature 1: Deal velocity sparkline ────────────────────────────────────────
+function _renderSparkline(history) {
+  if (!history || history.length < 2) return '';
+  var scores = history.map(function(h) { return typeof h === 'object' ? (h.health || h.score || 0) : 0; });
+  var min = Math.min.apply(null, scores);
+  var max = Math.max.apply(null, scores);
+  var range = max - min || 1;
+  var w = 36, h = 14, pts = scores.length;
+  var points = scores.map(function(s, i) {
+    var x = Math.round((i / (pts - 1)) * (w - 2)) + 1;
+    var y = Math.round(h - 1 - ((s - min) / range) * (h - 3)) + 1;
+    return x + ',' + y;
+  }).join(' ');
+  var last = scores[scores.length - 1];
+  var first = scores[0];
+  var color = last > first ? '#4a8c5c' : last < first ? '#c0523f' : '#888';
+  return '<svg width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '" style="margin-left:5px;flex-shrink:0" title="' + pts + '-day trend">' +
+    '<polyline points="' + points + '" fill="none" stroke="' + color + '" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>' +
+    '</svg>';
+}
+
+// ── Feature 2: Meeting prep ────────────────────────────────────────────────────
+var _meetingPrepData = null;
+
+async function loadMeetingPrep() {
+  var container = document.getElementById('meetingPrepSection'); if (!container) return;
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({action:'get_meeting_prep'}) });
+    var d = await r.json();
+    _meetingPrepData = d;
+    if (!d.ok || !d.meetings || !d.meetings.length) { container.style.display='none'; return; }
+    var meetings = d.meetings.filter(function(m) { return m.account_name; }); // only matched meetings
+    if (!meetings.length) { container.style.display='none'; return; }
+
+    var html = '<div style="margin-bottom:12px">';
+    html += '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">📅 Tomorrow\'s meetings · ' + meetings.length + '</div>';
+
+    meetings.forEach(function(m) {
+      var hScore = m.health_score || 0;
+      var hColor = hScore >= 70 ? 'var(--green)' : hScore >= 40 ? 'var(--amber)' : 'var(--coral)';
+      var time = '';
+      try { time = new Date(m.startTime).toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'}); } catch(e) {}
+
+      html += '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:11px 13px;margin-bottom:8px;cursor:pointer" onclick="_togglePrepDetail(\'' + esc(m.account_id||'') + '\')">';
+      // Header row
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">';
+      html += '<span style="font-size:13px;flex-shrink:0">📅</span>';
+      html += '<div style="flex:1;min-width:0">';
+      html += '<div style="font-size:13px;font-weight:500;color:var(--text)">' + esc(m.account_name) + '</div>';
+      html += '<div style="font-size:11px;color:var(--text3)">' + esc(m.title) + (time ? ' · ' + time : '') + '</div>';
+      html += '</div>';
+      if (hScore) html += '<span style="font-size:10px;padding:2px 7px;border-radius:4px;background:'+hColor+'18;color:'+hColor+'" title="Deal health">H:' + hScore + '</span>';
+      html += '</div>';
+
+      // Talking points (MEDDPICC gaps)
+      if (m.talking_points && m.talking_points.length) {
+        html += '<div style="font-size:11px;color:var(--text3);margin-bottom:5px;font-weight:500">Discuss in this meeting:</div>';
+        html += '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:5px">';
+        m.talking_points.forEach(function(tp) {
+          html += '<span style="font-size:11px;padding:2px 8px;border-radius:5px;background:rgba(160,117,42,0.1);color:var(--gold)">→ ' + esc(tp) + '</span>';
+        });
+        html += '</div>';
+      }
+
+      // Stakeholders attending
+      if (m.stakeholders_attending && m.stakeholders_attending.length) {
+        html += '<div style="font-size:11px;color:var(--text3);margin-bottom:3px">Attending: ' +
+          m.stakeholders_attending.map(function(s) { return '<strong>' + esc(s.full_name||'') + '</strong>' + (s.title ? ' (' + esc(s.title) + ')' : ''); }).join(', ') + '</div>';
+      }
+
+      // Last email
+      if (m.last_email) {
+        html += '<div style="font-size:11px;color:var(--text3);border-top:1px solid var(--border);margin-top:6px;padding-top:5px">';
+        html += '✉ Last: <em>' + esc(m.last_email.subject||'') + '</em>';
+        if (m.last_email.snippet) html += ' — ' + esc(m.last_email.snippet.slice(0,80)) + '…';
+        html += '</div>';
+      }
+
+      // Last transcript action items
+      if (m.last_transcript && m.last_transcript.action_items) {
+        html += '<div style="font-size:11px;color:var(--text3);margin-top:4px">📋 Open items: ' + esc(m.last_transcript.action_items.slice(0,100)) + '</div>';
+      }
+
+      html += '</div>';
+    });
+    html += '</div>';
+    container.innerHTML = html;
+    container.style.display = 'block';
+  } catch(e) { console.error('Meeting prep error:', e); }
+}
+
+function _togglePrepDetail(accountId) {
+  if (accountId && _pipelineData) {
+    var all = [...(_pipelineData.verified||[]),...(_pipelineData.partial||[]),...(_pipelineData.unverified||[])];
+    var deal = all.find(function(d) { return d.id === accountId; });
+    if (deal) openDealDetail(accountId, deal.account);
+  }
+}
+
+// ── Feature 4: Manager forecast view ──────────────────────────────────────────
+var _forecastData = null;
+
+async function loadForecastPanel() {
+  var container = document.getElementById('forecastPanel'); if (!container) return;
+  container.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0">↻ Computing forecast…</div>';
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({action:'get_forecast'}) });
+    _forecastData = await r.json();
+    var d = _forecastData;
+    if (!d.ok) { container.innerHTML = ''; return; }
+
+    var fmt = function(v) { return !v ? '$0' : v >= 1000000 ? '$' + (v/1000000).toFixed(1) + 'M' : '$' + Math.round(v/1000) + 'K'; };
+    var trend = function(v) { return !v ? '' : v > 0 ? '<span style="color:var(--green)">↑' + fmt(Math.abs(v)) + '</span>' : '<span style="color:var(--coral)">↓' + fmt(Math.abs(v)) + '</span>'; };
+
+    var html = '<div style="margin-bottom:14px">';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
+    html += '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">📊 Forecast</div>';
+    html += '<button onclick="loadForecastPanel()" style="font-size:10px;padding:2px 8px;border-radius:4px;background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);cursor:pointer">↻ Refresh</button>';
+    html += '</div>';
+
+    // KPI row
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px">';
+    html += '<div style="background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);border-radius:8px;padding:9px 10px"><div style="font-size:10px;color:var(--green);font-weight:600;margin-bottom:2px">Verified</div><div style="font-size:16px;font-weight:600;color:var(--text)">' + fmt(d.verified) + '</div>' + (d.trend ? '<div style="font-size:10px">' + trend(d.trend.verifiedChange) + ' vs last wk</div>' : '') + '</div>';
+    html += '<div style="background:rgba(160,117,42,0.08);border:1px solid rgba(160,117,42,0.2);border-radius:8px;padding:9px 10px"><div style="font-size:10px;color:var(--amber);font-weight:600;margin-bottom:2px">Nurture</div><div style="font-size:16px;font-weight:600;color:var(--text)">' + fmt(d.nurture) + '</div><div style="font-size:10px;color:var(--text3)">' + (d.buckets&&d.buckets.nurture?d.buckets.nurture.length:0) + ' deals</div></div>';
+    html += '<div style="background:rgba(192,82,63,0.08);border:1px solid rgba(192,82,63,0.2);border-radius:8px;padding:9px 10px"><div style="font-size:10px;color:var(--coral);font-weight:600;margin-bottom:2px">At risk</div><div style="font-size:16px;font-weight:600;color:var(--text)">' + fmt(d.atRisk) + '</div>' + (d.trend ? '<div style="font-size:10px">' + trend(d.trend.atRiskChange) + ' vs last wk</div>' : '') + '</div>';
+    html += '</div>';
+
+    // Won / Lost MTD
+    if (d.wonMtd || d.lostMtd) {
+      html += '<div style="display:flex;gap:6px;margin-bottom:10px">';
+      html += '<div style="flex:1;background:var(--surface2);border-radius:8px;padding:8px 10px"><div style="font-size:10px;color:var(--text3);margin-bottom:1px">Won MTD</div><div style="font-size:14px;font-weight:600;color:var(--green)">' + fmt(d.wonMtd) + '</div></div>';
+      html += '<div style="flex:1;background:var(--surface2);border-radius:8px;padding:8px 10px"><div style="font-size:10px;color:var(--text3);margin-bottom:1px">Lost MTD</div><div style="font-size:14px;font-weight:600;color:var(--coral)">' + fmt(d.lostMtd) + '</div></div>';
+      html += '<div style="flex:1;background:var(--surface2);border-radius:8px;padding:8px 10px"><div style="font-size:10px;color:var(--text3);margin-bottom:1px">Pipeline</div><div style="font-size:14px;font-weight:600;color:var(--text)">' + fmt(d.total_pipeline) + '</div></div>';
+      html += '</div>';
+    }
+
+    // Closing soon
+    if (d.closingSoon && d.closingSoon.length) {
+      html += '<div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Closing in 14 days</div>';
+      d.closingSoon.forEach(function(deal) {
+        var hc = deal.health >= 70 ? 'var(--green)' : deal.health >= 40 ? 'var(--amber)' : 'var(--coral)';
+        html += '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)">';
+        html += '<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:500;color:var(--text)">' + esc(deal.account) + '</div>';
+        html += '<div style="font-size:10px;color:var(--text3)">' + esc(deal.rep) + (deal.region?' · '+esc(deal.region):'') + '</div></div>';
+        html += '<div style="text-align:right;flex-shrink:0"><div style="font-size:12px;font-weight:500;color:var(--text)">' + fmt(deal.value) + '</div>';
+        html += '<div style="font-size:10px;color:' + (deal.daysToClose<=3?'var(--coral)':'var(--text3)') + '">' + deal.daysToClose + 'd</div></div>';
+        html += '<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:'+hc+'18;color:'+hc+'">H:' + (deal.health||'-') + '</span>';
+        html += '</div>';
+      });
+    }
+
+    html += '</div>';
+    container.innerHTML = html;
+  } catch(e) { container.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>'; }
+}
+
 async function loadHealthWeights() {
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
@@ -7114,6 +7276,8 @@ function renderPipelineDeals(data) {
           ';color:' + (d.health_score>=70?'var(--green)':d.health_score>=40?'var(--amber)':'var(--coral)') +
           '" title="Deal health score">H:' + d.health_score + '</span>'
         : '';
+      // Velocity sparkline — shows last 14 days of health trend
+      var sparkline = _renderSparkline(d.score_history || []);
 
       return '<div class="deal-card-row" data-deal-id="' + esc(d.id) + '" data-deal-account="' + esc(d.account) + '" style="background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;margin-bottom:6px;cursor:pointer;transition:border-color 0.15s" onmouseenter="this.style.borderColor=\'var(--gold)\'" onmouseleave="this.style.borderColor=\'var(--border2)\'">' +
         '<div style="display:flex;align-items:flex-start;gap:10px">' +
@@ -7128,6 +7292,7 @@ function renderPipelineDeals(data) {
               '<span style="font-size:10px;color:' + tc.color + ';font-weight:500">' + tc.icon + ' ' + tc.label + '</span>' +
               scoreBar +
               healthBadge +
+              sparkline +
             '</div>' +
             '<div style="font-size:10px;color:var(--text3);font-style:italic;margin-bottom:4px">' + esc(d.verification_reason || '') + '</div>' +
             (d.hint_context ? '<div style="font-size:11px;color:var(--text3);font-style:italic">"' + esc(d.hint_context.slice(0, 100)) + '"</div>' : '') +
