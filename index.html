@@ -3721,8 +3721,9 @@ async function loadSamBrief(force) {
     }
     if (!d.ok) { out.innerHTML = '<div style="font-size:12px;color:var(--text3)">'+esc(d.error||'Brief unavailable')+'</div>'; return; }
     _briefLoadedDate = todayKey2;
-    try { localStorage.setItem(_BRIEF_CACHE_KEY, JSON.stringify({ brief: d.brief, brief_structured: d.brief_structured, date: todayKey2 })); } catch(e) {}
-    out.innerHTML = renderBriefHtml(d.brief, d.brief_structured);
+    if (!d.cached) { try { localStorage.setItem(_BRIEF_CACHE_KEY, JSON.stringify({ brief: d.brief, brief_structured: d.brief_structured, date: todayKey2 })); } catch(e) {} }
+    out.innerHTML = renderBriefHtml(d.brief, d.brief_structured) +
+      (d.cached ? '<div style="font-size:10px;color:var(--amber);margin-top:8px;padding:4px 8px;background:rgba(160,117,42,0.1);border-radius:6px">⚠ Gemini quota reached — showing last brief from ' + esc(d.cached_date||'earlier') + '</div>' : '');
   } catch(e) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: '+esc(e.message)+'</div>'; }
 }
 
@@ -5770,6 +5771,7 @@ async function _renderSignalsPane(deal) {
     var html = '';
     var typeIcons = {hiring:'👥',funding:'💰',expansion:'🚀',contraction:'📉',leadership:'👤',technology:'⚙️',financial:'📊',competitive:'🏆'};
     var sigColors = {positive:'var(--green)',negative:'var(--coral)',neutral:'var(--amber)'};
+    if (d.cached) html += '<div style="font-size:10px;color:var(--amber);margin-bottom:10px;padding:4px 8px;background:rgba(160,117,42,0.1);border-radius:6px">⚠ Live refresh unavailable (AI quota) — showing signals from ' + esc(((d.cached_at||'').split('T')[0])||'earlier') + '</div>';
 
     function renderSignalCards(signals) {
       if (!signals || !signals.length) return '<div style="font-size:12px;color:var(--text3);padding:8px 0;font-style:italic">No signals found for this scope.</div>';
