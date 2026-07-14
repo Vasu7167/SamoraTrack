@@ -597,8 +597,13 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
         <div style="font-size:15px;font-weight:600;color:var(--text)">Pipeline Intelligence</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">Verified · Partial · AI-extracted · Region &amp; product breakdown</div>
       </div>
-      <button onclick="loadPipeline()" id="pipelineRefreshBtn" style="padding:6px 12px;border-radius:20px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">↻ Refresh</button>
+      <div style="display:flex;gap:6px">
+        <button onclick="openCrmImport()" id="crmImportBtn" style="padding:6px 12px;border-radius:20px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer" title="Upload a CRM deals export (Zoho, HubSpot, Salesforce…) and verify it against real activity">⇪ CRM audit</button>
+        <button onclick="loadPipeline()" id="pipelineRefreshBtn" style="padding:6px 12px;border-radius:20px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">↻ Refresh</button>
+      </div>
     </div>
+    <input type="file" id="crmCsvInput" accept=".csv,text/csv" style="display:none" onchange="handleCrmCsv(this.files[0]);this.value=''"/>
+    <div id="crmAuditSection" style="margin-bottom:14px"></div>
 
     <!-- Intelligent prompts -->
     <div id="pipelinePrompts" style="margin-bottom:14px"></div>
@@ -6054,7 +6059,7 @@ function _renderStakeholdersPane(stakeholders, deal) {
   }
 
   // Enrich button
-  html += '<button onclick="enrichDeal(\'' + esc(deal && deal.id || '') + '\',\'' + esc(deal && deal.account || '') + '\')" id="enrichDealBtn" style="width:100%;margin-top:12px;padding:10px;border-radius:8px;background:var(--surface2);border:1px dashed var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer">' + _samoraIntelLabel('Find contacts from ') + '</button>';
+  html += '<button onclick="enrichDeal(\'' + esc(deal && deal.id || '') + '\',\'' + esc(deal && deal.account || '') + '\')" id="enrichDealBtn" style="width:100%;margin-top:12px;padding:10px;border-radius:8px;background:var(--surface2);border:1px dashed var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer">' + _samoraIntelLabel('Find contacts from Gmail &amp; SmartReach activity') + '</button>';
   html += '<div id="enrichDealStatus" style="font-size:11px;color:var(--text3);margin-top:6px"></div>';
   html += '<button onclick="refreshStakeholderSignals(\'' + esc(deal && deal.id || '') + '\').then(function(d){if(d&&d.ok&&_currentDealDetail){_renderStakeholdersPane(_currentDealDetail.stakeholders, deal);}});" style="width:100%;margin-top:6px;padding:8px;border-radius:8px;background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);font-size:11px;cursor:pointer">↻ Refresh contact activity from Gmail</button>';
 
@@ -6066,8 +6071,8 @@ function _renderMeddpiccPane(m, deal) {
   var body = document.getElementById('deal-detail-body'); if (!body||!deal) return;
   // Auto-infer button — rules-based, reads from call transcripts, no AI needed
   var autoInferBtn = '<div style="margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">' +
-    '<div style="font-size:11px;color:var(--text3)">Edit fields or auto-fill from </div>' +
-    '<button onclick="inferMeddpiccFromTranscripts(\'' + esc(deal.id) + '\').then(function(d){if(d&&d.ok){_loadDealDetailData(\'' + esc(deal.id) + '\',{id:\'' + esc(deal.id) + '\',account:\'' + esc(deal.account) + '\'})}})" style="padding:5px 10px;border-radius:6px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:11px;cursor:pointer">' + _samoraIntelLabel('Auto-fill VIA') + '</button>' +
+    '<div style="font-size:11px;color:var(--text3)">Edit fields or auto-fill from call transcripts</div>' +
+    '<button onclick="inferMeddpiccFromTranscripts(\'' + esc(deal.id) + '\').then(function(d){if(d&&d.ok){_loadDealDetailData(\'' + esc(deal.id) + '\',{id:\'' + esc(deal.id) + '\',account:\'' + esc(deal.account) + '\'})}})" style="padding:5px 10px;border-radius:6px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:11px;cursor:pointer">' + _samoraIntelLabel('Auto-fill from calls') + '</button>' +
   '</div>';
   var fields = [
     {key:'metrics',letter:'M',label:'Metrics',valKey:'metrics_value',hint:'What measurable outcome does the buyer want?'},
@@ -7299,6 +7304,162 @@ function renderAttentionPanel(deals, data, fmtUsd) {
       alerts.map(function(a){return mkAlertRow(a.dot,a.text);}).join('') +
     '</div>' +
   '</div>';
+}
+
+// ── CRM CSV Audit (Samora Intelligence — deterministic, no AI) ────────────────
+var _crmAudit = null; // { headers, rawRows, mapping, results, summary, missing }
+
+function openCrmImport() { document.getElementById('crmCsvInput')?.click(); }
+
+// Minimal RFC-4180-ish CSV parser — handles quoted fields, embedded commas/newlines
+function _parseCsv(text) {
+  var rows = [], row = [], field = '', inQ = false;
+  for (var i = 0; i < text.length; i++) {
+    var c = text[i];
+    if (inQ) {
+      if (c === '"') { if (text[i+1] === '"') { field += '"'; i++; } else inQ = false; }
+      else field += c;
+    } else if (c === '"') inQ = true;
+    else if (c === ',') { row.push(field); field = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i+1] === '\n') i++;
+      row.push(field); field = '';
+      if (row.length > 1 || row[0] !== '') rows.push(row);
+      row = [];
+    } else field += c;
+  }
+  if (field !== '' || row.length) { row.push(field); rows.push(row); }
+  return rows;
+}
+
+// Auto-detect CRM columns by header name — Zoho, HubSpot, Salesforce, Pipedrive variants
+function _detectCrmColumns(headers) {
+  var find = function(patterns) {
+    for (var i = 0; i < headers.length; i++) {
+      var h = headers[i].toLowerCase().trim();
+      for (var p = 0; p < patterns.length; p++) if (patterns[p].test(h)) return i;
+    }
+    return -1;
+  };
+  return {
+    name:          find([/^(deal|potential|opportunity)\s*name$/, /^deal$/, /^potential$/, /^opportunity$/, /deal.*name/, /potential.*name/]),
+    account:       find([/^account\s*name$/, /^company(\s*name)?$/, /^organi[sz]ation$/, /account/, /company/]),
+    stage:         find([/^stage$/, /deal.*stage/, /stage/]),
+    amount:        find([/^amount$/, /^deal\s*value$/, /^value$/, /amount/, /revenue/]),
+    close_date:    find([/clos(e|ing)\s*date/, /expected.*close/]),
+    last_activity: find([/last\s*activity/, /modified\s*time/, /last\s*contacted/, /last\s*update/, /activity\s*date/]),
+    owner:         find([/owner/, /deal\s*owner/, /assigned/]),
+    email:         find([/^email$/, /contact.*email/, /e-?mail/])
+  };
+}
+
+async function handleCrmCsv(file) {
+  if (!file) return;
+  var section = document.getElementById('crmAuditSection');
+  var btn = document.getElementById('crmImportBtn');
+  if (btn) { btn.textContent = '↻ Reading…'; btn.disabled = true; }
+  try {
+    var text = await file.text();
+    var rows = _parseCsv(text);
+    if (rows.length < 2) { showToast('CSV appears empty'); return; }
+    var headers = rows[0];
+    var map = _detectCrmColumns(headers);
+    if (map.name === -1 && map.account === -1) { showToast('Could not find a deal/account name column'); return; }
+
+    var payloadRows = rows.slice(1).filter(function(r){ return r.join('').trim(); }).slice(0, 200).map(function(r) {
+      var get = function(idx){ return idx >= 0 ? (r[idx]||'').trim() : ''; };
+      return { name: get(map.name) || get(map.account), account: get(map.account) || get(map.name),
+        stage: get(map.stage), amount: get(map.amount), close_date: get(map.close_date),
+        last_activity: get(map.last_activity), owner: get(map.owner), email: get(map.email) };
+    });
+
+    if (section) section.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:10px"><span style="animation:spin 1s linear infinite;display:inline-block">↻</span> Verifying ' + payloadRows.length + ' deals against Gmail, calendar & sequencing evidence…</div>';
+
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'crm_verify', rows: payloadRows }) });
+    var d = await r.json();
+    if (!d.ok) { if (section) section.innerHTML = '<div style="font-size:12px;color:var(--coral);padding:10px">' + esc(d.error||'Verification failed') + '</div>'; return; }
+
+    _crmAudit = { headers: headers, rawRows: rows.slice(1), mapping: map, results: d.results, summary: d.summary, missing: d.missing_from_crm || [], fileName: file.name };
+    _renderCrmAudit();
+  } catch(e) { showToast('CSV error: ' + e.message); }
+  finally { if (btn) { btn.textContent = '⇪ CRM audit'; btn.disabled = false; } }
+}
+
+function _renderCrmAudit() {
+  var section = document.getElementById('crmAuditSection');
+  if (!section || !_crmAudit) return;
+  var s = _crmAudit.summary;
+  var statusMeta = {
+    verified:      { col:'var(--green)', label:'Verified',     icon:'✓' },
+    cooling:       { col:'var(--amber)', label:'Cooling',      icon:'◐' },
+    at_risk:       { col:'var(--coral)', label:'At risk',      icon:'⚠' },
+    no_evidence:   { col:'var(--coral)', label:'No evidence',  icon:'∅' },
+    not_in_samora: { col:'var(--text3)', label:'Not tracked',  icon:'—' }
+  };
+  var html = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:14px">';
+  // Branded header
+  html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">';
+  html += '<img src="icons/icon-48.png" alt="Samora" style="width:18px;height:18px;border-radius:50%"/>';
+  html += '<span style="font-size:13px;font-weight:600;color:var(--text)">CRM Verification Report</span>';
+  html += '<span style="font-size:8px;font-weight:700;letter-spacing:.1em;color:var(--gold);text-transform:uppercase;background:rgba(160,117,42,0.12);padding:2px 6px;border-radius:4px">Samora Intelligence</span>';
+  html += '<span style="flex:1"></span>';
+  html += '<button onclick="exportCrmEnriched()" style="padding:4px 12px;border-radius:14px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">⬇ Export enriched CSV</button>';
+  html += '<button onclick="_crmAudit=null;document.getElementById(\'crmAuditSection\').innerHTML=\'\'" style="padding:4px 8px;border-radius:14px;background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-size:11px;cursor:pointer">✕</button>';
+  html += '</div>';
+  // The headline — CRM says vs reality
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">';
+  var chip = function(num, label, col) {
+    return '<div style="flex:1;min-width:90px;background:var(--surface2);border-radius:8px;padding:8px 10px;text-align:center"><div style="font-size:17px;font-weight:700;color:' + col + '">' + num + '</div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">' + label + '</div></div>';
+  };
+  html += chip(s.total_rows, 'CRM deals', 'var(--text)');
+  html += chip(s.verified, 'Verified ≤14d', 'var(--green)');
+  html += chip(s.at_risk + s.cooling, 'Cooling / at risk', 'var(--amber)');
+  html += chip(s.no_evidence, 'No evidence', 'var(--coral)');
+  html += chip(s.trust_pct + '%', 'Pipeline you can trust', s.trust_pct >= 60 ? 'var(--green)' : 'var(--coral)');
+  html += '</div>';
+  if (s.deals_with_optimism_gap > 0) {
+    html += '<div style="font-size:12px;color:var(--text2);background:rgba(192,82,63,0.08);border-left:3px solid var(--coral);border-radius:0 6px 6px 0;padding:8px 12px;margin-bottom:12px">📉 <strong>' + s.deals_with_optimism_gap + ' deal' + (s.deals_with_optimism_gap!==1?'s':'') + '</strong> show CRM activity more recent than any verified evidence — average gap <strong>' + s.avg_optimism_gap_days + ' days</strong>. This is the difference between what was logged and what actually happened.</div>';
+  }
+  // Table
+  html += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">';
+  html += '<tr style="color:var(--text3);text-align:left"><th style="padding:5px 8px;font-weight:600">CRM deal</th><th style="padding:5px 8px;font-weight:600">CRM last activity</th><th style="padding:5px 8px;font-weight:600">Verified last contact</th><th style="padding:5px 8px;font-weight:600">Gap</th><th style="padding:5px 8px;font-weight:600">Days dark</th><th style="padding:5px 8px;font-weight:600">Status</th></tr>';
+  _crmAudit.results.forEach(function(rw) {
+    var m = statusMeta[rw.status] || statusMeta.not_in_samora;
+    html += '<tr style="border-top:1px solid var(--border)">';
+    html += '<td style="padding:6px 8px;color:var(--text);font-weight:500">' + esc(rw.crm_name) + (rw.matched && rw.samora_account !== rw.crm_name ? '<div style="font-size:9px;color:var(--text3)">→ ' + esc(rw.samora_account) + '</div>' : '') + '</td>';
+    html += '<td style="padding:6px 8px;color:var(--text2)">' + esc(rw.crm_last_activity || '—') + '</td>';
+    html += '<td style="padding:6px 8px;color:var(--text2)">' + esc(rw.samora_last_verified_contact || '—') + '</td>';
+    html += '<td style="padding:6px 8px;color:' + (rw.gap_days > 7 ? 'var(--coral)' : 'var(--text2)') + ';font-weight:' + (rw.gap_days > 7 ? '700' : '400') + '">' + (rw.gap_days != null ? (rw.gap_days > 0 ? '+' : '') + rw.gap_days + 'd' : '—') + '</td>';
+    html += '<td style="padding:6px 8px;color:var(--text2)">' + (rw.samora_days_dark != null ? rw.samora_days_dark + 'd' : '—') + '</td>';
+    html += '<td style="padding:6px 8px"><span style="color:' + m.col + ';font-weight:600">' + m.icon + ' ' + m.label + '</span></td>';
+    html += '</tr>';
+  });
+  html += '</table></div>';
+  // Deals Samora tracks that the CRM is missing
+  if (_crmAudit.missing.length) {
+    html += '<div style="margin-top:10px;font-size:11px;color:var(--text3)">Also in Samora but not in this export: ' + _crmAudit.missing.map(function(x){ return esc(x.account); }).join(', ') + '</div>';
+  }
+  html += '</div>';
+  section.innerHTML = html;
+}
+
+function exportCrmEnriched() {
+  if (!_crmAudit) return;
+  var q = function(v) { v = v == null ? '' : String(v); return (v.indexOf(',') >= 0 || v.indexOf('"') >= 0 || v.indexOf('\n') >= 0) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+  var extra = ['samora_status','samora_health_score','samora_signal_score','samora_last_verified_contact','samora_days_dark','samora_gap_days','samora_champion_identified','samora_seq_touchpoints','samora_seq_replies'];
+  var out = _crmAudit.headers.map(q).join(',') + ',' + extra.join(',') + '\n';
+  _crmAudit.rawRows.forEach(function(raw, i) {
+    var rw = _crmAudit.results[i];
+    var extras = rw ? [rw.status, rw.samora_health_score, rw.samora_signal_score, rw.samora_last_verified_contact, rw.samora_days_dark, rw.gap_days, rw.samora_champion_identified, rw.seq_touchpoints, rw.seq_replies] : ['','','','','','','','',''];
+    out += raw.map(q).join(',') + ',' + extras.map(q).join(',') + '\n';
+  });
+  var blob = new Blob([out], { type: 'text/csv' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (_crmAudit.fileName || 'crm').replace(/\.csv$/i, '') + '_samora_verified.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 async function loadPipeline() {
