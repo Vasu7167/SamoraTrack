@@ -7334,10 +7334,15 @@ function _parseCsv(text) {
 
 // Auto-detect CRM columns by header name — Zoho, HubSpot, Salesforce, Pipedrive variants
 function _detectCrmColumns(headers) {
+  // Pattern-priority search: most specific pattern wins across ALL headers,
+  // and ID-ish columns (Account Name.id, ACCOUNTID…) are never picked.
   var find = function(patterns) {
-    for (var i = 0; i < headers.length; i++) {
-      var h = headers[i].toLowerCase().trim();
-      for (var p = 0; p < patterns.length; p++) if (patterns[p].test(h)) return i;
+    for (var p = 0; p < patterns.length; p++) {
+      for (var i = 0; i < headers.length; i++) {
+        var h = headers[i].toLowerCase().trim();
+        if (/(^|[^a-z])id$|\.id$|^id($|[^a-z])/.test(h)) continue;
+        if (patterns[p].test(h)) return i;
+      }
     }
     return -1;
   };
