@@ -5676,18 +5676,36 @@ async function loadCoachingAlerts() {
     html += '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">⚡ ' + alerts.length + ' alert' + (alerts.length!==1?'s':'') + '</div>';
     html += '<button onclick="runCoachingAlerts()" style="font-size:10px;padding:1px 7px;border-radius:4px;background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);cursor:pointer">↻</button>';
     html += '</div>';
-    alerts.slice(0, 3).forEach(function(a) {
+    var VISIBLE_ALERTS = 5;
+    function alertRow(a) {
       var col = sevColor[a.severity] || 'var(--text3)';
-      html += '<div style="display:flex;align-items:center;gap:6px;padding:4px 8px;margin-bottom:3px;background:var(--surface2);border-left:2px solid ' + col + ';border-radius:0 5px 5px 0">';
-      html += '<span style="font-size:11px;flex-shrink:0">' + (typeIcon[a.alert_type]||'⚠') + '</span>';
-      html += '<span style="font-size:11px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(a.detail||'') + '">' + esc(a.title) + '</span>';
-      html += '<button onclick="dismissAlert(\'' + a.id + '\')" style="font-size:10px;background:none;border:none;color:var(--text3);cursor:pointer;padding:0 2px;flex-shrink:0">✕</button>';
+      var h = '<div style="display:flex;align-items:center;gap:6px;padding:4px 8px;margin-bottom:3px;background:var(--surface2);border-left:2px solid ' + col + ';border-radius:0 5px 5px 0">';
+      h += '<span style="font-size:11px;flex-shrink:0">' + (typeIcon[a.alert_type]||'⚠') + '</span>';
+      h += '<span style="font-size:11px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(a.detail||'') + '">' + esc(a.title) + '</span>';
+      h += '<button onclick="dismissAlert(\'' + a.id + '\')" style="font-size:10px;background:none;border:none;color:var(--text3);cursor:pointer;padding:0 2px;flex-shrink:0">✕</button>';
+      h += '</div>';
+      return h;
+    }
+    alerts.slice(0, VISIBLE_ALERTS).forEach(function(a) { html += alertRow(a); });
+    if (alerts.length > VISIBLE_ALERTS) {
+      html += '<div id="coachingAlertsMore" style="display:none">';
+      alerts.slice(VISIBLE_ALERTS).forEach(function(a) { html += alertRow(a); });
       html += '</div>';
-    });
-    if (alerts.length > 3) html += '<div style="font-size:10px;color:var(--text3);padding:2px 0 0 8px">+' + (alerts.length-3) + ' more</div>';
+      html += '<div id="coachingAlertsMoreBtn" onclick="_toggleCoachingAlerts()" style="font-size:10px;color:var(--gold);padding:3px 0 0 8px;cursor:pointer;user-select:none">+' + (alerts.length-VISIBLE_ALERTS) + ' more ▾</div>';
+    }
     html += '</div>';
     panel.innerHTML = html;
   } catch(e) { /* non-fatal */ }
+}
+
+function _toggleCoachingAlerts() {
+  var more = document.getElementById('coachingAlertsMore');
+  var btn = document.getElementById('coachingAlertsMoreBtn');
+  if (!more || !btn) return;
+  var open = more.style.display !== 'none';
+  more.style.display = open ? 'none' : 'block';
+  var hiddenCount = more.children.length;
+  btn.textContent = open ? '+' + hiddenCount + ' more ▾' : 'show less ▴';
 }
 
 async function dismissAlert(alertId) {
