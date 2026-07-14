@@ -6154,7 +6154,7 @@ async function loadMeetingPrep() {
     if (!meetings.length) {
       // Calendar events exist but none matched pipeline accounts — show light hint
       container.style.display = 'block';
-      container.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:6px 10px;background:var(--surface2);border-radius:8px;margin-bottom:4px">📅 ' + d.meetings.length + ' meeting' + (d.meetings.length!==1?'s':'') + ' tomorrow — none matched pipeline accounts by name</div>';
+      container.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:6px 10px;background:var(--surface2);border-radius:8px;margin-bottom:4px">📅 ' + d.meetings.length + ' meeting' + (d.meetings.length!==1?'s':'') + ' tomorrow — none matched pipeline accounts by attendee or name</div>';
       return;
     }
 
