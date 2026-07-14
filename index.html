@@ -249,7 +249,11 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 .sam-action{font-size:12px;color:var(--green);background:rgba(74,140,92,0.08);border-radius:6px;padding:6px 10px}
 .dying-action{color:var(--coral);background:rgba(192,82,63,0.08)}
 .sam-coming-soon{background:var(--surface2);border:1px dashed var(--border2);border-radius:var(--radius);padding:16px;margin-top:4px;text-align:center;margin-bottom:80px}
-.sam-chat-bar{position:fixed;bottom:72px;left:0;right:0;background:var(--bg);padding:12px 16px 4px;display:flex;gap:8px;z-index:50}
+.sam-chat-bar{position:fixed;bottom:72px;left:0;right:0;background:var(--bg);padding:12px 16px 4px;display:none;gap:8px;z-index:50}
+.sam-chat-bar.open{display:flex;animation:samBarUp .22s ease}
+@keyframes samBarUp{from{transform:translateY(14px);opacity:0}to{transform:translateY(0);opacity:1}}
+.sam-chat-fab{position:fixed;bottom:86px;right:16px;width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#B8860B 0%,#E8B84B 60%,#C8961E 100%);box-shadow:0 4px 16px rgba(184,134,11,0.45),0 2px 5px rgba(0,0,0,0.25);border:none;cursor:pointer;z-index:51;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;transition:transform .15s ease}
+.sam-chat-fab:active{transform:scale(0.92)}
 .sam-chat-input{flex:1;background:var(--surface);border:1px solid var(--border2);border-radius:24px;padding:12px 18px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;outline:none;transition:border-color 0.2s}
 .sam-chat-input:focus{border-color:var(--gold)}
 .sam-chat-input::placeholder{color:var(--text3)}
@@ -478,7 +482,6 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 
   <!-- ── TODAY ── -->
   <div class="panel active" id="panel-today">
-    <div id="meetingPrepSection" style="display:none;margin-bottom:12px"></div>
     <div id="productivityBanner" style="margin-bottom:12px"></div>
     <div id="coachingAlertsPanel" style="margin-bottom:12px"></div>
     <div id="nudgeBanner" style="display:none;background:rgba(160,117,42,0.08);border:1px solid rgba(160,117,42,0.25);border-radius:var(--radius);padding:10px 14px;margin-bottom:12px"><div style="display:flex;align-items:center;justify-content:space-between"><div id="nudgeText" style="font-size:12px;color:var(--text2)"></div><button onclick="this.parentElement.parentElement.style.display='none'" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:0 0 0 8px">✕</button></div></div>
@@ -544,6 +547,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
       <div class="today-sec-header"><span class="today-sec-title">○ Misses</span></div>
       <div class="items" id="today-list-misses"></div>
     </div>
+    <div id="meetingPrepSection" style="display:none;margin-top:12px"></div>
   </div>
 
   <!-- ── Tasks ── -->
@@ -766,6 +770,10 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
             <span style="font-family:var(--sans);font-size:6.5px;font-weight:700;letter-spacing:.12em;color:#18160F;opacity:0.75;text-transform:uppercase">ASK</span>
           </button>
         </div>
+        <button class="sam-chat-fab" id="samChatFab" onclick="toggleSamChatBar()" title="Ask SAM">
+          <span id="samFabIcon" style="font-family:'EB Garamond',Georgia,serif;font-size:24px;font-weight:700;color:#18160F;line-height:1">S</span>
+          <span id="samFabLabel" style="font-family:var(--sans);font-size:7.5px;font-weight:700;letter-spacing:.12em;color:#18160F;opacity:0.75;text-transform:uppercase">ASK</span>
+        </button>
         <div id="samChatOutput" style="margin-top:12px"></div>
       </div>
 
@@ -4676,6 +4684,18 @@ async function getCoverageCoaching(grid, outputId, repEmail) {
   }
 }
 
+function toggleSamChatBar() {
+  var bar = document.getElementById('samChatBar');
+  var icon = document.getElementById('samFabIcon');
+  var label = document.getElementById('samFabLabel');
+  if (!bar) return;
+  var opening = !bar.classList.contains('open');
+  bar.classList.toggle('open', opening);
+  if (icon) icon.textContent = opening ? '✕' : 'S';
+  if (label) label.style.display = opening ? 'none' : '';
+  if (opening) { var inp = document.getElementById('samChatInput'); if (inp) setTimeout(function(){ inp.focus(); }, 60); }
+}
+
 async function runSamQuery() {
   const inp = document.getElementById('samChatInput'); const out = document.getElementById('samChatOutput');
   const query = inp?.value?.trim(); if (!query || !out) return;
@@ -6145,7 +6165,7 @@ async function loadMeetingPrep() {
   var container = document.getElementById('meetingPrepSection'); if (!container) return;
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
-      body:JSON.stringify({action:'get_meeting_prep'}) });
+      body:JSON.stringify({action:'get_meeting_prep', target_date: new Date().toISOString().split('T')[0]}) });
     var d = await r.json();
     _meetingPrepData = d;
     if (!d.ok || !d.meetings || !d.meetings.length) {
@@ -6156,12 +6176,17 @@ async function loadMeetingPrep() {
     if (!meetings.length) {
       // Calendar events exist but none matched pipeline accounts — show light hint
       container.style.display = 'block';
-      container.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:6px 10px;background:var(--surface2);border-radius:8px;margin-bottom:4px">📅 ' + d.meetings.length + ' meeting' + (d.meetings.length!==1?'s':'') + ' tomorrow — none matched pipeline accounts by attendee or name</div>';
+      container.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:6px 10px;background:var(--surface2);border-radius:8px;margin-bottom:4px">📅 ' + d.meetings.length + ' meeting' + (d.meetings.length!==1?'s':'') + ' today — none matched pipeline accounts by attendee or name</div>';
       return;
     }
 
     var html = '<div style="margin-bottom:12px">';
-    html += '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">📅 Tomorrow\'s meetings · ' + meetings.length + '</div>';
+    // Collapsible header — collapsed by default to save screen space
+    html += '<div onclick="_toggleMeetingPrepList()" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 12px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;user-select:none">';
+    html += '<span style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;flex:1">📅 Today\'s meetings · ' + meetings.length + '</span>';
+    html += '<span id="meetingPrepChevron" style="font-size:11px;color:var(--text3)">▸</span>';
+    html += '</div>';
+    html += '<div id="meetingPrepList" style="display:none;margin-top:8px">';
 
     meetings.forEach(function(m) {
       var hScore = m.health_score || 0;
@@ -6211,10 +6236,19 @@ async function loadMeetingPrep() {
 
       html += '</div>';
     });
-    html += '</div>';
+    html += '</div></div>';
     container.innerHTML = html;
     container.style.display = 'block';
   } catch(e) { console.error('Meeting prep error:', e); }
+}
+
+function _toggleMeetingPrepList() {
+  var l = document.getElementById('meetingPrepList');
+  var c = document.getElementById('meetingPrepChevron');
+  if (!l) return;
+  var open = l.style.display !== 'none';
+  l.style.display = open ? 'none' : 'block';
+  if (c) c.textContent = open ? '▸' : '▾';
 }
 
 function _togglePrepDetail(accountId) {
