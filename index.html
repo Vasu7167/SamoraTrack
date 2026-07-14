@@ -6067,7 +6067,7 @@ function _renderMeddpiccPane(m, deal) {
   // Auto-infer button — rules-based, reads from call transcripts, no AI needed
   var autoInferBtn = '<div style="margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">' +
     '<div style="font-size:11px;color:var(--text3)">Edit fields or auto-fill from </div>' +
-    '<button onclick="inferMeddpiccFromTranscripts(\'' + esc(deal.id) + '\').then(function(d){if(d&&d.ok){_loadDealDetailData(\'' + esc(deal.id) + '\',{id:\'' + esc(deal.id) + '\',account:\'' + esc(deal.account) + '\'})}})" style="padding:5px 10px;border-radius:6px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:11px;cursor:pointer">' + _samoraIntelLabel('Auto-fill from calls') + '</button>' +
+    '<button onclick="inferMeddpiccFromTranscripts(\'' + esc(deal.id) + '\').then(function(d){if(d&&d.ok){_loadDealDetailData(\'' + esc(deal.id) + '\',{id:\'' + esc(deal.id) + '\',account:\'' + esc(deal.account) + '\'})}})" style="padding:5px 10px;border-radius:6px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:11px;cursor:pointer">' + _samoraIntelLabel('Auto-fill VIA') + '</button>' +
   '</div>';
   var fields = [
     {key:'metrics',letter:'M',label:'Metrics',valKey:'metrics_value',hint:'What measurable outcome does the buyer want?'},
