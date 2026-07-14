@@ -6054,7 +6054,7 @@ function _renderStakeholdersPane(stakeholders, deal) {
   }
 
   // Enrich button
-  html += '<button onclick="enrichDeal(\'' + esc(deal && deal.id || '') + '\',\'' + esc(deal && deal.account || '') + '\')" id="enrichDealBtn" style="width:100%;margin-top:12px;padding:10px;border-radius:8px;background:var(--surface2);border:1px dashed var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer">✦ Find contacts from Gmail &amp; SmartReach activity</button>';
+  html += '<button onclick="enrichDeal(\'' + esc(deal && deal.id || '') + '\',\'' + esc(deal && deal.account || '') + '\')" id="enrichDealBtn" style="width:100%;margin-top:12px;padding:10px;border-radius:8px;background:var(--surface2);border:1px dashed var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer">' + _samoraIntelLabel('Find contacts from Gmail &amp; SmartReach activity') + '</button>';
   html += '<div id="enrichDealStatus" style="font-size:11px;color:var(--text3);margin-top:6px"></div>';
   html += '<button onclick="refreshStakeholderSignals(\'' + esc(deal && deal.id || '') + '\').then(function(d){if(d&&d.ok&&_currentDealDetail){_renderStakeholdersPane(_currentDealDetail.stakeholders, deal);}});" style="width:100%;margin-top:6px;padding:8px;border-radius:8px;background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);font-size:11px;cursor:pointer">↻ Refresh contact activity from Gmail</button>';
 
@@ -6067,7 +6067,7 @@ function _renderMeddpiccPane(m, deal) {
   // Auto-infer button — rules-based, reads from call transcripts, no AI needed
   var autoInferBtn = '<div style="margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">' +
     '<div style="font-size:11px;color:var(--text3)">Edit fields or auto-fill from call transcripts</div>' +
-    '<button onclick="inferMeddpiccFromTranscripts(\'' + esc(deal.id) + '\').then(function(d){if(d&&d.ok){_loadDealDetailData(\'' + esc(deal.id) + '\',{id:\'' + esc(deal.id) + '\',account:\'' + esc(deal.account) + '\'})}})" style="padding:5px 10px;border-radius:6px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:11px;cursor:pointer">✦ Auto-fill from calls</button>' +
+    '<button onclick="inferMeddpiccFromTranscripts(\'' + esc(deal.id) + '\').then(function(d){if(d&&d.ok){_loadDealDetailData(\'' + esc(deal.id) + '\',{id:\'' + esc(deal.id) + '\',account:\'' + esc(deal.account) + '\'})}})" style="padding:5px 10px;border-radius:6px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:11px;cursor:pointer">' + _samoraIntelLabel('Auto-fill from calls') + '</button>' +
   '</div>';
   var fields = [
     {key:'metrics',letter:'M',label:'Metrics',valKey:'metrics_value',hint:'What measurable outcome does the buyer want?'},
@@ -6463,6 +6463,15 @@ async function _saveAllMeddpicc(accountId) {
   if (btn) { btn.textContent = 'Save changes'; btn.disabled = false; }
 }
 
+// Branded label for features powered by the Samora local intelligence layer
+function _samoraIntelLabel(text) {
+  return '<span style="display:inline-flex;align-items:center;gap:7px;justify-content:center;flex-wrap:wrap">'
+    + '<img src="icons/icon-48.png" alt="Samora" style="width:16px;height:16px;border-radius:50%;flex-shrink:0"/>'
+    + '<span>' + text + '</span>'
+    + '<span style="font-size:8px;font-weight:700;letter-spacing:.1em;color:var(--gold);text-transform:uppercase;background:rgba(160,117,42,0.12);padding:2px 6px;border-radius:4px;flex-shrink:0">Samora Intelligence</span>'
+    + '</span>';
+}
+
 async function enrichDeal(accountId, accountName) {
   var body = document.getElementById('deal-detail-body');
   var status = document.getElementById('enrichDealStatus');
@@ -6477,7 +6486,7 @@ async function enrichDeal(accountId, accountName) {
     var dd = await dr.json();
     domain = dd.domain || '';
   } catch(e) {}
-  if (btn) { btn.textContent = '✦ Find contacts from Gmail & SmartReach activity'; btn.disabled = false; }
+  if (btn) { btn.innerHTML = _samoraIntelLabel('Find contacts from Gmail &amp; SmartReach activity'); btn.disabled = false; }
 
   // Step 2: show confirmation panel so human can verify domain before searching
   var confirmHtml = '<div style="margin-top:10px;background:var(--surface2);border-radius:10px;padding:12px">' +
