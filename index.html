@@ -726,15 +726,16 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
               <button onclick="runLocalIntelligence()" id="localIntelBtn" style="padding:9px 10px;border-radius:10px;background:rgba(160,117,42,0.08);border:1px solid rgba(160,117,42,0.2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">⚡ Scan channels</button>
               <button onclick="syncSequencing()" id="seqSyncBtn" style="padding:9px 10px;border-radius:10px;background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);color:var(--green);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">↺ Sync sequences</button>
-              <button onclick="runExternalSignals()" id="externalSignalsBtn" style="display:none"></button>
               <button onclick="syncNotetaker()" id="notetakerSyncBtn" style="padding:9px 10px;border-radius:10px;background:rgba(160,117,42,0.08);border:1px solid rgba(160,117,42,0.2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">🎙 Sync calls</button>
               <button onclick="loadSequencingStats()" id="seqStatsBtn" style="padding:9px 10px;border-radius:10px;background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);color:var(--green);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">📊 Seq stats</button>
               <button onclick="loadTimeAnalytics()" id="timeAnalyticsBtn" style="padding:9px 10px;border-radius:10px;background:rgba(58,110,168,0.08);border:1px solid rgba(58,110,168,0.2);color:var(--blue);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">🕐 Time by account</button>
               <button onclick="computeIcpScores()" id="icp-score-btn" style="padding:9px 10px;border-radius:10px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);color:#6366f1;font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">✦ Score ICP fit</button>
-              <button onclick="runDealHealth()" style="padding:9px 10px;border-radius:10px;background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);color:var(--green);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">❤ Deal health</button>
-              <button onclick="runCoachingAlerts()" style="padding:9px 10px;border-radius:10px;background:rgba(192,82,63,0.08);border:1px solid rgba(192,82,63,0.2);color:var(--coral);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">⚡ Run alerts</button>
-              <button onclick="scanNotetakerEmails()" id="scanCallsBtn" style="padding:9px 10px;border-radius:10px;background:rgba(160,117,42,0.08);border:1px solid rgba(160,117,42,0.2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">📧 Scan call emails</button>
-              <button onclick="retagSeqChannels()" id="retagSeqBtn" style="padding:9px 10px;border-radius:10px;background:rgba(192,82,63,0.08);border:1px solid rgba(192,82,63,0.2);color:var(--coral);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">🏷 Fix channel tags</button>
+              <!-- Hidden maintenance buttons kept for programmatic use -->
+              <button onclick="runExternalSignals()" id="externalSignalsBtn" style="display:none"></button>
+              <button onclick="runDealHealth()" id="dealHealthBtn" style="display:none"></button>
+              <button onclick="runCoachingAlerts()" id="runAlertsBtn" style="display:none"></button>
+              <button onclick="scanNotetakerEmails()" id="scanCallsBtn" style="display:none"></button>
+              <button onclick="retagSeqChannels()" id="retagSeqBtn" style="display:none"></button>
             </div>
             <!-- Output areas -->
             <div id="samLocalIntelOutput" style="margin-top:12px"></div>
@@ -760,7 +761,10 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
         </div>
         <div class="sam-chat-bar" id="samChatBar">
           <input class="sam-chat-input" id="samChatInput" placeholder="Ask SAM anything about your pipeline…" onkeydown="if(event.key==='Enter')runSamQuery()"/>
-          <button class="sam-chat-btn" onclick="runSamQuery()" style="font-family:'EB Garamond',Georgia,serif;font-size:18px;font-weight:600;letter-spacing:-0.02em">S</button>
+          <button class="sam-chat-btn" onclick="runSamQuery()" style="background:linear-gradient(135deg,#B8860B 0%,#E8B84B 60%,#C8961E 100%);box-shadow:0 3px 12px rgba(184,134,11,0.4),0 1px 3px rgba(0,0,0,0.2);border:none;flex-direction:column;gap:0px;width:48px;height:48px">
+            <span style="font-family:'EB Garamond',Georgia,serif;font-size:18px;font-weight:700;color:#18160F;line-height:1">S</span>
+            <span style="font-family:var(--sans);font-size:6.5px;font-weight:700;letter-spacing:.12em;color:#18160F;opacity:0.75;text-transform:uppercase">ASK</span>
+          </button>
         </div>
         <div id="samChatOutput" style="margin-top:12px"></div>
       </div>
@@ -5646,22 +5650,20 @@ async function loadCoachingAlerts() {
     }
     var sevColor = {high:'var(--coral)', medium:'var(--amber)', low:'var(--blue)'};
     var typeIcon  = {dark_account:'🌑', no_champion:'👤', meddpicc_gap:'🎯', close_at_risk:'⏰', velocity_stall:'📉'};
-    var html = '<div style="margin-bottom:10px">';
-    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">';
-    html += '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">⚡ Coaching alerts — ' + alerts.length + ' active</div>';
-    html += '<button onclick="runCoachingAlerts()" style="font-size:10px;padding:2px 8px;border-radius:5px;background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);cursor:pointer">↻ Refresh</button>';
+    var html = '<div style="margin-bottom:6px">';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">';
+    html += '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">⚡ ' + alerts.length + ' alert' + (alerts.length!==1?'s':'') + '</div>';
+    html += '<button onclick="runCoachingAlerts()" style="font-size:10px;padding:1px 7px;border-radius:4px;background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);cursor:pointer">↻</button>';
     html += '</div>';
-    alerts.slice(0, 5).forEach(function(a) {
+    alerts.slice(0, 3).forEach(function(a) {
       var col = sevColor[a.severity] || 'var(--text3)';
-      html += '<div style="background:var(--surface);border:1px solid ' + col + '33;border-left:3px solid ' + col + ';border-radius:8px;padding:8px 10px;margin-bottom:5px;display:flex;align-items:flex-start;gap:8px">';
-      html += '<span style="font-size:13px;flex-shrink:0">' + (typeIcon[a.alert_type]||'⚠') + '</span>';
-      html += '<div style="flex:1;min-width:0">';
-      html += '<div style="font-size:12px;font-weight:500;color:var(--text)">' + esc(a.title) + '</div>';
-      if (a.detail) html += '<div style="font-size:11px;color:var(--text3);margin-top:1px">' + esc(a.detail) + '</div>';
-      html += '</div>';
-      html += '<button onclick="dismissAlert(\'' + a.id + '\')" style="font-size:11px;background:none;border:none;color:var(--text3);cursor:pointer;padding:0;flex-shrink:0">✕</button>';
+      html += '<div style="display:flex;align-items:center;gap:6px;padding:4px 8px;margin-bottom:3px;background:var(--surface2);border-left:2px solid ' + col + ';border-radius:0 5px 5px 0">';
+      html += '<span style="font-size:11px;flex-shrink:0">' + (typeIcon[a.alert_type]||'⚠') + '</span>';
+      html += '<span style="font-size:11px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(a.detail||'') + '">' + esc(a.title) + '</span>';
+      html += '<button onclick="dismissAlert(\'' + a.id + '\')" style="font-size:10px;background:none;border:none;color:var(--text3);cursor:pointer;padding:0 2px;flex-shrink:0">✕</button>';
       html += '</div>';
     });
+    if (alerts.length > 3) html += '<div style="font-size:10px;color:var(--text3);padding:2px 0 0 8px">+' + (alerts.length-3) + ' more</div>';
     html += '</div>';
     panel.innerHTML = html;
   } catch(e) { /* non-fatal */ }
