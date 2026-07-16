@@ -294,9 +294,11 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 .pv-btn{font-size:11px;padding:5px 14px;border-radius:20px;border:1px solid var(--border2);background:var(--surface2);color:var(--text3);cursor:pointer;font-family:var(--sans);font-weight:500;transition:all 0.15s}
 .pv-btn.active{background:var(--gold);border-color:var(--gold);color:#18160F}
 .pv-btn:hover:not(.active){color:var(--text);border-color:var(--border2)}
-.pdt-btn{font-size:12px;padding:6px 14px;border-radius:8px 8px 0 0;border:1px solid transparent;background:transparent;color:var(--text3);cursor:pointer;font-family:var(--sans);font-weight:500;border-bottom:none;transition:all 0.15s;margin-bottom:-1px}
-.pdt-btn.active{background:var(--bg);border-color:var(--border);border-bottom-color:var(--bg);color:var(--text);font-weight:600}
-.pdt-btn:hover:not(.active){color:var(--text);background:var(--surface)}
+.pdt-bar{display:flex;gap:4px;margin-bottom:14px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:4px;background:var(--surface2);border-radius:12px}
+.pdt-bar::-webkit-scrollbar{display:none}
+.pdt-btn{font-size:12px;padding:7px 14px;border-radius:9px;border:none;background:transparent;color:var(--text3);cursor:pointer;font-family:var(--sans);font-weight:500;white-space:nowrap;flex-shrink:0;transition:all 0.15s;position:relative}
+.pdt-btn.active{background:var(--bg);color:var(--text);font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,0.25)}
+.pdt-btn:hover:not(.active){color:var(--text)}
 .pdt-alert::after{content:'';display:inline-block;width:6px;height:6px;background:var(--coral);border-radius:50%;margin-left:4px;vertical-align:middle}
 @keyframes slideUp{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}
 .template-btn:hover{border-color:var(--gold);color:var(--gold)}
@@ -613,8 +615,11 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
     <!-- Intelligent prompts -->
     <div id="pipelinePrompts" style="margin-bottom:14px"></div>
 
+    <!-- SDR pipeline-generation panel (renders only for SDR role) -->
+    <div id="sdrGenPanel"></div>
+
     <!-- Dashboard tabs (role-based) -->
-    <div style="display:flex;gap:4px;margin-bottom:14px;border-bottom:1px solid var(--border);padding-bottom:10px">
+    <div class="pdt-bar" id="pdtBar">
       <button onclick="setPipelineDashTab('overview')" id="pdt-overview" class="pdt-btn active">Overview</button>
       <button onclick="setPipelineDashTab('byProduct')" id="pdt-byProduct" class="pdt-btn">By product</button>
       <button onclick="setPipelineDashTab('byRegion')" id="pdt-byRegion" class="pdt-btn">By region</button>
@@ -7053,6 +7058,8 @@ function setPipelineView(view) {
 }
 
 function setPipelineDashTab(tab) {
+  var activeBtn = document.getElementById('pdt-' + tab);
+  if (activeBtn && activeBtn.scrollIntoView) { try { activeBtn.scrollIntoView({ block:'nearest', inline:'center', behavior:'smooth' }); } catch(e) {} }
   _pipelineDashTab = tab;
   document.querySelectorAll('.pdt-btn').forEach(function(b) { b.classList.remove('active'); });
   var btn = document.getElementById('pdt-' + tab);
@@ -7741,6 +7748,55 @@ function exportCrmEnriched() {
   URL.revokeObjectURL(a.href);
 }
 
+// ── SDR pipeline-generation panel ─────────────────────────────────────────────
+// SDRs carry generation targets, not revenue targets. This panel credits the
+// SDR's real work: net-new stakeholders brought into discussion + attributed pipeline.
+async function loadSdrPanel() {
+  var panel = document.getElementById('sdrGenPanel');
+  if (!panel) return;
+  if ((profile?.role||'').toLowerCase() !== 'sdr') { panel.innerHTML = ''; return; }
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'get_sdr_stats', days: 30 }) });
+    var d = await r.json();
+    if (!d.ok) { panel.innerHTML = ''; return; }
+    var chip = function(num, label, col) {
+      return '<div style="flex:1;min-width:80px;background:var(--surface2);border-radius:10px;padding:10px;text-align:center"><div style="font-size:18px;font-weight:700;color:'+(col||'var(--text)')+'">'+num+'</div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-top:2px">'+label+'</div></div>';
+    };
+    var pipeK = d.pipeline_generated_usd >= 1000000 ? '$'+(d.pipeline_generated_usd/1000000).toFixed(1)+'M' : '$'+Math.round(d.pipeline_generated_usd/1000)+'K';
+    var html = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:14px;margin-bottom:14px">';
+    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">';
+    html += '<img src="icons/icon-48.png" style="width:16px;height:16px;border-radius:50%"/>';
+    html += '<span style="font-size:13px;font-weight:600;color:var(--text);flex:1">Pipeline Generation · last 30 days</span>';
+    html += '<span style="font-size:8px;font-weight:700;letter-spacing:.1em;color:var(--gold);text-transform:uppercase;background:rgba(160,117,42,0.12);padding:2px 6px;border-radius:4px">SDR</span>';
+    html += '</div>';
+    html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">';
+    html += chip(d.new_prospects, 'New stakeholders contacted', 'var(--text)');
+    html += chip(d.new_prospects_engaged, 'Brought into discussion', 'var(--green)');
+    html += chip(d.engagement_rate + '%', 'Engagement rate', d.engagement_rate >= 10 ? 'var(--green)' : 'var(--amber)');
+    html += chip(d.new_companies_touched, 'New companies', 'var(--text)');
+    html += '</div>';
+    html += '<div style="display:flex;gap:8px;flex-wrap:wrap">';
+    html += chip(pipeK, 'Pipeline generated', 'var(--gold)');
+    html += chip(d.pipeline_generated_deals, 'Deals sourced', 'var(--gold)');
+    html += chip(d.accounts_sourced_period, 'Sourced this period', 'var(--text)');
+    html += '</div>';
+    if (d.recent_new_engaged && d.recent_new_engaged.length) {
+      html += '<div style="margin-top:10px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px">↩ Newest stakeholders in discussion</div>';
+      html += '<div style="display:flex;gap:5px;flex-wrap:wrap">';
+      d.recent_new_engaged.forEach(function(p) {
+        html += '<span style="font-size:11px;padding:3px 9px;border-radius:6px;background:rgba(74,140,92,0.1);color:var(--green)">'+esc(p.name)+(p.company?' · '+esc(p.company):'')+'</span>';
+      });
+      html += '</div>';
+    }
+    if (!d.pipeline_generated_deals) {
+      html += '<div style="margin-top:8px;font-size:10px;color:var(--text3)">Pipeline attribution comes from the AE/manager tagging "SDR sourced this" on a deal.</div>';
+    }
+    html += '</div>';
+    panel.innerHTML = html;
+  } catch(e) { panel.innerHTML = ''; }
+}
+
 async function loadPipeline() {
   var btn = document.getElementById('pipelineRefreshBtn');
   if (btn) btn.textContent = '↻ Loading…';
@@ -7758,6 +7814,9 @@ async function loadPipeline() {
     });
     _pipelineData = await r.json();
     if (!_pipelineData.ok) { if (chartEl) chartEl.innerHTML = '<div style="color:var(--coral);font-size:12px">' + esc(_pipelineData.error || 'Failed to load pipeline') + '</div>'; return; }
+
+    // SDR role: show pipeline-generation panel (generation targets, not revenue)
+    loadSdrPanel();
 
     // Prompts
     if (promptsEl && _pipelineData.prompts?.length) {
