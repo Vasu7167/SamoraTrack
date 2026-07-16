@@ -3902,6 +3902,9 @@ function openHabitEditor() {
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
         '<span style="font-size:18px">'+(CHANNEL_ICONS[h.channel]||'⚙')+'</span>' +
         '<input value="'+esc(h.title)+'" onchange="_userHabits['+i+'].title=this.value" style="flex:1;padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>' +
+        (h.from_calendar || h.pushed_to_calendar
+          ? '<span title="Lives on your calendar" style="font-size:12px;flex-shrink:0">📅✓</span>'
+          : '<button onclick="pushHabitToCalendar('+i+')" title="Create a recurring calendar event from this habit" style="background:none;border:none;color:var(--gold);cursor:pointer;font-size:12px;padding:2px;flex-shrink:0">📅↗</button>') +
         '<button onclick="removeHabit('+i+')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;padding:2px">✕</button>' +
       '</div>' +
       '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">'+dayBtns+'</div>' +
@@ -3923,12 +3926,78 @@ function openHabitEditor() {
       '<button onclick="document.getElementById(\'habit-modal\').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3)">✕</button>' +
     '</div>' +
     '<div style="font-size:12px;color:var(--text3);margin-bottom:14px">Habits auto-generate tasks in SamoraTrack on the days you choose. Set it once, forget it.</div>' +
+    _renderHabitSuggestions() +
     '<div id="habit-rows">'+habitRows+'</div>' +
-    '<button onclick="addHabit()" style="width:100%;padding:9px;border:1px dashed var(--border2);border-radius:8px;background:none;color:var(--text3);font-size:13px;cursor:pointer;margin-bottom:12px">+ Add habit</button>' +
+    '<div style="display:flex;gap:8px;margin-bottom:12px">' +
+      '<button onclick="addHabit()" style="flex:1;padding:9px;border:1px dashed var(--border2);border-radius:8px;background:none;color:var(--text3);font-size:13px;cursor:pointer">+ Add habit</button>' +
+      '<button onclick="detectCalendarHabits()" id="detectHabitsBtn" style="flex:1;padding:9px;border:1px dashed var(--gold);border-radius:8px;background:none;color:var(--gold);font-size:13px;cursor:pointer">📅 Detect from calendar</button>' +
+    '</div>' +
     '<button onclick="saveHabits()" style="width:100%;padding:12px;border:none;border-radius:10px;background:var(--gold);color:#18160F;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--sans)">Save habits</button>' +
   '</div>';
   modal.addEventListener('click', function() { modal.remove(); });
   document.body.appendChild(modal);
+}
+
+// ── Habits ⇄ Calendar bridge ─────────────────────────────────────────────────
+var _habitSuggestions = null;
+
+function _renderHabitSuggestions() {
+  if (!_habitSuggestions || !_habitSuggestions.length) return '';
+  var h = '<div style="margin-bottom:12px"><div style="font-size:10px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">📅 Detected from your calendar</div>';
+  _habitSuggestions.forEach(function(s, i) {
+    var dayLbl = (s.days||[]).map(function(d){ return DAY_NAMES[d]; }).join('·');
+    h += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(160,117,42,0.07);border:1px solid rgba(160,117,42,0.2);border-radius:8px;margin-bottom:5px">';
+    h += '<span style="font-size:13px">'+(CHANNEL_ICONS[s.channel]||'📅')+'</span>';
+    h += '<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(s.title)+'</div>';
+    h += '<div style="font-size:10px;color:var(--text3)">'+dayLbl+' · '+esc(s.start_time||'')+' · '+s.duration_mins+'m · seen '+s.occurrences+'×'+(s.is_recurring_series?' · recurring series':'')+'</div></div>';
+    h += '<button onclick="addSuggestedHabit('+i+')" style="padding:4px 10px;border-radius:6px;background:var(--gold);border:none;color:#18160F;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--sans);flex-shrink:0">+ Add</button>';
+    h += '<button onclick="_habitSuggestions.splice('+i+',1);openHabitEditor()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;padding:0 2px;flex-shrink:0">✕</button>';
+    h += '</div>';
+  });
+  h += '</div>';
+  return h;
+}
+
+async function detectCalendarHabits() {
+  var btn = document.getElementById('detectHabitsBtn');
+  if (btn) { btn.textContent = '↻ Scanning…'; btn.disabled = true; }
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'detect_calendar_habits', tz: Intl.DateTimeFormat().resolvedOptions().timeZone }) });
+    var d = await r.json();
+    if (!d.ok) { showToast(d.error || 'Detection failed'); if (btn) { btn.textContent = '📅 Detect from calendar'; btn.disabled = false; } return; }
+    var existing = {};
+    (_userHabits||[]).forEach(function(h){ existing[(h.title||'').toLowerCase().replace(/\s*· sam habit$/,'')] = 1; });
+    _habitSuggestions = (d.suggestions||[]).filter(function(s){ return !existing[(s.title||'').toLowerCase()]; });
+    if (!_habitSuggestions.length) { showToast('No new recurring patterns found in the last 4 weeks'); if (btn) { btn.textContent = '📅 Detect from calendar'; btn.disabled = false; } return; }
+    openHabitEditor(); // re-render with suggestions section
+  } catch(e) { showToast('Error: ' + e.message); if (btn) { btn.textContent = '📅 Detect from calendar'; btn.disabled = false; } }
+}
+
+function addSuggestedHabit(i) {
+  var s = _habitSuggestions[i]; if (!s) return;
+  _userHabits.push({ id:'h'+Date.now(), title:s.title, channel:s.channel||'other', days:s.days||[1,2,3,4,5],
+    time_of_day:s.time_of_day||'morning', duration_mins:s.duration_mins||30, active:true,
+    from_calendar:true, start_time:s.start_time||null });
+  _habitSuggestions.splice(i, 1);
+  openHabitEditor();
+}
+
+async function pushHabitToCalendar(i) {
+  var h = _userHabits[i]; if (!h) return;
+  if (!(h.days||[]).length) { showToast('Pick at least one day first'); return; }
+  showToast('Creating recurring calendar event…');
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'push_habit_to_calendar', habit:h, tz: Intl.DateTimeFormat().resolvedOptions().timeZone }) });
+    var d = await r.json();
+    if (!d.ok) { showToast(d.error || 'Could not create event'); return; }
+    h.pushed_to_calendar = true;
+    fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'save_habits', habits:_userHabits }) }).catch(function(){});
+    showToast('📅 Recurring event created — first on ' + (d.first_occurrence||'next matching day'));
+    openHabitEditor();
+  } catch(e) { showToast('Error: ' + e.message); }
 }
 
 function toggleHabitDay(idx, dow) {
