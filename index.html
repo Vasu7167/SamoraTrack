@@ -8091,6 +8091,13 @@ function renderPipelineDeals(data) {
             '<span style="font-size:10px;color:' + tc.color + ';font-weight:500">' + tc.icon + ' ' + tc.label + '</span>' +
             scoreBar + healthBadge + sparkline +
           '</div>' +
+          // Risk chips — named, deterministic, each carries its evidence (tap to see)
+          ((d.risks && d.risks.length)
+            ? '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px">' + d.risks.map(function(rk) {
+                var rc = rk.severity === 'high' ? 'var(--coral)' : rk.severity === 'medium' ? 'var(--amber)' : 'var(--text3)';
+                return '<span onclick="event.stopPropagation();showToast(this.dataset.ev)" data-ev="' + esc((rk.evidence || '').replace(/"/g, '&quot;')) + '" title="' + esc(rk.evidence || '') + '" style="font-size:9px;font-weight:600;padding:1px 6px;border-radius:8px;border:1px solid ' + rc + ';color:' + rc + ';cursor:help">' + esc(rk.label) + '</span>';
+              }).join('') + '</div>'
+            : '') +
           '<div style="font-size:10px;color:var(--text3);font-style:italic;margin-bottom:4px">' + esc(d.verification_reason || '') + '</div>' +
           (d.hint_context ? '<div style="font-size:11px;color:var(--text3);font-style:italic">"' + esc(d.hint_context.slice(0, 100)) + '"</div>' : '') +
           '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:2px">' +
