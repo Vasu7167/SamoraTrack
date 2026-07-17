@@ -6301,6 +6301,84 @@ function _buildDealOverviewHTML(deal) {
   return html;
 }
 
+// ── Stakeholder insight: plain-English "how to work with them" ───────────────
+// One style chip + up to 5 direct pointers + MEDDPICC flags, receipts on tap.
+// Never shows framework jargon. Org-shared cache — one fetch serves the team.
+async function openStakeholderInsight(stakeholderId, name, opts) {
+  opts = opts || {};
+  document.getElementById('stk-insight-modal')?.remove();
+  var modal = document.createElement('div');
+  modal.id = 'stk-insight-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:99999;display:flex;align-items:flex-end;justify-content:center';
+  modal.innerHTML = '<div style="background:var(--bg);border-radius:16px 16px 0 0;width:100%;max-width:480px;padding:20px;max-height:85vh;overflow-y:auto" onclick="event.stopPropagation()">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
+      '<div style="font-size:15px;font-weight:700;color:var(--text)">🧭 ' + esc(name) + '</div>' +
+      '<button onclick="document.getElementById(\'stk-insight-modal\').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3)">✕</button>' +
+    '</div>' +
+    '<div style="margin-bottom:12px">' + _samoraIntelLabel('Read from their own messages — receipts on tap') + '</div>' +
+    '<div id="stk-insight-body"><div style="font-size:12px;color:var(--text3);padding:16px 0;text-align:center">Reading their communication…</div></div>' +
+  '</div>';
+  modal.addEventListener('click', function() { modal.remove(); });
+  document.body.appendChild(modal);
+
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({ action:'get_stakeholder_insight', stakeholder_id:stakeholderId, refresh:!!opts.refresh, web_research:!!opts.web }) });
+    var d = await r.json();
+    var body = document.getElementById('stk-insight-body');
+    if (!body) return;
+    if (!d.ok) { body.innerHTML = '<div style="color:var(--coral);font-size:12px">' + esc(d.error||'Insight unavailable') + '</div>'; return; }
+
+    var h = '';
+    if (d.stakeholder && (d.stakeholder.title || d.stakeholder.role)) {
+      h += '<div style="font-size:11px;color:var(--text3);margin-bottom:10px">' + esc(d.stakeholder.title||'') + (d.stakeholder.role ? ' · ' + esc(d.stakeholder.role.replace(/_/g,' ')) : '') + '</div>';
+    }
+    if (d.style) {
+      var confLbl = d.style.confidence === 'high' ? 'high confidence' : d.style.confidence === 'moderate' ? 'moderate confidence' : 'early read';
+      h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">' +
+        '<span style="font-size:13px;font-weight:700;padding:3px 10px;border-radius:14px;background:rgba(160,117,42,0.12);color:var(--gold)">' + esc(d.style.label) + '</span>' +
+        '<span style="font-size:10px;color:var(--text3)">' + confLbl + ' · ' + d.style.messages_scanned + ' messages</span>' +
+        '<span onclick="var el=document.getElementById(\'stk-receipts\');el.style.display=el.style.display===\'none\'?\'block\':\'none\'" style="font-size:10px;color:var(--gold);cursor:pointer;text-decoration:underline dotted">why?</span>' +
+      '</div>';
+      h += '<div id="stk-receipts" style="display:none;background:var(--surface2);border-radius:8px;padding:8px 10px;margin-bottom:8px">' +
+        (d.style.receipts||[]).map(function(rc){ return '<div style="font-size:11px;color:var(--text2);padding:2px 0">· ' + esc(rc) + '</div>'; }).join('') + '</div>';
+    } else if (d.archetype) {
+      h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="font-size:13px;font-weight:700;padding:3px 10px;border-radius:14px;background:var(--surface2);color:var(--text2)">' + esc(d.archetype.label) + '</span>' +
+        '<span style="font-size:10px;color:var(--text3)">based on their role — style not assessed yet (too few messages)</span></div>';
+    } else {
+      h += '<div style="font-size:12px;color:var(--text3);padding:8px 0">' + esc(d.empty_reason || 'Not enough information yet.') + '</div>';
+    }
+
+    if (d.tips && d.tips.length) {
+      h += '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:10px 0 6px">When talking to them</div>';
+      d.tips.forEach(function(tip) {
+        h += '<div style="display:flex;gap:7px;padding:5px 0;font-size:12px;color:var(--text)"><span style="color:var(--gold);flex-shrink:0">→</span><span>' + esc(tip) + '</span></div>';
+      });
+    }
+    if (d.meddpicc_flags && d.meddpicc_flags.length) {
+      h += '<div style="font-size:10px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.06em;margin:10px 0 6px">Deal gaps this person can close</div>';
+      d.meddpicc_flags.forEach(function(f) {
+        h += '<div style="display:flex;gap:7px;padding:5px 0;font-size:12px;color:var(--text2)"><span style="color:var(--amber);flex-shrink:0">⚑</span><span>' + esc(f) + '</span></div>';
+      });
+    }
+    if (d.web && d.web.bullets && d.web.bullets.length) {
+      h += '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:10px 0 6px">Public footprint</div>';
+      d.web.bullets.forEach(function(b) { h += '<div style="display:flex;gap:7px;padding:4px 0;font-size:12px;color:var(--text2)"><span style="flex-shrink:0">🔎</span><span>' + esc(b) + '</span></div>'; });
+      h += '<div style="font-size:10px;color:var(--amber);margin-top:4px">' + esc(d.web.label||'') + '</div>';
+    } else if (!d.web) {
+      h += '<button onclick="openStakeholderInsight(\'' + esc(stakeholderId) + '\',\'' + esc(name) + '\',{web:true})" style="width:100%;margin-top:12px;padding:8px;border-radius:8px;background:none;border:1px dashed var(--border2);color:var(--text3);font-family:var(--sans);font-size:11px;cursor:pointer">🔎 Check public footprint (uses AI — one search, shared with team)</button>';
+    }
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:8px;border-top:1px solid var(--border)">' +
+      '<span style="font-size:10px;color:var(--text3)">' + (d.cached ? '🗂 Shared team read from ' + esc((d.computed_at||'').slice(0,10)) : 'Computed just now') + '</span>' +
+      '<span onclick="openStakeholderInsight(\'' + esc(stakeholderId) + '\',\'' + esc(name) + '\',{refresh:true})" style="font-size:10px;color:var(--gold);cursor:pointer">↻ Recompute</span>' +
+    '</div>';
+    body.innerHTML = h;
+  } catch(e) {
+    var b = document.getElementById('stk-insight-body');
+    if (b) b.innerHTML = '<div style="color:var(--coral);font-size:12px">Error: ' + esc(e.message) + '</div>';
+  }
+}
+
 function _renderStakeholdersPane(stakeholders, deal) {
   var body = document.getElementById('deal-detail-body'); if (!body) return;
   var roleLabels = {champion:'Champion',economic_buyer:'Economic buyer',blocker:'Blocker',
@@ -6384,6 +6462,7 @@ function _renderStakeholdersPane(stakeholders, deal) {
         html += '<option value="' + rv + '"' + (s.meddpicc_role === rv ? ' selected' : '') + '>' + (rv ? (roleLabels[rv] || rv) : 'Set role…') + '</option>';
       }
       html += '</select>';
+      html += '<button onclick="openStakeholderInsight(\'' + s.id + '\',\'' + esc(s.full_name||'') + '\')" title="How to work with them" style="background:none;border:none;color:var(--gold);cursor:pointer;font-size:14px;padding:2px;flex-shrink:0">🧭</button>';
       html += '</div>'; // row
     }
   }
