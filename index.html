@@ -1658,6 +1658,10 @@ async function loadProfile() {
 }
 function doLogout() {
   localStorage.removeItem('dt-user'); currentUser = null; profile = null; allData = {};
+  // Habits are per-user server state — clear the in-memory copy so the next
+  // user who signs in on this device fetches THEIR habits instead of seeing
+  // (and accidentally saving over their profile with) the previous user's.
+  _userHabits = null; _habitSuggestions = null;
   document.getElementById('appScreen').classList.remove('active');
   document.getElementById('authScreen').classList.add('active');
 }
@@ -3814,13 +3818,24 @@ function renderBriefHtml(brief, brief_structured) {
 
 // ── Sales Habits ──────────────────────────────────────────────────────────────
 var DEFAULT_HABITS = [
-  { id:'h1', title:'LinkedIn outreach', channel:'linkedin', days:[1,2,3,4,5], time_of_day:'morning', duration_mins:30, active:true },
-  { id:'h2', title:'Email batch / follow-ups', channel:'email', days:[1,2,3,4,5], time_of_day:'morning', duration_mins:45, active:true },
-  { id:'h3', title:'Pipeline review & SamoraTrack log', channel:'other', days:[1,5], time_of_day:'afternoon', duration_mins:20, active:true },
+  { id:'h1', title:'LinkedIn outreach', channel:'linkedin', days:[1,2,3,4,5], start_time:'09:00', time_of_day:'morning', duration_mins:30, active:true },
+  { id:'h2', title:'Email batch / follow-ups', channel:'email', days:[1,2,3,4,5], start_time:'10:00', time_of_day:'morning', duration_mins:45, active:true },
+  { id:'h3', title:'Pipeline review & SamoraTrack log', channel:'other', days:[1,5], start_time:'16:00', time_of_day:'afternoon', duration_mins:20, active:true },
 ];
 var CHANNEL_ICONS = { linkedin:'🔗', email:'✉', call:'📞', whatsapp:'💬', other:'⚙' };
 var DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 var TIME_LABELS = { morning:'Morning (8-12)', afternoon:'Afternoon (12-5)', evening:'Evening (5+)', anytime:'Anytime' };
+// Concrete start times (30-min slots) — clean two-way calendar sync.
+// time_of_day is kept only as a derived legacy field for old saved habits.
+var HABIT_TIME_SLOTS = (function(){ var out=[]; for (var hh=6; hh<=21; hh++){ ['00','30'].forEach(function(mm){ out.push(String(hh).padStart(2,'0')+':'+mm); }); } return out; })();
+function _habitTimeLabel(h) {
+  if (h.start_time && /^\d{1,2}:\d{2}$/.test(h.start_time)) return h.start_time;
+  return TIME_LABELS[h.time_of_day] || 'Anytime';
+}
+function _timeOfDayFromStart(t) {
+  var hh = parseInt((t||'').split(':')[0]);
+  return isNaN(hh) ? 'anytime' : hh < 12 ? 'morning' : hh < 17 ? 'afternoon' : 'evening';
+}
 
 async function loadHabitsSection() {
   // Guard: if already loaded, just re-render
@@ -3838,12 +3853,22 @@ async function loadHabitsSection() {
       new Promise(function(resolve) { setTimeout(function() { resolve({ _timeout: true }); }, 5000); })
     ]);
     if (result && !result._timeout && Array.isArray(result.habits)) {
-      _userHabits = result.habits.length ? result.habits : DEFAULT_HABITS;
+      // Defaults ONLY when the server confirms this user has no habits yet.
+      // On error/timeout we must NOT fall back to DEFAULT_HABITS — a later
+      // "Save habits" would overwrite the user's real server-side habits.
+      _userHabits = result.habits.length ? result.habits : DEFAULT_HABITS.map(function(h){ return Object.assign({}, h); });
     } else {
-      _userHabits = DEFAULT_HABITS;
+      // Timeout / bad response: leave habits unloaded so the next visit
+      // retries — do NOT show defaults that could get saved over real data.
+      _userHabits = null;
     }
   } catch(e) {
-    _userHabits = DEFAULT_HABITS;
+    _userHabits = null;
+  }
+  if (_userHabits === null) {
+    var prevEl = document.getElementById('youHabitsPreview');
+    if (prevEl) prevEl.textContent = 'Couldn’t load your habits — check connection and reopen this tab.';
+    return;
   }
 
   _updateHabitsPreview();
@@ -3872,7 +3897,7 @@ function renderHabitsSection() {
     return '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)">' +
       '<span style="font-size:16px">'+(CHANNEL_ICONS[h.channel]||'⚙')+'</span>' +
       '<div style="flex:1"><div style="font-size:12px;font-weight:500;color:var(--text)">'+esc(h.title)+'</div>' +
-      '<div style="font-size:10px;color:var(--text3)">'+(TIME_LABELS[h.time_of_day]||h.time_of_day)+' · '+h.duration_mins+' min</div></div>' +
+      '<div style="font-size:10px;color:var(--text3)">'+_habitTimeLabel(h)+' · '+h.duration_mins+' min</div></div>' +
       '<span style="font-size:10px;color:var(--green);font-weight:600">AUTO</span>' +
     '</div>';
   }).join('') + '<div style="margin-top:6px"><button onclick="openHabitEditor()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-family:var(--sans);font-size:11px;padding:0">Edit habits →</button></div>';
@@ -3917,8 +3942,8 @@ function openHabitEditor() {
         '<select onchange="_userHabits['+i+'].channel=this.value" style="flex:1;padding:5px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;outline:none">' +
           ['email','linkedin','call','whatsapp','other'].map(function(c){return '<option value="'+c+'"'+(h.channel===c?' selected':'')+'>'+(CHANNEL_ICONS[c]||'')+'  '+c+'</option>';}).join('') +
         '</select>' +
-        '<select onchange="_userHabits['+i+'].time_of_day=this.value" style="flex:1;padding:5px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;outline:none">' +
-          ['morning','afternoon','evening','anytime'].map(function(t){return '<option value="'+t+'"'+(h.time_of_day===t?' selected':'')+'>'+TIME_LABELS[t]+'</option>';}).join('') +
+        '<select onchange="_userHabits['+i+'].start_time=this.value;_userHabits['+i+'].time_of_day=_timeOfDayFromStart(this.value)" style="flex:1;padding:5px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;outline:none">' +
+          HABIT_TIME_SLOTS.map(function(t){return '<option value="'+t+'"'+(h.start_time===t?' selected':'')+'>'+t+'</option>';}).join('') +
         '</select>' +
         '<input type="number" value="'+h.duration_mins+'" min="5" max="240" onchange="_userHabits['+i+'].duration_mins=parseInt(this.value)" style="width:56px;padding:5px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;outline:none" placeholder="mins"/>' +
       '</div>' +
@@ -4016,7 +4041,7 @@ function toggleHabitDay(idx, dow) {
 
 function removeHabit(idx) { _userHabits.splice(idx, 1); openHabitEditor(); }
 function addHabit() {
-  _userHabits.push({ id:'h'+Date.now(), title:'New habit', channel:'other', days:[1,2,3,4,5], time_of_day:'morning', duration_mins:30, active:true });
+  _userHabits.push({ id:'h'+Date.now(), title:'New habit', channel:'other', days:[1,2,3,4,5], start_time:'09:00', time_of_day:'morning', duration_mins:30, active:true });
   openHabitEditor();
 }
 
