@@ -6301,6 +6301,49 @@ function _buildDealOverviewHTML(deal) {
   return html;
 }
 
+// ── Samora Intel button: branded entry point for stakeholder insights ────────
+function _samoraIntelBtn(onclickStr, compact) {
+  return '<button onclick="' + onclickStr + '" title="Samora Intelligence: how to work with them" style="display:inline-flex;align-items:center;gap:5px;background:rgba(160,117,42,0.12);border:1px solid rgba(160,117,42,0.35);border-radius:12px;padding:' + (compact ? '2px 8px' : '6px 12px') + ';cursor:pointer;flex-shrink:0">'
+    + '<img src="icons/icon-48.png" alt="" style="width:' + (compact ? 12 : 16) + 'px;height:' + (compact ? 12 : 16) + 'px;border-radius:50%"/>'
+    + '<span style="font-size:' + (compact ? 9 : 10) + 'px;font-weight:700;letter-spacing:.08em;color:var(--gold);text-transform:uppercase;font-family:var(--sans)">Samora Intel</span>'
+    + '</button>';
+}
+
+// ── Meeting insights roster: all stakeholders in a meeting, tap for insight ──
+function openMeetingInsights(idx) {
+  var roster = (window._mtgRosters || [])[idx] || [];
+  document.getElementById('mtg-insight-modal')?.remove();
+  var modal = document.createElement('div');
+  modal.id = 'mtg-insight-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  var rows = roster.map(function(s, i) {
+    var initials = (s.full_name || '?').split(' ').map(function(w){ return w[0] || ''; }).slice(0,2).join('').toUpperCase();
+    var insLbl = s.insight && s.insight.label
+      ? '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:rgba(160,117,42,0.12);color:var(--gold)">' + esc(s.insight.label) + '</span>'
+      : '<span style="font-size:10px;color:var(--text3)">Not assessed yet, tap to read</span>';
+    var click = s.id ? 'openStakeholderInsight(\'' + esc(s.id) + '\',\'' + esc(s.full_name||'') + '\')' : '';
+    return '<div onclick="' + click + '" style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--border);cursor:' + (s.id ? 'pointer' : 'default') + '">' +
+      '<div style="width:34px;height:34px;border-radius:50%;background:var(--surface2);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--text2);flex-shrink:0">' + esc(initials) + '</div>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="font-size:13px;font-weight:500;color:var(--text)">' + esc(s.full_name||'') + '</div>' +
+        (s.title ? '<div style="font-size:11px;color:var(--text3)">' + esc(s.title) + '</div>' : '') +
+        (s.insight && s.insight.tip ? '<div style="font-size:11px;color:var(--text2);margin-top:2px">→ ' + esc(s.insight.tip) + '</div>' : '') +
+      '</div>' + insLbl +
+      (s.id ? '<span style="color:var(--text3);font-size:14px;flex-shrink:0">›</span>' : '') +
+    '</div>';
+  }).join('');
+  modal.innerHTML = '<div style="background:var(--bg);border-radius:16px 16px 0 0;width:100%;max-width:480px;padding:20px;max-height:85vh;overflow-y:auto" onclick="event.stopPropagation()">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
+      '<div style="font-size:15px;font-weight:700;color:var(--text)">Who is in this meeting</div>' +
+      '<button onclick="document.getElementById(\'mtg-insight-modal\').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3)">✕</button>' +
+    '</div>' +
+    '<div style="margin-bottom:12px">' + _samoraIntelLabel('Tap a person for how to work with them') + '</div>' +
+    (rows || '<div style="font-size:12px;color:var(--text3);padding:16px 0;text-align:center">No matched stakeholders for this meeting yet.</div>') +
+  '</div>';
+  modal.addEventListener('click', function() { modal.remove(); });
+  document.body.appendChild(modal);
+}
+
 // ── Stakeholder insight: plain-English "how to work with them" ───────────────
 // One style chip + up to 5 direct pointers + MEDDPICC flags, receipts on tap.
 // Never shows framework jargon. Org-shared cache — one fetch serves the team.
@@ -6462,7 +6505,7 @@ function _renderStakeholdersPane(stakeholders, deal) {
         html += '<option value="' + rv + '"' + (s.meddpicc_role === rv ? ' selected' : '') + '>' + (rv ? (roleLabels[rv] || rv) : 'Set role…') + '</option>';
       }
       html += '</select>';
-      html += '<button onclick="openStakeholderInsight(\'' + s.id + '\',\'' + esc(s.full_name||'') + '\')" title="How to work with them" style="background:none;border:none;color:var(--gold);cursor:pointer;font-size:14px;padding:2px;flex-shrink:0">🧭</button>';
+      html += _samoraIntelBtn('openStakeholderInsight(\'' + s.id + '\',\'' + esc(s.full_name||'') + '\')', true);
       html += '</div>'; // row
     }
   }
@@ -6620,6 +6663,7 @@ async function loadMeetingPrep() {
     html += '</div>';
     html += '<div id="meetingPrepList" style="display:none;margin-top:8px">';
 
+    window._mtgRosters = [];  // rebuilt on every render, indexes stay in sync
     meetings.forEach(function(m) {
       var hScore = m.health_score || 0;
       var hColor = hScore >= 70 ? 'var(--green)' : hScore >= 40 ? 'var(--amber)' : 'var(--coral)';
@@ -6649,14 +6693,13 @@ async function loadMeetingPrep() {
 
       // Stakeholders attending
       if (m.stakeholders_attending && m.stakeholders_attending.length) {
-        html += '<div style="font-size:11px;color:var(--text3);margin-bottom:3px">Attending: ' +
+        window._mtgRosters = window._mtgRosters || [];
+        var _rosterIdx = window._mtgRosters.push(m.stakeholders_attending) - 1;
+        html += '<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Attending: ' +
           m.stakeholders_attending.map(function(s) {
-            var ins = s.insight && (s.insight.label || s.insight.tip)
-              ? '<div style="font-size:10px;color:var(--gold);margin:1px 0 3px 0">' + (s.insight.label ? '🧭 ' + esc(s.insight.label) : '') + (s.insight.tip ? (s.insight.label ? ': ' : '🧭 ') + esc(s.insight.tip) : '') + '</div>'
-              : '';
-            var insBtn = s.id ? ' <span onclick="openStakeholderInsight(\'' + esc(s.id) + '\',\'' + esc(s.full_name||'') + '\')" style="cursor:pointer" title="How to work with them">🧭</span>' : '';
-            return '<strong>' + esc(s.full_name||'') + '</strong>' + (s.title ? ' (' + esc(s.title) + ')' : '') + insBtn + ins;
+            return '<strong>' + esc(s.full_name||'') + '</strong>' + (s.title ? ' (' + esc(s.title) + ')' : '');
           }).join(', ') + '</div>';
+        html += '<div style="margin-bottom:5px">' + _samoraIntelBtn('event.stopPropagation();openMeetingInsights(' + _rosterIdx + ')', false) + '</div>';
       }
 
       // Last email
