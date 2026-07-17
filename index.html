@@ -8965,8 +8965,66 @@ async function loadIntelConsole() {
         '</div>';
       });
     }
+    // ── Cross-deal patterns (30d vs prior 30d) ───────────────────────────
+    var pt = d.patterns;
+    if (pt) {
+      var trendMark = function(t){ return t === 'up' ? '<span style="color:var(--coral)">▲</span>' : t === 'down' ? '<span style="color:var(--green)">▼</span>' : '<span style="color:var(--text3)">·</span>'; };
+      var board = function(title, icon, rows, upIsBad) {
+        if (!rows || !rows.length) return '';
+        var b = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:10px 12px">';
+        b += '<div style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">' + icon + ' ' + title + '</div>';
+        rows.slice(0, 4).forEach(function(r) {
+          var mk = upIsBad ? trendMark(r.trend) : (r.trend === 'up' ? '<span style="color:var(--green)">▲</span>' : r.trend === 'down' ? '<span style="color:var(--coral)">▼</span>' : '<span style="color:var(--text3)">·</span>');
+          b += '<div style="display:flex;align-items:center;gap:6px;padding:3px 0" title="' + esc((r.accounts||[]).join(', ')) + '">' +
+            '<span style="font-size:11px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(r.name) + '</span>' +
+            '<span style="font-size:11px;font-weight:600;color:var(--text2)">' + r.count + '</span>' +
+            '<span style="font-size:9px;color:var(--text3)">was ' + r.prior + '</span>' + mk +
+          '</div>';
+        });
+        b += '</div>';
+        return b;
+      };
+      var boards = board('Competitors', '🏆', pt.competitors, true) + board('Pricing pressure', '💰', pt.pricing, true) +
+                   board('Product gaps', '🧩', pt.product_gaps, true) + board('Deal risks', '⚠', pt.deal_risks, true) +
+                   board('Expansion signals', '🚀', pt.expansion, false);
+      if (boards) {
+        h += '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:12px 0 6px">Cross-deal patterns (30 days, hover for accounts)</div>';
+        h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px">' + boards + '</div>';
+      }
+    }
     box.innerHTML = h;
+    _loadIntelAttention();
   } catch(e) { box.innerHTML = ''; }
+}
+
+// ── Attention allocation: your calendar hours vs deal health ─────────────────
+// Reuses get_time_analytics (Google Calendar based, per-user). Appended below
+// the console so a slow calendar read never blocks the strip.
+async function _loadIntelAttention() {
+  var box = document.getElementById('intelConsole'); if (!box) return;
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({ action:'get_time_analytics', days: 30 }) });
+    var d = await r.json();
+    if (!d.ok || !d.by_account || !d.by_account.length) return;
+    var over = d.by_account.filter(function(a){ return a.mismatch === 'over_invested'; });
+    var under = d.by_account.filter(function(a){ return a.mismatch === 'under_invested'; });
+    if (!over.length && !under.length) return;
+    var h = '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:12px 0 6px">Your attention vs deal health (30 days of calendar)</div>';
+    over.slice(0, 3).forEach(function(a) {
+      h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;margin-bottom:4px;background:var(--surface);border-left:2px solid var(--amber);border-radius:0 8px 8px 0">' +
+        '<span style="font-size:12px">⏳</span><div style="flex:1;font-size:12px;color:var(--text)">Over-invested: <strong>' + esc(a.account_name) + '</strong></div>' +
+        '<span style="font-size:11px;color:var(--text3)">' + a.hours + 'h on signal ' + (a.signal_score != null ? a.signal_score : 'n/a') + '</span></div>';
+    });
+    under.slice(0, 3).forEach(function(a) {
+      h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;margin-bottom:4px;background:var(--surface);border-left:2px solid var(--green);border-radius:0 8px 8px 0">' +
+        '<span style="font-size:12px">💎</span><div style="flex:1;font-size:12px;color:var(--text)">Under-invested: <strong>' + esc(a.account_name) + '</strong></div>' +
+        '<span style="font-size:11px;color:var(--text3)">only ' + a.hours + 'h on signal ' + (a.signal_score != null ? a.signal_score : 'n/a') + '</span></div>';
+    });
+    var wrap = document.createElement('div');
+    wrap.innerHTML = h;
+    box.appendChild(wrap);
+  } catch(e) { /* attention section is optional */ }
 }
 
 async function loadIntelligence() {
