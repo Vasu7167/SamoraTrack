@@ -944,6 +944,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
         <button class="intel-tab" onclick="setIntelType('expansion_signals',this)">📈 Expansion</button>
         <button class="intel-tab" onclick="setIntelType('risk_signals',this)">⚠ Risk</button>
       </div>
+      <div id="intelConsole" style="margin-bottom:16px"></div>
       <div id="intelStats" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:18px"></div>
       <div id="intelFeed" style="display:flex;flex-direction:column;gap:10px">
         <div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">Click <strong style="color:var(--gold)">↻ Refresh</strong> to extract intelligence from your named account meeting notes</div>
@@ -8913,7 +8914,63 @@ function boostSignals(accountId, accountName) {
   }, 300);
 }
 
+// ── Revenue Truth Console: 5 derived numbers + what changed this week ────────
+// All deterministic (DB deltas, zero AI). Every line carries its evidence.
+async function loadIntelConsole() {
+  var box = document.getElementById('intelConsole'); if (!box) return;
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({ action:'get_intel_console' }) });
+    var d = await r.json();
+    if (!d.ok) { box.innerHTML = ''; return; }
+    var st = d.strip || {};
+    var fmtK = function(v){ return v >= 1000000 ? '$' + (v/1000000).toFixed(1) + 'M' : '$' + Math.round(v/1000) + 'K'; };
+    var fd = st.forecast_delta;
+    var fdVal = fd ? (fd.verified_change >= 0 ? '+' : '') + fmtK(Math.abs(fd.verified_change)).replace('$', fd.verified_change < 0 ? '-$' : '$') : 'n/a';
+    var fdCol = fd ? (fd.verified_change >= 0 ? 'var(--green)' : 'var(--coral)') : 'var(--text3)';
+    var cards = [
+      { label:'Verified pipeline', value: fmtK(st.verified_usd||0), sub: st.verified_pct + '% of ' + fmtK(st.total_usd||0), color:'var(--green)' },
+      { label:'Verified moved 7d', value: fdVal, sub: fd ? fd.from_date + ' to ' + fd.to_date : 'needs 2 snapshots', color: fdCol },
+      { label:'High risks', value: String(st.high_risks||0), sub:'of ' + (st.total_deals||0) + ' open deals', color: st.high_risks ? 'var(--coral)' : 'var(--green)' },
+      { label:'Dark >14d', value: String(st.dark_deals||0), sub:'no verified contact', color: st.dark_deals ? 'var(--amber)' : 'var(--green)' },
+      { label:'Single-threaded', value: String(st.single_threaded||0), sub:'one active contact', color: st.single_threaded ? 'var(--amber)' : 'var(--green)' }
+    ];
+    var h = '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px">';
+    cards.forEach(function(c) {
+      h += '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:10px 12px">' +
+        '<div style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">' + c.label + '</div>' +
+        '<div style="font-size:20px;font-weight:600;color:' + c.color + ';line-height:1.1">' + esc(c.value) + '</div>' +
+        '<div style="font-size:10px;color:var(--text3);margin-top:2px">' + esc(c.sub) + '</div>' +
+      '</div>';
+    });
+    h += '</div>';
+
+    var changes = d.changes || [];
+    var typeIcon = { signal_drop:'📉', signal_gain:'📈', tier_up:'✅', tier_down:'↘', went_dark:'🌑', single_threaded:'🧵', champion_quiet:'👤', close_slipped:'⏰', competitor_spike:'🏆' };
+    var sevCol = { high:'var(--coral)', medium:'var(--amber)', low:'var(--green)' };
+    h += '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">What changed this week' + (d.scope !== 'self' ? ' (' + d.scope + ')' : '') + '</div>';
+    if (!changes.length) {
+      h += '<div style="font-size:12px;color:var(--text3);font-style:italic;padding:4px 0 8px">No significant movements in the last 7 days. Steady week.</div>';
+    } else {
+      changes.forEach(function(c) {
+        var col = sevCol[c.severity] || 'var(--text3)';
+        var click = c.account_id ? 'openAccountTimeline(\'' + esc(c.account_id) + '\',\'' + esc(c.account||'') + '\')' : '';
+        h += '<div ' + (click ? 'onclick="' + click + '" ' : '') + 'style="display:flex;align-items:flex-start;gap:8px;padding:7px 10px;margin-bottom:4px;background:var(--surface);border-left:2px solid ' + col + ';border-radius:0 8px 8px 0;' + (click ? 'cursor:pointer' : '') + '">' +
+          '<span style="font-size:12px;flex-shrink:0">' + (typeIcon[c.type]||'•') + '</span>' +
+          '<div style="flex:1;min-width:0">' +
+            '<div style="font-size:12px;font-weight:500;color:var(--text)">' + esc(c.headline) + '</div>' +
+            '<div style="font-size:10px;color:var(--text3);margin-top:1px">' + esc(c.evidence||'') + '</div>' +
+          '</div>' +
+          (click ? '<span style="color:var(--text3);font-size:12px;flex-shrink:0">›</span>' : '') +
+        '</div>';
+      });
+    }
+    box.innerHTML = h;
+  } catch(e) { box.innerHTML = ''; }
+}
+
 async function loadIntelligence() {
+  loadIntelConsole();  // fire in parallel, renders its own section
   var feed = document.getElementById('intelFeed');
   var isManager = canSeeTeam(profile ? profile.role : '');
   var days = parseInt((document.getElementById('intelDaysFilter') || {}).value || '30') || 30;
