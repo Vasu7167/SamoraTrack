@@ -6664,13 +6664,16 @@ async function loadForecastPanel() {
 var _orgMembers = null;
 
 async function _ensureOrgMembers() {
-  if (_orgMembers) return _orgMembers;
+  // NB: empty array must NOT count as "loaded" — a single failed fetch would
+  // otherwise poison the cache and every dropdown stays empty forever.
+  if (_orgMembers && _orgMembers.length) return _orgMembers;
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
       body:JSON.stringify({action:'get_org_members'}) });
     var d = await r.json();
-    _orgMembers = d.members || [];
-  } catch(e) { _orgMembers = []; }
+    _orgMembers = Array.isArray(d.members) ? d.members : [];
+    if (!_orgMembers.length && d.error) showToast('Could not load team members: ' + d.error);
+  } catch(e) { _orgMembers = []; showToast('Could not load team members'); }
   return _orgMembers;
 }
 
