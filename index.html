@@ -3787,6 +3787,7 @@ async function loadSamBrief(force) {
       return;
     }
     if (!d.ok) { out.innerHTML = '<div style="font-size:12px;color:var(--text3)">'+esc(d.error||'Brief unavailable')+'</div>'; return; }
+    if (d.daily_limit && force) showToast('SAM brief refreshes once per day — showing today’s brief');
     _briefLoadedDate = todayKey2;
     if (!d.cached) { try { localStorage.setItem(_BRIEF_CACHE_KEY, JSON.stringify({ brief: d.brief, brief_structured: d.brief_structured, date: todayKey2 })); } catch(e) {} }
     out.innerHTML = renderBriefHtml(d.brief, d.brief_structured) +
@@ -6124,17 +6125,26 @@ async function saveCompanyLinkedIn(accountId, url) {
   } catch(e) {}
 }
 
-async function _renderSignalsPane(deal) {
+async function _renderSignalsPane(deal, forceRefresh) {
   var body = document.getElementById('deal-detail-body'); if (!body) return;
-  body.innerHTML = '<div style="padding:20px 0;text-align:center;font-size:13px;color:var(--text3)">↻ Researching ' + esc(deal.account) + '…</div>';
+  body.innerHTML = '<div style="padding:20px 0;text-align:center;font-size:13px;color:var(--text3)">↻ ' + (forceRefresh ? 'Refreshing' : 'Loading signals for') + ' ' + esc(deal.account) + '…</div>';
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
-      body:JSON.stringify({action:'get_market_signals', account_id:deal.id, account_name:deal.account, region:deal.region||''}) });
+      body:JSON.stringify({action:'get_market_signals', account_id:deal.id, account_name:deal.account, region:deal.region||'', refresh: !!forceRefresh}) });
     var d = await r.json();
     var html = '';
     var typeIcons = {hiring:'👥',funding:'💰',expansion:'🚀',contraction:'📉',leadership:'👤',technology:'⚙️',financial:'📊',competitive:'🏆'};
     var sigColors = {positive:'var(--green)',negative:'var(--coral)',neutral:'var(--amber)'};
-    if (d.cached) html += '<div style="font-size:10px;color:var(--amber);margin-bottom:10px;padding:4px 8px;background:rgba(160,117,42,0.1);border-radius:6px">⚠ Live refresh unavailable (AI quota) — showing signals from ' + esc(((d.cached_at||'').split('T')[0])||'earlier') + '</div>';
+    if (d.cached) {
+      // Fresh shared cache (<24h) = the NORMAL path — one rep fetches, the
+      // whole deal team reads it. Stale cache = quota-degraded fallback.
+      var cachedAtMs = d.cached_at ? new Date(d.cached_at).getTime() : 0;
+      var isFreshShare = cachedAtMs && (Date.now() - cachedAtMs) < 24*3600*1000;
+      var cachedLbl = d.cached_at ? new Date(d.cached_at).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : 'earlier';
+      html += isFreshShare
+        ? '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:10px;color:var(--text3);margin-bottom:10px;padding:4px 8px;background:var(--surface2);border-radius:6px"><span>🗂 Shared team fetch from ' + esc(cachedLbl) + ' — saved AI quota</span><button onclick="_renderSignalsPane(_currentDealDetail.deal, true)" style="background:none;border:none;color:var(--gold);cursor:pointer;font-size:10px;font-family:var(--sans);padding:0;flex-shrink:0">↻ Refresh live</button></div>'
+        : '<div style="font-size:10px;color:var(--amber);margin-bottom:10px;padding:4px 8px;background:rgba(160,117,42,0.1);border-radius:6px">⚠ Live refresh unavailable (AI quota) — showing signals from ' + esc(cachedLbl) + '</div>';
+    }
 
     function renderSignalCards(signals) {
       if (!signals || !signals.length) return '<div style="font-size:12px;color:var(--text3);padding:8px 0;font-style:italic">No signals found for this scope.</div>';
