@@ -2934,8 +2934,10 @@ function renderSamAlerts() {
 async function loadMyAccounts() {
   const list = document.getElementById('myAccountsList'); if (!list || !currentUser?.token || !profile?.org_id) return;
   try {
-    const rows = await sbGet('org_accounts?user_id=eq.' + currentUser.id + '&org_id=eq.' + profile.org_id + '&select=id,account_name,domain,additional_domains,region,deal_value,deal_value_usd&order=account_name');
+    // Unified mapping: show accounts where I'm the owner/AE OR the assigned SDR
+    const rows = await sbGet('org_accounts?or=(user_id.eq.' + currentUser.id + ',sdr_user_id.eq.' + currentUser.id + ')&org_id=eq.' + profile.org_id + '&select=id,account_name,domain,additional_domains,region,deal_value,deal_value_usd,user_id,sdr_user_id&order=account_name');
     if (!rows || !rows.length) { list.innerHTML = '<div style="font-size:12px;color:var(--text3);font-style:italic">No accounts assigned yet.</div>'; return; }
+    var _canAssignTeam = ['manager','director','executive','admin','super_admin'].includes(profile?.role);
     list.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:6px">' + rows.map(r => {
       var hasValue = r.deal_value != null;
       var extraDomains = (r.additional_domains || []).length;
@@ -2948,6 +2950,10 @@ async function loadMyAccounts() {
         valueTag +
         '<button onclick="openDealValueForm(\'' + r.id + '\',\'' + esc(r.account_name) + '\')" style="background:none;border:none;color:' + (hasValue ? 'var(--text3)' : 'var(--amber)') + ';cursor:pointer;font-size:11px;padding:0" title="' + (hasValue ? 'Edit deal value' : 'Add deal value') + '">' + (hasValue ? '💰' : '+ $') + '</button>' +
         '<button onclick="openDomainManager(\'' + r.id + '\',\'' + esc(r.account_name) + '\',\'' + esc(r.domain||'') + '\',' + JSON.stringify(r.additional_domains||[]) + ')" style="background:none;border:none;color:' + (extraDomains ? 'var(--green)' : 'var(--text3)') + ';cursor:pointer;font-size:11px;padding:0" title="Manage email domains for signal matching">🌐' + (extraDomains ? '<sup style=\'font-size:8px\'>+'+extraDomains+'</sup>' : '') + '</button>' +
+        (r.sdr_user_id && r.sdr_user_id === currentUser.id && r.user_id !== currentUser.id
+          ? '<span style="font-size:9px;font-weight:700;color:var(--gold);background:rgba(160,117,42,0.12);border-radius:4px;padding:1px 5px" title="You are the SDR on this account">SDR</span>' : '') +
+        (_canAssignTeam
+          ? '<button onclick="openTeamAssign(\'' + r.id + '\',\'' + esc(r.account_name) + '\',\'' + (r.user_id||'') + '\',\'' + (r.sdr_user_id||'') + '\')" style="background:none;border:none;color:' + (r.sdr_user_id ? 'var(--green)' : 'var(--text3)') + ';cursor:pointer;font-size:11px;padding:0" title="Assign AE / SDR">👥</button>' : '') +
         '<button onclick="removeMyAccount(\'' + r.id + '\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:0">✕</button>' +
       '</div>';
     }).join('') + '</div>';
@@ -4473,6 +4479,16 @@ async function autoCompleteTasks(silent) {
         var sentData = await r.json();
         var sentEmails = sentData.emails || [];
         emailTasks.forEach(function(task) {
+          // OOO re-engagement tasks carry the contact's email address —
+          // strongest possible evidence: did we actually send THEM a mail today?
+          if (task.oooContactEmail) {
+            var oooHit = sentEmails.find(function(e) { return ((e.to||'')+' '+(e.subject||'')).toLowerCase().includes(task.oooContactEmail); });
+            if (oooHit) {
+              task.done = true; task.autoCompleted = true; task.verifiedVia = 'ooo_reengage'; count++;
+              autoLog.push('📬 ' + esc(task.text.slice(0,50)) + ' → sent to ' + esc(task.oooContactEmail));
+            }
+            return; // never fall through to fuzzy word matching for OOO tasks
+          }
           var taskWords = task.text.toLowerCase().replace(/[^a-z0-9\s]/g,' ').split(/\s+/).filter(function(w){return w.length>3 && !['mail','send','from','with','that','this','have','will','been','they','team','respond','reply','follow','reach','write','email','share'].includes(w);});
           var matched = sentEmails.find(function(e) {
             var et = ((e.subject||'')+' '+(e.to||'')+' '+(e.snippet||'')).toLowerCase();
@@ -6646,6 +6662,62 @@ async function loadForecastPanel() {
 
 // ── SDR Attribution ───────────────────────────────────────────────────────────
 var _orgMembers = null;
+
+async function _ensureOrgMembers() {
+  if (_orgMembers) return _orgMembers;
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({action:'get_org_members'}) });
+    var d = await r.json();
+    _orgMembers = d.members || [];
+  } catch(e) { _orgMembers = []; }
+  return _orgMembers;
+}
+
+// ── Team assignment: AE + SDR on one account (manager+) ──────────────────────
+// One account row, both roles mapped — the SDR and AE always work the SAME
+// stored account. "No AE" = manager takes ownership.
+async function openTeamAssign(accountId, accountName, currentAe, currentSdr) {
+  await _ensureOrgMembers();
+  document.getElementById('teamAssignPanel')?.remove();
+  var panel = document.createElement('div');
+  panel.id = 'teamAssignPanel';
+  panel.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:99999;display:flex;align-items:center;justify-content:center';
+  var memberOpts = function(selected, roleFilter) {
+    return '<option value="">— None —</option>' + (_orgMembers||[]).filter(function(m){ return !roleFilter || roleFilter.includes(m.role) || !m.role; }).map(function(m) {
+      var name = m.display_name || (m.email||'').split('@')[0];
+      return '<option value="' + esc(m.user_id) + '"' + (m.user_id === selected ? ' selected' : '') + '>' + esc(name) + ' (' + esc(m.role||'member') + ')</option>';
+    }).join('');
+  };
+  var html = '<div style="background:var(--bg);border-radius:14px;padding:20px;width:320px;max-width:90vw" onclick="event.stopPropagation()">';
+  html += '<div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px">👥 Assign team</div>';
+  html += '<div style="font-size:12px;color:var(--text3);margin-bottom:14px">' + esc(accountName) + ' — AE and SDR share this one account record, so both always see the same data.</div>';
+  html += '<div style="margin-bottom:12px"><div style="font-size:11px;color:var(--text3);margin-bottom:5px">AE / Owner <span style="opacity:.7">(None = you own it)</span></div>';
+  html += '<select id="taAeSelect" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none">' + memberOpts(currentAe, null) + '</select></div>';
+  html += '<div style="margin-bottom:14px"><div style="font-size:11px;color:var(--text3);margin-bottom:5px">SDR</div>';
+  html += '<select id="taSdrSelect" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none">' + memberOpts(currentSdr, null) + '</select></div>';
+  html += '<div style="display:flex;gap:8px">';
+  html += '<button onclick="saveTeamAssign(\'' + esc(accountId) + '\')" style="flex:1;padding:9px;border-radius:8px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Save</button>';
+  html += '<button onclick="document.getElementById(\'teamAssignPanel\').remove()" style="padding:9px 14px;border-radius:8px;background:none;border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);font-size:12px;cursor:pointer">Cancel</button>';
+  html += '</div></div>';
+  panel.innerHTML = html;
+  panel.addEventListener('click', function(e) { if (e.target === panel) panel.remove(); });
+  document.body.appendChild(panel);
+}
+
+async function saveTeamAssign(accountId) {
+  var ae  = document.getElementById('taAeSelect')?.value || '';
+  var sdr = document.getElementById('taSdrSelect')?.value || '';
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({ action:'assign_account_team', account_id:accountId, ae_user_id:ae, sdr_user_id:sdr }) });
+    var d = await r.json();
+    if (!d.ok) { showToast(d.error || 'Assignment failed'); return; }
+    document.getElementById('teamAssignPanel')?.remove();
+    showToast('Team assigned');
+    loadMyAccounts();
+  } catch(e) { showToast('Error: ' + e.message); }
+}
 
 async function showAttributionPicker(dealId) {
   // Load org members if not cached
