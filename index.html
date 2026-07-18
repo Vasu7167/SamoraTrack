@@ -8928,43 +8928,73 @@ async function loadIntelConsole() {
     var fd = st.forecast_delta;
     var fdVal = fd ? (fd.verified_change >= 0 ? '+' : '') + fmtK(Math.abs(fd.verified_change)).replace('$', fd.verified_change < 0 ? '-$' : '$') : 'n/a';
     var fdCol = fd ? (fd.verified_change >= 0 ? 'var(--green)' : 'var(--coral)') : 'var(--text3)';
-    var cards = [
+    var changes = d.changes || [];
+    var typeIcon = { signal_drop:'📉', signal_gain:'📈', tier_up:'✅', tier_down:'↘', went_dark:'🌑', single_threaded:'🧵', champion_quiet:'👤', close_slipped:'⏰', competitor_spike:'🏆' };
+    var sevCol = { high:'var(--coral)', medium:'var(--amber)', low:'var(--green)' };
+    var needsDecision = changes.filter(function(c){ return c.severity === 'high'; });
+    var forAwareness = changes.filter(function(c){ return c.severity !== 'high'; });
+
+    // ── Headline: one deterministic sentence, the entry point for everything below ──
+    var headline = 'Verified pipeline is ' + fmtK(st.verified_usd||0) + ' (' + (st.verified_pct||0) + '% of ' + fmtK(st.total_usd||0) + ' total).';
+    if (fd) headline += ' ' + (fd.verified_change >= 0 ? 'Up' : 'Down') + ' ' + fmtK(Math.abs(fd.verified_change)) + ' this week.';
+    if (needsDecision.length) headline += ' ' + needsDecision.length + ' deal' + (needsDecision.length !== 1 ? 's need' : ' needs') + ' a decision.';
+    else headline += ' Nothing urgent flagged this week.';
+    var h = '<div style="font-size:14px;font-weight:600;color:var(--text);line-height:1.4;padding:2px 0 12px">' + esc(headline) + '</div>';
+
+    // ── Truth strip, demoted: 3 headline tiles + 2 folded behind a toggle ──
+    var primaryCards = [
       { label:'Verified pipeline', value: fmtK(st.verified_usd||0), sub: st.verified_pct + '% of ' + fmtK(st.total_usd||0), color:'var(--green)' },
       { label:'Verified moved 7d', value: fdVal, sub: fd ? fd.from_date + ' to ' + fd.to_date : 'needs 2 snapshots', color: fdCol },
-      { label:'High risks', value: String(st.high_risks||0), sub:'of ' + (st.total_deals||0) + ' open deals', color: st.high_risks ? 'var(--coral)' : 'var(--green)' },
+      { label:'High risks', value: String(st.high_risks||0), sub:'of ' + (st.total_deals||0) + ' open deals', color: st.high_risks ? 'var(--coral)' : 'var(--green)' }
+    ];
+    var moreCards = [
       { label:'Dark >14d', value: String(st.dark_deals||0), sub:'no verified contact', color: st.dark_deals ? 'var(--amber)' : 'var(--green)' },
       { label:'Single-threaded', value: String(st.single_threaded||0), sub:'one active contact', color: st.single_threaded ? 'var(--amber)' : 'var(--green)' }
     ];
-    var h = '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px">';
-    cards.forEach(function(c) {
-      h += '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:10px 12px">' +
+    var tile = function(c) {
+      return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:10px 12px">' +
         '<div style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">' + c.label + '</div>' +
         '<div style="font-size:20px;font-weight:600;color:' + c.color + ';line-height:1.1">' + esc(c.value) + '</div>' +
         '<div style="font-size:10px;color:var(--text3);margin-top:2px">' + esc(c.sub) + '</div>' +
       '</div>';
-    });
-    h += '</div>';
+    };
+    var stripOpen = !!window._intelStripOpen;
+    h += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:6px">' + primaryCards.map(tile).join('') + '</div>';
+    if (stripOpen) h += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:6px">' + moreCards.map(tile).join('') + '</div>';
+    h += '<div onclick="window._intelStripOpen=!window._intelStripOpen;loadIntelConsole()" style="font-size:10px;color:var(--text3);cursor:pointer;user-select:none;margin-bottom:14px">' + (stripOpen ? '▴ fewer numbers' : '▾ dark deals, single-threaded count') + '</div>';
 
-    var changes = d.changes || [];
-    var typeIcon = { signal_drop:'📉', signal_gain:'📈', tier_up:'✅', tier_down:'↘', went_dark:'🌑', single_threaded:'🧵', champion_quiet:'👤', close_slipped:'⏰', competitor_spike:'🏆' };
-    var sevCol = { high:'var(--coral)', medium:'var(--amber)', low:'var(--green)' };
-    h += '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">What changed this week' + (d.scope !== 'self' ? ' (' + d.scope + ')' : '') + '</div>';
-    if (!changes.length) {
-      h += '<div style="font-size:12px;color:var(--text3);font-style:italic;padding:4px 0 8px">No significant movements in the last 7 days. Steady week.</div>';
+    // ── Needs a decision: high-severity changes, always visible ──────────
+    var changeRow = function(c) {
+      var col = sevCol[c.severity] || 'var(--text3)';
+      var click = c.account_id ? 'openAccountTimeline(\'' + esc(c.account_id) + '\',\'' + esc(c.account||'') + '\')' : '';
+      return '<div ' + (click ? 'onclick="' + click + '" ' : '') + 'style="display:flex;align-items:flex-start;gap:8px;padding:7px 10px;margin-bottom:4px;background:var(--surface);border-left:2px solid ' + col + ';border-radius:0 8px 8px 0;' + (click ? 'cursor:pointer' : '') + '">' +
+        '<span style="font-size:12px;flex-shrink:0">' + (typeIcon[c.type]||'•') + '</span>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-size:12px;font-weight:500;color:var(--text)">' + esc(c.headline) + '</div>' +
+          '<div style="font-size:10px;color:var(--text3);margin-top:1px">' + esc(c.evidence||'') + '</div>' +
+        '</div>' +
+        (click ? '<span style="color:var(--text3);font-size:12px;flex-shrink:0">›</span>' : '') +
+      '</div>';
+    };
+    h += '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Needs a decision' + (d.scope !== 'self' ? ' (' + d.scope + ')' : '') + '</div>';
+    if (!needsDecision.length) {
+      h += '<div style="font-size:12px;color:var(--text3);font-style:italic;padding:4px 0 10px">Nothing urgent. Steady week.</div>';
     } else {
-      changes.forEach(function(c) {
-        var col = sevCol[c.severity] || 'var(--text3)';
-        var click = c.account_id ? 'openAccountTimeline(\'' + esc(c.account_id) + '\',\'' + esc(c.account||'') + '\')' : '';
-        h += '<div ' + (click ? 'onclick="' + click + '" ' : '') + 'style="display:flex;align-items:flex-start;gap:8px;padding:7px 10px;margin-bottom:4px;background:var(--surface);border-left:2px solid ' + col + ';border-radius:0 8px 8px 0;' + (click ? 'cursor:pointer' : '') + '">' +
-          '<span style="font-size:12px;flex-shrink:0">' + (typeIcon[c.type]||'•') + '</span>' +
-          '<div style="flex:1;min-width:0">' +
-            '<div style="font-size:12px;font-weight:500;color:var(--text)">' + esc(c.headline) + '</div>' +
-            '<div style="font-size:10px;color:var(--text3);margin-top:1px">' + esc(c.evidence||'') + '</div>' +
-          '</div>' +
-          (click ? '<span style="color:var(--text3);font-size:12px;flex-shrink:0">›</span>' : '') +
-        '</div>';
-      });
+      needsDecision.forEach(function(c) { h += changeRow(c); });
     }
+
+    // ── For your awareness: medium/low severity, collapsed by default ─────
+    if (forAwareness.length) {
+      var awareOpen = !!window._intelAwareOpen;
+      h += '<div onclick="window._intelAwareOpen=!window._intelAwareOpen;loadIntelConsole()" style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:var(--surface2);border-radius:6px;cursor:pointer;user-select:none;margin:10px 0 ' + (awareOpen ? '5px' : '0') + '">' +
+        '<span style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">For your awareness · ' + forAwareness.length + '</span>' +
+        '<span style="font-size:11px;color:var(--text3)">' + (awareOpen ? '▴' : '▾') + '</span>' +
+      '</div>';
+      if (awareOpen) forAwareness.forEach(function(c) { h += changeRow(c); });
+    }
+    // Marker: the async rollup below (manager+ only) inserts itself here,
+    // ahead of the exploratory patterns/attention sections.
+    h += '<div id="intelRollupMarker"></div>';
     // ── Cross-deal patterns (30d vs prior 30d) ───────────────────────────
     var pt = d.patterns;
     if (pt) {
@@ -9005,8 +9035,51 @@ async function loadIntelConsole() {
       h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px">' + boards + '</div>';
     }
     box.innerHTML = h;
+    if (canSeeTeam(profile ? profile.role : '')) _loadIntelCoachingRollup();
     _loadIntelAttention();
   } catch(e) { box.innerHTML = ''; }
+}
+
+// ── Manager/director rollup: who on the team needs a nudge, aggregated from ──
+// coaching_alerts (already generated, zero new AI). Inserts itself just above
+// the exploratory patterns/attention sections via #intelRollupMarker.
+async function _loadIntelCoachingRollup() {
+  var marker = document.getElementById('intelRollupMarker'); if (!marker || !marker.parentNode) return;
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({ action:'get_coaching_rollup' }) });
+    var d = await r.json();
+    if (!d.ok || !d.reps || !d.reps.length) return;
+    var sevColor = { high:'var(--coral)', medium:'var(--amber)', low:'var(--blue)' };
+    var h = '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:2px 0 8px">Your team, ' + d.total_alerts + ' open alert' + (d.total_alerts!==1?'s':'') + '</div>';
+    h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:6px">';
+    d.reps.slice(0, 8).forEach(function(rep) {
+      h += '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:12px 14px">';
+      h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border2)">';
+      h += '<span style="font-size:12px;font-weight:700;color:var(--text)">' + esc(rep.name) + '</span>';
+      h += '<div style="display:flex;gap:4px">';
+      if (rep.high) h += '<span style="font-size:9px;font-weight:700;color:var(--coral);background:var(--coral-lt);padding:2px 7px;border-radius:8px">' + rep.high + ' high</span>';
+      if (rep.medium) h += '<span style="font-size:9px;font-weight:700;color:var(--amber);background:var(--amber-lt);padding:2px 7px;border-radius:8px">' + rep.medium + ' med</span>';
+      if (!rep.high && !rep.medium && rep.low) h += '<span style="font-size:9px;font-weight:700;color:var(--text3);background:rgba(150,150,150,0.1);padding:2px 7px;border-radius:8px">' + rep.low + ' low</span>';
+      h += '</div></div>';
+      if (!rep.alerts || !rep.alerts.length) {
+        h += '<div style="font-size:11px;color:var(--text3);font-style:italic">No open alerts</div>';
+      } else {
+        rep.alerts.forEach(function(a) {
+          var col = sevColor[a.severity] || 'var(--text3)';
+          h += '<div style="display:flex;align-items:center;gap:6px;padding:2px 0;font-size:11px;color:var(--text2)">' +
+            '<span style="width:5px;height:5px;border-radius:50%;background:' + col + ';flex-shrink:0"></span>' +
+            '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(a.title) + '</span>' +
+          '</div>';
+        });
+      }
+      h += '</div>';
+    });
+    h += '</div>';
+    var wrap = document.createElement('div');
+    wrap.innerHTML = h;
+    marker.parentNode.insertBefore(wrap, marker);
+  } catch(e) { /* rollup is optional, never blocks the console */ }
 }
 
 // ── Attention allocation: your calendar hours vs deal health ─────────────────
