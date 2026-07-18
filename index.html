@@ -9046,8 +9046,17 @@ async function loadIntelConsole() {
 async function _loadIntelCoachingRollup() {
   var marker = document.getElementById('intelRollupMarker'); if (!marker || !marker.parentNode) return;
   try {
-    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
-      body:JSON.stringify({ action:'get_coaching_rollup' }) });
+    var call = function() {
+      return fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+        body:JSON.stringify({ action:'get_coaching_rollup' }) });
+    };
+    var r = await call();
+    // This section fires last in a long await chain; if the session token has
+    // lapsed by now the gateway 401s. Refresh once and retry before giving up.
+    if (r.status === 401 && currentUser && currentUser.refresh_token) {
+      var ok = await refreshToken();
+      if (ok) r = await call();
+    }
     var d = await r.json();
     if (!d.ok || !d.reps || !d.reps.length) return;
     var sevColor = { high:'var(--coral)', medium:'var(--amber)', low:'var(--blue)' };
