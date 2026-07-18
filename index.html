@@ -8992,49 +8992,14 @@ async function loadIntelConsole() {
       '</div>';
       if (awareOpen) forAwareness.forEach(function(c) { h += changeRow(c); });
     }
-    // Marker: the async rollup below (manager+ only) inserts itself here,
-    // ahead of the exploratory patterns/attention sections.
+    // Marker: the async rollup below (manager+ only) inserts itself here.
     h += '<div id="intelRollupMarker"></div>';
-    // ── Cross-deal patterns (30d vs prior 30d) ───────────────────────────
-    var pt = d.patterns;
-    if (pt) {
-      var badgeCol = { up_bad:'var(--coral)', up_good:'var(--green)', down_bad:'var(--coral)', down_good:'var(--green)', flat:'var(--text3)' };
-      var badgeBg = { up_bad:'var(--coral-lt)', up_good:'var(--green-lt)', down_bad:'var(--coral-lt)', down_good:'var(--green-lt)', flat:'rgba(150,150,150,0.1)' };
-      var board = function(title, icon, rows, upIsBad) {
-        var b = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;min-height:118px">';
-        b += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:9px;padding-bottom:8px;border-bottom:1px solid var(--border2)">' +
-          '<span style="font-size:14px;line-height:1">' + icon + '</span>' +
-          '<span style="font-size:11px;font-weight:700;color:var(--text2)">' + title + '</span>' +
-        '</div>';
-        if (!rows || !rows.length) {
-          b += '<div style="flex:1;display:flex;align-items:center;font-size:11px;color:var(--text3);font-style:italic">No signals in the last 30 days</div>';
-        } else {
-          b += '<div style="display:flex;flex-direction:column;gap:6px">';
-          rows.slice(0, 4).forEach(function(r) {
-            var delta = r.count - r.prior;
-            var key = delta === 0 ? 'flat' : (delta > 0 ? (upIsBad ? 'up_bad' : 'up_good') : (upIsBad ? 'down_good' : 'down_bad'));
-            var badText = delta === 0 ? 'flat' : (delta > 0 ? '+' + delta : String(delta));
-            b += '<div style="display:flex;align-items:center;gap:8px" title="' + esc((r.accounts||[]).join(', ')) + '">' +
-              '<span style="font-size:11px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(r.name) + '</span>' +
-              '<span style="font-size:12px;font-weight:700;color:var(--text)">' + r.count + '</span>' +
-              '<span style="font-size:9px;font-weight:700;color:' + badgeCol[key] + ';background:' + badgeBg[key] + ';padding:2px 7px;border-radius:8px;min-width:30px;text-align:center">' + badText + '</span>' +
-            '</div>';
-          });
-          b += '</div>';
-        }
-        b += '</div>';
-        return b;
-      };
-      var boards = board('Competitors', '🏆', pt.competitors, true) + board('Pricing pressure', '💰', pt.pricing, true) +
-                   board('Product gaps', '🧩', pt.product_gaps, true) + board('Deal risks', '⚠️', pt.deal_risks, true) +
-                   board('Expansion signals', '🚀', pt.expansion, false);
-      h += '<div style="display:flex;align-items:baseline;justify-content:space-between;margin:16px 0 8px">' +
-        '<span style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Cross-deal patterns, last 30 days</span>' +
-        '<span style="font-size:9px;color:var(--text3)">vs. prior 30 days · hover a row for accounts</span>' +
-      '</div>';
-      h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px">' + boards + '</div>';
-    }
     box.innerHTML = h;
+    // Cross-deal pattern boards used to render here. They now feed the unified
+    // Signal intelligence section below (theme trend arrows), so we stash the
+    // pattern trends and re-render that section instead of drawing a duplicate.
+    window._intelPatterns = d.patterns || {};
+    if (_intelData && typeof renderIntelFeed === 'function') renderIntelFeed();
     if (canSeeTeam(profile ? profile.role : '')) _loadIntelCoachingRollup();
     _loadIntelAttention();
   } catch(e) { box.innerHTML = ''; }
@@ -9211,149 +9176,226 @@ function setIntelType(type, btn) {
 
 function renderIntelligence() { loadIntelligence(); }
 
+var _intelLens = 'theme';
+function setIntelLens(lens) {
+  _intelLens = lens;
+  renderIntelFeed();
+}
+
+var _INTEL_CATS = [
+  { key:'expansion_signals',   pkey:'expansion',    label:'Expansion',        icon:'📈', color:'var(--green)', upGood:true  },
+  { key:'risk_signals',        pkey:'deal_risks',   label:'Deal risks',       icon:'⚠', color:'var(--coral)', upGood:false },
+  { key:'competitor_mentions', pkey:'competitors',  label:'Competitors',      icon:'⚔', color:'var(--amber)', upGood:false },
+  { key:'pricing_signals',     pkey:'pricing',      label:'Pricing pressure', icon:'💰', color:'var(--coral)', upGood:false },
+  { key:'product_feedback',    pkey:'product_gaps', label:'Product gaps',     icon:'🔧', color:'rgba(99,102,241,.85)', upGood:false }
+];
+var _INTEL_JUNK_TYPES = ['staleness'];
+
+function _samChip() { return '<span style="font-size:9px;font-weight:700;color:var(--gold);background:rgba(160,117,42,0.14);border-radius:4px;padding:2px 7px;white-space:nowrap">⚡ SAM</span>'; }
+function _aiChip()  { return '<span style="font-size:9px;font-weight:700;color:var(--text3);background:rgba(150,150,150,0.14);border-radius:4px;padding:2px 7px;white-space:nowrap">🤖 AI</span>'; }
+
 function renderIntelFeed() {
   var feed = document.getElementById('intelFeed');
   var stats = document.getElementById('intelStats');
+  if (stats) stats.style.display = 'none';
   if (!feed || !_intelData) return;
   var allRows = _intelData.rows || [];
   var rows = _intelSource === 'all' ? allRows : allRows.filter(function(r) { return (r.source || 'ai') === _intelSource; });
-
-  // ── Stats bar ─────────────────────────────────────────────────────────────
-  if (stats) {
-    var counts = { product_feedback:0, pricing_signals:0, competitor_mentions:0, expansion_signals:0, risk_signals:0 };
-    rows.forEach(function(row) {
-      counts.product_feedback   += (row.product_feedback||[]).length;
-      counts.pricing_signals    += (row.pricing_signals||[]).length;
-      counts.competitor_mentions += (row.competitor_mentions||[]).length;
-      counts.expansion_signals  += (row.expansion_signals||[]).length;
-      counts.risk_signals       += (row.risk_signals||[]).length;
-    });
-    stats.innerHTML = [
-      { label:'Product',     key:'product_feedback',    color:'rgba(99,102,241,.8)' },
-      { label:'Pricing',     key:'pricing_signals',     color:'var(--coral)' },
-      { label:'Competitors', key:'competitor_mentions',  color:'var(--amber)' },
-      { label:'Expansion',   key:'expansion_signals',   color:'var(--green)' },
-      { label:'Risk',        key:'risk_signals',        color:'var(--coral)' }
-    ].map(function(s) {
-      return '<div class="intel-stat-card"><div class="intel-stat-n" style="color:'+s.color+'">'+counts[s.key]+'</div><div class="intel-stat-l">'+s.label+'</div></div>';
-    }).join('');
-  }
 
   if (!rows.length) {
     feed.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">No intelligence yet.<br><span style="font-size:12px">Click ↻ Refresh to scan meeting notes.</span></div>';
     return;
   }
 
-  // ── Group all rows by account ─────────────────────────────────────────────
+  var flat = [];
+  var junk = [];
   var byAccount = {};
   rows.forEach(function(row) {
     var acct = row.account_name || 'Unknown';
-    if (!byAccount[acct]) byAccount[acct] = { name: acct, rows: [], signals: [], sentiment: {} };
-    byAccount[acct].rows.push(row);
-
-    // Collect all signals with type tags
-    var types = ['product_feedback','pricing_signals','competitor_mentions','expansion_signals','risk_signals'];
-    types.forEach(function(t) {
-      (row[t]||[]).forEach(function(s) {
-        byAccount[acct].signals.push(Object.assign({}, s, { _type: t, _date: row.meeting_date, _subject: row.meeting_subject, _source: row.source || 'ai' }));
+    var a = byAccount[acct] || (byAccount[acct] = { name: acct, rows: [], signals: [], sentiment: {}, lastDate: '' });
+    a.rows.push(row);
+    if (row.meeting_date && row.meeting_date > a.lastDate) a.lastDate = row.meeting_date;
+    if (row.sentiment) a.sentiment[row.sentiment] = (a.sentiment[row.sentiment] || 0) + 1;
+    _INTEL_CATS.forEach(function(cat) {
+      if (_intelType !== 'all' && _intelType !== cat.key) return;
+      (row[cat.key] || []).forEach(function(s) {
+        var rec = Object.assign({}, s, { _cat: cat.key, _date: row.meeting_date, _subject: row.meeting_subject, _source: row.source || 'ai', _account: acct });
+        if (s && s.type && _INTEL_JUNK_TYPES.indexOf(s.type) !== -1) { junk.push(rec); return; }
+        flat.push(rec); a.signals.push(rec);
       });
     });
-
-    // Track sentiment
-    if (row.sentiment) byAccount[acct].sentiment[row.sentiment] = (byAccount[acct].sentiment[row.sentiment]||0) + 1;
   });
 
-  var icons  = { product_feedback:'\uD83D\uDD27', pricing_signals:'\uD83D\uDCB0', competitor_mentions:'\u2694', expansion_signals:'\uD83D\uDCC8', risk_signals:'\u26A0' };
-  var labels = { product_feedback:'Product', pricing_signals:'Pricing', competitor_mentions:'Competitor', expansion_signals:'Expansion', risk_signals:'Risk' };
-  var typeColor = { product_feedback:'rgba(99,102,241,.85)', pricing_signals:'var(--coral)', competitor_mentions:'var(--amber)', expansion_signals:'var(--green)', risk_signals:'var(--coral)' };
+  var samCount = flat.filter(function(s){ return s._source === 'sam'; }).length;
+  var aiCount = flat.length - samCount;
+  var sentPos = rows.filter(function(r){ return r.sentiment === 'positive'; }).length;
+  var sentTot = rows.filter(function(r){ return r.sentiment; }).length;
+  var posPct = sentTot ? Math.round(sentPos / sentTot * 100) : null;
+  var acctCount = Object.keys(byAccount).length;
 
-  var cardsHtml = Object.values(byAccount).map(function(acct, acctIdx) {
-    var filtered = acct.signals.filter(function(s) { return _intelType === 'all' || s._type === _intelType; });
-    if (!filtered.length && _intelType !== 'all') return '';
+  var tiles = [
+    { label:'Live signals', value: String(flat.length), sub: 'across ' + acctCount + ' account' + (acctCount!==1?'s':''), color:'var(--text)' },
+    { label:'⚡ SAM verified', value: String(samCount), sub: 'rules-proven, certain', color:'var(--gold)' },
+    { label:'🤖 AI assisted', value: String(aiCount), sub: 'supplementary hints', color:'var(--text2)' },
+    { label:'Sentiment', value: posPct != null ? posPct + '%' : 'n/a', sub: posPct != null ? 'positive-leaning' : 'no reads', color: posPct != null && posPct >= 50 ? 'var(--green)' : 'var(--text3)' }
+  ];
+  var h = '<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px">' +
+    '<span style="font-size:16px;font-weight:600;color:var(--text)">Signal intelligence</span>' +
+    '<span style="display:inline-flex;border:1px solid var(--border2);border-radius:8px;overflow:hidden;font-size:12px">' +
+      '<span id="intel-lens-theme" onclick="setIntelLens(\'theme\')" style="padding:4px 12px;cursor:pointer;background:' + (_intelLens==='theme'?'var(--surface)':'transparent') + ';color:' + (_intelLens==='theme'?'var(--text)':'var(--text3)') + '">By theme</span>' +
+      '<span id="intel-lens-account" onclick="setIntelLens(\'account\')" style="padding:4px 12px;cursor:pointer;background:' + (_intelLens==='account'?'var(--surface)':'transparent') + ';color:' + (_intelLens==='account'?'var(--text)':'var(--text3)') + '">By account</span>' +
+    '</span></div>';
+  h += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px">';
+  tiles.forEach(function(t) {
+    h += '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:11px 13px">' +
+      '<div style="font-size:11px;color:var(--text3);margin-bottom:3px">' + t.label + '</div>' +
+      '<div style="font-size:22px;font-weight:600;color:' + t.color + ';line-height:1.1">' + t.value + '</div>' +
+      '<div style="font-size:10px;color:var(--text3);margin-top:2px">' + t.sub + '</div>' +
+    '</div>';
+  });
+  h += '</div>';
 
-    // Dominant sentiment
-    var sentEntries = Object.entries(acct.sentiment).sort(function(a,b){return b[1]-a[1];});
+  h += (_intelLens === 'account') ? _renderIntelAccountLens(byAccount) : _renderIntelThemeLens(flat, junk);
+  feed.innerHTML = h;
+}
+
+function _renderIntelThemeLens(flat, junk) {
+  var pats = window._intelPatterns || {};
+  var built = _INTEL_CATS.map(function(cat) {
+    if (_intelType !== 'all' && _intelType !== cat.key) return null;
+    var sigs = flat.filter(function(s){ return s._cat === cat.key; });
+    var prior = 0;
+    (pats[cat.pkey] || []).forEach(function(e){ prior += (e.prior || 0); });
+    return { cat: cat, sigs: sigs, count: sigs.length, prior: prior, delta: sigs.length - prior };
+  }).filter(Boolean);
+
+  var active = built.filter(function(b){ return b.count > 0; }).sort(function(a,b){ return b.count - a.count; });
+  var quiet = built.filter(function(b){ return b.count === 0; });
+
+  var h = '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Themes, ranked by volume</div>';
+  if (!active.length) {
+    h += '<div style="font-size:12px;color:var(--text3);font-style:italic;padding:4px 0 10px">No conversation signals in this window.</div>';
+  }
+  h += '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;overflow:hidden;margin-bottom:8px">';
+  active.forEach(function(b, i) {
+    var rid = 'intel-theme-' + b.cat.key;
+    var samN = b.sigs.filter(function(s){ return s._source === 'sam'; }).length;
+    var deltaCol = b.delta === 0 ? 'var(--text3)' : ((b.delta > 0) === b.cat.upGood ? 'var(--green)' : 'var(--coral)');
+    var deltaTxt = b.delta === 0 ? 'flat' : (b.delta > 0 ? '+' + b.delta : String(b.delta));
+    h += '<div onclick="toggleIntelDrill(\'' + rid + '\')" style="padding:12px 14px;cursor:pointer;' + (i ? 'border-top:1px solid var(--border2)' : '') + '">' +
+      '<div style="display:flex;align-items:center;gap:10px">' +
+        '<span style="font-size:16px;flex-shrink:0">' + b.cat.icon + '</span>' +
+        '<span style="flex:1;min-width:0;font-size:14px;font-weight:600;color:var(--text)">' + b.cat.label + '</span>' +
+        (samN ? '<span style="font-size:10px;color:var(--gold);font-weight:600">' + samN + ' SAM</span>' : '') +
+        '<span style="font-size:17px;font-weight:600;color:var(--text);min-width:26px;text-align:right">' + b.count + '</span>' +
+        '<span style="font-size:10px;font-weight:700;color:' + deltaCol + ';background:var(--surface2);padding:2px 8px;border-radius:9px;min-width:34px;text-align:center">' + deltaTxt + '</span>' +
+        '<span id="chevron-' + rid + '" style="font-size:16px;color:var(--text3)">›</span>' +
+      '</div>' +
+      '<div id="' + rid + '" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border2)">' + _renderThemeReceipts(b.sigs) + '</div>' +
+    '</div>';
+  });
+  h += '</div>';
+
+  if (quiet.length) {
+    h += '<div style="font-size:11px;color:var(--text3);margin-bottom:8px">Quiet this month: ' + quiet.map(function(b){ return b.cat.label.toLowerCase(); }).join(', ') + '</div>';
+  }
+  if (junk.length) {
+    h += '<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;background:var(--surface2);border-radius:10px;opacity:.9">' +
+      '<span style="font-size:14px;flex-shrink:0">⏳</span>' +
+      '<span style="flex:1;font-size:12px;color:var(--text3)">Auto-detected: staleness</span>' +
+      '<span style="font-size:11px;color:var(--text3)">' + junk.length + ' accounts, system-derived, not a talking point</span>' +
+    '</div>';
+  }
+  return h;
+}
+
+function _renderThemeReceipts(sigs) {
+  var sam = sigs.filter(function(s){ return s._source === 'sam'; });
+  var ai  = sigs.filter(function(s){ return s._source !== 'sam'; });
+  var line = function(s) {
+    return '<div style="display:flex;gap:8px;padding:4px 0;font-size:12px">' +
+      '<span style="font-weight:600;color:var(--text);min-width:74px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(s._account) + '</span>' +
+      '<span style="flex:1;color:var(--text2);font-style:italic">' + esc(s.quote || s.context || s.name || '(no detail captured)') + '</span>' +
+      '<span style="color:var(--text3);flex-shrink:0">' + esc((s._date || '').slice(5, 10)) + '</span>' +
+    '</div>';
+  };
+  var h = '';
+  if (sam.length) {
+    h += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">' + _samChip() + '<span style="font-size:10px;color:var(--gold);font-weight:600">Certain, rules-proven</span></div>';
+    h += sam.map(line).join('');
+  }
+  if (ai.length) {
+    h += '<div style="display:flex;align-items:center;gap:6px;margin:' + (sam.length?'10px':'0') + ' 0 4px">' + _aiChip() + '<span style="font-size:10px;color:var(--text3)">Supplementary, AI-read</span></div>';
+    h += ai.map(line).join('');
+  }
+  return h || '<div style="font-size:12px;color:var(--text3)">No detail captured.</div>';
+}
+
+function _renderIntelAccountLens(byAccount) {
+  var nowMs = Date.now();
+  var accts = Object.values(byAccount).map(function(a) {
+    var risk = a.signals.filter(function(s){ return s._cat === 'risk_signals'; }).length;
+    var exp  = a.signals.filter(function(s){ return s._cat === 'expansion_signals'; }).length;
+    var samN = a.signals.filter(function(s){ return s._source === 'sam'; }).length;
+    var daysDark = a.lastDate ? Math.round((nowMs - new Date(a.lastDate).getTime()) / 86400000) : 999;
+    var sentEntries = Object.entries(a.sentiment).sort(function(x,y){ return y[1]-x[1]; });
     var domSent = sentEntries.length ? sentEntries[0][0] : 'neutral';
-    var sentColor = { positive:'var(--green)', neutral:'var(--text3)', negative:'var(--coral)' }[domSent] || 'var(--text3)';
-    var sentIcon  = { positive:'\uD83D\uDCC5', neutral:'\u25CB', negative:'\u26A0\uFE0F' }[domSent] || '\u25CB';
+    var score = risk * 3 + (daysDark > 14 && daysDark < 999 ? 2 : 0) + exp + a.signals.length * 0.1;
+    return { a: a, risk: risk, exp: exp, samN: samN, daysDark: daysDark, domSent: domSent, score: score };
+  }).sort(function(x,y){ return y.score - x.score; });
 
-    // Signal type count summary
-    var typeSummary = ['product_feedback','pricing_signals','competitor_mentions','expansion_signals','risk_signals'].map(function(t) {
-      var n = filtered.filter(function(s){return s._type===t;}).length;
-      if (!n) return '';
-      return '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:'+typeColor[t]+'20;color:'+typeColor[t]+';margin-right:4px">'+icons[t]+' '+n+' '+labels[t]+'</span>';
-    }).join('');
-
-    // Sources
-    var hasSAM = acct.rows.some(function(r){return r.source==='sam';});
-    var hasAI  = acct.rows.some(function(r){return r.source==='ai'||!r.source;});
-    var srcBadge = (hasSAM ? '<span style="font-size:9px;font-weight:700;color:var(--green);background:rgba(74,140,92,0.12);border-radius:4px;padding:2px 6px">\u26A1 SAM</span> ' : '') +
-                   (hasAI  ? '<span style="font-size:9px;font-weight:700;color:var(--gold);background:rgba(160,117,42,0.12);border-radius:4px;padding:2px 6px">\uD83E\uDD16 AI</span>' : '');
-
-    // Aggregate summary — use the most recent row's summary, or compose from signal count
-    var summaries = acct.rows.map(function(r){return r.summary||'';}).filter(Boolean);
-    var aggSummary = summaries.length ? summaries[summaries.length-1] : (filtered.length + ' signal' + (filtered.length!==1?'s':'') + ' across ' + acct.rows.length + ' meeting' + (acct.rows.length!==1?'s':''));
-
-    var drillId = 'intel-drill-' + acctIdx;
-
-    // Build drill-down: group by meeting date
-    var byMeeting = {};
-    filtered.forEach(function(s) {
-      var key = (s._date||'Unknown date') + ' · ' + (s._subject||'');
-      if (!byMeeting[key]) byMeeting[key] = [];
-      byMeeting[key].push(s);
-    });
-
-    var drillHtml = Object.entries(byMeeting).map(function(entry) {
-      var meetingLabel = entry[0];
-      var sigs = entry[1];
-      return '<div style="margin-bottom:10px;padding:10px 12px;background:var(--surface2);border-radius:8px">' +
-        '<div style="font-size:11px;color:var(--text3);margin-bottom:6px;font-weight:600">' + esc(meetingLabel) + '</div>' +
-        sigs.map(function(s) {
-          return '<div style="display:flex;align-items:flex-start;gap:8px;padding:5px 0;border-top:1px solid var(--border)">' +
-            '<span style="font-size:13px;flex-shrink:0">' + (icons[s._type]||'\u25CB') + '</span>' +
-            '<div style="flex:1">' +
-              '<span style="font-size:10px;font-weight:600;color:'+typeColor[s._type]+'">' + labels[s._type] + '</span>' +
-              '<div style="font-size:12px;color:var(--text);margin-top:2px">' + esc(s.quote||s.context||s.name||'') + '</div>' +
-            '</div>' +
-          '</div>';
-        }).join('') +
-      '</div>';
-    }).join('');
-
-    return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;margin-bottom:10px;overflow:hidden">' +
-      // ── Account header ───────────────────────────────────────────────────
-      '<div style="padding:14px 16px;cursor:pointer" onclick="toggleIntelDrill(\''+drillId+'\')">' +
-        '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:6px">' +
-          '<div>' +
-            '<div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px">'+esc(acct.name)+'</div>' +
-            '<div style="font-size:11px;color:var(--text3)">' +
-              sentIcon + ' <span style="color:'+sentColor+'">'+domSent+'</span>' +
-              ' \u00b7 <strong style="color:var(--text)">'+filtered.length+'</strong> signals' +
-              ' \u00b7 '+acct.rows.length+' meeting'+(acct.rows.length!==1?'s':'')+
-              ' \u00b7 ' + srcBadge +
-            '</div>' +
-          '</div>' +
-          '<span style="font-size:18px;color:var(--text3);padding:0 4px" id="chevron-'+drillId+'">›</span>' +
+  var sentMap = { positive:{c:'var(--green)',bg:'rgba(74,140,92,0.12)'}, negative:{c:'var(--coral)',bg:'rgba(192,82,63,0.12)'}, neutral:{c:'var(--text3)',bg:'var(--surface2)'} };
+  var h = '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Hot accounts, most actionable signal now</div>';
+  h += '<div style="display:flex;flex-direction:column;gap:8px">';
+  accts.forEach(function(x, idx) {
+    var a = x.a;
+    var rid = 'intel-acct-' + idx;
+    var sm = sentMap[x.domSent] || sentMap.neutral;
+    var initials = (a.name || '?').replace(/[^A-Za-z0-9 ]/g,'').split(/\s+/).map(function(w){return w[0]||'';}).join('').slice(0,2).toUpperCase() || '?';
+    var meta = a.signals.length + ' signal' + (a.signals.length!==1?'s':'') + ', ' + a.rows.length + ' meeting' + (a.rows.length!==1?'s':'') + (x.samN ? ', ' + x.samN + ' SAM-verified' : '');
+    var flag = x.risk ? '<span style="font-size:10px;color:var(--coral);background:rgba(192,82,63,0.12);padding:2px 8px;border-radius:9px;white-space:nowrap">' + x.risk + ' risk</span>'
+             : (x.daysDark > 14 && x.daysDark < 999 ? '<span style="font-size:10px;color:var(--amber);background:rgba(201,151,62,0.12);padding:2px 8px;border-radius:9px;white-space:nowrap">dark ' + x.daysDark + 'd</span>' : '');
+    h += '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;overflow:hidden">' +
+      '<div onclick="toggleIntelDrill(\'' + rid + '\')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer">' +
+        '<div style="width:34px;height:34px;border-radius:50%;background:' + sm.bg + ';display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:' + sm.c + ';flex-shrink:0">' + esc(initials) + '</div>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-size:14px;font-weight:700;color:var(--text)">' + esc(a.name) + '</div>' +
+          '<div style="font-size:11px;color:var(--text3)">' + esc(meta) + '</div>' +
         '</div>' +
-        // Signal type badges
-        (typeSummary ? '<div style="margin-bottom:6px">'+typeSummary+'</div>' : '') +
-        // Aggregate summary
-        '<div style="font-size:12px;color:var(--text2);font-style:italic;line-height:1.5">'+esc(aggSummary)+'</div>' +
+        flag +
+        '<span style="font-size:10px;color:' + sm.c + ';background:' + sm.bg + ';padding:2px 8px;border-radius:9px;white-space:nowrap">' + x.domSent + '</span>' +
+        '<span id="chevron-' + rid + '" style="font-size:16px;color:var(--text3)">›</span>' +
       '</div>' +
-      // ── Drill-down (hidden by default) ───────────────────────────────────
-      '<div id="'+drillId+'" style="display:none;padding:0 16px 14px">' +
-        '<div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Signal detail by meeting</div>' +
-        drillHtml +
-      '</div>' +
+      '<div id="' + rid + '" style="display:none;padding:0 14px 12px">' + _renderAccountReceipts(a) + '</div>' +
+    '</div>';
+  });
+  h += '</div>';
+  return h;
+}
+
+function _renderAccountReceipts(a) {
+  var catMeta = {}; _INTEL_CATS.forEach(function(c){ catMeta[c.key] = c; });
+  var byMeeting = {};
+  a.signals.forEach(function(s) {
+    var key = (s._date || 'Undated') + ' · ' + (s._subject || '');
+    (byMeeting[key] || (byMeeting[key] = [])).push(s);
+  });
+  return Object.entries(byMeeting).map(function(entry) {
+    return '<div style="margin-bottom:8px;padding:10px 12px;background:var(--surface2);border-radius:8px">' +
+      '<div style="font-size:11px;color:var(--text3);margin-bottom:6px;font-weight:600">' + esc(entry[0]) + '</div>' +
+      entry[1].map(function(s) {
+        var cm = catMeta[s._cat] || { icon:'○', label:'', color:'var(--text3)' };
+        return '<div style="display:flex;align-items:flex-start;gap:8px;padding:5px 0;border-top:1px solid var(--border)">' +
+          '<span style="font-size:13px;flex-shrink:0">' + cm.icon + '</span>' +
+          '<div style="flex:1">' +
+            '<span style="font-size:10px;font-weight:600;color:' + cm.color + '">' + cm.label + '</span> ' +
+            (s._source === 'sam' ? _samChip() : _aiChip()) +
+            '<div style="font-size:12px;color:var(--text);margin-top:2px">' + esc(s.quote || s.context || s.name || '') + '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('') +
     '</div>';
   }).join('');
-
-  if (!cardsHtml.trim()) {
-    feed.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">No signals for this filter.</div>';
-    return;
-  }
-  feed.innerHTML = cardsHtml;
 }
 
 function toggleIntelDrill(id) {
@@ -9370,6 +9412,7 @@ window.loadIntelligence = loadIntelligence;
 window.renderIntelligence = renderIntelligence;
 window.renderIntelFeed = renderIntelFeed;
 window.setIntelType = setIntelType;
+window.setIntelLens = setIntelLens;
 window.openCarryForward = typeof openCarryForward !== 'undefined' ? openCarryForward : function(){};
 window.openCarryFromTask = typeof openCarryFromTask !== 'undefined' ? openCarryFromTask : function(){};
 window.closeCarryForward = typeof closeCarryForward !== 'undefined' ? closeCarryForward : function(){};
