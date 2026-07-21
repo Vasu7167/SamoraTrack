@@ -945,6 +945,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
         <button class="intel-tab" onclick="setIntelType('risk_signals',this)">⚠ Risk</button>
       </div>
       <div id="intelConsole" style="margin-bottom:16px"></div>
+      <div id="velocityForecast" style="margin-bottom:16px"></div>
       <div id="intelStats" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:18px"></div>
       <div id="intelFeed" style="display:flex;flex-direction:column;gap:10px">
         <div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">Click <strong style="color:var(--gold)">↻ Refresh</strong> to extract intelligence from your named account meeting notes</div>
@@ -3808,32 +3809,75 @@ async function loadSamBrief(force) {
   } catch(e) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: '+esc(e.message)+'</div>'; }
 }
 
+// Coerce a brief into a structured object, tolerating raw JSON strings, code
+// fences, and TRUNCATED JSON (Gemini sometimes stops mid-string on the coaching
+// line). Salvages top_accounts (a bracket-balanced array is usually still valid
+// even when the outer object is cut off later) and the scalar text fields.
+function _coerceBrief(brief) {
+  if (brief && typeof brief === 'object') return brief;
+  if (typeof brief !== 'string') return null;
+  var txt = brief.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+  try { var clean = JSON.parse(txt); if (clean && typeof clean === 'object') return clean; } catch (e) {}
+
+  var out = {};
+  var ti = txt.indexOf('"top_accounts"');
+  if (ti !== -1) {
+    var bs = txt.indexOf('[', ti);
+    if (bs !== -1) {
+      var depth = 0, end = -1, inStr = false, escd = false;
+      for (var i = bs; i < txt.length; i++) {
+        var ch = txt[i];
+        if (inStr) { if (escd) escd = false; else if (ch === '\\') escd = true; else if (ch === '"') inStr = false; continue; }
+        if (ch === '"') inStr = true;
+        else if (ch === '[') depth++;
+        else if (ch === ']') { depth--; if (depth === 0) { end = i; break; } }
+      }
+      if (end !== -1) { try { out.top_accounts = JSON.parse(txt.slice(bs, end + 1)); } catch (e) {} }
+    }
+  }
+  ['coaching_signal', 'calendar_prep', 'priority_before_noon'].forEach(function (k) {
+    var m = txt.match(new RegExp('"' + k + '"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)'));
+    if (m && m[1]) {
+      var v = m[1].replace(/\\"/g, '"').replace(/\\n/g, ' ').trim();
+      if (v) out[k] = v;
+    }
+  });
+  return (out.top_accounts || out.coaching_signal || out.calendar_prep || out.priority_before_noon) ? out : null;
+}
+
 function renderBriefHtml(brief, brief_structured) {
+  var obj = _coerceBrief(brief);
   var html = '';
-  if (brief_structured && brief && typeof brief === 'object') {
-    var topAccts = brief.top_accounts || [];
+  if (obj && (obj.top_accounts || obj.coaching_signal || obj.calendar_prep || obj.priority_before_noon)) {
+    var topAccts = obj.top_accounts || [];
     if (topAccts.length) {
       html += '<div style="margin-bottom:12px"><div style="font-size:10px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">📊 Top 3 accounts today</div>';
-      topAccts.slice(0,3).forEach(function(a) {
+      topAccts.slice(0, 3).forEach(function (a) {
         var sc = a.score >= 60 ? 'var(--green)' : a.score >= 35 ? 'var(--amber)' : 'var(--text3)';
-        html += '<div style="padding:8px 10px;background:rgba(0,0,0,0.04);border-radius:8px;margin-bottom:5px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:3px"><span style="font-size:12px;font-weight:600;color:var(--text)">'+esc(a.name)+'</span>';
-        if (a.score) html += '<span style="font-size:10px;font-weight:700;color:'+sc+';background:'+sc+'18;padding:1px 6px;border-radius:4px">'+a.score+'</span>';
+        html += '<div style="padding:8px 10px;background:rgba(0,0,0,0.04);border-radius:8px;margin-bottom:5px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:3px"><span style="font-size:12px;font-weight:600;color:var(--text)">' + esc(a.name) + '</span>';
+        if (a.score) html += '<span style="font-size:10px;font-weight:700;color:' + sc + ';background:' + sc + '18;padding:1px 6px;border-radius:4px">' + a.score + '</span>';
         html += '</div>';
-        if (a.reason) html += '<div style="font-size:11px;color:var(--text3);margin-bottom:3px">'+esc(a.reason)+'</div>';
-        if (a.action) html += '<div style="font-size:11px;font-weight:600;color:var(--gold)">→ '+esc(a.action)+'</div>';
+        if (a.reason) html += '<div style="font-size:11px;color:var(--text3);margin-bottom:3px">' + esc(a.reason) + '</div>';
+        if (a.action) html += '<div style="font-size:11px;font-weight:600;color:var(--gold)">→ ' + esc(a.action) + '</div>';
         html += '</div>';
       });
       html += '</div>';
     }
-    if (brief.calendar_prep && brief.calendar_prep !== 'null') html += '<div style="margin-bottom:10px"><div style="font-size:10px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px">📅 Calendar prep</div><div style="font-size:12px;color:var(--text2);line-height:1.5">'+esc(brief.calendar_prep)+'</div></div>';
-    if (brief.coaching_signal) html += '<div style="margin-bottom:10px"><div style="font-size:10px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px">⚡ Coaching</div><div style="font-size:12px;color:var(--text2);line-height:1.5">'+esc(brief.coaching_signal)+'</div></div>';
-    if (brief.priority_before_noon) html += '<div style="padding:8px 12px;background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);border-radius:8px"><div style="font-size:10px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:3px">🎯 Priority before noon</div><div style="font-size:12px;font-weight:600;color:var(--text)">'+esc(brief.priority_before_noon)+'</div></div>';
-  } else if (typeof brief === 'string' && brief.length > 10) {
-    html = '<div style="font-size:12px;color:var(--text2);white-space:pre-wrap;line-height:1.7">'+esc(brief)+'</div>';
-  } else {
-    html = '<div style="font-size:12px;color:var(--text3)">Brief could not be generated — run Scan channels first to build pipeline context.</div>';
+    if (obj.calendar_prep && obj.calendar_prep !== 'null') html += '<div style="margin-bottom:10px"><div style="font-size:10px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px">📅 Calendar prep</div><div style="font-size:12px;color:var(--text2);line-height:1.5">' + esc(obj.calendar_prep) + '</div></div>';
+    if (obj.coaching_signal) html += '<div style="margin-bottom:10px"><div style="font-size:10px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px">⚡ Coaching</div><div style="font-size:12px;color:var(--text2);line-height:1.5">' + esc(obj.coaching_signal) + '</div></div>';
+    if (obj.priority_before_noon) html += '<div style="padding:8px 12px;background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);border-radius:8px"><div style="font-size:10px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:3px">🎯 Priority before noon</div><div style="font-size:12px;font-weight:600;color:var(--text)">' + esc(obj.priority_before_noon) + '</div></div>';
+    return html;
   }
-  return html;
+  // Never dump raw JSON at the user. If it still looks like JSON we could not
+  // salvage, ask for a refresh instead of showing braces.
+  if (typeof brief === 'string' && brief.trim().length > 10) {
+    var t = brief.trim();
+    if (t[0] === '{' || t[0] === '[' || /^```/.test(t)) {
+      return '<div style="font-size:12px;color:var(--text3);line-height:1.5">Your brief did not finish writing (the model was cut off). Tap ↻ to regenerate it.</div>';
+    }
+    return '<div style="font-size:12px;color:var(--text2);white-space:pre-wrap;line-height:1.7">' + esc(brief) + '</div>';
+  }
+  return '<div style="font-size:12px;color:var(--text3)">Brief could not be generated — run Scan channels first to build pipeline context.</div>';
 }
 
 // ── Sales Habits ──────────────────────────────────────────────────────────────
@@ -9039,6 +9083,87 @@ function boostSignals(accountId, accountName) {
   }, 300);
 }
 
+// ── Deal velocity + forecast integrity (deterministic, receipts per line) ────
+async function loadVelocityForecast() {
+  var box = document.getElementById('velocityForecast'); if (!box) return;
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({ action:'get_velocity_forecast' }) });
+    var d = await r.json();
+    if (!d.ok) { box.innerHTML = ''; return; }
+    var f = d.forecast || {};
+    var vel = d.velocity || [];
+    var fmtK = function(v){ return v >= 1000000 ? '$' + (v/1000000).toFixed(1) + 'M' : '$' + Math.round(v/1000) + 'K'; };
+
+    var h = '<div style="margin-bottom:10px">' + _samoraIntelLabel('Forecast integrity, deterministic') + '</div>';
+
+    // ── Forecast integrity tiles ─────────────────────────────────────────
+    var tiles = [
+      { label:'At risk', value: fmtK(f.at_risk_usd||0), sub: (f.at_risk_deals||[]).length + ' deal' + ((f.at_risk_deals||[]).length!==1?'s':'') + ' flagged', color: f.at_risk_usd ? 'var(--coral)' : 'var(--green)', key:'atrisk' },
+      { label:'Unverified value', value: fmtK(f.happy_ears_usd||0), sub: (f.happy_ears_count||0) + ' below signal 40', color: f.happy_ears_usd ? 'var(--amber)' : 'var(--green)', key:'happy' },
+      { label:'No close date', value: fmtK(f.no_date_usd||0), sub: (f.no_date_count||0) + ' deal' + ((f.no_date_count||0)!==1?'s':''), color: f.no_date_usd ? 'var(--amber)' : 'var(--green)', key:'nodate' },
+      { label:'Verified', value: (f.verified_pct||0) + '%', sub: fmtK(f.verified_usd||0) + ' of ' + fmtK(f.total_usd||0), color:'var(--green)', key:'ver' }
+    ];
+    h += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:6px">';
+    tiles.forEach(function(t) {
+      var clickable = (t.key === 'atrisk' && (f.at_risk_deals||[]).length) || (t.key === 'happy' && (f.happy_ears_deals||[]).length);
+      h += '<div ' + (clickable ? 'onclick="_toggleFcDrill(\'' + t.key + '\')" style="cursor:pointer;' : 'style="') + 'background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:11px 13px">' +
+        '<div style="font-size:11px;color:var(--text3);margin-bottom:3px">' + t.label + (clickable ? ' <span style="color:var(--text3);font-size:9px">tap</span>' : '') + '</div>' +
+        '<div style="font-size:20px;font-weight:600;color:' + t.color + ';line-height:1.1">' + t.value + '</div>' +
+        '<div style="font-size:10px;color:var(--text3);margin-top:2px">' + esc(t.sub) + '</div>' +
+      '</div>';
+    });
+    h += '</div>';
+
+    // At-risk drill (hidden): which dollars, and why.
+    var drill = function(key, deals, label) {
+      var x = '<div id="fcDrill-' + key + '" style="display:none;background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:10px 12px;margin-bottom:6px">';
+      x += '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">' + label + '</div>';
+      deals.forEach(function(dl) {
+        x += '<div onclick="openAccountTimeline(\'' + esc(dl.account_id) + '\',\'' + esc(dl.name||'') + '\')" style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--border);cursor:pointer">' +
+          '<span style="font-size:12px;font-weight:600;color:var(--text);min-width:90px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(dl.name) + '</span>' +
+          '<span style="font-size:11px;color:var(--text3);flex:1;min-width:0">' + esc(dl.reasons ? dl.reasons.join(', ') : ('signal ' + dl.signal_score + ', unverified')) + '</span>' +
+          '<span style="font-size:12px;font-weight:700;color:var(--text2);flex-shrink:0">' + fmtK(dl.value||0) + '</span>' +
+        '</div>';
+      });
+      x += '</div>';
+      return x;
+    };
+    if ((f.at_risk_deals||[]).length) h += drill('atrisk', f.at_risk_deals, 'At-risk dollars, and why');
+    if ((f.happy_ears_deals||[]).length) h += drill('happy', f.happy_ears_deals, 'Unverified value, rep entered but signal below 40');
+
+    // ── Slipping / stuck deals ───────────────────────────────────────────
+    var stateMeta = {
+      regressed: { icon:'↘', color:'var(--coral)' },
+      slipping:  { icon:'📉', color:'var(--coral)' },
+      stalled:   { icon:'⏸', color:'var(--amber)' },
+      plateau:   { icon:'➖', color:'var(--amber)' }
+    };
+    h += '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 6px">Losing momentum' + (d.scope !== 'self' ? ' (' + d.scope + ')' : '') + '</div>';
+    if (!vel.length) {
+      h += '<div style="font-size:12px;color:var(--text3);font-style:italic;padding:4px 0 6px">No deals slipping or stuck. Momentum looks healthy.</div>';
+    } else {
+      vel.forEach(function(v) {
+        var m = stateMeta[v.state] || { icon:'•', color:'var(--text3)' };
+        h += '<div onclick="openAccountTimeline(\'' + esc(v.account_id) + '\',\'' + esc(v.name||'') + '\')" style="display:flex;align-items:flex-start;gap:8px;padding:7px 10px;margin-bottom:4px;background:var(--surface);border-left:2px solid ' + m.color + ';border-radius:0 8px 8px 0;cursor:pointer">' +
+          '<span style="font-size:12px;flex-shrink:0">' + m.icon + '</span>' +
+          '<div style="flex:1;min-width:0">' +
+            '<div style="font-size:12px;font-weight:500;color:var(--text)">' + esc(v.headline) + '</div>' +
+            '<div style="font-size:10px;color:var(--text3);margin-top:1px">' + esc(v.evidence) + '</div>' +
+          '</div>' +
+          '<span style="color:var(--text3);font-size:12px;flex-shrink:0">›</span>' +
+        '</div>';
+      });
+    }
+    box.innerHTML = h;
+  } catch(e) { box.innerHTML = ''; }
+}
+
+function _toggleFcDrill(key) {
+  var el = document.getElementById('fcDrill-' + key); if (!el) return;
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
 // ── Revenue Truth Console: 5 derived numbers + what changed this week ────────
 // All deterministic (DB deltas, zero AI). Every line carries its evidence.
 async function loadIntelConsole() {
@@ -9229,6 +9354,7 @@ async function _loadIntelAttention() {
 
 async function loadIntelligence() {
   loadIntelConsole();  // fire in parallel, renders its own section
+  loadVelocityForecast();  // deterministic velocity + forecast integrity, own section
   var feed = document.getElementById('intelFeed');
   var isManager = canSeeTeam(profile ? profile.role : '');
   var days = parseInt((document.getElementById('intelDaysFilter') || {}).value || '30') || 30;
