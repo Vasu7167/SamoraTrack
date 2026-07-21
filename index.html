@@ -946,6 +946,8 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
       </div>
       <div id="intelConsole" style="margin-bottom:16px"></div>
       <div id="velocityForecast" style="margin-bottom:16px"></div>
+      <div id="relationshipCoverage" style="margin-bottom:16px"></div>
+      <div id="signalStates" style="margin-bottom:16px"></div>
       <div id="intelStats" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:18px"></div>
       <div id="intelFeed" style="display:flex;flex-direction:column;gap:10px">
         <div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">Click <strong style="color:var(--gold)">↻ Refresh</strong> to extract intelligence from your named account meeting notes</div>
@@ -8554,18 +8556,28 @@ function _renderTimelineIntel(timeline, engagement) {
   });
   h += '</div>';
 
-  // Reply / open engagement rates, only if the server sent them (honest empty state otherwise).
-  if (engagement && (engagement.reply_rate != null || engagement.open_rate != null)) {
-    h += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border2)">';
+  // Reply + thread behaviour, only when the server computed it from real mail.
+  if (engagement && engagement.sent != null) {
+    var eg = engagement;
+    var latTxt = eg.reply_latency_hours == null ? 'n/a'
+      : eg.reply_latency_hours < 24 ? eg.reply_latency_hours + 'h'
+      : Math.round(eg.reply_latency_hours / 24) + 'd';
     var eTiles = [
-      { label:'Reply rate', value: engagement.reply_rate != null ? engagement.reply_rate + '%' : 'n/a' },
-      { label:'Open rate', value: engagement.open_rate != null ? engagement.open_rate + '%' : 'n/a' },
-      { label:'Sent', value: engagement.sent != null ? String(engagement.sent) : 'n/a' }
+      { label:'Reply rate', value: eg.reply_rate != null ? eg.reply_rate + '%' : 'n/a', color:'var(--gold)' },
+      { label:'Reply speed', value: latTxt, color: (eg.reply_latency_hours != null && eg.reply_latency_hours <= 48) ? 'var(--green)' : 'var(--text2)' },
+      { label:'Msgs / 14d', value: String(eg.thread_velocity_14d || 0), color: eg.thread_velocity_14d ? 'var(--green)' : 'var(--text3)' },
+      { label:'Contacts', value: String(eg.contacts_seen || 0) + (eg.new_contacts_14d ? ' (+' + eg.new_contacts_14d + ')' : ''), color: eg.new_contacts_14d ? 'var(--green)' : 'var(--text2)' }
     ];
+    h += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border2)">';
     eTiles.forEach(function(t) {
-      h += '<div style="text-align:center"><div style="font-size:16px;font-weight:700;color:var(--gold)">' + esc(t.value) + '</div><div style="font-size:10px;color:var(--text3)">' + t.label + '</div></div>';
+      h += '<div style="text-align:center"><div style="font-size:15px;font-weight:700;color:' + t.color + '">' + esc(t.value) + '</div><div style="font-size:9px;color:var(--text3)">' + t.label + '</div></div>';
     });
     h += '</div>';
+    var notes = [];
+    if (eg.new_contacts_14d) notes.push(eg.new_contacts_14d + ' new contact' + (eg.new_contacts_14d===1?'':'s') + ' entered the thread this fortnight, buying group widening');
+    if (eg.inbound_initiated) notes.push('they emailed first, inbound-initiated');
+    if (eg.sent && !eg.replies) notes.push(eg.sent + ' sent, no reply yet');
+    if (notes.length) h += '<div style="font-size:10px;color:var(--text3);margin-top:6px;font-style:italic">' + esc(notes.join(' · ')) + '</div>';
   }
 
   // Sentiment trajectory line, if any event carried sentiment.
@@ -9083,6 +9095,93 @@ function boostSignals(accountId, accountName) {
   }, 300);
 }
 
+// ── Relationship coverage depth (deterministic, receipts per deal) ───────────
+async function loadRelationshipCoverage() {
+  var box = document.getElementById('relationshipCoverage'); if (!box) return;
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({ action:'get_relationship_coverage' }) });
+    var d = await r.json();
+    if (!d.ok) { box.innerHTML = ''; return; }
+    var ru = d.rollup || {};
+    var deals = d.deals || [];
+    var h = '<div style="margin-bottom:10px">' + _samoraIntelLabel('Relationship coverage, deterministic') + '</div>';
+
+    var tiles = [
+      { label:'Strong', value: String(ru.strong||0), color:'var(--green)', sub:'well covered' },
+      { label:'Partial', value: String(ru.partial||0), color:'var(--amber)', sub:'one gap' },
+      { label:'Thin', value: String(ru.thin||0), color:'var(--coral)', sub:'multiple gaps' },
+      { label:'Ghost contacts', value: String(ru.ghost_contacts||0), color: ru.ghost_contacts?'var(--amber)':'var(--green)', sub:'enriched, never reached' }
+    ];
+    h += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:6px">';
+    tiles.forEach(function(t) {
+      h += '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:11px 13px">' +
+        '<div style="font-size:11px;color:var(--text3);margin-bottom:3px">' + t.label + '</div>' +
+        '<div style="font-size:20px;font-weight:600;color:' + t.color + ';line-height:1.1">' + t.value + '</div>' +
+        '<div style="font-size:10px;color:var(--text3);margin-top:2px">' + t.sub + '</div>' +
+      '</div>';
+    });
+    h += '</div>';
+
+    var gradeCol = { thin:'var(--coral)', partial:'var(--amber)', strong:'var(--green)' };
+    var withGaps = deals.filter(function(dl){ return dl.gaps && dl.gaps.length; });
+    h += '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 6px">Coverage gaps' + (d.scope !== 'self' ? ' (' + d.scope + ')' : '') + '</div>';
+    if (!withGaps.length) {
+      h += '<div style="font-size:12px;color:var(--text3);font-style:italic;padding:4px 0 6px">Every open deal is well covered for its stage.</div>';
+    } else {
+      withGaps.forEach(function(dl) {
+        var col = gradeCol[dl.grade] || 'var(--text3)';
+        h += '<div onclick="openAccountTimeline(\'' + esc(dl.account_id) + '\',\'' + esc(dl.name||'') + '\')" style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;margin-bottom:4px;background:var(--surface);border-left:2px solid ' + col + ';border-radius:0 8px 8px 0;cursor:pointer">' +
+          '<div style="flex:1;min-width:0">' +
+            '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">' +
+              '<span style="font-size:12px;font-weight:600;color:var(--text)">' + esc(dl.name) + '</span>' +
+              '<span style="font-size:9px;color:var(--text3)">' + esc(dl.value_label) + ' · ' + esc(dl.stage) + '</span>' +
+              '<span style="font-size:9px;color:' + col + ';font-weight:700;text-transform:uppercase">' + dl.grade + '</span>' +
+            '</div>' +
+            '<div style="font-size:11px;color:var(--text3)">' + dl.active + ' of ' + dl.total + ' contacts active' + (dl.senior_active ? ', senior engaged' : ', no senior') + '</div>' +
+            '<div style="font-size:11px;color:var(--text2);margin-top:2px">' + dl.gaps.map(function(g){ return esc(g); }).join(' · ') + '</div>' +
+          '</div>' +
+          '<span style="color:var(--text3);font-size:12px;flex-shrink:0">›</span>' +
+        '</div>';
+      });
+    }
+    box.innerHTML = h;
+  } catch(e) { box.innerHTML = ''; }
+}
+
+// ── Correlated signal states (named deterministic verdicts) ──────────────────
+async function loadSignalStates() {
+  var box = document.getElementById('signalStates'); if (!box) return;
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({ action:'get_signal_states' }) });
+    var d = await r.json();
+    if (!d.ok || !d.states || !d.states.length) { box.innerHTML = ''; return; }
+    var meta = {
+      at_risk_to_competitor: { icon:'🏆', color:'var(--coral)' },
+      champion_less_closing: { icon:'👤', color:'var(--coral)' },
+      silent_high_value:     { icon:'🌑', color:'var(--coral)' },
+      pricing_squeeze:       { icon:'💰', color:'var(--amber)' },
+      expansion_ready:       { icon:'🚀', color:'var(--green)' }
+    };
+    var h = '<div style="margin-bottom:10px">' + _samoraIntelLabel('Signal states, deterministic verdicts') + '</div>';
+    h += '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">What the signals add up to' + (d.scope !== 'self' ? ' (' + d.scope + ')' : '') + '</div>';
+    h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px">';
+    d.states.forEach(function(s) {
+      var m = meta[s.state] || { icon:'•', color:'var(--text3)' };
+      h += '<div onclick="openAccountTimeline(\'' + esc(s.account_id) + '\',\'' + esc(s.account||'') + '\')" style="background:var(--surface);border:1px solid var(--border2);border-left:2px solid ' + m.color + ';border-radius:0 10px 10px 0;padding:10px 12px;cursor:pointer">' +
+        '<div style="display:flex;align-items:center;gap:7px;margin-bottom:3px">' +
+          '<span style="font-size:14px;flex-shrink:0">' + m.icon + '</span>' +
+          '<span style="font-size:12px;font-weight:600;color:var(--text);flex:1;min-width:0">' + esc(s.headline) + '</span>' +
+        '</div>' +
+        '<div style="font-size:10px;color:var(--text3);line-height:1.4">' + esc(s.evidence) + '</div>' +
+      '</div>';
+    });
+    h += '</div>';
+    box.innerHTML = h;
+  } catch(e) { box.innerHTML = ''; }
+}
+
 // ── Deal velocity + forecast integrity (deterministic, receipts per line) ────
 async function loadVelocityForecast() {
   var box = document.getElementById('velocityForecast'); if (!box) return;
@@ -9355,6 +9454,8 @@ async function _loadIntelAttention() {
 async function loadIntelligence() {
   loadIntelConsole();  // fire in parallel, renders its own section
   loadVelocityForecast();  // deterministic velocity + forecast integrity, own section
+  loadRelationshipCoverage();  // coverage depth by stage, own section
+  loadSignalStates();  // correlated deterministic verdicts, own section
   var feed = document.getElementById('intelFeed');
   var isManager = canSeeTeam(profile ? profile.role : '');
   var days = parseInt((document.getElementById('intelDaysFilter') || {}).value || '30') || 30;
