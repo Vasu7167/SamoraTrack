@@ -3103,7 +3103,7 @@ function renderSourceBadge(source) {
   return '<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;color:' + cfg.color + ';background:rgba(0,0,0,0.12);border-radius:4px;padding:2px 7px;letter-spacing:0.02em">' + cfg.icon + ' ' + cfg.label + '</span>';
 }
 
-var _ivrPeriod = {}, _ivrRepId = {}, _ivrData = {};
+var _ivrPeriod = {}, _ivrRepId = {}, _ivrData = {}, _ivrSeq = {};
 function setIvrPeriod(outputId, period, btn) {
   _ivrPeriod[outputId] = period;
   var wrap = document.getElementById('ivrperiod-' + outputId);
@@ -3316,9 +3316,16 @@ async function runIntentVsReality(repId, outputId, periodOverride) {
   }
   var picker = isManager ? renderIvrPeriodPicker(outputId) : '';
   out.innerHTML = picker + '<div style="font-size:12px;color:var(--text3);padding:8px 0">Checking intent vs reality for ' + esc(periodLabel) + '…</div>';
+  // Race guard: only the latest request for this panel is allowed to render.
+  // Without this, a slower earlier scan (e.g. the default range on tab open)
+  // resolves after your new selection and overwrites it — the "flips to a
+  // larger range after a few seconds" bug.
+  var _ivrKey = outputId || 'ivrOutput';
+  var _ivrToken = (_ivrSeq[_ivrKey] = (_ivrSeq[_ivrKey] || 0) + 1);
   try {
     var r2 = await fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify({ action: 'intent_vs_reality', rep_user_id: isManager?repId:null, date_from: dateFrom, date_to: dateTo }) });
     var data = await r2.json();
+    if (_ivrToken !== _ivrSeq[_ivrKey]) return;  // a newer selection superseded this one
     if (data.scopeError) { out.innerHTML = picker + '<div style="font-size:12px;color:var(--coral);padding:8px 0">🔒 ' + esc(data.error || 'Gmail permissions need to be re-granted.') + '</div>'; if (btn&&!isManager){btn.textContent='Check this week';btn.disabled=false;} return; }
     if (data.reconnectNeeded) { out.innerHTML = picker + '<div style="font-size:12px;color:var(--coral);padding:8px 0">⚠️ ' + esc(data.error || 'Gmail connection expired.') + '</div>'; if (btn&&!isManager){btn.textContent='Check this week';btn.disabled=false;} return; }
     if (!data.connected) {
@@ -6192,13 +6199,22 @@ async function saveCompanyLinkedIn(accountId, url) {
   } catch(e) {}
 }
 
-async function _renderSignalsPane(deal, forceRefresh) {
+async function _renderSignalsPane(deal, forceRefresh, _retried) {
   var body = document.getElementById('deal-detail-body'); if (!body) return;
-  body.innerHTML = '<div style="padding:20px 0;text-align:center;font-size:13px;color:var(--text3)">↻ ' + (forceRefresh ? 'Refreshing' : 'Loading signals for') + ' ' + esc(deal.account) + '…</div>';
+  body.innerHTML = '<div style="padding:20px 0;text-align:center;font-size:13px;color:var(--text3)">↻ ' + (_retried ? 'Still working on' : forceRefresh ? 'Refreshing' : 'Loading signals for') + ' ' + esc(deal.account) + '…</div>';
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
       body:JSON.stringify({action:'get_market_signals', account_id:deal.id, account_name:deal.account, region:deal.region||'', refresh: !!forceRefresh}) });
     var d = await r.json();
+    // The first uncached fetch runs a live AI call that occasionally returns
+    // an unparseable/empty payload — which is why it used to take two manual
+    // refreshes. Detect that empty shape and retry once automatically.
+    var _broken = !d || d.error || (!d.verdict && !(d.signals && d.signals.length) && !(d.regional_signals && d.regional_signals.length) && !d.summary && !d.company_industry);
+    if (_broken && !_retried) { return _renderSignalsPane(deal, true, true); }
+    if (_broken) {
+      body.innerHTML = '<div style="padding:20px 0;text-align:center;font-size:12px;color:var(--text3)">Couldn\'t load signals right now.<br><button onclick="_renderSignalsPane(_currentDealDetail.deal, true)" style="margin-top:8px;font-size:11px;padding:5px 12px;border-radius:6px;background:var(--surface2);border:1px solid var(--border2);color:var(--gold);cursor:pointer;font-family:var(--sans)">↻ Try again</button></div>';
+      return;
+    }
     var html = '';
     var typeIcons = {hiring:'👥',funding:'💰',expansion:'🚀',contraction:'📉',leadership:'👤',technology:'⚙️',financial:'📊',competitive:'🏆'};
     var sigColors = {positive:'var(--green)',negative:'var(--coral)',neutral:'var(--amber)'};
@@ -6489,100 +6505,180 @@ async function openStakeholderInsight(stakeholderId, name, opts) {
   }
 }
 
+var _stkTab = 'active';
+function _stkIsActive(s) { return !!s.last_contacted_at || (s.contact_count || 0) > 0; }
+
+function _stkRowHtml(s) {
+  var roleLabels = {champion:'Champion',economic_buyer:'Economic buyer',blocker:'Blocker',decision_maker:'Decision maker',influencer:'Influencer',end_user:'End user',not_relevant:'Not relevant'};
+  var roleBgs = {champion:'rgba(74,140,92,0.15)',economic_buyer:'rgba(58,110,168,0.15)',blocker:'rgba(192,82,63,0.15)'};
+  var isNR = s.meddpicc_role === 'not_relevant';
+  var initials = (s.full_name || '?').split(' ').map(function(w){ return w[0] || ''; }).slice(0,2).join('').toUpperCase();
+  var recencyStr = 'Not yet contacted', recencyColor = 'var(--text3)';
+  if (s.last_contacted_at) {
+    var days = Math.round((Date.now() - new Date(s.last_contacted_at).getTime()) / 86400000);
+    if (days <= 0) { recencyStr = 'Today'; recencyColor = 'var(--green)'; }
+    else if (days <= 7) { recencyStr = days + 'd ago'; recencyColor = 'var(--green)'; }
+    else if (days <= 30) { recencyStr = days + 'd ago'; recencyColor = 'var(--amber)'; }
+    else { recencyStr = days + 'd ago'; recencyColor = 'var(--coral)'; }
+  }
+  var liHref = s.linkedin_url ? s.linkedin_url : ('https://www.linkedin.com/search/results/people/?keywords=' + encodeURIComponent(s.full_name || ''));
+  var liOpacity = s.linkedin_url ? (isNR ? '0.4' : '1') : (isNR ? '0.2' : '0.35');
+  var roleHtml = (s.meddpicc_role && s.meddpicc_role !== 'not_relevant') ? '<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:' + (roleBgs[s.meddpicc_role] || 'rgba(0,0,0,0.06)') + ';color:var(--text2);margin-left:4px">' + esc(roleLabels[s.meddpicc_role] || s.meddpicc_role) + '</span>' : '';
+  var deptChip = s.department ? '<span style="font-size:9px;color:var(--text3);background:var(--surface2);border-radius:4px;padding:1px 6px;margin-left:4px">' + esc(s.department) + '</span>' : '';
+  var html = '<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border);opacity:' + (isNR ? '0.45' : '1') + '">';
+  html += '<div style="width:34px;height:34px;border-radius:50%;background:var(--surface2);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--text2);flex-shrink:0">' + esc(initials) + '</div>';
+  html += '<div style="flex:1;min-width:0">';
+  html += '<div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;flex-wrap:wrap">';
+  html += '<span style="font-size:13px;font-weight:500;color:var(--text)">' + esc(s.full_name || '') + '</span>';
+  html += '<a href="' + esc(liHref) + '" target="_blank" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;color:#0A66C2;opacity:' + liOpacity + ';text-decoration:none"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></a>';
+  html += roleHtml + deptChip;
+  html += '</div>';
+  var titleStr = s.title ? esc(s.title) : '<span style="color:var(--border2);font-style:italic">No title</span>';
+  var locStr = s.location ? ' &nbsp;·&nbsp; <span>📍 ' + esc(s.location) + '</span>' : '';
+  html += '<div style="font-size:11px;color:var(--text3);margin-bottom:4px">' + titleStr + locStr + '</div>';
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap">';
+  html += '<span style="font-size:11px;color:' + recencyColor + '">✉ ' + recencyStr + '</span>';
+  if (s.contact_count > 0) html += '<span style="font-size:11px;color:var(--text3)">' + s.contact_count + ' emails</span>';
+  html += '</div></div>';
+  html += '<select onchange="saveStakeholderRole(\'' + s.id + '\',this.value)" style="font-size:10px;padding:3px 6px;border-radius:6px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);flex-shrink:0">';
+  ['','champion','economic_buyer','decision_maker','influencer','blocker','end_user','not_relevant'].forEach(function(rv){
+    html += '<option value="' + rv + '"' + (s.meddpicc_role === rv ? ' selected' : '') + '>' + (rv ? (roleLabels[rv] || rv) : 'Set role…') + '</option>';
+  });
+  html += '</select>';
+  html += _samoraIntelBtn('openStakeholderInsight(\'' + s.id + '\',\'' + esc(s.full_name||'') + '\')', true);
+  html += '</div>';
+  return html;
+}
+
 function _renderStakeholdersPane(stakeholders, deal) {
   var body = document.getElementById('deal-detail-body'); if (!body) return;
-  var roleLabels = {champion:'Champion',economic_buyer:'Economic buyer',blocker:'Blocker',
-    decision_maker:'Decision maker',influencer:'Influencer',end_user:'End user',not_relevant:'Not relevant'};
-  var roleBgs = {champion:'rgba(74,140,92,0.15)',economic_buyer:'rgba(58,110,168,0.15)',blocker:'rgba(192,82,63,0.15)'};
+  window._stkDeal = deal;
+  window._stkAll = stakeholders || [];
+  var all = window._stkAll;
+  var active = all.filter(_stkIsActive);
+  var prospective = all.filter(function(s){ return !_stkIsActive(s); });
+  var list = _stkTab === 'active' ? active : prospective;
 
-  var html = '';
+  var tab = function(key, label, n) {
+    var on = _stkTab === key;
+    return '<span onclick="setStkTab(\'' + key + '\')" style="padding:6px 12px;cursor:pointer;font-size:12px;font-weight:600;border-bottom:2px solid ' + (on?'var(--gold)':'transparent') + ';color:' + (on?'var(--text)':'var(--text3)') + '">' + label + ' <span style="font-size:10px;color:var(--text3)">' + n + '</span></span>';
+  };
+  var html = '<div style="display:flex;gap:6px;border-bottom:1px solid var(--border2);margin-bottom:12px">' +
+    tab('active','Active', active.length) + tab('prospective','Prospective', prospective.length) + '</div>';
 
-  if (!stakeholders || !stakeholders.length) {
-    html = '<div style="padding:16px 0;text-align:center;font-size:12px;color:var(--text3)">No contacts yet. Click below to find from Gmail activity.</div>';
+  if (_stkTab === 'active') {
+    html += '<div style="font-size:11px;color:var(--text3);margin-bottom:10px">People with real interaction: replies, calendar invites, and anyone on the thread.</div>';
   } else {
-    // Sort: has role first → recency desc → not_relevant last
-    var sorted = stakeholders.slice().sort(function(a, b) {
-      if (a.meddpicc_role === 'not_relevant' && b.meddpicc_role !== 'not_relevant') return 1;
-      if (b.meddpicc_role === 'not_relevant' && a.meddpicc_role !== 'not_relevant') return -1;
-      if (a.meddpicc_role && !b.meddpicc_role) return -1;
-      if (b.meddpicc_role && !a.meddpicc_role) return 1;
+    html += '<div style="font-size:11px;color:var(--text3);margin-bottom:10px">People reached out to or scouted, not yet interacting. They move to Active once they engage.</div>';
+  }
+
+  if (!list.length) {
+    html += '<div style="padding:14px 0;text-align:center;font-size:12px;color:var(--text3)">' + (_stkTab === 'active' ? 'No active contacts yet. Sync recent activity or find contacts below.' : 'No prospects yet. Scout stakeholders for this account below.') + '</div>';
+  } else {
+    var sorted = list.slice().sort(function(a,b){
+      if (a.meddpicc_role && a.meddpicc_role !== 'not_relevant' && !(b.meddpicc_role && b.meddpicc_role !== 'not_relevant')) return -1;
+      if (b.meddpicc_role && b.meddpicc_role !== 'not_relevant' && !(a.meddpicc_role && a.meddpicc_role !== 'not_relevant')) return 1;
       var da = a.last_contacted_at || '0', db = b.last_contacted_at || '0';
       return da > db ? -1 : da < db ? 1 : 0;
     });
-
-    var assigned = sorted.filter(function(s){ return s.meddpicc_role && s.meddpicc_role !== 'not_relevant'; }).length;
-    html += '<div style="font-size:11px;color:var(--text3);margin-bottom:10px">' + sorted.length + ' contacts · <span style="color:var(--green)">' + assigned + ' with roles</span></div>';
-
-    for (var si = 0; si < sorted.length; si++) {
-      var s = sorted[si];
-      var isNR = s.meddpicc_role === 'not_relevant';
-      var initials = (s.full_name || '?').split(' ').map(function(w){ return w[0] || ''; }).slice(0,2).join('').toUpperCase();
-
-      // Recency
-      var recencyStr = 'Not yet contacted';
-      var recencyColor = 'var(--text3)';
-      if (s.last_contacted_at) {
-        var days = Math.round((Date.now() - new Date(s.last_contacted_at).getTime()) / 86400000);
-        if (days <= 0) { recencyStr = 'Today'; recencyColor = 'var(--green)'; }
-        else if (days <= 7) { recencyStr = days + 'd ago'; recencyColor = 'var(--green)'; }
-        else if (days <= 30) { recencyStr = days + 'd ago'; recencyColor = 'var(--amber)'; }
-        else { recencyStr = days + 'd ago'; recencyColor = 'var(--coral)'; }
-      }
-
-      // LinkedIn href and opacity
-      var liHref = s.linkedin_url ? s.linkedin_url : ('https://www.linkedin.com/search/results/people/?keywords=' + encodeURIComponent(s.full_name || ''));
-      var liOpacity = s.linkedin_url ? (isNR ? '0.4' : '1') : (isNR ? '0.2' : '0.35');
-      var liTitle = s.linkedin_url ? 'LinkedIn profile' : 'Search on LinkedIn';
-
-      // Role badge
-      var roleHtml = '';
-      if (s.meddpicc_role && s.meddpicc_role !== 'not_relevant') {
-        roleHtml = '<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:' + (roleBgs[s.meddpicc_role] || 'rgba(0,0,0,0.06)') + ';color:var(--text2);margin-left:4px">' + esc(roleLabels[s.meddpicc_role] || s.meddpicc_role) + '</span>';
-      }
-
-      html += '<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border);opacity:' + (isNR ? '0.45' : '1') + '">';
-      // Avatar
-      html += '<div style="width:34px;height:34px;border-radius:50%;background:var(--surface2);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--text2);flex-shrink:0">' + esc(initials) + '</div>';
-      // Info
-      html += '<div style="flex:1;min-width:0">';
-      // Name + LinkedIn icon + role badge
-      html += '<div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;flex-wrap:wrap">';
-      html += '<span style="font-size:13px;font-weight:500;color:var(--text)">' + esc(s.full_name || '') + '</span>';
-      html += '<a href="' + esc(liHref) + '" target="_blank" title="' + esc(liTitle) + '" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;color:#0A66C2;opacity:' + liOpacity + ';text-decoration:none">';
-      html += '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>';
-      html += '</a>';
-      html += roleHtml;
-      html += '</div>';
-      // Title + location
-      var titleStr = s.title ? esc(s.title) : '<span style="color:var(--border2);font-style:italic">No title</span>';
-      var locStr = s.location ? ' &nbsp;·&nbsp; <span>📍 ' + esc(s.location) + '</span>' : '';
-      html += '<div style="font-size:11px;color:var(--text3);margin-bottom:4px">' + titleStr + locStr + '</div>';
-      // Activity signals
-      html += '<div style="display:flex;gap:8px;flex-wrap:wrap">';
-      html += '<span style="font-size:11px;color:' + recencyColor + '">✉ ' + recencyStr + '</span>';
-      if (s.contact_count > 0) html += '<span style="font-size:11px;color:var(--text3)">' + s.contact_count + ' emails</span>';
-      if (s.meeting_count > 0) html += '<span style="font-size:11px;color:var(--text3)">📅 ' + s.meeting_count + ' mtgs</span>';
-      html += '</div>';
-      html += '</div>'; // info
-      // Role dropdown
-      html += '<select onchange="saveStakeholderRole(\'' + s.id + '\',this.value)" style="font-size:10px;padding:3px 6px;border-radius:6px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);flex-shrink:0">';
-      var roleOpts = ['','champion','economic_buyer','decision_maker','influencer','blocker','end_user','not_relevant'];
-      for (var ri = 0; ri < roleOpts.length; ri++) {
-        var rv = roleOpts[ri];
-        html += '<option value="' + rv + '"' + (s.meddpicc_role === rv ? ' selected' : '') + '>' + (rv ? (roleLabels[rv] || rv) : 'Set role…') + '</option>';
-      }
-      html += '</select>';
-      html += _samoraIntelBtn('openStakeholderInsight(\'' + s.id + '\',\'' + esc(s.full_name||'') + '\')', true);
-      html += '</div>'; // row
-    }
+    sorted.forEach(function(s){ html += _stkRowHtml(s); });
   }
 
-  // Enrich button
-  html += '<button onclick="enrichDeal(\'' + esc(deal && deal.id || '') + '\',\'' + esc(deal && deal.account || '') + '\')" id="enrichDealBtn" style="width:100%;margin-top:12px;padding:10px;border-radius:8px;background:var(--surface2);border:1px dashed var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer">' + _samoraIntelLabel('Find contacts from Gmail &amp; SmartReach activity') + '</button>';
-  html += '<div id="enrichDealStatus" style="font-size:11px;color:var(--text3);margin-top:6px"></div>';
-  html += '<button onclick="refreshStakeholderSignals(\'' + esc(deal && deal.id || '') + '\').then(function(d){if(d&&d.ok&&_currentDealDetail){_renderStakeholdersPane(_currentDealDetail.stakeholders, deal);}});" style="width:100%;margin-top:6px;padding:8px;border-radius:8px;background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);font-size:11px;cursor:pointer">↻ Refresh contact activity from Gmail</button>';
-
+  var dealId = deal && deal.id || '';
+  if (_stkTab === 'active') {
+    html += '<button onclick="enrichDeal(\'' + esc(dealId) + '\',\'' + esc(deal && deal.account || '') + '\')" id="enrichDealBtn" style="width:100%;margin-top:12px;padding:10px;border-radius:8px;background:var(--surface2);border:1px dashed var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer">' + _samoraIntelLabel('Find &amp; enrich contacts from activity') + '</button>';
+    html += '<div id="enrichDealStatus" style="font-size:11px;color:var(--text3);margin-top:6px"></div>';
+    html += '<button onclick="syncActiveStakeholders(\'' + esc(dealId) + '\')" id="syncActiveBtn" style="width:100%;margin-top:6px;padding:8px;border-radius:8px;background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);font-size:11px;cursor:pointer">↻ Sync recent contacts from Gmail &amp; calendar</button>';
+  } else {
+    html += '<button onclick="scoutStakeholders(\'' + esc(dealId) + '\')" id="scoutBtn" style="width:100%;margin-top:12px;padding:10px;border-radius:8px;background:rgba(160,117,42,0.08);border:1px solid rgba(160,117,42,0.4);color:var(--gold);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">' + _samoraIntelLabel('Scout stakeholders for this account') + '</button>';
+    html += '<div id="scoutStatus" style="font-size:11px;color:var(--text3);margin-top:6px"></div>';
+    if (typeof canManageOrg === 'function' && canManageOrg(profile ? profile.role : '')) {
+      html += '<div onclick="openScoutProfile()" style="font-size:10px;color:var(--text3);text-align:center;margin-top:8px;cursor:pointer">⚙ Configure scout profile (departments &amp; seniority)</div>';
+    }
+  }
   body.innerHTML = html;
+}
+
+function setStkTab(t) { _stkTab = t; _renderStakeholdersPane(window._stkAll, window._stkDeal); }
+
+async function _reloadStakeholders(dealId) {
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({ action:'get_stakeholders', account_id:dealId }) });
+    var d = await r.json();
+    var stk = d.stakeholders || [];
+    if (_currentDealDetail) _currentDealDetail.stakeholders = stk;
+    _renderStakeholdersPane(stk, window._stkDeal || (_currentDealDetail && _currentDealDetail.deal));
+  } catch(e) {}
+}
+
+async function syncActiveStakeholders(dealId) {
+  var st = document.getElementById('syncActiveBtn'); if (st) { st.textContent = '↻ Scanning Gmail & calendar…'; st.disabled = true; }
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({ action:'sync_active_stakeholders', account_id:dealId, days:90 }) });
+    var d = await r.json();
+    if (!d.ok) { if (st){st.textContent='↻ Sync recent contacts from Gmail & calendar';st.disabled=false;} showToast(d.error || 'Sync unavailable'); return; }
+    showToast(d.discovered ? '✓ ' + d.discovered + ' contact' + (d.discovered!==1?'s':'') + ' synced' : 'No new recent contacts found');
+    _stkTab = 'active';
+    _reloadStakeholders(dealId);
+  } catch(e) { if (st){st.textContent='↻ Sync recent contacts from Gmail & calendar';st.disabled=false;} showToast('Error: ' + e.message); }
+}
+
+async function scoutStakeholders(dealId) {
+  var st = document.getElementById('scoutStatus'); if (st) st.innerHTML = '<span style="color:var(--gold)">Scouting stakeholders by your scout profile…</span>';
+  var btn = document.getElementById('scoutBtn'); if (btn) btn.disabled = true;
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({ action:'scout_stakeholders', account_id:dealId }) });
+    var d = await r.json();
+    if (btn) btn.disabled = false;
+    if (!d.ok) { if (st) st.innerHTML = '<span style="color:var(--coral)">' + esc(d.error || 'Scout unavailable') + '</span>'; return; }
+    if (!d.scouted) { if (st) st.innerHTML = '<span style="color:var(--text3)">' + esc(d.error || 'No new prospects found for this profile.') + '</span>'; return; }
+    showToast('✓ ' + d.scouted + ' prospect' + (d.scouted!==1?'s':'') + ' scouted via ' + (d.provider||'enrichment'));
+    _stkTab = 'prospective';
+    _reloadStakeholders(dealId);
+  } catch(e) { if (btn) btn.disabled = false; if (st) st.innerHTML = '<span style="color:var(--coral)">Error: ' + esc(e.message) + '</span>'; }
+}
+
+var _SCOUT_DEPTS = ['Sales','Strategy','Marketing','HR','Finance','Operations','IT','Product','Engineering'];
+var _SCOUT_SENIORITIES = ['Mid','Senior','Leadership','CXO'];
+async function openScoutProfile() {
+  document.getElementById('scout-profile-modal')?.remove();
+  var current = { departments: ['Sales','Marketing','Strategy'], seniorities: ['Senior','Leadership','CXO'] };
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({ action:'get_org_setting', key:'stakeholder_scout_profile' }) });
+    var d = await r.json();
+    if (d.value) { var p = JSON.parse(d.value); if (p.departments) current.departments = p.departments; if (p.seniorities) current.seniorities = p.seniorities; }
+  } catch(e) {}
+  var chip = function(group, val, on) {
+    return '<label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:5px 10px;border-radius:16px;border:1px solid ' + (on?'var(--gold)':'var(--border2)') + ';background:' + (on?'rgba(160,117,42,0.08)':'transparent') + ';color:' + (on?'var(--gold)':'var(--text2)') + ';cursor:pointer;margin:0 6px 6px 0"><input type="checkbox" data-group="' + group + '" value="' + val + '"' + (on?' checked':'') + ' style="margin:0">' + val + '</label>';
+  };
+  var modal = document.createElement('div');
+  modal.id = 'scout-profile-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10000;display:flex;align-items:flex-end;justify-content:center';
+  modal.innerHTML = '<div style="background:var(--bg);border-radius:16px 16px 0 0;width:100%;max-width:520px;padding:20px;max-height:80vh;overflow-y:auto" onclick="event.stopPropagation()">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><div style="font-size:15px;font-weight:700;color:var(--text)">Scout profile</div><button onclick="document.getElementById(\'scout-profile-modal\').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3)">✕</button></div>' +
+    '<div style="font-size:12px;color:var(--text3);margin-bottom:14px">Which people the scout should look for at target accounts. Applies org-wide.</div>' +
+    '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Departments</div>' +
+    '<div style="margin-bottom:16px">' + _SCOUT_DEPTS.map(function(x){ return chip('dept', x, current.departments.indexOf(x) !== -1); }).join('') + '</div>' +
+    '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Seniority</div>' +
+    '<div style="margin-bottom:18px">' + _SCOUT_SENIORITIES.map(function(x){ return chip('sen', x, current.seniorities.indexOf(x) !== -1); }).join('') + '</div>' +
+    '<button onclick="saveScoutProfile()" style="width:100%;padding:12px;border:none;border-radius:10px;background:var(--gold);color:#18160F;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--sans)">Save profile</button>' +
+  '</div>';
+  modal.addEventListener('click', function(){ modal.remove(); });
+  document.body.appendChild(modal);
+}
+
+async function saveScoutProfile() {
+  var depts = [], sens = [];
+  document.querySelectorAll('#scout-profile-modal input[type=checkbox]').forEach(function(c){
+    if (!c.checked) return;
+    if (c.getAttribute('data-group') === 'dept') depts.push(c.value); else sens.push(c.value);
+  });
+  try {
+    await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({ action:'save_org_setting', key:'stakeholder_scout_profile', value: JSON.stringify({ departments:depts, seniorities:sens }) }) });
+    document.getElementById('scout-profile-modal')?.remove();
+    showToast('✓ Scout profile saved');
+  } catch(e) { showToast('Error: ' + e.message); }
 }
 
 
@@ -8312,7 +8408,7 @@ function renderPipelineDeals(data) {
           '<div style="margin-top:4px;font-size:10px;color:var(--text3)">' + prob + '% → ' + fmtUsd(d.weighted_value_usd) + '</div>' +
           '<div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">' +
             '<button onclick="' + (d.tier==='verified' ? 'openDealValueForm(\''+d.id+'\',\''+esc(d.account)+'\')' : d.tier==='partial' ? 'boostSignals(\''+d.id+'\',\''+esc(d.account)+'\')' : 'openDealValueForm(\''+d.id+'\',\''+esc(d.account)+'\')') + '" style="font-size:10px;padding:3px 10px;border-radius:4px;border:1px solid ' + (d.tier==='verified'?'var(--border2)':d.tier==='partial'?'var(--amber)':'var(--green)') + ';background:transparent;color:' + (d.tier==='verified'?'var(--text3)':d.tier==='partial'?'var(--amber)':'var(--green)') + ';cursor:pointer">' + (d.tier==='verified'?'Edit':d.tier==='partial'?'⚡ Boost':'Confirm') + '</button>' +
-            '<button onclick="openAccountTimeline(\''+esc(d.id)+'\',\''+esc(d.account)+'\')" style="font-size:10px;padding:3px 10px;border-radius:4px;border:1px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer">📋 Timeline</button>' +
+            '<button onclick="openAccountTimeline(\''+esc(d.id)+'\',\''+esc(d.account)+'\')" style="display:inline-flex;align-items:center;gap:5px;font-size:10px;padding:3px 10px;border-radius:4px;border:1px solid rgba(160,117,42,0.4);background:rgba(160,117,42,0.08);color:var(--gold);font-weight:600;cursor:pointer"><img src="icons/icon-48.png" alt="" style="width:12px;height:12px;border-radius:50%"/>Timeline</button>' +
             '<button onclick="openCloseDeal(\''+esc(d.id)+'\',\''+esc(d.account)+'\')" style="font-size:10px;padding:3px 10px;border-radius:4px;border:1px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer">Close deal</button>' +
           '</div>' +
         '</div>' +
@@ -8458,32 +8554,58 @@ async function confirmCloseDeal(opportunityId) {
 }
 
 // ── Account Timeline ──────────────────────────────────────────────────────────
+var _tlDays = 60;
 async function openAccountTimeline(accountId, accountName) {
   document.getElementById('timeline-modal')?.remove();
+  window._tlAcct = { id: accountId, name: accountName };
   var modal = document.createElement('div');
   modal.id = 'timeline-modal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  var rangeBtns = [30,60,180].map(function(dn){
+    var on = _tlDays === dn;
+    return '<span onclick="_setTimelineDays(' + dn + ')" style="padding:3px 11px;cursor:pointer;font-size:11px;background:' + (on?'var(--surface)':'transparent') + ';color:' + (on?'var(--text)':'var(--text3)') + '">' + dn + 'd</span>';
+  }).join('');
   modal.innerHTML = '<div style="background:var(--bg);border-radius:16px 16px 0 0;width:100%;max-width:520px;padding:20px;max-height:82vh;overflow-y:auto" onclick="event.stopPropagation()">' +
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
-      '<div><div style="font-size:15px;font-weight:700;color:var(--text)">📋 Account timeline</div><div style="font-size:12px;color:var(--text3)">' + esc(accountName) + ' · last 90 days</div></div>' +
-      '<button onclick="document.getElementById(\'timeline-modal\').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3)">✕</button>' +
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">' +
+      '<div><div style="font-size:15px;font-weight:700;color:var(--text)">Account timeline</div><div id="timeline-sub" style="font-size:12px;color:var(--text3)">' + esc(accountName) + ' · last ' + _tlDays + ' days</div></div>' +
+      '<div style="display:flex;align-items:center;gap:10px">' +
+        '<span id="timeline-range" style="display:inline-flex;border:1px solid var(--border2);border-radius:8px;overflow:hidden">' + rangeBtns + '</span>' +
+        '<button onclick="document.getElementById(\'timeline-modal\').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3)">✕</button>' +
+      '</div>' +
     '</div>' +
-    '<div style="margin-bottom:12px">' + _samoraIntelLabel('Account activity and engagement') + '</div>' +
+    '<div style="margin-bottom:12px">' + _samoraIntelLabel('Intelligence-guided timeline') + '</div>' +
     '<div id="timeline-body"><div style="font-size:12px;color:var(--text3);padding:20px 0;text-align:center">Loading…</div></div>' +
   '</div>';
   modal.addEventListener('click', function() { modal.remove(); });
   document.body.appendChild(modal);
+  _loadTimelineBody();
+}
 
+function _setTimelineDays(dn) {
+  _tlDays = dn;
+  ['30','60','180'].forEach(function(){});
+  var rng = document.getElementById('timeline-range');
+  if (rng) rng.innerHTML = [30,60,180].map(function(x){
+    var on = _tlDays === x;
+    return '<span onclick="_setTimelineDays(' + x + ')" style="padding:3px 11px;cursor:pointer;font-size:11px;background:' + (on?'var(--surface)':'transparent') + ';color:' + (on?'var(--text)':'var(--text3)') + '">' + x + 'd</span>';
+  }).join('');
+  var sub = document.getElementById('timeline-sub');
+  if (sub && window._tlAcct) sub.textContent = window._tlAcct.name + ' · last ' + _tlDays + ' days';
+  _loadTimelineBody();
+}
+
+async function _loadTimelineBody() {
+  var body = document.getElementById('timeline-body');
+  if (!body || !window._tlAcct) return;
+  body.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:20px 0;text-align:center">Loading…</div>';
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
-      body: JSON.stringify({ action:'get_account_timeline', account_id:accountId, days:90 }) });
+      body: JSON.stringify({ action:'get_account_timeline', account_id:window._tlAcct.id, days:_tlDays }) });
     var data = await r.json();
-    var body = document.getElementById('timeline-body');
-    if (!body) return;
+    body = document.getElementById('timeline-body'); if (!body) return;
     var acts = (data.activities || data.timeline || []).filter(function(e){ return e && e.date; });
     var series = data.score_series || [];
-    if (!acts.length && !series.length) { body.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:20px 0;text-align:center">No activity found in the last 90 days.</div>'; return; }
-
+    if (!acts.length && !series.length) { body.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:20px 0;text-align:center">No activity found in the last ' + _tlDays + ' days.</div>'; return; }
     body.innerHTML = _renderTimelineIntel(acts, data.engagement, series) + _renderTimelineEvents(acts);
   } catch(e) {
     var b = document.getElementById('timeline-body');
