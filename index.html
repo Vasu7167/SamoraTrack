@@ -2183,7 +2183,8 @@ function renderListHTML(key, items) {
       const priorityBadge = isPriority ? '<span class="priority-badge">Priority</span>' : '';
       const delegatedBadge = item.delegatedBy ? '<span class="delegated-badge">\u2193 ' + esc(item.delegatedBy.split('@')[0]) + '</span>' : '';
       // Auto-completion evidence badge \u2014 shows HOW Samora verified the task
-      const verifyLabels = { gmail_sent: '\u2709 Verified \u00b7 sent mail', meeting_transcript: '\ud83c\udf99 Verified \u00b7 transcript', post_meeting_followup: '\ud83d\udcc5 Post-Meeting-FollowUp-Sent' };
+      const notetakerNames = { fireflies:'Fireflies', fathom:'Fathom', otter:'Otter', read_ai:'Read.ai', grain:'Grain', tldv:'tl;dv', gong:'Gong', avoma:'Avoma', fellow:'Fellow', meetgeek:'MeetGeek', notta:'Notta', spinach:'Spinach', sembly:'Sembly', supernormal:'Supernormal', krisp:'Krisp', circleback:'CircleBack' };
+      const verifyLabels = { gmail_sent: '\u2709 Verified \u00b7 sent mail', meeting_transcript: '\ud83c\udf99 Verified \u00b7 transcript', post_meeting_followup: '\ud83d\udcc5 Post-Meeting-FollowUp-Sent', notetaker_email: '\ud83c\udf99 Verified \u00b7 ' + (notetakerNames[item.verifiedSource] ? notetakerNames[item.verifiedSource] + ' notes' : 'meeting notes') };
       const verifyBadge = (item.autoCompleted && verifyLabels[item.verifiedVia])
         ? '<span style="font-size:9px;font-weight:700;color:var(--green);background:rgba(74,140,92,0.12);border-radius:4px;padding:1px 6px;margin-left:6px;white-space:nowrap">' + verifyLabels[item.verifiedVia] + '</span>'
         : (item.meetingFlag ? '<span style="font-size:9px;font-weight:700;color:var(--amber);background:rgba(160,117,42,0.12);border-radius:4px;padding:1px 6px;margin-left:6px;white-space:nowrap">\u26a0 Meeting ' + item.meetingFlag + '</span>' : '');
@@ -4482,14 +4483,19 @@ async function autoCompleteTasks(silent) {
       return !t.done && (t.source === 'calendar' || /\bmeeting\b|\bdemo\b|\bcall with\b|\bsync\b/i.test(t.text));
     });
     if (calTasks.length) {
-      var transcripts = [], verifiedMeetings = [];
+      var transcripts = [], verifiedMeetings = [], inboxNotes = [];
       try {
         var results = await Promise.all([
           fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'get_meeting_transcripts', days:2}) }).then(function(r){return r.json();}),
-          fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'verify_meetings', date: today2}) }).then(function(r){return r.json();})
+          fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'verify_meetings', date: today2}) }).then(function(r){return r.json();}),
+          // Notetaker recaps sitting in the inbox (Fireflies/Fathom/Otter/Read.ai/
+          // Grain/tl;dv/Gong/... email you a summary). Deterministic scan, no AI.
+          // A recap only exists if the meeting happened, so it is attendance proof.
+          fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'list_notetaker_notes', days:7}) }).then(function(r){return r.json();})
         ]);
         transcripts = results[0].transcripts || [];
         verifiedMeetings = results[1].meetings || [];
+        inboxNotes = results[2].notes || [];
       } catch(e) { /* non-fatal */ }
       calTasks.forEach(function(task) {
         // Must be past the scheduled time (+30 min grace) if a time is present
@@ -4522,7 +4528,20 @@ async function autoCompleteTasks(silent) {
         });
         if (ev) {
           task.done = true; task.autoCompleted = true; task.verifiedVia = 'meeting_transcript'; count++;
-          autoLog.push('📅 ' + esc(task.text.slice(0,50)) + ' → transcript "' + esc((ev.title||'').slice(0,40)) + '"');
+          autoLog.push('🎙 ' + esc(task.text.slice(0,50)) + ' → transcript "' + esc((ev.title||'').slice(0,40)) + '"');
+          return;
+        }
+        // Evidence 1b: notetaker recap email in the inbox. Same strength as a
+        // direct transcript (the recap only exists if the meeting happened),
+        // but tagged as a distinct source so the badge shows a 🎙 receipt.
+        var note = inboxNotes.find(function(n) {
+          var nt = ((n.title||'') + ' ' + (n.participants||[]).join(' ')).toLowerCase();
+          return words.some(function(w){ return nt.includes(w); });
+        });
+        if (note) {
+          task.done = true; task.autoCompleted = true; task.verifiedVia = 'notetaker_email';
+          task.verifiedSource = note.provider || 'notetaker'; count++;
+          autoLog.push('🎙 ' + esc(task.text.slice(0,50)) + ' → meeting notes "' + esc((note.title||'').slice(0,40)) + '"');
           return;
         }
         // Evidence 2: Post-Meeting-FollowUp-Sent — rep emailed an external
