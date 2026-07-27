@@ -2184,10 +2184,14 @@ function renderListHTML(key, items) {
       const delegatedBadge = item.delegatedBy ? '<span class="delegated-badge">\u2193 ' + esc(item.delegatedBy.split('@')[0]) + '</span>' : '';
       // Auto-completion evidence badge \u2014 shows HOW Samora verified the task
       const notetakerNames = { fireflies:'Fireflies', fathom:'Fathom', otter:'Otter', read_ai:'Read.ai', grain:'Grain', tldv:'tl;dv', gong:'Gong', avoma:'Avoma', fellow:'Fellow', meetgeek:'MeetGeek', notta:'Notta', spinach:'Spinach', sembly:'Sembly', supernormal:'Supernormal', krisp:'Krisp', circleback:'CircleBack' };
-      const verifyLabels = { gmail_sent: '\u2709 Verified \u00b7 sent mail', meeting_transcript: '\ud83c\udf99 Verified \u00b7 transcript', post_meeting_followup: '\ud83d\udcc5 Post-Meeting-FollowUp-Sent', notetaker_email: '\ud83c\udf99 Verified \u00b7 ' + (notetakerNames[item.verifiedSource] ? notetakerNames[item.verifiedSource] + ' notes' : 'meeting notes') };
+      const verifyLabels = { gmail_sent: '\u2709 Verified \u00b7 ' + (item.verifiedCount ? item.verifiedCount + ' sent' : 'sent mail'), meeting_transcript: '\ud83c\udf99 Verified \u00b7 transcript', post_meeting_followup: '\ud83d\udcc5 Post-Meeting-FollowUp-Sent', notetaker_email: '\ud83c\udf99 Verified \u00b7 ' + (notetakerNames[item.verifiedSource] ? notetakerNames[item.verifiedSource] + ' notes' : 'meeting notes') };
+      // Partial bulk-send progress (e.g. 3/15 sent): shown while the task stays open.
+      const progressBadge = (!item.done && item.sendProgress)
+        ? '<span style="font-size:9px;font-weight:700;color:var(--amber);background:rgba(160,117,42,0.12);border-radius:4px;padding:1px 6px;margin-left:6px;white-space:nowrap">\u2709 ' + esc(item.sendProgress) + ' sent</span>'
+        : '';
       const verifyBadge = (item.autoCompleted && verifyLabels[item.verifiedVia])
         ? '<span style="font-size:9px;font-weight:700;color:var(--green);background:rgba(74,140,92,0.12);border-radius:4px;padding:1px 6px;margin-left:6px;white-space:nowrap">' + verifyLabels[item.verifiedVia] + '</span>'
-        : (item.meetingFlag ? '<span style="font-size:9px;font-weight:700;color:var(--amber);background:rgba(160,117,42,0.12);border-radius:4px;padding:1px 6px;margin-left:6px;white-space:nowrap">\u26a0 Meeting ' + item.meetingFlag + '</span>' : '');
+        : (item.meetingFlag ? '<span style="font-size:9px;font-weight:700;color:var(--amber);background:rgba(160,117,42,0.12);border-radius:4px;padding:1px 6px;margin-left:6px;white-space:nowrap">\u26a0 Meeting ' + item.meetingFlag + '</span>' : progressBadge);
       const carryMeta = item.carriedFrom ? '<div class="item-meta" style="color:var(--gold)">↗ Carried from ' + fmtDate(item.carriedFrom) + (item.carryReason?' · '+item.carryReason:'') + '</div>' : (item.carriedTo ? '<div class="item-meta" style="color:var(--text3)">⟶ Moved to ' + (item.carriedToLabel||item.carriedTo) + '</div>' : '');
       const tsMeta = (item.addedAt ? '<div class="item-meta">' + (item.delegatedBy?'Delegated ':'Added ') + item.addedAt + (item.completedAt?' · Completed '+item.completedAt:'') + '</div>' : '') + carryMeta;
       return '<div class="item ' + (item.done?'done':'') + ' ' + (isPriority?'priority-task':'') + '" data-task-idx="' + i + '" data-carry-text="' + esc(displayText) + '"' + (item.carriedTo?' style="opacity:0.5"':'') + '>' +
@@ -4460,6 +4464,115 @@ async function processOooMails() {
 // ── Auto-complete obvious tasks ───────────────────────────────────────────────
 // Marks done any task that is clearly completed based on context:
 // ── Auto-complete tasks via Gmail verification ────────────────────────────────
+//
+// Matching guards (precision-first, "every completion shows its receipts"):
+//   • DATE  — a task for today is only ever verified by evidence dated today.
+//             Past transcripts/notes/mails never complete a current-day task.
+//   • PERSON— if the task names a person ("Call Aman Gautam", "connect with
+//             Milind"), the evidence must reference that person, not just the
+//             company. A company-only match on a person task is rejected.
+//   • REGION— if the task is geography-scoped ("Reckitt Africa"), the evidence
+//             must carry the same region. Conflicting-region or region-less
+//             evidence is rejected so an APAC thread never closes an Africa task.
+//   • COUNT — "send 15 mails" needs 15 matching sends, not 1, before completing.
+var _REGION_ALIASES = {
+  africa:   ['africa','african','nigeria','kenya','egypt','morocco','ghana','south africa'],
+  apac:     ['apac','asia pacific','asia-pacific','sea','anz','australia','singapore','japan','korea','indonesia','philippines','vietnam','thailand','malaysia'],
+  india:    ['india','indian','bharat','mumbai','delhi','bengaluru','bangalore','pune','chennai'],
+  europe:   ['europe','european','emea','uk','united kingdom','germany','france','spain','italy','nordics','netherlands','poland'],
+  mena:     ['mena','middle east','gcc','uae','dubai','saudi','qatar','kuwait','bahrain','oman'],
+  americas: ['americas','latam','usa','united states','north america','canada','mexico','brazil','argentina','colombia']
+};
+function _regionsIn(text) {
+  var t = (text || '').toLowerCase(), out = [];
+  Object.keys(_REGION_ALIASES).forEach(function(canon) {
+    var hit = _REGION_ALIASES[canon].some(function(a) {
+      return new RegExp('(^|[^a-z])' + a.replace(/[-\/\\^$*+?.()|[\]{}]/g,'\\$&') + '([^a-z]|$)').test(t);
+    });
+    if (hit) out.push(canon);
+  });
+  return out;
+}
+// Regional task ⇒ evidence must share the region. Non-regional task ⇒ no gate.
+function _regionGateOk(taskText, evidenceText) {
+  var tr = _regionsIn(taskText);
+  if (!tr.length) return true;
+  var er = _regionsIn(evidenceText);
+  if (!er.length) return false;                        // no region receipt → reject
+  return tr.some(function(r) { return er.indexOf(r) > -1; });
+}
+// Pull named people from action verbs. Returns first/last name tokens to look for.
+function _personsIn(taskText) {
+  // Triggers matched case-insensitively (so a sentence-initial "Call ..." works);
+  // the captured name must still be Capitalized to look like a proper noun.
+  var re = /\b(?:call|called|connect with|catch up with|catchup with|sync with|meeting with|meet with|meet|met|ping|speak to|spoke to|reach(?:ed)? out to|follow up with|followup with|touch base with|with)\s+([A-Za-z][a-z]+(?:\s+[A-Za-z][a-z]+)?)/gi;
+  var names = [], m;
+  while ((m = re.exec(taskText || ''))) {
+    var n = m[1].trim();
+    if (!/^[A-Z]/.test(n)) continue;                    // must start capitalized
+    if (_regionsIn(n).length) continue;                 // don't treat a place as a person
+    names.push(n);
+  }
+  return names;
+}
+function _personGateOk(taskText, evidenceText) {
+  var people = _personsIn(taskText);
+  if (!people.length) return true;
+  var own = _ownIdentityTokens();
+  var ev = (evidenceText || '').toLowerCase(), tokens = [];
+  people.forEach(function(p) { p.toLowerCase().split(/\s+/).forEach(function(tok) { if (tok.length >= 3 && own.indexOf(tok) === -1) tokens.push(tok); }); });
+  if (!tokens.length) return true;                       // only self-named → no gate
+  return tokens.some(function(tok) { return ev.indexOf(tok) > -1; });
+}
+// Evidence date must be today. If the evidence carries no timestamp we cannot
+// prove same-day, so for date-sensitive phases we treat "no date" as pass only
+// when the fetch window was already today-scoped (documented at each call site).
+function _isToday(ms) {
+  if (!ms) return false;
+  var n = Number(ms);
+  if (n < 1e12) n *= 1000;                              // seconds → ms
+  return dateKey(new Date(n)) === todayKey();
+}
+function _evDate(o) {
+  if (!o) return 0;
+  return o.date || o.ts || o.timestamp || o.internalDate || o.sentAt || o.started_at || o.receivedDateTime || 0;
+}
+// One gate to rule them all (person + region). Date handled per call site.
+function _matchGatesOk(taskText, evidenceText) {
+  return _personGateOk(taskText, evidenceText) && _regionGateOk(taskText, evidenceText);
+}
+// Parse an explicit target count out of bulk-send tasks ("send 15 mails").
+function _requiredCount(taskText) {
+  var m = (taskText || '').match(/\b(\d{1,3})\s*(?:\+\s*)?(mails?|e-?mails?|messages?|msgs?|outreach(?:es)?|touch(?:es|points?)?|follow.?ups?|sequences?|contacts?|prospects?|accounts?)\b/i);
+  if (!m) return 1;
+  var n = parseInt(m[1], 10);
+  return (n && n > 1) ? n : 1;
+}
+// Meeting/task boilerplate that is NOT a usable identifier. A recap can only
+// complete a task if it shares a DISTINCTIVE token (a person, account or topic),
+// never a generic word like "weekly" or "review" — otherwise a notetaker digest
+// or notification email that merely contains "weekly" would falsely verify it.
+var _GENERIC_TASK_WORDS = {};
+('meeting meetings call calls sync syncs demo demos review reviews weekly biweekly monthly daily quarterly fortnightly cadence standup huddle catchup checkin touchbase brainstorm brainstorming session sessions discussion discuss align alignment update updates recap recaps notes note followup followups follow internal external team teams general misc adhoc connect chat quick roundup planning plan prep debrief retro retrospective onboarding intro introduction kickoff alignment virtual physical online zoom gmeet meet google calendar invite scheduled schedule reschedule finalize finalise about regarding discuss next steps step this that from your please today tomorrow week month with and the for our their your').split(/\s+/).forEach(function(w){ _GENERIC_TASK_WORDS[w] = 1; });
+// The signed-in user's own identity tokens (from their email local-part). These
+// must NEVER be used as a match key: the user is a participant on essentially
+// every recap they receive, so their own name ("vasu") appears in all of their
+// evidence — including colleagues' Read.ai/Fireflies recaps CC'd to them. Using
+// it would let any recap verify any of their meetings.
+function _ownIdentityTokens() {
+  var toks = [];
+  try {
+    var email = ((typeof currentUser !== 'undefined' && currentUser && currentUser.email) || '').toLowerCase();
+    (email.split('@')[0] || '').split(/[._\-+]+/).forEach(function(t) { if (t.length >= 3) toks.push(t); });
+  } catch (e) {}
+  return toks;
+}
+function _distinctiveWords(taskText) {
+  var own = _ownIdentityTokens();
+  return (taskText || '').toLowerCase().replace(/[^a-z0-9\s]/g,' ').split(/\s+/).filter(function(w) {
+    return w.length >= 4 && !_GENERIC_TASK_WORDS[w] && own.indexOf(w) === -1;
+  });
+}
 var _autoCompleteBusy = false;
 async function autoCompleteTasks(silent) {
   if (_autoCompleteBusy) return;
@@ -4480,18 +4593,22 @@ async function autoCompleteTasks(silent) {
     // only produce one if the meeting actually happened). True "joined the link" logs
     // need Google Workspace admin APIs, so transcripts are the reliable proxy.
     var calTasks = (d.tasks || []).filter(function(t) {
-      return !t.done && (t.source === 'calendar' || /\bmeeting\b|\bdemo\b|\bcall with\b|\bsync\b/i.test(t.text));
+      return !t.done && (t.source === 'calendar' || /\bmeeting\b|\bdemo\b|\bcall\b|\bconnect\b|\bsync\b|\bcatch.?up\b/i.test(t.text));
     });
     if (calTasks.length) {
       var transcripts = [], verifiedMeetings = [], inboxNotes = [];
+      // Hard lower bound = start of TODAY in local time (epoch seconds). The scan
+      // can never reach into yesterday or earlier; a today task is only ever
+      // matched against today's evidence.
+      var _startOfToday = Math.floor(new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000);
       try {
         var results = await Promise.all([
-          fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'get_meeting_transcripts', days:2}) }).then(function(r){return r.json();}),
+          fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'get_meeting_transcripts', days:1, since:_startOfToday}) }).then(function(r){return r.json();}),
           fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'verify_meetings', date: today2}) }).then(function(r){return r.json();}),
           // Notetaker recaps sitting in the inbox (Fireflies/Fathom/Otter/Read.ai/
           // Grain/tl;dv/Gong/... email you a summary). Deterministic scan, no AI.
           // A recap only exists if the meeting happened, so it is attendance proof.
-          fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'list_notetaker_notes', days:7}) }).then(function(r){return r.json();})
+          fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'list_notetaker_notes', days:1, since:_startOfToday}) }).then(function(r){return r.json();})
         ]);
         transcripts = results[0].transcripts || [];
         verifiedMeetings = results[1].meetings || [];
@@ -4509,6 +4626,12 @@ async function autoCompleteTasks(silent) {
           return w.length >= 4 && !['meeting','with','call','sync','demo','catch','catchup','virtual'].includes(w);
         });
         if (!words.length) return;
+        // Distinctive tokens (names/accounts/topics, generic meeting words stripped).
+        // Recap/transcript evidence must overlap on one of THESE, never on a bare
+        // "weekly"/"review". A task with no distinctive token (e.g. "Weekly Cadence
+        // / Review") can only be closed by real calendar attendance, not a recap.
+        var distinct = _distinctiveWords(task.text);
+        var hasIdentity = distinct.length > 0 || _personsIn(task.text).length > 0;
 
         // Match the task to a verified calendar event by title-word overlap
         var calEv = verifiedMeetings.find(function(m) {
@@ -4521,22 +4644,28 @@ async function autoCompleteTasks(silent) {
           return;
         }
 
-        // Evidence 1 (strongest): notetaker transcript exists
-        var ev = transcripts.find(function(t) {
+        // Evidence 1 (strongest): notetaker transcript exists — but only one
+        // recorded TODAY, sharing a DISTINCTIVE token, naming the right person,
+        // in the right region.
+        var ev = hasIdentity && transcripts.find(function(t) {
           var tt = ((t.title||'') + ' ' + (t.participants||[]).join(' ')).toLowerCase();
-          return words.some(function(w){ return tt.includes(w); });
+          if (!distinct.some(function(w){ return tt.includes(w); })) return false;
+          var td = _evDate(t);
+          if (td && !_isToday(td)) return false;         // never a prior-day transcript
+          return _matchGatesOk(task.text, tt);
         });
         if (ev) {
           task.done = true; task.autoCompleted = true; task.verifiedVia = 'meeting_transcript'; count++;
           autoLog.push('🎙 ' + esc(task.text.slice(0,50)) + ' → transcript "' + esc((ev.title||'').slice(0,40)) + '"');
           return;
         }
-        // Evidence 1b: notetaker recap email in the inbox. Same strength as a
-        // direct transcript (the recap only exists if the meeting happened),
-        // but tagged as a distinct source so the badge shows a 🎙 receipt.
-        var note = inboxNotes.find(function(n) {
+        // Evidence 1b: notetaker recap email in the inbox (today only, distinctive
+        // token required so a digest/notification never verifies a meeting).
+        var note = hasIdentity && inboxNotes.find(function(n) {
           var nt = ((n.title||'') + ' ' + (n.participants||[]).join(' ')).toLowerCase();
-          return words.some(function(w){ return nt.includes(w); });
+          if (!distinct.some(function(w){ return nt.includes(w); })) return false;
+          if (!_isToday(_evDate(n))) return false;        // recap must be dated today
+          return _matchGatesOk(task.text, nt);
         });
         if (note) {
           task.done = true; task.autoCompleted = true; task.verifiedVia = 'notetaker_email';
@@ -4545,18 +4674,20 @@ async function autoCompleteTasks(silent) {
           return;
         }
         // Evidence 2: Post-Meeting-FollowUp-Sent — rep emailed an external
-        // attendee within 36h after the event ended
-        if (calEv && calEv.ended && calEv.followup_sent) {
+        // attendee within 36h after the event ended. verify_meetings is already
+        // today-scoped; still apply person + region gates.
+        if (calEv && calEv.ended && calEv.followup_sent &&
+            _matchGatesOk(task.text, ((calEv.title||'') + ' ' + (calEv.external_attendees||[]).join(' ') + ' ' + (calEv.followup_subject||'')).toLowerCase())) {
           task.done = true; task.autoCompleted = true; task.verifiedVia = 'post_meeting_followup'; count++;
           autoLog.push('📅 ' + esc(task.text.slice(0,50)) + ' → Post-Meeting-FollowUp-Sent' + (calEv.followup_subject ? ' "' + esc(calEv.followup_subject.slice(0,35)) + '"' : ''));
         }
       });
     }
 
-    // Phase 2: email/respond tasks — evidence in Gmail/Outlook sent folder
+    // Phase 2: email/respond/outreach tasks — evidence in Gmail/Outlook sent folder
     var emailTasks = (d.tasks || []).filter(function(t) {
       if (t.done) return false;
-      return /\bmail\b|\bsend\b|\brespond\b|\breply\b|\bfollow.?up\b|\breach.?out\b|\bwrite\b|\bemail\b|\bshare\b|\bMOM\b|\bminutes\b|\bpointer\b/i.test(t.text);
+      return /\bmail\b|\bsend\b|\brespond\b|\breply\b|\bfollow.?up\b|\breach.?out\b|\breach out\b|\bwrite\b|\bemail\b|\bshare\b|\boutreach\b|\bMOM\b|\bminutes\b|\bpointer\b/i.test(t.text);
     });
 
     if (emailTasks.length > 0) {
@@ -4564,6 +4695,8 @@ async function autoCompleteTasks(silent) {
         var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'get_sent_today', date: today2}) });
         var sentData = await r.json();
         var sentEmails = sentData.emails || [];
+        // Defensive: even if the edge widened the window, only count TODAY's sends.
+        sentEmails = sentEmails.filter(function(e) { var dt = _evDate(e); return !dt || _isToday(dt); });
         emailTasks.forEach(function(task) {
           // OOO re-engagement tasks carry the contact's email address —
           // strongest possible evidence: did we actually send THEM a mail today?
@@ -4575,23 +4708,36 @@ async function autoCompleteTasks(silent) {
             }
             return; // never fall through to fuzzy word matching for OOO tasks
           }
-          var taskWords = task.text.toLowerCase().replace(/[^a-z0-9\s]/g,' ').split(/\s+/).filter(function(w){return w.length>3 && !['mail','send','from','with','that','this','have','will','been','they','team','respond','reply','follow','reach','write','email','share'].includes(w);});
-          var matched = sentEmails.find(function(e) {
+          var _own = _ownIdentityTokens();
+          var taskWords = task.text.toLowerCase().replace(/[^a-z0-9\s]/g,' ').split(/\s+/).filter(function(w){return w.length>3 && !_GENERIC_TASK_WORDS[w] && _own.indexOf(w)===-1 && !['mail','send','from','have','will','been','respond','reply','reach','write','email','share','outreach','through'].includes(w);});
+          // Count EVERY qualifying send (not just the first) so bulk targets are
+          // honoured, and apply person + region gates to each candidate.
+          var matches = sentEmails.filter(function(e) {
             var et = ((e.subject||'')+' '+(e.to||'')+' '+(e.snippet||'')).toLowerCase();
             var hits = taskWords.filter(function(w){return et.includes(w);}).length;
-            // 2-word overlap, or 1 distinctive word (likely a name/account) for short tasks
-            return hits >= 2 || (hits >= 1 && taskWords.length <= 3);
+            var overlap = hits >= 2 || (hits >= 1 && taskWords.length <= 3);
+            if (!overlap) return false;
+            return _matchGatesOk(task.text, et);          // person + geography gates
           });
-          if (matched) {
-            task.done = true; task.autoCompleted = true; task.verifiedVia = 'gmail_sent'; count++;
-            autoLog.push('✉ '+esc(task.text.slice(0,50))+' → "'+esc((matched.subject||'').slice(0,40))+'"');
+          var required = _requiredCount(task.text);       // "send 15 mails" → 15
+          if (matches.length >= required) {
+            task.done = true; task.autoCompleted = true; task.verifiedVia = 'gmail_sent';
+            if (required > 1) task.verifiedCount = matches.length + '/' + required;
+            delete task.sendProgress; count++;
+            autoLog.push('✉ '+esc(task.text.slice(0,50))+(required>1?(' → '+matches.length+'/'+required+' sent'):(' → "'+esc((matches[0].subject||'').slice(0,40))+'"')));
+          } else if (matches.length > 0 && required > 1) {
+            // Partial: show progress but keep the task open until the count is met.
+            task.sendProgress = matches.length + '/' + required;
           }
         });
       } catch(e) { /* non-fatal */ }
     }
 
-    if (count > 0) {
+    var anyProgress = (d.tasks || []).some(function(t) { return !t.done && t.sendProgress; });
+    if (count > 0 || anyProgress) {
       save(today2); render();
+    }
+    if (count > 0) {
       showToast('✓ Auto-completed ' + count + ' task' + (count!==1?'s':'') + (autoLog.length ? ' — ' + autoLog[0].replace(/<[^>]+>/g,'').slice(0,40) : ''));
     } else if (!silent) {
       showToast('No new evidence found for open tasks');
