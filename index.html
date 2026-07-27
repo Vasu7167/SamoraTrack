@@ -1333,6 +1333,14 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
       </div>
     </div>
 
+    <div class="admin-section" id="notifRulesAdminSection">
+      <div class="admin-title">Notification rules</div>
+      <div class="admin-card-sub" style="margin-bottom:12px;font-size:12px;color:var(--text3)">Choose which push notifications your organisation sends, and when. These apply org wide; each person still controls whether their own device receives them (You tab).</div>
+      <div class="admin-card">
+        <div id="notifRulesForm"><div style="font-size:12px;color:var(--text3)">Loading…</div></div>
+      </div>
+    </div>
+
     <div class="admin-section" id="enrichmentAdminSection">
       <div class="admin-title">Enrichment providers — org-wide</div>
       <div class="admin-card-sub" style="margin-bottom:12px;font-size:12px;color:var(--text3)">API keys set here apply to all reps. Individual reps can override with their own keys in the You tab. Keys are stored encrypted — never visible after saving.</div>
@@ -2034,7 +2042,7 @@ function switchTab(tab) {
   if (navBtn) navBtn.classList.add('active');
   if (['tasks','issues','wins','misses'].includes(tab)) { if (tab !== 'misses') setTodaySection(tab); renderToday(); }
   if (tab === 'today') { setTodaySection('tasks'); renderToday(); }
-  if (tab === 'settings') { renderSettings(); if (currentUser?.token) loadHealthWeights(); }
+  if (tab === 'settings') { renderSettings(); if (currentUser?.token) { loadHealthWeights(); loadNotificationRules(); } }
   if (tab === 'you') { renderYouPanel(); refreshYouTabConnections(); loadHabitsSection(); loadEnrichmentStatus(); }
   if (tab === 'review') renderSummary();
   if (tab === 'exec') loadExecDashboard();
@@ -2713,7 +2721,7 @@ async function refreshYouTabConnections() {
 // Requires: a VAPID public key (set below), the sw.js push handlers, and the
 // edge actions save_push_subscription / remove_push_subscription / send_push.
 // iOS note: only works when SamoraTrack is installed to the Home Screen.
-var VAPID_PUBLIC_KEY = window._orgConfig && window._orgConfig.vapidPublicKey ? window._orgConfig.vapidPublicKey : 'BCQfb_aUvTpza5spQI_I_NAa2N35w_Y-gfD8YKsbEYcFjxA9QURrQp_ObrfI5KUs5sRCEbn3fdNqm6aT1bu-McI';
+var VAPID_PUBLIC_KEY = window._orgConfig && window._orgConfig.vapidPublicKey ? window._orgConfig.vapidPublicKey : 'REPLACE_WITH_VAPID_PUBLIC_KEY';
 function _urlBase64ToUint8Array(base64String) {
   var padding = '='.repeat((4 - base64String.length % 4) % 4);
   var base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -7161,6 +7169,113 @@ async function saveHealthWeights() {
       body:JSON.stringify({action:'save_org_setting', key:'health_score_weights', value:JSON.stringify(weights)}) });
     var d = await r.json();
     if (d.ok) { showToast('Health weights saved'); if(st){st.textContent='✓ Saved';st.style.color='var(--green)';setTimeout(function(){st.textContent='';},3000);} }
+  } catch(e) { showToast('Error: ' + e.message); }
+}
+
+// ── Org notification rules ────────────────────────────────────────────────────
+// Configurable per organisation. Stored in org_settings key `notification_rules`
+// (reused generic save_org_setting / get_org_setting). Every future push trigger
+// reads these before firing, so each org decides what it gets notified about.
+var NOTIFICATION_RULE_DEFAULTS = {
+  version: 1,
+  enabled: true,
+  quiet_hours: { enabled: true, start: 21, end: 8 },   // local hours; no pushes in window
+  weekly_digest: { enabled: true, day: 1, hour: 8 },    // day 0=Sun..6=Sat
+  rules: {
+    weekly_check_at_risk:        { enabled: true,  min_value_k: 0 },
+    deal_gone_dark:              { enabled: true,  days: 14, min_value_k: 25 },
+    champion_missing_near_close: { enabled: true,  days_to_close: 30 },
+    competitor_risk:             { enabled: true },
+    momentum_drop:               { enabled: true,  points: 5 },
+    ooo_reengage:                { enabled: true },
+    manager_rollup:              { enabled: false }
+  }
+};
+var NOTIF_RULE_META = [
+  { key:'weekly_check_at_risk', icon:'🗓', label:'Account flips to at-risk', desc:'When the Weekly Check verdict turns At risk, alert the account owner.', params:[{ key:'min_value_k', label:'Only if deal ≥', suffix:'k$', def:0 }] },
+  { key:'deal_gone_dark', icon:'🌙', label:'Open deal goes quiet', desc:'No contact logged on an open deal for a while.', params:[{ key:'days', label:'After', suffix:'days', def:14 },{ key:'min_value_k', label:'Deal ≥', suffix:'k$', def:25 }] },
+  { key:'champion_missing_near_close', icon:'🏆', label:'Closing soon without a champion', desc:'Expected close is near and no champion is tagged.', params:[{ key:'days_to_close', label:'Within', suffix:'days', def:30 }] },
+  { key:'competitor_risk', icon:'⚔️', label:'Competitor active in account', desc:'A competitor is mentioned alongside pricing or risk signals.', params:[] },
+  { key:'momentum_drop', icon:'📉', label:'Signal momentum drops', desc:'Signal score falls over a 7 day window.', params:[{ key:'points', label:'By ≥', suffix:'pts', def:5 }] },
+  { key:'ooo_reengage', icon:'🏖', label:'Contact out-of-office ends', desc:'Nudge the owner to re-engage when a contact returns.', params:[] },
+  { key:'manager_rollup', icon:'👔', label:'Manager team at-risk summary', desc:'Managers get a digest of their team\'s at-risk accounts.', params:[] }
+];
+var _notificationRulesCache = null;
+function _mergeNotifRules(saved) {
+  var base = JSON.parse(JSON.stringify(NOTIFICATION_RULE_DEFAULTS));
+  if (!saved || typeof saved !== 'object') return base;
+  base.enabled = saved.enabled !== false;
+  if (saved.quiet_hours) base.quiet_hours = Object.assign(base.quiet_hours, saved.quiet_hours);
+  if (saved.weekly_digest) base.weekly_digest = Object.assign(base.weekly_digest, saved.weekly_digest);
+  if (saved.rules) Object.keys(base.rules).forEach(function(k){ if (saved.rules[k]) base.rules[k] = Object.assign(base.rules[k], saved.rules[k]); });
+  return base;
+}
+function _chk(id, on) { return '<input type="checkbox" id="'+id+'"'+(on?' checked':'')+' style="width:16px;height:16px;accent-color:var(--gold);cursor:pointer">'; }
+function _num(id, val, w) { return '<input type="number" id="'+id+'" value="'+(val==null?'':val)+'" style="width:'+(w||48)+'px;padding:5px 6px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none">'; }
+function renderNotificationRules(cfg) {
+  var host = document.getElementById('notifRulesForm'); if (!host) return;
+  var days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  var h = '';
+  // Master switch
+  h += '<label style="display:flex;align-items:center;gap:10px;padding:8px 0;margin-bottom:6px;border-bottom:1px solid var(--border);cursor:pointer">' + _chk('nr-enabled', cfg.enabled) + '<span style="font-size:13px;font-weight:600;color:var(--text)">Push notifications enabled for this org</span></label>';
+  // Rule rows
+  h += NOTIF_RULE_META.map(function(m){
+    var rc = cfg.rules[m.key] || { enabled:false };
+    var params = m.params.map(function(p){
+      return '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text3)">'+esc(p.label)+' '+_num('nr-'+m.key+'-'+p.key, rc[p.key]!=null?rc[p.key]:p.def)+' '+esc(p.suffix)+'</span>';
+    }).join('<span style="margin:0 4px"></span>');
+    return '<div style="padding:10px 0;border-bottom:1px solid var(--border)">' +
+      '<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer">' + _chk('nr-rule-'+m.key, rc.enabled) +
+      '<div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--text)">'+m.icon+' '+esc(m.label)+'</div>' +
+      '<div style="font-size:11px;color:var(--text3);margin-top:2px">'+esc(m.desc)+'</div>' +
+      (params ? '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">'+params+'</div>' : '') +
+      '</div></label></div>';
+  }).join('');
+  // Quiet hours + weekly digest
+  h += '<div style="padding:12px 0;border-bottom:1px solid var(--border)">' +
+    '<label style="display:flex;align-items:center;gap:10px;cursor:pointer">' + _chk('nr-quiet', cfg.quiet_hours.enabled) +
+    '<span style="font-size:13px;font-weight:600;color:var(--text)">🌚 Quiet hours</span></label>' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:11px;color:var(--text3)">No pushes from '+_num('nr-quiet-start', cfg.quiet_hours.start)+' :00 to '+_num('nr-quiet-end', cfg.quiet_hours.end)+' :00 (local)</div></div>';
+  h += '<div style="padding:12px 0">' +
+    '<label style="display:flex;align-items:center;gap:10px;cursor:pointer">' + _chk('nr-digest', cfg.weekly_digest.enabled) +
+    '<span style="font-size:13px;font-weight:600;color:var(--text)">📬 Weekly digest</span></label>' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:11px;color:var(--text3)">Send on <select id="nr-digest-day" style="padding:5px 6px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--sans);font-size:12px">'+days.map(function(d,i){return '<option value="'+i+'"'+(i===cfg.weekly_digest.day?' selected':'')+'>'+d+'</option>';}).join('')+'</select> at '+_num('nr-digest-hour', cfg.weekly_digest.hour)+' :00</div></div>';
+  // Save
+  h += '<div style="display:flex;gap:8px;margin-top:14px;align-items:center">' +
+    '<button onclick="saveNotificationRules()" style="padding:8px 16px;border-radius:8px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Save rules</button>' +
+    '<button onclick="renderNotificationRules(NOTIFICATION_RULE_DEFAULTS)" style="padding:8px 12px;border-radius:8px;background:none;border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);font-size:12px;cursor:pointer">Reset to default</button>' +
+    '<span id="nr-status" style="font-size:12px;color:var(--text3)"></span></div>';
+  host.innerHTML = h;
+}
+async function loadNotificationRules() {
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({action:'get_org_setting', key:'notification_rules'}) });
+    var d = await r.json();
+    var saved = null; try { saved = d.value ? JSON.parse(d.value) : null; } catch(e) {}
+    _notificationRulesCache = _mergeNotifRules(saved);
+  } catch(e) { _notificationRulesCache = _mergeNotifRules(null); }
+  window._notificationRules = _notificationRulesCache;
+  renderNotificationRules(_notificationRulesCache);
+}
+async function saveNotificationRules() {
+  var g = function(id){ return document.getElementById(id); };
+  var cfg = _mergeNotifRules(null);
+  cfg.enabled = g('nr-enabled') ? g('nr-enabled').checked : true;
+  cfg.quiet_hours = { enabled: g('nr-quiet')?.checked, start: parseInt(g('nr-quiet-start')?.value||'21',10), end: parseInt(g('nr-quiet-end')?.value||'8',10) };
+  cfg.weekly_digest = { enabled: g('nr-digest')?.checked, day: parseInt(g('nr-digest-day')?.value||'1',10), hour: parseInt(g('nr-digest-hour')?.value||'8',10) };
+  NOTIF_RULE_META.forEach(function(m){
+    var rc = { enabled: g('nr-rule-'+m.key)?.checked };
+    m.params.forEach(function(p){ var el = g('nr-'+m.key+'-'+p.key); rc[p.key] = el ? (parseInt(el.value,10)||0) : p.def; });
+    cfg.rules[m.key] = rc;
+  });
+  var st = g('nr-status');
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({action:'save_org_setting', key:'notification_rules', value:JSON.stringify(cfg)}) });
+    var d = await r.json();
+    if (d.ok) { _notificationRulesCache = cfg; window._notificationRules = cfg; showToast('Notification rules saved'); if(st){st.textContent='✓ Saved';st.style.color='var(--green)';setTimeout(function(){st.textContent='';},3000);} }
+    else showToast('Could not save rules');
   } catch(e) { showToast('Error: ' + e.message); }
 }
 
