@@ -6128,7 +6128,7 @@ async function openDealDetail(dealId, accountName) {
     deal = all.find(function(d) { return d.id === dealId; });
   }
   if (!deal) return;
-  _dealDetailTab = 'overview';
+  _dealDetailTab = 'weekly';
   var modal = document.createElement('div');
   modal.id = 'deal-detail-modal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
@@ -6148,10 +6148,10 @@ function _buildDealDetailHTML(deal) {
         '<button onclick="document.getElementById(\'deal-detail-modal\').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3)">✕</button>' +
       '</div>' +
       '<div style="display:flex;gap:0;margin-bottom:-1px">' +
-        _dealTab('overview','📊 Overview') + _dealTab('stakeholders','👥 Stakeholders') + _dealTab('meddpicc','🎯 MEDDPICC') + _dealTab('signals','📡 Signals') +
+        _dealTab('weekly','🗓 Weekly Check') + _dealTab('overview','📊 Overview') + _dealTab('stakeholders','👥 Stakeholders') + _dealTab('meddpicc','🎯 MEDDPICC') + _dealTab('signals','📡 Signals') +
       '</div>' +
     '</div>' +
-    '<div id="deal-detail-body" style="padding:16px">' + _buildDealOverviewHTML(deal) + '</div>' +
+    '<div id="deal-detail-body" style="padding:16px"><div style="padding:24px 0;text-align:center;font-size:12px;color:var(--text3)">Loading weekly check…</div></div>' +
   '</div>';
 }
 
@@ -6162,13 +6162,14 @@ function _dealTab(key, label) {
 
 function switchDealTab(tab) {
   _dealDetailTab = tab;
-  ['overview','stakeholders','meddpicc'].forEach(function(t) {
+  ['weekly','overview','stakeholders','meddpicc','signals'].forEach(function(t) {
     var b = document.getElementById('ddtab-' + t); if (!b) return;
     b.style.borderBottomColor = t===tab?'var(--gold)':'transparent';
     b.style.color = t===tab?'var(--gold)':'var(--text3)';
     b.style.fontWeight = t===tab?'600':'400';
   });
   var body = document.getElementById('deal-detail-body'); if (!body) return;
+  if (tab === 'weekly'       && _currentDealDetail) { _renderWeeklyCheckPane(_currentDealDetail.deal); return; }
   if (tab === 'overview'     && _currentDealDetail) { body.innerHTML = _buildDealOverviewHTML(_currentDealDetail.deal); return; }
   if (tab === 'stakeholders' && _currentDealDetail) { _renderStakeholdersPane(_currentDealDetail.stakeholders, _currentDealDetail.deal); return; }
   if (tab === 'meddpicc'     && _currentDealDetail) { _renderMeddpiccPane(_currentDealDetail.meddpicc, _currentDealDetail.deal); return; }
@@ -6206,10 +6207,103 @@ async function _loadDealDetailData(dealId, deal) {
     _currentDealDetail = { deal, meddpicc: mData.meddpicc||null, stakeholders };
   } catch(e) { _currentDealDetail = { deal, meddpicc:null, stakeholders:[] }; }
   var body = document.getElementById('deal-detail-body'); if (!body) return;
+  if (_dealDetailTab === 'weekly')       _renderWeeklyCheckPane(deal);
   if (_dealDetailTab === 'overview')     body.innerHTML = _buildDealOverviewHTML(deal);
   if (_dealDetailTab === 'stakeholders') _renderStakeholdersPane(_currentDealDetail.stakeholders, deal);
   if (_dealDetailTab === 'meddpicc')     _renderMeddpiccPane(_currentDealDetail.meddpicc, deal);
   if (_dealDetailTab === 'signals')      _renderSignalsPane(deal);
+}
+
+// ── Weekly Check pane ─────────────────────────────────────────────────────────
+// Per-account "what's right / what's wrong / do this week", every line with its
+// receipt. Deterministic (get_account_weekly_check); serves cached on failure.
+async function _renderWeeklyCheckPane(deal, forceRefresh) {
+  var body = document.getElementById('deal-detail-body'); if (!body) return;
+  body.innerHTML = '<div style="padding:24px 0;text-align:center;font-size:12px;color:var(--text3)">Reading the account…</div>';
+  var d;
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({action:'get_account_weekly_check', account_id:deal.id, refresh: !!forceRefresh}) });
+    d = await r.json();
+  } catch(e) { d = null; }
+  if (!d || (!d.ok && !d.going_right)) {
+    body.innerHTML = '<div style="padding:20px 0;text-align:center;font-size:12px;color:var(--text3)">Couldn\'t load the weekly check.<br><button onclick="_renderWeeklyCheckPane(_currentDealDetail.deal, true)" style="margin-top:8px;font-size:11px;padding:5px 12px;border-radius:6px;background:var(--surface2);border:1px solid var(--border2);color:var(--gold);cursor:pointer;font-family:var(--sans)">↻ Try again</button></div>';
+    return;
+  }
+  var h = d.header || {};
+  var verdictCfg = {
+    on_track:        { label: 'On track',        color: 'var(--green)', bg: 'rgba(74,140,92,0.12)',  icon: '✓' },
+    needs_attention: { label: 'Needs attention', color: 'var(--amber)', bg: 'rgba(160,117,42,0.14)', icon: '⚠' },
+    at_risk:         { label: 'At risk',          color: 'var(--coral)', bg: 'rgba(200,80,70,0.12)',  icon: '⛔' }
+  }[d.verdict] || { label: 'Reviewed', color: 'var(--text2)', bg: 'var(--surface2)', icon: '•' };
+  var fmtUsd = function(v){ return !v ? '—' : v>=1e6 ? '$'+(v/1e6).toFixed(1)+'M' : '$'+Math.round(v/1e3)+'K'; };
+
+  var html = '<div style="margin-bottom:10px">' + _samoraIntelLabel('Weekly account check · every line shows its receipt') + '</div>';
+
+  // Verdict + vitals
+  html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">' +
+    '<span style="font-size:12px;font-weight:700;color:'+verdictCfg.color+';background:'+verdictCfg.bg+';border-radius:6px;padding:4px 10px">'+verdictCfg.icon+' '+verdictCfg.label+'</span>' +
+    (d.cached ? '<span style="font-size:9px;color:var(--text3);background:var(--surface2);border-radius:4px;padding:2px 6px">cached</span>' : '') +
+    '</div>';
+
+  var vitals = [];
+  if (h.health_score != null) vitals.push(['Health', h.health_score + '/100']);
+  if (h.signal_score != null) vitals.push(['Signal', h.signal_score + '/100']);
+  vitals.push(['Value', fmtUsd(h.value_usd)]);
+  if (h.days_to_close != null) vitals.push(['Close in', h.days_to_close + 'd']);
+  vitals.push(['Active contacts', h.active_contacts != null ? String(h.active_contacts) : '—']);
+  vitals.push(['Last touch', h.days_since_contact != null ? h.days_since_contact + 'd ago' : 'never']);
+  if (d.momentum && d.momentum.signal_delta_7d != null) vitals.push(['7d momentum', (d.momentum.signal_delta_7d>=0?'+':'') + d.momentum.signal_delta_7d]);
+  html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">' + vitals.map(function(v){
+    return '<div style="flex:1;min-width:72px;background:var(--surface2);border-radius:8px;padding:7px 8px;text-align:center"><div style="font-size:13px;font-weight:600;color:var(--text)">'+esc(v[1])+'</div><div style="font-size:9px;color:var(--text3)">'+esc(v[0])+'</div></div>';
+  }).join('') + '</div>';
+
+  var section = function(title, color, items, render) {
+    if (!items || !items.length) return '';
+    var s = '<div style="font-size:10px;font-weight:700;color:'+color+';text-transform:uppercase;letter-spacing:0.06em;margin:14px 0 8px">'+title+'</div>';
+    return s + items.map(render).join('');
+  };
+
+  html += section('✓ What\'s going right', 'var(--green)', d.going_right, function(w){
+    return '<div style="background:rgba(74,140,92,0.06);border-left:2px solid var(--green);border-radius:0 6px 6px 0;padding:8px 10px;margin-bottom:6px">' +
+      '<div style="font-size:12px;font-weight:600;color:var(--text)">'+esc(w.point)+'</div>' +
+      '<div style="font-size:11px;color:var(--text3);margin-top:2px">'+esc(w.evidence)+'</div></div>';
+  });
+
+  html += section('⚠ What needs attention', 'var(--coral)', d.going_wrong, function(w){
+    var sv = w.severity === 'high' ? { c:'var(--coral)', bg:'rgba(200,80,70,0.06)' } : { c:'var(--amber)', bg:'rgba(160,117,42,0.06)' };
+    return '<div style="background:'+sv.bg+';border-left:2px solid '+sv.c+';border-radius:0 6px 6px 0;padding:8px 10px;margin-bottom:6px">' +
+      '<div style="font-size:12px;font-weight:600;color:var(--text)">'+esc(w.point)+' <span style="font-size:8px;font-weight:700;color:'+sv.c+';text-transform:uppercase">· '+esc(w.severity)+'</span></div>' +
+      '<div style="font-size:11px;color:var(--text3);margin-top:2px">'+esc(w.evidence)+'</div></div>';
+  });
+
+  if (d.do_this_week && d.do_this_week.length) {
+    html += '<div style="font-size:10px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em;margin:14px 0 8px">→ Do this week</div>';
+    html += d.do_this_week.map(function(t, i){
+      return '<div style="display:flex;gap:8px;align-items:flex-start;background:rgba(160,117,42,0.06);border:1px solid rgba(160,117,42,0.2);border-radius:8px;padding:8px 10px;margin-bottom:6px">' +
+        '<span style="font-size:11px;font-weight:700;color:var(--gold);flex-shrink:0">'+(i+1)+'.</span>' +
+        '<div><div style="font-size:12px;font-weight:600;color:var(--text)">'+esc(t.action)+'</div>' +
+        '<div style="font-size:10px;color:var(--text3);margin-top:2px">'+esc(t.why)+'</div></div></div>';
+    }).join('');
+  }
+
+  if (!d.going_right.length && !d.going_wrong.length) {
+    html += '<div style="padding:16px 0;text-align:center;font-size:12px;color:var(--text3)">Not enough activity on this account yet to assess. Enrich contacts and log a meeting to start the read.</div>';
+  }
+
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;font-size:10px;color:var(--text3)">' +
+    '<span>'+(d.computed_at ? 'Checked '+_fmtRelTime(d.computed_at) : '')+'</span>' +
+    '<button onclick="_renderWeeklyCheckPane(_currentDealDetail.deal, true)" style="background:none;border:none;color:var(--gold);cursor:pointer;font-size:10px;font-family:var(--sans);padding:0">↻ Re-check</button></div>';
+
+  body.innerHTML = html;
+}
+function _fmtRelTime(iso) {
+  try { var s = (Date.now() - new Date(iso).getTime())/1000;
+    if (s < 90) return 'just now';
+    if (s < 3600) return Math.round(s/60)+'m ago';
+    if (s < 86400) return Math.round(s/3600)+'h ago';
+    return Math.round(s/86400)+'d ago';
+  } catch(e) { return ''; }
 }
 
 // ── Local Intelligence Engine ─────────────────────────────────────────────────
