@@ -1684,27 +1684,32 @@ function canSeeCrossTeam(r) { return ['director','executive','admin','super_admi
 function canSeeFullOrg(r) { return ['executive','admin','super_admin'].includes(r); }
 function canManageOrg(r) { return ['admin','super_admin'].includes(r); }
 
+// Header labels + role-gated nav visibility. Idempotent and network-free, so it
+// can be re-applied cheaply after a background profile refresh without re-running
+// the heavy launchApp (no duplicate sync badge / timers).
+function _applyRoleChrome() {
+  const role = profile?.role || 'member';
+  const emailEl = document.getElementById('uEmail'); if (emailEl && currentUser) emailEl.textContent = currentUser.email;
+  const rp = document.getElementById('uRole');
+  const labels = { super_admin:'Admin', admin:'Admin', manager:'Manager', director:'Director', executive:'Executive', member:'Member', sdr:'SDR', ae:'AE' };
+  const cls = { super_admin:'role-super', admin:'role-super', manager:'role-manager', director:'role-manager', executive:'role-manager', member:'role-member', sdr:'role-member', ae:'role-member' };
+  if (rp) { rp.textContent = labels[role]; rp.className = 'role-pill ' + (cls[role]||'role-member'); }
+  const orgEl = document.getElementById('uOrg'); if (orgEl) orgEl.textContent = profile?.org_name || '';
+  const seniorRole = ['super_admin','admin','manager','director','executive'].includes(role);
+  const navExec = document.getElementById('nav-exec');
+  if (navExec) navExec.style.display = ['director','executive','admin','super_admin'].includes(role) ? '' : 'none';
+  const navIntelBtn = document.getElementById('nav-intel');
+  if (navIntelBtn) navIntelBtn.style.display = seniorRole ? '' : 'none';
+}
 function launchApp() {
   document.getElementById('authScreen').classList.remove('active');
   document.getElementById('appScreen').classList.add('active');
   const role = profile?.role || 'member';
-  document.getElementById('uEmail').textContent = currentUser.email;
-  const rp = document.getElementById('uRole');
-  const labels = { super_admin:'Admin', admin:'Admin', manager:'Manager', director:'Director', executive:'Executive', member:'Member', sdr:'SDR', ae:'AE' };
-  const cls = { super_admin:'role-super', admin:'role-super', manager:'role-manager', director:'role-manager', executive:'role-manager', member:'role-member', sdr:'role-member', ae:'role-member' };
-  rp.textContent = labels[role]; rp.className = 'role-pill ' + (cls[role]||'role-member');
-  document.getElementById('uOrg').textContent = profile?.org_name || '';
-  const seniorRole = ['super_admin','admin','manager','director','executive'].includes(role);
-  // Load ICP definition for admin users
+  _applyRoleChrome();
+  // Load ICP definition for admin users (once, on launch)
   if (['super_admin','admin','manager','director','executive'].includes(role)) {
     setTimeout(loadIcpDefinition, 2000);
   }
-  if (seniorRole) {
-    const navExec = document.getElementById('nav-exec');
-    if (navExec) navExec.style.display = ['director','executive','admin','super_admin'].includes(role) ? '' : 'none';
-  }
-  const navIntelBtn = document.getElementById('nav-intel');
-  if (navIntelBtn) navIntelBtn.style.display = seniorRole ? '' : 'none';
   loadLocal(); runCarryOver();
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   const todayNav = document.getElementById('nav-today'); if (todayNav) todayNav.classList.add('active');
@@ -7554,16 +7559,26 @@ document.addEventListener('click',e=>{const m=document.getElementById('carryFwdM
       const ok = await refreshToken();
       if (!ok) { localStorage.removeItem('dt-user'); currentUser = null; registerSW(); return; }
     }
-    // Load fresh profile from network (overwrites cache)
-    await loadProfile();
-    if (profile) {
-      launchApp();
+    const _finishLaunch = function() {
       const pendingCode = sessionStorage.getItem('ms_pending_code');
       if (pendingCode) {
         sessionStorage.removeItem('ms_pending_code');
         setTimeout(function() { handleMicrosoftCallback(pendingCode); }, 500);
       }
-    } else { localStorage.removeItem('dt-user'); }
+    };
+    if (profile) {
+      // Fast path: we already have a cached profile, so paint the app NOW and
+      // refresh the profile from the network in the background. This removes a
+      // blocking round-trip (and loadProfile's 5s timeout) from first paint.
+      launchApp();
+      _finishLaunch();
+      loadProfile().then(function() { try { _applyRoleChrome(); } catch(e) {} });
+    } else {
+      // No cached profile — must load it before we can launch.
+      await loadProfile();
+      if (profile) { launchApp(); _finishLaunch(); }
+      else { localStorage.removeItem('dt-user'); }
+    }
   }
   registerSW();
 })();
