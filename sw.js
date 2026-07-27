@@ -1,6 +1,6 @@
 // ── SamoraTrack Service Worker ──────────────────────────────────────
 // BUMP THIS VERSION NUMBER every time you push an update.
-const VERSION = 'v1.0.10';
+const VERSION = 'v1.0.11';
 const CACHE = `samoratrack-${VERSION}`;
 
 const PRECACHE = [
@@ -37,6 +37,41 @@ self.addEventListener('activate', event => {
           client.postMessage({ type: 'SW_UPDATED', version: VERSION });
         });
       });
+    })
+  );
+});
+
+// ── Web Push ─────────────────────────────────────────────────────────
+// Show a notification when the server pushes one (even if the app is closed).
+self.addEventListener('push', event => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch (e) { data = { title: 'SamoraTrack', body: event.data ? event.data.text() : '' }; }
+  const title = data.title || 'SamoraTrack';
+  const options = {
+    body: data.body || '',
+    icon: data.icon || '/icons/icon-192.png',
+    badge: '/icons/icon-96.png',
+    tag: data.tag || undefined,          // same tag replaces an existing notification
+    renotify: !!data.tag,
+    data: { url: data.url || '/' },
+    requireInteraction: !!data.requireInteraction
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// Focus an existing tab (or open one) and navigate to the notification's URL.
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || '/';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
+      for (const client of clients) {
+        if ('focus' in client) {
+          if ('navigate' in client && target !== '/') { client.navigate(target).catch(() => {}); }
+          return client.focus();
+        }
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(target);
     })
   );
 });
