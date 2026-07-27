@@ -2713,7 +2713,7 @@ async function refreshYouTabConnections() {
 // Requires: a VAPID public key (set below), the sw.js push handlers, and the
 // edge actions save_push_subscription / remove_push_subscription / send_push.
 // iOS note: only works when SamoraTrack is installed to the Home Screen.
-var VAPID_PUBLIC_KEY = window._orgConfig && window._orgConfig.vapidPublicKey ? window._orgConfig.vapidPublicKey : 'REPLACE_WITH_VAPID_PUBLIC_KEY';
+var VAPID_PUBLIC_KEY = window._orgConfig && window._orgConfig.vapidPublicKey ? window._orgConfig.vapidPublicKey : 'BCQfb_aUvTpza5spQI_I_NAa2N35w_Y-gfD8YKsbEYcFjxA9QURrQp_ObrfI5KUs5sRCEbn3fdNqm6aT1bu-McI';
 function _urlBase64ToUint8Array(base64String) {
   var padding = '='.repeat((4 - base64String.length % 4) % 4);
   var base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
