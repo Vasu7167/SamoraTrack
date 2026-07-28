@@ -2776,7 +2776,7 @@ async function refreshYouTabConnections() {
 // fallback string below. Read LAZILY (via _getVapidKey) because window._orgConfig
 // is populated asynchronously after load, so evaluating it once at parse time
 // would always miss it.
-var VAPID_PUBLIC_KEY_FALLBACK = 'BCQfb_aUvTpza5spQI_I_NAa2N35w_Y-gfD8YKsbEYcFjxA9QURrQp_ObrfI5KUs5sRCEbn3fdNqm6aT1bu-McI';
+var VAPID_PUBLIC_KEY_FALLBACK = 'BOSxqHYKqUfcnxAk_JGPO6Qmz7o85d538CiwQ3asDWyGPu0C9OC3BZPmcW790AzJ6tyDHa5SmjTLCfkqfS2l_qU';
 function _getVapidKey() {
   try { return (window._orgConfig && window._orgConfig.vapidPublicKey) || VAPID_PUBLIC_KEY_FALLBACK; }
   catch (e) { return VAPID_PUBLIC_KEY_FALLBACK; }
