@@ -618,6 +618,9 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
     <!-- SDR pipeline-generation panel (renders only for SDR role) -->
     <div id="sdrGenPanel"></div>
 
+    <!-- SDR playground: team deals + my leads + scout (renders only for SDR role) -->
+    <div id="sdrPlayground"></div>
+
     <!-- Dashboard tabs (role-based) -->
     <div class="pdt-bar" id="pdtBar">
       <button onclick="setPipelineDashTab('overview')" id="pdt-overview" class="pdt-btn active">Overview</button>
@@ -6279,15 +6282,18 @@ document.addEventListener('click', function(e) {
 var _dealDetailTab = 'overview';
 var _currentDealDetail = null;
 
-async function openDealDetail(dealId, accountName) {
+function openSdrScout(dealId, accountName) { _stkTab = 'prospective'; openDealDetail(dealId, accountName, 'stakeholders'); }
+async function openDealDetail(dealId, accountName, initialTab) {
   document.getElementById('deal-detail-modal')?.remove();
   var deal = null;
   if (_pipelineData) {
     var all = [...(_pipelineData.verified||[]), ...(_pipelineData.partial||[]), ...(_pipelineData.unverified||[])];
     deal = all.find(function(d) { return d.id === dealId; });
   }
+  // SDR playground deals/leads aren't in _pipelineData — fall back to that lookup.
+  if (!deal && window._sdrDeals && window._sdrDeals[dealId]) deal = window._sdrDeals[dealId];
   if (!deal) return;
-  _dealDetailTab = 'weekly';
+  _dealDetailTab = initialTab || 'weekly';
   var modal = document.createElement('div');
   modal.id = 'deal-detail-modal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
@@ -8762,6 +8768,97 @@ async function loadSdrPanel() {
   } catch(e) { panel.innerHTML = ''; }
 }
 
+// ── SDR Playground ────────────────────────────────────────────────────────────
+// SDRs see the deals their team's AEs/managers are working on, can create new
+// leads (scoutable prospective accounts), and generate prospective contacts with
+// the same scout flow AEs use. Team = everyone under the SDR's manager_id, plus
+// the manager. Leads = accounts where they are the assigned SDR (sdr_user_id).
+window._sdrDeals = {};
+function _sdrDealCard(a, kind) {
+  var v = a.deal_value_usd ? (a.deal_value_usd>=1e6 ? '$'+(a.deal_value_usd/1e6).toFixed(1)+'M' : '$'+Math.round(a.deal_value_usd/1e3)+'K') : '';
+  var owner = (a._owner_email||'').split('@')[0];
+  var meta = [a.region?esc(a.region):'', owner?('AE: '+esc(owner)):'', v].filter(Boolean).join(' · ');
+  return '<div onclick="openSdrScout(\''+esc(a.id)+'\',\''+esc(a.account_name)+'\')" style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:10px 12px;margin-bottom:6px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px">' +
+    '<div style="min-width:0"><div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(a.account_name)+(kind==='lead'?' <span style="font-size:8px;font-weight:700;color:var(--gold);background:rgba(160,117,42,0.12);border-radius:4px;padding:1px 5px;vertical-align:middle">MY LEAD</span>':'')+'</div>' +
+    (meta?'<div style="font-size:10px;color:var(--text3);margin-top:2px">'+meta+'</div>':'') + '</div>' +
+    '<div style="font-size:11px;color:var(--gold);flex-shrink:0;white-space:nowrap">🎯 Scout ›</div></div>';
+}
+async function loadSdrPlayground() {
+  var panel = document.getElementById('sdrPlayground');
+  if (!panel) return;
+  if ((profile?.role||'').toLowerCase() !== 'sdr') { panel.innerHTML = ''; return; }
+  panel.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">Loading your team\'s deals…</div>';
+  window._sdrDeals = {};
+  try {
+    var org = profile.org_id, mgr = profile.manager_id || null;
+    // Team = peers under my manager + the manager themselves.
+    var teamIds = [];
+    var emailById = {};
+    if (mgr) {
+      var peers = await sbGet('user_profiles?org_id=eq.'+org+'&manager_id=eq.'+mgr+'&select=user_id,email,role');
+      (peers||[]).forEach(function(p){ if (p.user_id !== currentUser.id) { teamIds.push(p.user_id); emailById[p.user_id]=p.email; } });
+      teamIds.push(mgr);
+      try { var mgrRow = await sbGet('user_profiles?user_id=eq.'+mgr+'&select=user_id,email&limit=1'); if (mgrRow&&mgrRow[0]) emailById[mgr]=mgrRow[0].email; } catch(e){}
+    }
+    // My leads (I'm the assigned SDR).
+    var myLeads = await sbGet('org_accounts?org_id=eq.'+org+'&sdr_user_id=eq.'+currentUser.id+'&select=id,account_name,domain,region,deal_value_usd,user_id,sdr_user_id&order=account_name');
+    // Team deals (owned by an AE/manager on my team), excluding ones I already source.
+    var teamDeals = [];
+    if (teamIds.length) {
+      teamDeals = await sbGet('org_accounts?org_id=eq.'+org+'&user_id=in.('+teamIds.join(',')+')&deal_status=not.in.(won,lost)&select=id,account_name,domain,region,deal_value_usd,user_id,sdr_user_id&order=account_name&limit=100') || [];
+    }
+    var mine = (myLeads||[]);
+    var mineIds = new Set(mine.map(function(a){return a.id;}));
+    teamDeals = teamDeals.filter(function(a){ return !mineIds.has(a.id); });
+    teamDeals.forEach(function(a){ a._owner_email = emailById[a.user_id] || ''; });
+    // Register all in the lookup so openDealDetail can find them.
+    mine.concat(teamDeals).forEach(function(a){ window._sdrDeals[a.id] = { id:a.id, account:a.account_name, deal_value_usd:a.deal_value_usd||0, stage:'prospective', region:a.region||'' }; });
+
+    var html = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:14px;margin-bottom:14px">';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><span style="font-size:13px;font-weight:600;color:var(--text)">🧭 SDR Playground</span>' +
+      '<button onclick="toggleSdrLeadForm()" id="sdrNewLeadBtn" style="font-size:11px;font-weight:600;padding:5px 12px;border-radius:8px;background:var(--gold);border:none;color:#18160F;cursor:pointer;font-family:var(--sans)">+ New lead</button></div>';
+    // Create-lead form (hidden by default)
+    html += '<div id="sdrLeadForm" style="display:none;background:var(--surface2);border-radius:10px;padding:10px;margin-bottom:12px">' +
+      '<div style="display:flex;flex-direction:column;gap:6px">' +
+      '<input id="sdrLeadName" placeholder="Company / account name" style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
+      '<div style="display:flex;gap:6px"><input id="sdrLeadDomain" placeholder="domain.com" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
+      '<input id="sdrLeadRegion" placeholder="Region (e.g. APAC)" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/></div>' +
+      '<div style="font-size:10px;color:var(--text3)">Domain powers contact scouting; region keeps prospects geo-consistent.</div>' +
+      '<button onclick="createSdrLead()" style="padding:9px;border:none;border-radius:8px;background:var(--gold);color:#18160F;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--sans)">Create lead &amp; open</button>' +
+      '</div></div>';
+    // My leads
+    html += '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:4px 0 6px">My leads ('+mine.length+')</div>';
+    html += mine.length ? mine.map(function(a){ return _sdrDealCard(a,'lead'); }).join('') : '<div style="font-size:11px;color:var(--text3);padding:2px 0 8px">No leads yet. Create one to start scouting contacts.</div>';
+    // Team deals
+    html += '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:12px 0 6px">Team deals ('+teamDeals.length+')</div>';
+    html += teamDeals.length ? teamDeals.map(function(a){ return _sdrDealCard(a,'team'); }).join('') : '<div style="font-size:11px;color:var(--text3);padding:2px 0">' + (mgr?'No open deals on your team yet.':'You are not linked to a manager yet, so no team deals to show. Ask your manager to assign you.') + '</div>';
+    html += '</div>';
+    panel.innerHTML = html;
+  } catch(e) { panel.innerHTML = '<div style="font-size:11px;color:var(--coral);padding:6px 0">Could not load playground: '+esc(e.message)+'</div>'; }
+}
+function toggleSdrLeadForm() {
+  var f = document.getElementById('sdrLeadForm'); if (!f) return;
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+  if (f.style.display === 'block') document.getElementById('sdrLeadName')?.focus();
+}
+async function createSdrLead() {
+  var name = document.getElementById('sdrLeadName')?.value?.trim();
+  var domain = document.getElementById('sdrLeadDomain')?.value?.trim().toLowerCase().replace(/^https?:\/\//,'').replace(/\/.*$/,'') || null;
+  var region = document.getElementById('sdrLeadRegion')?.value?.trim() || null;
+  if (!name) { showToast('Enter a company name'); return; }
+  try {
+    var body = { org_id: profile.org_id, user_id: currentUser.id, sdr_user_id: currentUser.id, added_by: currentUser.id, account_name: name, domain: domain };
+    if (region) body.region = region;
+    var r = await fetch(SB_URL + '/rest/v1/org_accounts', { method:'POST', headers:{'apikey':SB_KEY,'Authorization':'Bearer '+currentUser.token,'Content-Type':'application/json','Prefer':'return=representation'}, body: JSON.stringify(body) });
+    if (!r.ok) throw new Error(await r.text());
+    var rows = await r.json();
+    var created = Array.isArray(rows) ? rows[0] : rows;
+    showToast('✓ Lead created');
+    await loadSdrPlayground();
+    if (created && created.id) { window._sdrDeals[created.id] = { id:created.id, account:name, deal_value_usd:0, stage:'prospective', region:region||'' }; openSdrScout(created.id, name); }
+  } catch(e) { if ((e.message||'').match(/duplicate|unique/)) showToast(name+' already exists'); else showToast('Error: '+e.message); }
+}
+
 async function loadPipeline() {
   var btn = document.getElementById('pipelineRefreshBtn');
   if (btn) btn.textContent = '↻ Loading…';
@@ -8782,6 +8879,7 @@ async function loadPipeline() {
 
     // SDR role: show pipeline-generation panel (generation targets, not revenue)
     loadSdrPanel();
+    loadSdrPlayground();
 
     // Prompts
     if (promptsEl && _pipelineData.prompts?.length) {
