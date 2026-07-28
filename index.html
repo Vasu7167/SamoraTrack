@@ -5508,6 +5508,17 @@ async function delegateTask(memberId, memberEmail) {
   try {
     const r = await fetch(SB_URL + '/rest/v1/rpc/delegate_task', { method: 'POST', headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_member_id: memberId, p_org_id: profile.org_id, p_day_key: selectedDate, p_task_text: cleanText, p_delegated_by: currentUser.email, p_added_at: ts, p_is_priority: isPriority }) });
     if (!r.ok) throw new Error(await r.text());
+    // Notify the assignee's devices (fire-and-forget; no-op if they haven't
+    // enabled notifications). Reuses the existing send_push action.
+    try {
+      var _mgr = (currentUser.email || '').split('@')[0];
+      var _when = (selectedDate === todayKey()) ? 'today' : 'for ' + fmtDate(selectedDate);
+      fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+        body:JSON.stringify({ action:'send_push', user_ids:[memberId],
+          title:'📋 New task from ' + _mgr,
+          body:(isPriority?'⭐ ':'') + cleanText.slice(0,140) + ' (' + _when + ')',
+          url:'/?tab=today' }) }).catch(function(){});
+    } catch(e) {}
     inp.value = ''; alert('Task delegated to ' + memberEmail + ' ✓'); renderTeam();
   } catch(e) { alert('Failed to delegate: ' + e.message); }
 }
