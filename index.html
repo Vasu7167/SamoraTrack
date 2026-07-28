@@ -2221,7 +2221,7 @@ function renderListHTML(key, items) {
       const verifyBadge = (item.autoCompleted && verifyLabels[item.verifiedVia])
         ? '<span style="font-size:9px;font-weight:700;color:var(--green);background:rgba(74,140,92,0.12);border-radius:4px;padding:1px 6px;margin-left:6px;white-space:nowrap">' + verifyLabels[item.verifiedVia] + '</span>'
         : (item.meetingFlag ? '<span style="font-size:9px;font-weight:700;color:var(--amber);background:rgba(160,117,42,0.12);border-radius:4px;padding:1px 6px;margin-left:6px;white-space:nowrap">\u26a0 Meeting ' + item.meetingFlag + '</span>' : progressBadge);
-      const carryMeta = item.carriedFrom ? '<div class="item-meta" style="color:var(--gold)">↗ Carried from ' + fmtDate(item.carriedFrom) + (item.carryReason?' · '+item.carryReason:'') + '</div>' : (item.carriedTo ? '<div class="item-meta" style="color:var(--text3)">⟶ Moved to ' + (item.carriedToLabel||item.carriedTo) + '</div>' : '');
+      const carryMeta = item.carriedFrom ? '<div class="item-meta" style="color:var(--gold)">↗ Carried from ' + fmtDate(item.carriedFrom) + (item.carryReason?' · '+item.carryReason:'') + '</div>' : (item.carriedTo ? '<div class="item-meta" style="color:var(--text3)">' + (item.rescheduled ? '⟳ Rescheduled to ' : '⟶ Moved to ') + (item.carriedToLabel||item.carriedTo) + '</div>' : '');
       const tsMeta = (item.addedAt ? '<div class="item-meta">' + (item.delegatedBy?'Delegated ':'Added ') + item.addedAt + (item.completedAt?' · Completed '+item.completedAt:'') + '</div>' : '') + carryMeta;
       return '<div class="item ' + (item.done?'done':'') + ' ' + (isPriority?'priority-task':'') + '" data-task-idx="' + i + '" data-carry-text="' + esc(displayText) + '"' + (item.carriedTo?' style="opacity:0.5"':'') + '>' +
         '<div class="drag-handle"><svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="4" cy="3" r="1.5"/><circle cx="8" cy="3" r="1.5"/><circle cx="4" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="4" cy="13" r="1.5"/><circle cx="8" cy="13" r="1.5"/></svg></div>' +
@@ -2516,18 +2516,21 @@ async function reconcileCalendarTasks() {
       if (k < today) return;                         // never disturb past history
       var day = allData[k]; if (!day || !day.tasks) return;
       day.tasks.slice().forEach(function(t){
-        if (!t || t.done || t.source !== 'calendar' || !t.calendarEventId) return;
+        if (!t || t.done || t.carriedTo || t.source !== 'calendar' || !t.calendarEventId) return;
         var ev = byId[t.calendarEventId];
         if (!ev) return;                             // not in window → leave as is
         if (ev.status === 'cancelled') { if (t.meetingFlag !== 'cancelled') { t.meetingFlag = 'cancelled'; affected[k] = 1; } return; }
         if (ev.date && ev.date !== k) {              // meeting moved to a new day
-          day.tasks = day.tasks.filter(function(x){ return x !== t; });
           var dest = dayData(ev.date);
           if (!dest.tasks.some(function(x){ return x.calendarEventId === t.calendarEventId; })) {
-            delete t.addedToMisses; delete t.addedToWins; delete t.meetingFlag;
-            t.carriedFrom = k; t.carryReason = 'meeting rescheduled';
-            dest.tasks.push(t);
+            // Live, actionable copy on the NEW day.
+            var nt = Object.assign({}, t);
+            delete nt.carriedTo; delete nt.carriedToLabel; delete nt.rescheduled; delete nt.addedToMisses; delete nt.addedToWins; delete nt.meetingFlag;
+            nt.carriedFrom = k; nt.carryReason = 'meeting rescheduled';
+            dest.tasks.push(nt);
           }
+          // Keep a SUBDUED record on the original day noting where it went.
+          t.carriedTo = ev.date; t.carriedToLabel = fmtDate(ev.date); t.rescheduled = true; t.addedToMisses = true;
           affected[k] = 1; affected[ev.date] = 1; moved++;
         }
       });
@@ -3008,6 +3011,8 @@ function scoreColor(score) { return score >= 80 ? '#4A8C5C' : score >= 60 ? '#C9
 function scoreLabel(score) { return score >= 80 ? 'On track' : score >= 60 ? 'Getting there' : score >= 40 ? 'Needs focus' : 'Behind'; }
 
 function renderProductivityBanner(tasks) {
+  // Daily score / rhythm banner removed to reclaim screen space.
+  var _pb0 = document.getElementById('productivityBanner'); if (_pb0) { _pb0.innerHTML=''; _pb0.style.display='none'; } return;
   const banner = document.getElementById('productivityBanner'); if (!banner) return;
   const { score, completion, rhythm } = calcDayScore(tasks);
   const col = scoreColor(score); const label = scoreLabel(score);
@@ -6058,6 +6063,8 @@ function calcMomentum() {
   return total ? Math.round((done/total)*100) : 0;
 }
 function renderMomentum() {
+  // Streak / 5-day momentum row removed to reclaim screen space.
+  var _mr0 = document.getElementById('momentumRow'); if (_mr0) { _mr0.innerHTML=''; _mr0.style.display='none'; } return;
   const streak=calcStreak(); const momentum=calcMomentum(); const mr=document.getElementById('momentumRow'); if (!mr) return;
   if (streak===0&&momentum===0){mr.innerHTML='';return;}
   const fireEmoji=streak>=7?'🔥':streak>=3?'⚡':'✦';
