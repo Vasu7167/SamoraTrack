@@ -1760,6 +1760,7 @@ function launchApp() {
   if (SB_URL && SB_KEY) {
     syncDown().then(() => {
       runCarryOver(); _lastCalDate = null; render(); renderCalStrip();
+      reconcileCalendarTasks();   // auto-carry tasks whose meetings moved/cancelled
       var badge = document.getElementById('global-sync-badge');
       if (badge) { badge.style.opacity = '0'; setTimeout(function(){ badge.remove(); }, 400); }
     }).catch(function() {
@@ -2496,6 +2497,49 @@ function addAllCalendarTasks() {
   save(viewDate); render();
   var row = document.getElementById('calendarSyncRow'); if (row) row.style.display = 'none';
   showToast('📅 Calendar events added as tasks');
+}
+
+// ── Reconcile calendar-sourced tasks when a meeting is moved/cancelled ─────────
+// If a calendar event tied to a task has been rescheduled to another day, carry
+// the task to that day; if the meeting was cancelled, flag it. Only touches
+// today+future days and open (not done) calendar tasks. Idempotent.
+async function reconcileCalendarTasks() {
+  if (!currentUser || !currentUser.token) return;
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'get_calendar_window', days:21, tz: Intl.DateTimeFormat().resolvedOptions().timeZone }) });
+    var d = await r.json();
+    if (!d || !d.ok || !Array.isArray(d.events)) return;
+    var byId = {}; d.events.forEach(function(e){ if (e && e.id) byId[e.id] = e; });
+    var today = todayKey(), affected = {}, moved = 0;
+    Object.keys(allData).forEach(function(k){
+      if (k < today) return;                         // never disturb past history
+      var day = allData[k]; if (!day || !day.tasks) return;
+      day.tasks.slice().forEach(function(t){
+        if (!t || t.done || t.source !== 'calendar' || !t.calendarEventId) return;
+        var ev = byId[t.calendarEventId];
+        if (!ev) return;                             // not in window → leave as is
+        if (ev.status === 'cancelled') { if (t.meetingFlag !== 'cancelled') { t.meetingFlag = 'cancelled'; affected[k] = 1; } return; }
+        if (ev.date && ev.date !== k) {              // meeting moved to a new day
+          day.tasks = day.tasks.filter(function(x){ return x !== t; });
+          var dest = dayData(ev.date);
+          if (!dest.tasks.some(function(x){ return x.calendarEventId === t.calendarEventId; })) {
+            delete t.addedToMisses; delete t.addedToWins; delete t.meetingFlag;
+            t.carriedFrom = k; t.carryReason = 'meeting rescheduled';
+            dest.tasks.push(t);
+          }
+          affected[k] = 1; affected[ev.date] = 1; moved++;
+        }
+      });
+    });
+    var dates = Object.keys(affected);
+    if (dates.length) {
+      saveLocal();
+      dates.forEach(function(dk){ try { save(dk); } catch(e){} });
+      render();
+      if (moved) showToast('📅 ' + moved + ' rescheduled meeting' + (moved>1?'s':'') + ' moved to ' + (moved>1?'their new dates':'its new date'));
+    }
+  } catch(e) { /* non-fatal */ }
 }
 
 function stripMeetingBoilerplate(text) {
@@ -7837,7 +7881,7 @@ document.addEventListener('click',e=>{const m=document.getElementById('carryFwdM
   setInterval(async () => { if (currentUser?.refresh_token) await refreshToken(); }, 30 * 60 * 1000);
   document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState === 'visible' && currentUser?.token) {
-      await syncDown(); runCarryOver(); _lastCalDate = null; render();
+      await syncDown(); runCarryOver(); _lastCalDate = null; render(); reconcileCalendarTasks();
     }
   });
   const saved = localStorage.getItem('dt-user');
