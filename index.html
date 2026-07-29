@@ -712,6 +712,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
     <!-- ══ SELF MODE ══ -->
     <div id="samSelfMode">
       <div id="samAlerts" style="margin-bottom:8px"></div>
+      <div id="meetingsKpiSelf" style="margin-bottom:12px"></div>
 
       <!-- ── SAM Brief Card ─────────────────────────────────────────────── -->
       <div id="samBriefSection" style="display:none;margin-bottom:16px">
@@ -839,6 +840,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 
     <!-- ══ TEAM MODE ══ -->
     <div id="samTeamMode" style="display:none">
+      <div id="meetingsKpiTeam" style="margin-bottom:12px"></div>
       <div id="forecastPanel" style="margin-bottom:12px"></div>
       <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:12px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
@@ -2076,7 +2078,7 @@ function switchTab(tab) {
     setSamMode(mode);
   }
   if (tab === 'intel') { loadIntelligence(); }
-  if (tab === 'pipeline') { loadPipeline(); }
+  if (tab === 'pipeline') { loadPipeline(); loadMeetingsKpiSelf(); }
   if (tab === 'org') { if (currentUser?.refresh_token) { refreshToken().then(() => renderOrg()); } else { renderOrg(); } }
 }
 let _samMode = 'self';
@@ -2092,6 +2094,7 @@ function setSamMode(mode) {
     const tdi = document.getElementById('teamDateInput'); if (tdi) tdi.value = viewDate;
     renderTeam();
     loadForecastPanel();
+    loadMeetingsKpiTeam();
   } else {
     if (selfBtn) { selfBtn.style.background = 'var(--gold)'; selfBtn.style.color = '#18160F'; }
     if (teamBtn) { teamBtn.style.background = 'transparent'; teamBtn.style.color = 'var(--text2)'; }
@@ -5883,12 +5886,18 @@ async function loadExecDashboard() {
     }
 
     html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-top:12px">' +
+      '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">📅 Org — relevant meetings booked</div>' +
+      '<div id="meetingsKpiOrg">Loading…</div>' +
+    '</div>';
+
+    html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-top:12px">' +
       '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">⚡ Live feed — org-wide</div>' +
       '<div id="teamFeedList">Loading…</div>' +
     '</div>';
 
     container.innerHTML = html;
     loadTeamFeed('teamFeedList');
+    loadMeetingsKpiOrg();
   } catch(e) { container.innerHTML = '<div style="padding:20px;font-size:13px;color:var(--coral)">Error: ' + esc(e.message) + '</div>'; }
 }
 
@@ -5953,6 +5962,86 @@ async function reactToFeed(feedId, emoji) {
       body:JSON.stringify({ action:'react_to_feed', feed_id: feedId, emoji: emoji }) });
     if (window._teamFeedTarget) loadTeamFeed(window._teamFeedTarget);
   } catch(e) { showToast('Could not react'); }
+}
+
+// ── Meetings booked KPI — relevant meetings only (external attendee, tied
+// to a real account, not an existing won customer). Self view computes live
+// from the rep's own calendar (and caches it for manager/exec rollups);
+// team view just reads that cache. Period toggle re-fetches self, just
+// re-slices the same cached list for team (cheap, no new calendar calls).
+let _meetingsKpiSelfDays = 30;
+async function loadMeetingsKpiSelf(days) {
+  var el = document.getElementById('meetingsKpiSelf'); if (!el || !currentUser?.token) return;
+  if (days) _meetingsKpiSelfDays = days;
+  el.innerHTML = '<div style="font-size:12px;color:var(--text3)">Loading meetings booked…</div>';
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({ action:'get_meetings_kpi', days: _meetingsKpiSelfDays }) });
+    var d = await r.json();
+    if (!d.ok) { el.innerHTML = d.connected === false ? '<div style="font-size:12px;color:var(--text3)">Connect email to track meetings booked.</div>' : '<div style="font-size:12px;color:var(--coral)">Could not load.</div>'; return; }
+    var periodBtns = [7,30,90].map(function(p){
+      var active = p === _meetingsKpiSelfDays;
+      return '<button onclick="loadMeetingsKpiSelf(' + p + ')" style="padding:3px 10px;border-radius:10px;border:1px solid ' + (active?'var(--gold)':'var(--border)') + ';background:' + (active?'rgba(184,134,11,0.12)':'var(--surface2)') + ';color:var(--text2);font-size:11px;cursor:pointer;margin-left:4px">' + p + 'd</button>';
+    }).join('');
+    var list = (d.meetings || []).slice(0, 8).map(function(m){
+      return '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);padding:3px 0;border-bottom:1px solid var(--border)">' +
+        '<span>' + esc(m.account_name) + ' — ' + esc(m.title||'').slice(0,40) + '</span><span>' + esc(m.date) + '</span></div>';
+    }).join('');
+    el.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+        '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em">📅 Relevant meetings booked</div>' +
+        '<div>' + periodBtns + '</div>' +
+      '</div>' +
+      '<div style="font-size:28px;font-weight:700;color:var(--gold);margin-bottom:4px">' + (d.count||0) + '</div>' +
+      '<div style="font-size:11px;color:var(--text3);margin-bottom:8px">Last ' + _meetingsKpiSelfDays + ' days · external attendee, tied to a real account, not an existing customer</div>' +
+      (list || '<div style="font-size:11px;color:var(--text3)">No qualifying meetings in this window.</div>') +
+    '</div>';
+  } catch(e) { el.innerHTML = '<div style="font-size:12px;color:var(--coral)">Could not load meetings booked.</div>'; }
+}
+let _meetingsKpiTeamDays = 30;
+async function loadMeetingsKpiTeam(days) {
+  var el = document.getElementById('meetingsKpiTeam'); if (!el || !currentUser?.token) return;
+  if (days) _meetingsKpiTeamDays = days;
+  el.innerHTML = '<div style="font-size:12px;color:var(--text3)">Loading team meetings booked…</div>';
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({ action:'get_team_meetings_kpi', scope:'team', days: _meetingsKpiTeamDays }) });
+    var d = await r.json();
+    if (!d.ok) { el.innerHTML = ''; return; }
+    var periodBtns = [7,30,90].map(function(p){
+      var active = p === _meetingsKpiTeamDays;
+      return '<button onclick="loadMeetingsKpiTeam(' + p + ')" style="padding:3px 10px;border-radius:10px;border:1px solid ' + (active?'var(--gold)':'var(--border)') + ';background:' + (active?'rgba(184,134,11,0.12)':'var(--surface2)') + ';color:var(--text2);font-size:11px;cursor:pointer;margin-left:4px">' + p + 'd</button>';
+    }).join('');
+    var rows = (d.byRep||[]).map(function(r2){
+      return '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);padding:5px 0;border-bottom:1px solid var(--border)">' +
+        '<span>' + esc(r2.name||r2.email||'—') + (r2.stale ? ' <span style="color:var(--text3);font-size:10px">(not synced yet)</span>' : '') + '</span>' +
+        '<span style="font-weight:600;color:var(--text)">' + r2.count + '</span></div>';
+    }).join('');
+    el.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+        '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em">📅 Team — relevant meetings booked</div>' +
+        '<div>' + periodBtns + '</div>' +
+      '</div>' +
+      '<div style="font-size:28px;font-weight:700;color:var(--gold);margin-bottom:8px">' + (d.total||0) + '</div>' +
+      (rows || '<div style="font-size:11px;color:var(--text3)">No direct reports found.</div>') +
+    '</div>';
+  } catch(e) { el.innerHTML = ''; }
+}
+async function loadMeetingsKpiOrg() {
+  var el = document.getElementById('meetingsKpiOrg'); if (!el || !currentUser?.token) return;
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({ action:'get_team_meetings_kpi', scope:'org', days: 30 }) });
+    var d = await r.json();
+    if (!d.ok) { el.innerHTML = '<div style="font-size:12px;color:var(--text3)">Not available.</div>'; return; }
+    var rows = (d.byRep||[]).sort(function(a,b){return b.count-a.count;}).slice(0,10).map(function(r2){
+      return '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);padding:5px 0;border-bottom:1px solid var(--border)">' +
+        '<span>' + esc(r2.name||r2.email||'—') + '</span><span style="font-weight:600;color:var(--text)">' + r2.count + '</span></div>';
+    }).join('');
+    el.innerHTML = '<div style="font-size:28px;font-weight:700;color:var(--gold);margin-bottom:4px">' + (d.total||0) + '</div>' +
+      '<div style="font-size:11px;color:var(--text3);margin-bottom:8px">Last 30 days, org-wide · external attendee, tied to a real account, not an existing customer</div>' +
+      (rows || '<div style="font-size:11px;color:var(--text3)">No data yet.</div>');
+  } catch(e) { el.innerHTML = '<div style="font-size:12px;color:var(--coral)">Could not load.</div>'; }
 }
 
 let orgPeople = [];
