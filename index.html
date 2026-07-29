@@ -491,6 +491,14 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
   <div class="panel active" id="panel-today">
     <div id="productivityBanner" style="margin-bottom:12px"></div>
     <div id="coachingAlertsPanel" style="margin-bottom:12px"></div>
+    <div style="margin-bottom:12px">
+      <button onclick="toggleTeamFeedWidget()" style="width:100%;text-align:left;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;font-family:var(--sans);font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:space-between">
+        <span>⚡ Team wins</span><span id="teamFeedWidgetChev" style="color:var(--text3)">›</span>
+      </button>
+      <div id="teamFeedWidgetBody" style="display:none;background:var(--surface);border:1px solid var(--border);border-top:none;border-radius:0 0 var(--radius) var(--radius);padding:10px 14px">
+        <div id="teamFeedWidget">Loading…</div>
+      </div>
+    </div>
     <div id="nudgeBanner" style="display:none;background:rgba(160,117,42,0.08);border:1px solid rgba(160,117,42,0.25);border-radius:var(--radius);padding:10px 14px;margin-bottom:12px"><div style="display:flex;align-items:center;justify-content:space-between"><div id="nudgeText" style="font-size:12px;color:var(--text2)"></div><button onclick="this.parentElement.parentElement.style.display='none'" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:0 0 0 8px">✕</button></div></div>
     <div style="display:flex;gap:8px;margin-bottom:12px">
       <button class="today-section-btn active" id="tsb-tasks" onclick="setTodaySection('tasks')">✦ Tasks</button>
@@ -1238,6 +1246,16 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
       <button id="pushToggleBtn" onclick="togglePushNotifications()" style="padding:8px 14px;border-radius:8px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:700;cursor:pointer">🔔 Enable notifications</button>
       <button id="pushTestBtn" onclick="sendTestPush()" style="display:none;margin-left:8px;padding:8px 14px;border-radius:8px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Send test</button>
       <div id="youPushHint" style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.5"></div>
+    </div>
+      </div>
+    </div>
+    <div class="you-acc" id="youAcc-reminders">
+      <button class="you-menu-item" onclick="toggleYouAcc('reminders'); loadReminders();"><span>⏰ Reminders</span><span class="you-arrow you-acc-chev">›</span></button>
+      <div class="you-acc-body">
+    <div class="admin-card" style="margin-bottom:0">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px">One-off or repeating reminders, delivered as a push notification at the time you choose.</div>
+      <button onclick="window._openReminder()" style="padding:8px 14px;border-radius:8px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:700;cursor:pointer;margin-bottom:12px">+ New reminder</button>
+      <div id="remindersList" style="font-size:12px;color:var(--text3)">Loading…</div>
     </div>
       </div>
     </div>
@@ -2227,7 +2245,8 @@ function renderListHTML(key, items) {
         '<div class="drag-handle"><svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="4" cy="3" r="1.5"/><circle cx="8" cy="3" r="1.5"/><circle cx="4" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="4" cy="13" r="1.5"/><circle cx="8" cy="13" r="1.5"/></svg></div>' +
         '<div class="chk ' + (item.done?'on':'') + '" onclick="' + (item.carriedTo?'':'toggleFromToday('+i+')') + '"' + (item.carriedTo?' title="Task moved forward"':'') + '></div>' +
         '<div style="flex:1"><div class="item-text">' + esc(displayText) + ' ' + priorityBadge + delegatedBadge + verifyBadge + '</div>' + tsMeta +
-        '<button class="icarry" onclick="window._doCarry(event)">\u2197 Move</button></div>' +
+        '<button class="icarry" onclick="window._doCarry(event)">\u2197 Move</button>' +
+        '<button class="icarry" onclick="window._openReminderFromTask(event)" style="margin-left:4px">\u23F0 Remind</button></div>' +
         '<button class="idel" onclick="delFromToday(\'tasks\',' + i + ')">✕</button></div>';
     }
     if (key === 'wins') {
@@ -2885,6 +2904,81 @@ async function sendTestPush() {
     var d = await r.json();
     showToast(d.ok ? 'Test sent — check your notifications' : 'Test failed: ' + (d.error||''));
   } catch(e) { showToast('Test failed'); }
+}
+
+// ── Reminders ────────────────────────────────────────────────────────────────
+// One-off or repeating reminders, delivered by the sam-cron function's
+// run_reminders sweep. Can be opened blank (from the You tab) or prefilled
+// from a specific task (from the Today list).
+window._pendingReminderTaskIdx = null;
+window._openReminder = function() {
+  window._pendingReminderTaskIdx = null;
+  var modal = document.getElementById('reminderModal'); if (!modal) return;
+  document.getElementById('reminderTitle').value = '';
+  var now = new Date(); now.setMinutes(now.getMinutes() + 30);
+  document.getElementById('reminderDate').value = now.toISOString().slice(0,10);
+  document.getElementById('reminderTime').value = now.toTimeString().slice(0,5);
+  document.getElementById('reminderRepeat').value = 'none';
+  modal.style.display = 'flex';
+};
+window._openReminderFromTask = function(e) {
+  e.stopPropagation();
+  var item = e.target.closest('[data-task-idx]');
+  var idx = item ? parseInt(item.getAttribute('data-task-idx')) : null;
+  var rawText = item ? (item.getAttribute('data-carry-text') || '') : '';
+  var tmp = document.createElement('textarea'); tmp.innerHTML = rawText;
+  window._openReminder();
+  window._pendingReminderTaskIdx = idx;
+  document.getElementById('reminderTitle').value = tmp.value || '';
+};
+function closeReminderModal() {
+  var modal = document.getElementById('reminderModal'); if (modal) modal.style.display = 'none';
+}
+async function confirmCreateReminder() {
+  var title = document.getElementById('reminderTitle').value.trim();
+  var date = document.getElementById('reminderDate').value;
+  var time = document.getElementById('reminderTime').value;
+  var repeat = document.getElementById('reminderRepeat').value;
+  if (!title) { alert('Please enter what this reminder is for'); return; }
+  if (!date || !time) { alert('Please choose a date and time'); return; }
+  var when = new Date(date + 'T' + time);
+  if (isNaN(when.getTime())) { alert('Invalid date/time'); return; }
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({ action:'create_reminder', title: title, remind_at: when.toISOString(), repeat: repeat, url: '/?tab=today' }) });
+    var d = await r.json();
+    if (d.ok) { showToast('⏰ Reminder set'); closeReminderModal(); loadReminders(); }
+    else showToast('Could not set reminder: ' + (d.error||''));
+  } catch(e) { showToast('Could not set reminder'); }
+}
+async function loadReminders() {
+  var el = document.getElementById('remindersList'); if (!el) return;
+  el.textContent = 'Loading…';
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({ action:'list_reminders' }) });
+    var d = await r.json();
+    var rows = (d.ok && d.reminders) || [];
+    if (!rows.length) { el.innerHTML = '<div style="padding:6px 0">No upcoming reminders.</div>'; return; }
+    var REPEAT_LABEL = { none:'Once', daily:'Daily', weekdays:'Weekdays', weekly:'Weekly' };
+    el.innerHTML = rows.map(function(rm) {
+      var when = new Date(rm.remind_at);
+      var whenLbl = when.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}) + ' · ' + when.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
+      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">' +
+        '<div style="flex:1"><div style="color:var(--text);font-size:13px">' + esc(rm.title) + '</div>' +
+        '<div style="font-size:11px;color:var(--text3);margin-top:2px">' + whenLbl + (rm.repeat !== 'none' ? ' · ' + REPEAT_LABEL[rm.repeat] : '') + '</div></div>' +
+        '<button onclick="cancelReminder(\'' + rm.id + '\')" style="background:none;border:none;color:var(--text3);font-size:16px;cursor:pointer">✕</button></div>';
+    }).join('');
+  } catch(e) { el.textContent = 'Could not load reminders.'; }
+}
+async function cancelReminder(id) {
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({ action:'cancel_reminder', id: id }) });
+    var d = await r.json();
+    if (d.ok) { showToast('Reminder cancelled'); loadReminders(); }
+    else showToast('Could not cancel');
+  } catch(e) { showToast('Could not cancel'); }
 }
 
 // ── Fix market signals — show actual signal content ────────────────────────────
@@ -5788,8 +5882,77 @@ async function loadExecDashboard() {
       html += '</div>';
     }
 
+    html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-top:12px">' +
+      '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">⚡ Live feed — org-wide</div>' +
+      '<div id="teamFeedList">Loading…</div>' +
+    '</div>';
+
     container.innerHTML = html;
+    loadTeamFeed('teamFeedList');
   } catch(e) { container.innerHTML = '<div style="padding:20px;font-size:13px;color:var(--coral)">Error: ' + esc(e.message) + '</div>'; }
+}
+
+// ── Live feed (team_feed) — org-wide positive events with reactions ────────
+// Two placements share this same renderer: the Exec tab's full "Live feed"
+// section (loadExecDashboard above) and a compact widget on the Today tab
+// (loadTodayFeedWidget). Same data, same react_to_feed action either way.
+const FEED_EVENT_ICON = { deal_won: '🏆', champion_confirmed: '🤝', momentum_up: '📈', milestone: '🎖' };
+const FEED_EMOJIS = ['👏', '🔥', '🎉'];
+function _feedTimeAgo(iso) {
+  var diffMin = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (diffMin < 60) return diffMin + 'm ago';
+  var diffHr = Math.round(diffMin / 60);
+  if (diffHr < 24) return diffHr + 'h ago';
+  return Math.round(diffHr / 24) + 'd ago';
+}
+function _renderFeedEntries(entries) {
+  if (!entries.length) return '<div style="font-size:12px;color:var(--text3);padding:8px 0">Nothing yet — wins and milestones will show up here as they happen.</div>';
+  return entries.map(function(f) {
+    var icon = FEED_EVENT_ICON[f.event_type] || '✨';
+    var reactionChips = FEED_EMOJIS.map(function(e) {
+      var count = (f.reactions && f.reactions[e]) || 0;
+      var mine = f.my_reaction === e;
+      return '<button onclick="reactToFeed(\'' + f.id + '\',\'' + e + '\')" style="border:1px solid ' + (mine ? 'var(--gold)' : 'var(--border)') + ';background:' + (mine ? 'rgba(184,134,11,0.12)' : 'var(--surface2)') + ';border-radius:12px;padding:2px 8px;font-size:11px;cursor:pointer;margin-right:4px">' + e + (count ? ' ' + count : '') + '</button>';
+    }).join('');
+    return '<div style="padding:10px 12px;background:var(--bg);border-radius:8px;margin-bottom:8px;border-left:3px solid var(--gold)">' +
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:4px">' +
+        '<div style="font-size:13px;color:var(--text);font-weight:500">' + icon + ' ' + esc(f.title) + '</div>' +
+        '<div style="font-size:10px;color:var(--text3);white-space:nowrap">' + _feedTimeAgo(f.created_at) + '</div>' +
+      '</div>' +
+      (f.body ? '<div style="font-size:12px;color:var(--text2);margin-bottom:6px">' + esc(f.body) + '</div>' : '') +
+      '<div style="display:flex;align-items:center;justify-content:space-between">' +
+        '<span style="font-size:11px;color:var(--text3)">' + esc(f.actor_name) + '</span>' +
+        '<div>' + reactionChips + '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+async function loadTeamFeed(targetElId, limit) {
+  var el = document.getElementById(targetElId); if (!el || !currentUser?.token) return;
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({ action:'list_team_feed', limit: limit || 30 }) });
+    var d = await r.json();
+    window._teamFeedTarget = targetElId;
+    el.innerHTML = (d.ok && d.feed) ? _renderFeedEntries(d.feed) : '<div style="font-size:12px;color:var(--coral)">Could not load feed.</div>';
+  } catch(e) { el.innerHTML = '<div style="font-size:12px;color:var(--coral)">Could not load feed.</div>'; }
+}
+let _teamFeedWidgetLoaded = false;
+function toggleTeamFeedWidget() {
+  var body = document.getElementById('teamFeedWidgetBody');
+  var chev = document.getElementById('teamFeedWidgetChev');
+  if (!body) return;
+  var open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : '';
+  if (chev) chev.textContent = open ? '›' : '⌄';
+  if (!open && !_teamFeedWidgetLoaded) { _teamFeedWidgetLoaded = true; loadTeamFeed('teamFeedWidget', 15); }
+}
+async function reactToFeed(feedId, emoji) {
+  try {
+    await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({ action:'react_to_feed', feed_id: feedId, emoji: emoji }) });
+    if (window._teamFeedTarget) loadTeamFeed(window._teamFeedTarget);
+  } catch(e) { showToast('Could not react'); }
 }
 
 let orgPeople = [];
@@ -10629,6 +10792,44 @@ window.selectCarryDate = typeof selectCarryDate !== 'undefined' ? selectCarryDat
         <div style="display:flex;gap:10px">
           <button onclick="closeCarryForward()" style="flex:1;padding:11px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-family:'DM Sans',sans-serif;font-size:14px;cursor:pointer">Cancel</button>
           <button onclick="confirmCarryForward()" style="flex:2;padding:11px;background:var(--gold);border:none;border-radius:8px;color:#18160F;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer">↗ Carry Forward</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reminder Modal -->
+    <div id="reminderModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:600;align-items:center;justify-content:center;padding:20px">
+      <div style="background:var(--surface);border:1px solid var(--border2);border-radius:16px;width:100%;max-width:420px;padding:24px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <span style="font-family:'EB Garamond',Georgia,serif;font-size:20px;color:var(--text)">⏰ Set a reminder</span>
+          <button onclick="closeReminderModal()" style="background:none;border:none;font-size:20px;color:var(--text3);cursor:pointer">✕</button>
+        </div>
+        <div style="margin-bottom:14px">
+          <div style="font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">What should this remind you of?</div>
+          <input id="reminderTitle" placeholder="e.g. Follow up with Acme Corp" maxlength="200"
+            style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;outline:none"/>
+        </div>
+        <div style="display:flex;gap:10px;margin-bottom:14px">
+          <div style="flex:1">
+            <div style="font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Date</div>
+            <input type="date" id="reminderDate" style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;outline:none"/>
+          </div>
+          <div style="flex:1">
+            <div style="font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Time</div>
+            <input type="time" id="reminderTime" style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;outline:none"/>
+          </div>
+        </div>
+        <div style="margin-bottom:18px">
+          <div style="font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Repeat</div>
+          <select id="reminderRepeat" style="width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;outline:none">
+            <option value="none">Just once</option>
+            <option value="daily">Every day</option>
+            <option value="weekdays">Every weekday (Mon–Fri)</option>
+            <option value="weekly">Every week, same day</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:10px">
+          <button onclick="closeReminderModal()" style="flex:1;padding:11px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-family:'DM Sans',sans-serif;font-size:14px;cursor:pointer">Cancel</button>
+          <button onclick="confirmCreateReminder()" style="flex:2;padding:11px;background:var(--gold);border:none;border-radius:8px;color:#18160F;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer">⏰ Set reminder</button>
         </div>
       </div>
     </div>
