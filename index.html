@@ -9524,7 +9524,11 @@ function _renderSampaignContacts(campaignId) {
     dead:          { label:'Dead',          color:'var(--coral)' },
     opted_out:     { label:'Opted out',     color:'var(--text3)' }
   };
-  var unenriched = all.filter(function(c){ return !c.enriched_at; }).length;
+  // Counts as "needs enrichment" if never touched OR touched but still has
+  // no LinkedIn/outreach note (e.g. ran before those fields existed, or the
+  // provider missed) — matches the backend's own retry filter exactly, so
+  // the button doesn't permanently disappear after one attempt.
+  var unenriched = all.filter(function(c){ return !c.enriched_at || (!c.linkedin_url && !c.outreach_note); }).length;
 
   var tab = function(key, label, n) {
     var on = _sampaignContactTab === key;
@@ -9647,7 +9651,7 @@ async function _uploadSampaignCsvFile(campaignId, file) {
         var er = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
           body: JSON.stringify({ action:'enrich_sampaign_contacts', campaign_id: campaignId }) });
         var ed = await er.json();
-        if (ed.ok && ed.enriched > 0) showToast('✨ Enriched '+ed.enriched+' of '+ed.checked+' contacts via '+ed.provider);
+        if (ed.ok && ed.checked > 0) showToast('✨ Checked '+ed.checked+', matched '+ed.enriched+' via '+(ed.provider||'—')+(ed.linkedin_found!==undefined?', '+ed.linkedin_found+' with LinkedIn':''));
       } catch(e) { /* enrichment is best-effort, upload already succeeded */ }
     }
   } catch(e) { showToast('CSV error: '+e.message); }
@@ -9678,7 +9682,13 @@ async function enrichSampaignContacts(campaignId) {
       body: JSON.stringify({ action:'enrich_sampaign_contacts', campaign_id: campaignId }) });
     var d = await r.json();
     if (!d.ok) { showToast('Error: '+(d.error||'Enrichment unavailable')); return; }
-    showToast('✨ Enriched '+d.enriched+' of '+d.checked+' contacts via '+d.provider);
+    // Surface the real match rate, not just "done" — this is what tells you
+    // whether the provider is genuinely working (checked>0) vs just missing
+    // LinkedIn for these specific people (linkedin_found low/0, has a note
+    // explaining it's a coverage limit, not a bug).
+    var msg = '✨ Checked '+d.checked+', matched '+d.enriched+' via '+(d.provider||'—')+(d.linkedin_found!==undefined?', '+d.linkedin_found+' with LinkedIn':'');
+    if (d.note) msg += ' — '+d.note;
+    showToast(msg);
     var r2 = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body: JSON.stringify({ action:'list_sampaign_contacts', campaign_id: campaignId }) });
     var d2 = await r2.json();
     if (d2.ok) { window._sampaignContactsCache[campaignId] = d2.contacts || []; _renderSampaignContacts(campaignId); }
