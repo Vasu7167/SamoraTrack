@@ -756,9 +756,9 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
             <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">Actions</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
               <button onclick="runLocalIntelligence()" id="localIntelBtn" style="padding:9px 10px;border-radius:10px;background:rgba(160,117,42,0.08);border:1px solid rgba(160,117,42,0.2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">⚡ Scan channels</button>
-              <button onclick="syncSequencing()" id="seqSyncBtn" style="padding:9px 10px;border-radius:10px;background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);color:var(--green);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">↺ Sync sequences</button>
+              <button onclick="syncSequencing()" id="seqSyncBtn" style="padding:9px 10px;border-radius:10px;background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);color:var(--green);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">↺ Sync SAMpaigns</button>
               <button onclick="syncNotetaker()" id="notetakerSyncBtn" style="padding:9px 10px;border-radius:10px;background:rgba(160,117,42,0.08);border:1px solid rgba(160,117,42,0.2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">🎙 Sync calls</button>
-              <button onclick="loadSequencingStats()" id="seqStatsBtn" style="padding:9px 10px;border-radius:10px;background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);color:var(--green);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">📊 Seq stats</button>
+              <button onclick="loadSequencingStats()" id="seqStatsBtn" style="padding:9px 10px;border-radius:10px;background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);color:var(--green);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">📨 SAMpaign stats</button>
               <button onclick="loadTimeAnalytics()" id="timeAnalyticsBtn" style="padding:9px 10px;border-radius:10px;background:rgba(58,110,168,0.08);border:1px solid rgba(58,110,168,0.2);color:var(--blue);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">🕐 Time by account</button>
               <button onclick="computeIcpScores()" id="icp-score-btn" style="padding:9px 10px;border-radius:10px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);color:#6366f1;font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left">✦ Score ICP fit</button>
               <!-- Hidden maintenance buttons kept for programmatic use -->
@@ -3859,8 +3859,8 @@ async function loadSequencingStats() {
   var btn = document.getElementById('seqStatsBtn');
   var out = document.getElementById('seqStatsOutput');
   if (!out) return;
-  if (btn) { btn.textContent = '📊 Loading…'; btn.disabled = true; }
-  out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0">Crunching sequencing signals…</div>';
+  if (btn) { btn.textContent = '📨 Loading…'; btn.disabled = true; }
+  out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0">Crunching SAMpaign signals…</div>';
 
   try {
     var r = await fetch(EDGE_FN_URL, {
@@ -3886,17 +3886,18 @@ async function loadSequencingStats() {
     // ── Org summary strip ─────────────────────────────────────────────────
     html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px">' +
       '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">' +
-        '📊 Sequencing overview · last 90 days' +
+        '📨 SAMpaign Analytics · last 90 days' +
         (d.synced_at ? '<span style="font-weight:400;margin-left:8px">Last sync: '+new Date(d.synced_at).toLocaleDateString()+'</span>' : '') +
       '</div>' +
-      '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">' +
-        ['Prospects','Sent','Opened','Replied'].map(function(label, i) {
-          var vals = [s.total_prospects, s.sent, s.opened, s.replied];
-          var rates = [null, null, s.open_rate, s.reply_rate];
-          var goods = [null, null, bm.open_rate.good, bm.reply_rate.good];
-          var avgs  = [null, null, bm.open_rate.avg,  bm.reply_rate.avg];
-          var color = rates[i] !== null ? rateColor(rates[i], goods[i], avgs[i]) : 'var(--text)';
-          var sub   = rates[i] !== null ? rates[i]+'% · '+rateLabel(rates[i],goods[i],avgs[i]) : (i===3&&s.bounced?s.bounced+' bounced':'');
+      '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px">' +
+        ['Prospects','Sent','Opened','Replied','Dead'].map(function(label, i) {
+          var vals = [s.total_prospects, s.sent, s.opened, s.replied, s.bounced||0];
+          var rates = [null, null, s.open_rate, s.reply_rate, null];
+          var goods = [null, null, bm.open_rate.good, bm.reply_rate.good, null];
+          var avgs  = [null, null, bm.open_rate.avg,  bm.reply_rate.avg,  null];
+          var color = i===4 ? 'var(--coral)' : (rates[i] !== null ? rateColor(rates[i], goods[i], avgs[i]) : 'var(--text)');
+          var sub   = i===4 ? (s.sent>0?Math.round((s.bounced||0)/s.sent*100)+'% of sent':'no longer working')
+                    : (rates[i] !== null ? rates[i]+'% · '+rateLabel(rates[i],goods[i],avgs[i]) : '');
           return '<div style="background:var(--surface);border-radius:8px;padding:10px;text-align:center">' +
             '<div style="font-size:20px;font-weight:700;color:'+color+'">'+vals[i]+'</div>' +
             '<div style="font-size:11px;color:var(--text3)">'+label+'</div>' +
@@ -3953,7 +3954,7 @@ async function loadSequencingStats() {
           '<th style="text-align:center;padding:4px 6px;color:var(--text3);font-weight:500">Sent</th>' +
           '<th style="text-align:center;padding:4px 6px;color:var(--text3);font-weight:500">Open %</th>' +
           '<th style="text-align:center;padding:4px 6px;color:var(--text3);font-weight:500">Reply %</th>' +
-          '<th style="text-align:left;padding:4px 6px;color:var(--text3);font-weight:500">Campaigns</th>' +
+          '<th style="text-align:left;padding:4px 6px;color:var(--text3);font-weight:500">SAMpaigns</th>' +
         '</tr></thead><tbody>' +
         d.by_rep.map(function(rep) {
           var oc = rateColor(rep.open_rate, bm.open_rate.good, bm.open_rate.avg);
@@ -4001,13 +4002,15 @@ async function loadSequencingStats() {
               '<div><div style="font-size:13px;font-weight:600;color:var(--text)">'+acct.sent+'</div><div style="font-size:9px;color:var(--text3)">sent</div></div>' +
               '<div><div style="font-size:13px;font-weight:600;color:'+oc+'">'+acct.open_rate+'%</div><div style="font-size:9px;color:var(--text3)">opens</div></div>' +
               '<div><div style="font-size:13px;font-weight:600;color:'+rc+'">'+acct.reply_rate+'%</div><div style="font-size:9px;color:var(--text3)">replies</div></div>' +
+              (acct.bounced ? '<div><div style="font-size:13px;font-weight:600;color:var(--coral)">'+acct.bounced+'</div><div style="font-size:9px;color:var(--text3)">dead</div></div>' : '') +
             '</div>' +
           '</div>' +
-          // Contact detail rows (show replied/opened status per contact)
+          // Contact detail rows (show replied/opened/bounced status per contact)
           (acct.contacts_detail && acct.contacts_detail.length ?
             '<div style="margin-top:6px;padding-left:12px">' +
             acct.contacts_detail.slice(0,4).map(function(c) {
-              var badge = c.replied ? '<span style="font-size:9px;font-weight:700;color:var(--green);background:rgba(74,140,92,0.12);border-radius:4px;padding:1px 5px">↩ replied</span>'
+              var badge = c.bounced ? '<span style="font-size:9px;font-weight:700;color:var(--coral);background:rgba(212,90,90,0.12);border-radius:4px;padding:1px 5px">💀 dead</span>'
+                        : c.replied ? '<span style="font-size:9px;font-weight:700;color:var(--green);background:rgba(74,140,92,0.12);border-radius:4px;padding:1px 5px">↩ replied</span>'
                         : c.opened ? '<span style="font-size:9px;color:var(--amber)">👁 opened'+(c.opens>1?' ×'+c.opens:'')+'</span>'
                         : '<span style="font-size:9px;color:var(--text3)">sent</span>';
               return '<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:11px;color:var(--text2)">' +
@@ -4020,10 +4023,29 @@ async function loadSequencingStats() {
       html += '</div>';
     }
 
-    // ── By campaign ───────────────────────────────────────────────────────
+    // ── Dead contacts (bounced, no longer working) ──────────────────────────
+    // Defensive: only renders once get_sequencing_stats returns dead_contacts
+    // (per-contact bounce receipts). Until then this section is simply absent
+    // rather than showing a broken/empty box — honest empty state.
+    if (d.dead_contacts && d.dead_contacts.length) {
+      html += '<div style="background:rgba(212,90,90,0.06);border:1px solid rgba(212,90,90,0.2);border-radius:10px;padding:12px 14px;margin-bottom:10px">' +
+        '<div style="font-size:10px;font-weight:700;color:var(--coral);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">💀 Dead contacts ('+d.dead_contacts.length+') · bounced, no longer working</div>' +
+        d.dead_contacts.map(function(c) {
+          return '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-top:1px solid rgba(212,90,90,0.12)">' +
+            '<div>' +
+              '<div style="font-size:12px;font-weight:600;color:var(--text)">'+esc(c.name||c.email||'Unknown')+'</div>' +
+              '<div style="font-size:10px;color:var(--text3)">'+esc(c.company||c.account_name||'')+(c.campaign_name?' · 📨 '+esc(c.campaign_name):'')+'</div>' +
+            '</div>' +
+            '<span style="font-size:10px;font-weight:700;color:var(--coral);background:rgba(212,90,90,0.12);border-radius:5px;padding:3px 8px">💀 dead</span>' +
+          '</div>';
+        }).join('') +
+      '</div>';
+    }
+
+    // ── By SAMpaign ───────────────────────────────────────────────────────
     if (d.by_campaign && d.by_campaign.length) {
       html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px">' +
-        '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">📨 By campaign (sorted by reply rate)</div>' +
+        '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">📨 By SAMpaign (sorted by reply rate)</div>' +
         d.by_campaign.map(function(c) {
           var bar = c.sent > 0 ? Math.max(4, Math.round(c.open_rate / 100 * 100)) : 4;
           var rc = rateColor(c.reply_rate, bm.reply_rate.good, bm.reply_rate.avg);
@@ -4642,7 +4664,7 @@ async function syncSequencing() {
   var btn = document.getElementById('seqSyncBtn');
   var out = document.getElementById('seqSyncOutput');
   if (btn) { btn.textContent = '↺ Syncing…'; btn.disabled = true; }
-  if (out) out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">Connecting to sequencing tool…</div>';
+  if (out) out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">Connecting to SAMpaign tool…</div>';
 
   try {
     var r = await fetch(EDGE_FN_URL, {
@@ -4660,7 +4682,7 @@ async function syncSequencing() {
     var html = '<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-top:6px">' +
       '<div style="font-size:11px;font-weight:600;color:var(--green);margin-bottom:6px">↺ ' + esc(d.provider) + ' synced successfully</div>' +
       '<div style="display:flex;gap:12px;flex-wrap:wrap">' +
-        '<span style="font-size:12px;color:var(--text2)">📊 ' + (d.campaigns_fetched || 0) + ' campaigns</span>' +
+        '<span style="font-size:12px;color:var(--text2)">📨 ' + (d.campaigns_fetched || 0) + ' SAMpaigns</span>' +
         '<span style="font-size:12px;color:var(--text2)">⚡ ' + (d.signals_synced || 0) + ' signals synced</span>' +
       '</div>';
 
@@ -4679,7 +4701,7 @@ async function syncSequencing() {
   } catch(e) {
     if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>';
   }
-  if (btn) { btn.textContent = '↺ Sync sequences'; btn.disabled = false; }
+  if (btn) { btn.textContent = '↺ Sync SAMpaigns'; btn.disabled = false; }
 }
 
 async function runExternalSignals(repId, resultElId) {
