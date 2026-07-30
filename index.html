@@ -7353,6 +7353,104 @@ async function openStakeholderInsight(stakeholderId, name, opts) {
   }
 }
 
+// ── SAMpaign contact insight: same "how to work with them" pattern as
+// openStakeholderInsight, reused for uploaded/scouted campaign contacts.
+// Only real differences: account-collision flag instead of MEDDPICC flags,
+// and a "Copy for email" button since this exists to feed a personalised
+// outreach draft, not a deal-coaching conversation.
+async function openSampaignContactInsight(contactId, name, opts) {
+  opts = opts || {};
+  document.getElementById('spc-insight-modal')?.remove();
+  var modal = document.createElement('div');
+  modal.id = 'spc-insight-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:99999;display:flex;align-items:flex-end;justify-content:center';
+  modal.innerHTML = '<div style="background:var(--bg);border-radius:16px 16px 0 0;width:100%;max-width:480px;padding:20px;max-height:85vh;overflow-y:auto" onclick="event.stopPropagation()">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
+      '<div style="font-size:15px;font-weight:700;color:var(--text)">🧭 ' + esc(name) + '</div>' +
+      '<button onclick="document.getElementById(\'spc-insight-modal\').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3)">✕</button>' +
+    '</div>' +
+    '<div style="margin-bottom:12px">' + _samoraIntelLabel('Read from their own messages, receipts on tap') + '</div>' +
+    '<div id="spc-insight-body"><div style="font-size:12px;color:var(--text3);padding:16px 0;text-align:center">Reading their communication…</div></div>' +
+  '</div>';
+  modal.addEventListener('click', function() { modal.remove(); });
+  document.body.appendChild(modal);
+
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({ action:'get_sampaign_contact_insight', contact_id:contactId, refresh:!!opts.refresh, web_research:!!opts.web }) });
+    var d = await r.json();
+    var body = document.getElementById('spc-insight-body');
+    if (!body) return;
+    if (!d.ok) { body.innerHTML = '<div style="color:var(--coral);font-size:12px">' + esc(d.error||'Insight unavailable') + '</div>'; return; }
+
+    var h = '';
+    if (d.contact && d.contact.title) {
+      h += '<div style="font-size:11px;color:var(--text3);margin-bottom:10px">' + esc(d.contact.title||'') + (d.contact.company ? ' · ' + esc(d.contact.company) : '') + '</div>';
+    }
+    if (d.style) {
+      var confLbl = d.style.confidence === 'high' ? 'high confidence' : d.style.confidence === 'moderate' ? 'moderate confidence' : 'early read';
+      h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">' +
+        '<span style="font-size:13px;font-weight:700;padding:3px 10px;border-radius:14px;background:rgba(160,117,42,0.12);color:var(--gold)">' + esc(d.style.label) + '</span>' +
+        '<span style="font-size:10px;color:var(--text3)">' + confLbl + ' · ' + d.style.messages_scanned + ' messages</span>' +
+        '<span onclick="var el=document.getElementById(\'spc-receipts\');el.style.display=el.style.display===\'none\'?\'block\':\'none\'" style="font-size:10px;color:var(--gold);cursor:pointer;text-decoration:underline dotted">why?</span>' +
+      '</div>';
+      h += '<div id="spc-receipts" style="display:none;background:var(--surface2);border-radius:8px;padding:8px 10px;margin-bottom:8px">' +
+        (d.style.receipts||[]).map(function(rc){ return '<div style="font-size:11px;color:var(--text2);padding:2px 0">· ' + esc(rc) + '</div>'; }).join('') + '</div>';
+    } else if (d.archetype) {
+      h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="font-size:13px;font-weight:700;padding:3px 10px;border-radius:14px;background:var(--surface2);color:var(--text2)">' + esc(d.archetype.label) + '</span>' +
+        '<span style="font-size:10px;color:var(--text3)">based on their title: style not assessed yet (too few messages)</span></div>';
+    } else {
+      h += '<div style="font-size:12px;color:var(--text3);padding:8px 0">' + esc(d.empty_reason || 'Not enough information yet.') + '</div>';
+    }
+
+    if (d.tips && d.tips.length) {
+      h += '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:10px 0 6px">When talking to them</div>';
+      d.tips.forEach(function(tip) {
+        h += '<div style="display:flex;gap:7px;padding:5px 0;font-size:12px;color:var(--text)"><span style="color:var(--gold);flex-shrink:0">→</span><span>' + esc(tip) + '</span></div>';
+      });
+    }
+    if (d.account_flags && d.account_flags.length) {
+      h += '<div style="font-size:10px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.06em;margin:10px 0 6px">Account context</div>';
+      d.account_flags.forEach(function(f) {
+        h += '<div style="display:flex;gap:7px;padding:5px 0;font-size:12px;color:var(--text2)"><span style="color:var(--amber);flex-shrink:0">⚑</span><span>' + esc(f) + '</span></div>';
+      });
+    }
+    if (d.web && d.web.bullets && d.web.bullets.length) {
+      h += '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:10px 0 6px">Public footprint</div>';
+      d.web.bullets.forEach(function(b) { h += '<div style="display:flex;gap:7px;padding:4px 0;font-size:12px;color:var(--text2)"><span style="flex-shrink:0">🔎</span><span>' + esc(b) + '</span></div>'; });
+      h += '<div style="font-size:10px;color:var(--amber);margin-top:4px">' + esc(d.web.label||'') + '</div>';
+    } else if (!d.web) {
+      h += '<button onclick="openSampaignContactInsight(\'' + esc(contactId) + '\',\'' + esc(name) + '\',{web:true})" style="width:100%;margin-top:12px;padding:8px;border-radius:8px;background:none;border:1px dashed var(--border2);color:var(--text3);font-family:var(--sans);font-size:11px;cursor:pointer">🔎 Check public footprint (uses AI: one search, shared with team)</button>';
+    }
+    if ((d.tips && d.tips.length) || (d.web && d.web.bullets && d.web.bullets.length)) {
+      h += '<button id="spc-copy-btn" onclick="_copySampaignInsight(\'' + esc(contactId) + '\')" style="width:100%;margin-top:10px;padding:8px;border-radius:8px;background:rgba(74,158,255,0.08);border:1px solid rgba(74,158,255,0.3);color:var(--blue);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">📋 Copy for email draft</button>';
+    }
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:8px;border-top:1px solid var(--border)">' +
+      '<span style="font-size:10px;color:var(--text3)">' + (d.cached ? '🗂 Shared team read from ' + esc((d.computed_at||'').slice(0,10)) : 'Computed just now') + '</span>' +
+      '<span onclick="openSampaignContactInsight(\'' + esc(contactId) + '\',\'' + esc(name) + '\',{refresh:true})" style="font-size:10px;color:var(--gold);cursor:pointer">↻ Recompute</span>' +
+    '</div>';
+    body.innerHTML = h;
+    window._spcInsightData = window._spcInsightData || {};
+    window._spcInsightData[contactId] = { name: name, tips: d.tips||[], web: (d.web && d.web.bullets) || [], style: d.style, archetype: d.archetype };
+  } catch(e) {
+    var b = document.getElementById('spc-insight-body');
+    if (b) b.innerHTML = '<div style="color:var(--coral);font-size:12px">Error: ' + esc(e.message) + '</div>';
+  }
+}
+
+// Plain-text summary of the insight, ready to paste into a compose window.
+function _copySampaignInsight(contactId) {
+  var d = (window._spcInsightData || {})[contactId];
+  if (!d) return;
+  var lines = [];
+  if (d.style) lines.push('Communication style: ' + d.style.label);
+  else if (d.archetype) lines.push('Likely archetype: ' + d.archetype.label);
+  if (d.tips && d.tips.length) { lines.push(''); lines.push('When writing to ' + d.name + ':'); d.tips.forEach(function(t){ lines.push('- ' + t); }); }
+  if (d.web && d.web.length) { lines.push(''); lines.push('Public footprint:'); d.web.forEach(function(b){ lines.push('- ' + b); }); }
+  var text = lines.join('\n');
+  navigator.clipboard.writeText(text).then(function(){ showToast('✓ Copied, paste into your draft'); }).catch(function(){ showToast('Could not copy, select the text manually'); });
+}
+
 var _stkTab = 'active';
 function _stkIsActive(s) { return !!s.last_contacted_at || (s.contact_count || 0) > 0; }
 
@@ -9470,12 +9568,14 @@ function _renderSampaignContacts(campaignId) {
           : '<div style="font-size:9px;color:var(--text3);margin-top:3px">No matching tracked account yet — link one to promote</div>';
       }
       var titleLine = (c.title || c.seniority) ? '<div style="font-size:10px;color:var(--text2);margin-top:1px">'+esc([c.title, c.seniority].filter(Boolean).join(' · '))+(c.linkedin_url?' · <a href="'+esc(c.linkedin_url)+'" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:none">LinkedIn ↗</a>':'')+'</div>' : '';
+      var intelBtn = _samoraIntelBtn('openSampaignContactInsight(\''+esc(c.id)+'\',\''+esc(c.name||c.email||'')+'\')', true);
       return '<div style="padding:6px 0;border-top:1px solid var(--border)">' +
-        '<div style="display:flex;align-items:center;justify-content:space-between">' +
-        '<div style="min-width:0"><div style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(c.name||c.email||'—')+'</div>' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px">' +
+        '<div style="min-width:0;flex:1"><div style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(c.name||c.email||'—')+'</div>' +
         '<div style="font-size:10px;color:var(--text3)">'+esc(c.email||'')+(c.company?' · '+esc(c.company):'')+'</div>' + titleLine + '</div>' +
-        '<select onchange="setSampaignContactStatus(\''+esc(c.id)+'\',this.value,\''+esc(campaignId)+'\')" style="font-size:10px;font-weight:600;color:'+meta.color+';background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:3px 6px;flex-shrink:0">'+opts+'</select>' +
-        '</div>' + collisionLine + promoteBtn +
+        '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">' + intelBtn +
+        '<select onchange="setSampaignContactStatus(\''+esc(c.id)+'\',this.value,\''+esc(campaignId)+'\')" style="font-size:10px;font-weight:600;color:'+meta.color+';background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:3px 6px">'+opts+'</select>' +
+        '</div></div>' + collisionLine + promoteBtn +
       '</div>';
     }).join('');
   }
