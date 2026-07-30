@@ -9618,6 +9618,7 @@ function _renderSampaignContacts(campaignId) {
   html += '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">' +
     '<label style="font-size:10px;color:var(--gold);padding:5px 10px;border-radius:8px;background:rgba(160,117,42,0.1);border:1px solid rgba(160,117,42,0.25);cursor:pointer">⇪ Upload CSV<input type="file" accept=".csv,text/csv" style="display:none" onchange="handleSampaignCsv(\''+esc(campaignId)+'\',this.files[0]);this.value=\'\'"/></label>' +
     '<button onclick="scoutSampaignContacts(\''+esc(campaignId)+'\')" style="font-size:10px;color:var(--gold);padding:5px 10px;border-radius:8px;background:rgba(160,117,42,0.1);border:1px solid rgba(160,117,42,0.25);cursor:pointer">🔎 Scout more contacts</button>' +
+    '<span onclick="openSampaignScoutProfile(\''+esc(campaignId)+'\')" style="font-size:10px;color:var(--text3);cursor:pointer;text-decoration:underline dotted">🎯 Who to hunt</span>' +
     (unenriched ? '<button onclick="enrichSampaignContacts(\''+esc(campaignId)+'\')" style="font-size:10px;color:var(--blue);padding:5px 10px;border-radius:8px;background:rgba(74,158,255,0.1);border:1px solid rgba(74,158,255,0.25);cursor:pointer">✨ Enrich '+unenriched+' contact'+(unenriched!==1?'s':'')+'</button>' : '') +
     '<span style="font-size:9px;color:var(--text3)">Columns: name, email, phone, company, title (header names flexible)</span>' +
     '</div>';
@@ -9750,6 +9751,82 @@ async function scoutSampaignContacts(campaignId) {
     if (d2.ok) { window._sampaignContactsCache[campaignId] = d2.contacts || []; _sampaignContactTab = 'prospective'; _renderSampaignContacts(campaignId); }
     loadSampaignCampaigns();
   } catch(e) { showToast('Error: '+e.message); }
+}
+
+// ── SAMpaign "Who to hunt": same criteria capability as the deal
+// Stakeholders tab's openScoutProfile/saveScoutProfile, scoped per campaign
+// instead of per account (a rep may want a broad Sales/Marketing net for
+// outreach here, and a narrower MEDDPICC-role hunt on the same account's
+// deal stakeholders — different purposes, so a separate override). Reuses
+// the same generic get_org_setting/save_org_setting actions and the same
+// _SCOUT_DEPTS/_SCOUT_SENIORITIES chip lists, just a campaign-scoped key
+// (scout_profile_sampaign_<campaign_id>) instead of an account-scoped one.
+var _sampScoutCampaignId = null;
+async function openSampaignScoutProfile(campaignId) {
+  _sampScoutCampaignId = campaignId;
+  document.getElementById('samp-scout-profile-modal')?.remove();
+  var orgP = { departments: ['Sales','Marketing','Strategy'], seniorities: ['Senior','Leadership','CXO'], jobTitles: [], locations: [] };
+  var campP = null;
+  try {
+    var reqs = [
+      fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({ action:'get_org_setting', key:'stakeholder_scout_profile' }) }).then(function(r){return r.json();}),
+      fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({ action:'get_org_setting', key:'scout_profile_sampaign_'+campaignId }) }).then(function(r){return r.json();})
+    ];
+    var res = await Promise.all(reqs);
+    if (res[0] && res[0].value) { var p = JSON.parse(res[0].value); ['departments','seniorities','jobTitles','locations'].forEach(function(k){ if (Array.isArray(p[k])) orgP[k] = p[k]; }); }
+    if (res[1] && res[1].value) { try { var cp = JSON.parse(res[1].value); if (cp && (cp.departments||cp.seniorities||cp.jobTitles||cp.locations)) campP = cp; } catch(e){} }
+  } catch(e) {}
+  var usingCamp = !!campP;
+  var cur = campP || orgP;
+  var chip = function(group, val, on) {
+    return '<label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:5px 10px;border-radius:16px;border:1px solid ' + (on?'var(--gold)':'var(--border2)') + ';background:' + (on?'rgba(160,117,42,0.08)':'transparent') + ';color:' + (on?'var(--gold)':'var(--text2)') + ';cursor:pointer;margin:0 6px 6px 0"><input type="checkbox" data-group="' + group + '" value="' + val + '"' + (on?' checked':'') + ' style="margin:0">' + val + '</label>';
+  };
+  var inputStyle = 'width:100%;padding:9px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:var(--sans);outline:none';
+  var modal = document.createElement('div');
+  modal.id = 'samp-scout-profile-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10000;display:flex;align-items:flex-end;justify-content:center';
+  modal.innerHTML = '<div style="background:var(--bg);border-radius:16px 16px 0 0;width:100%;max-width:520px;padding:20px;max-height:85vh;overflow-y:auto" onclick="event.stopPropagation()">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><div style="font-size:15px;font-weight:700;color:var(--text)">🎯 Who to hunt for this SAMpaign</div><button onclick="document.getElementById(\'samp-scout-profile-modal\').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3)">✕</button></div>' +
+    '<label style="display:flex;align-items:center;gap:8px;margin:8px 0 12px;cursor:pointer"><input type="checkbox" id="samp-scout-toggle"' + (usingCamp?' checked':'') + ' style="width:15px;height:15px;accent-color:var(--gold)"><span style="font-size:12px;color:var(--text2)">Custom targets for <b>this SAMpaign only</b> (otherwise edits the org default)</span></label>' +
+    '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Job titles (primary, comma separated)</div>' +
+    '<textarea id="samp-scout-titles" rows="2" placeholder="e.g. CFO, Chief Financial Officer, VP Finance, Head of Procurement, Owner" style="' + inputStyle + ';resize:vertical;height:54px">' + esc((cur.jobTitles||[]).join(', ')) + '</textarea>' +
+    '<div style="font-size:10px;color:var(--text3);margin:4px 0 12px">These match real titles at the account. Leave blank to use departments + seniority.</div>' +
+    '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Departments</div>' +
+    '<div style="margin-bottom:14px">' + _SCOUT_DEPTS.map(function(x){ return chip('dept', x, (cur.departments||[]).indexOf(x) !== -1); }).join('') + '</div>' +
+    '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Seniority</div>' +
+    '<div style="margin-bottom:14px">' + _SCOUT_SENIORITIES.map(function(x){ return chip('sen', x, (cur.seniorities||[]).indexOf(x) !== -1); }).join('') + '</div>' +
+    '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Locations (optional, comma separated)</div>' +
+    '<input id="samp-scout-locs" value="' + esc((cur.locations||[]).join(', ')) + '" placeholder="e.g. India, APAC" style="' + inputStyle + ';margin-bottom:16px"/>' +
+    '<button onclick="saveSampaignScoutProfile()" style="width:100%;padding:12px;border:none;border-radius:10px;background:var(--gold);color:#18160F;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--sans)">Save</button>' +
+  '</div>';
+  modal.addEventListener('click', function(){ modal.remove(); });
+  document.body.appendChild(modal);
+}
+
+async function saveSampaignScoutProfile() {
+  var depts = [], sens = [];
+  document.querySelectorAll('#samp-scout-profile-modal input[type=checkbox][data-group]').forEach(function(c){
+    if (!c.checked) return;
+    if (c.getAttribute('data-group') === 'dept') depts.push(c.value); else sens.push(c.value);
+  });
+  var csv = function(id){ var el = document.getElementById(id); return el ? el.value.split(',').map(function(x){return x.trim();}).filter(Boolean) : []; };
+  var profile = { departments: depts, seniorities: sens, jobTitles: csv('samp-scout-titles'), locations: csv('samp-scout-locs') };
+  var perCampaign = !!(document.getElementById('samp-scout-toggle') && document.getElementById('samp-scout-toggle').checked);
+  try {
+    if (perCampaign && _sampScoutCampaignId) {
+      await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+        body:JSON.stringify({ action:'save_org_setting', key:'scout_profile_sampaign_'+_sampScoutCampaignId, value: JSON.stringify(profile) }) });
+      showToast('✓ Custom targets saved for this SAMpaign');
+    } else {
+      var jobs = [ fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+        body:JSON.stringify({ action:'save_org_setting', key:'stakeholder_scout_profile', value: JSON.stringify(profile) }) }) ];
+      if (_sampScoutCampaignId) jobs.push(fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+        body:JSON.stringify({ action:'save_org_setting', key:'scout_profile_sampaign_'+_sampScoutCampaignId, value: JSON.stringify({}) }) }));
+      await Promise.all(jobs);
+      showToast('✓ Org default targets saved');
+    }
+    document.getElementById('samp-scout-profile-modal')?.remove();
+  } catch(e) { showToast('Error: ' + e.message); }
 }
 
 async function enrichSampaignContacts(campaignId) {
