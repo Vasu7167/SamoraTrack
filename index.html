@@ -9296,7 +9296,10 @@ function loadSampaignWorkspace() {
     '</div>' +
     '<div id="sampaignNewForm" style="display:none;background:var(--surface2);border-radius:10px;padding:10px;margin-bottom:12px">' +
       '<div style="display:flex;flex-direction:column;gap:6px">' +
-      '<input id="sampaignName" placeholder="SAMpaign name (e.g. APAC manufacturing outreach)" style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
+      '<div style="font-size:10px;color:var(--text3)">Same as an SDR lead — a SAMpaign is anchored to a real tracked account, so contacts you upload/scout belong to it by construction.</div>' +
+      '<input id="sampaignName" placeholder="Company name (e.g. Acme Corp)" style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
+      '<input id="sampaignDomain" placeholder="Domain (e.g. acme.com)" style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
+      '<input id="sampaignRegion" placeholder="Region (optional)" style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
       '<div style="font-size:10px;color:var(--text3)">Follow-up cadence (days after send) — e.g. 3, 7, 14 for follow-up 1/2/3</div>' +
       '<input id="sampaignCadence" value="3,7,14" style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
       '<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--text2)">' +
@@ -9320,8 +9323,11 @@ function toggleNewSampaignForm() {
 }
 
 async function createSampaign() {
-  var name = document.getElementById('sampaignName')?.value?.trim();
-  if (!name) { showToast('Enter a SAMpaign name'); return; }
+  var accountName = document.getElementById('sampaignName')?.value?.trim();
+  var domain = document.getElementById('sampaignDomain')?.value?.trim().toLowerCase().replace(/^https?:\/\//,'').replace(/\/.*$/,'');
+  var region = document.getElementById('sampaignRegion')?.value?.trim() || null;
+  if (!accountName) { showToast('Enter a company name'); return; }
+  if (!domain) { showToast('Enter a domain — SAMpaigns are anchored to a tracked account, same as an SDR lead'); return; }
   var cadenceRaw = document.getElementById('sampaignCadence')?.value || '3,7,14';
   var followup_days = cadenceRaw.split(',').map(function(s){ return parseInt(s.trim(),10); }).filter(function(n){ return n > 0; });
   var alerts_enabled = {
@@ -9333,11 +9339,13 @@ async function createSampaign() {
   var csvFile = document.getElementById('sampaignNewCsv')?.files?.[0] || null;
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
-      body: JSON.stringify({ action:'create_sampaign', name: name, followup_days: followup_days.length?followup_days:undefined, alerts_enabled: alerts_enabled }) });
+      body: JSON.stringify({ action:'create_sampaign', account_name: accountName, domain: domain, region: region, followup_days: followup_days.length?followup_days:undefined, alerts_enabled: alerts_enabled }) });
     var d = await r.json();
     if (!d.ok) { showToast('Error: '+(d.error||'Could not create SAMpaign')); return; }
-    showToast('✓ SAMpaign created');
+    showToast(d.account_linked ? '✓ SAMpaign linked to existing account' : '✓ SAMpaign + account created');
     document.getElementById('sampaignName').value = '';
+    document.getElementById('sampaignDomain').value = '';
+    document.getElementById('sampaignRegion').value = '';
     toggleNewSampaignForm();
     // One-motion audience upload: if a CSV was attached at creation, add its
     // contacts straight to the campaign we just created — name + define
@@ -9391,10 +9399,23 @@ async function toggleSampaignCampaign(campaignId) {
   } catch(e) { box.innerHTML = '<div style="font-size:11px;color:var(--coral)">Error: '+esc(e.message)+'</div>'; }
 }
 
+// Active/Prospective split mirrors the account Stakeholders tab's existing
+// _stkTab pattern (not_contacted = prospective, everything else = active) —
+// one shared global tab var is fine since only one campaign's panel is ever
+// expanded at a time, same assumption _stkTab already makes.
+var _sampaignContactTab = 'active';
+function setSampaignContactTab(campaignId, tab) {
+  _sampaignContactTab = tab;
+  _renderSampaignContacts(campaignId);
+}
+
 function _renderSampaignContacts(campaignId) {
   var box = document.getElementById('sampaignContacts_'+campaignId);
   if (!box) return;
-  var contacts = window._sampaignContactsCache[campaignId] || [];
+  var all = window._sampaignContactsCache[campaignId] || [];
+  var active = all.filter(function(c){ return c.status !== 'not_contacted'; });
+  var prospective = all.filter(function(c){ return c.status === 'not_contacted'; });
+  var contacts = _sampaignContactTab === 'prospective' ? prospective : active;
   var STATUS_META = {
     not_contacted: { label:'Not contacted', color:'var(--text3)' },
     sent:          { label:'Sent',          color:'var(--blue)' },
@@ -9405,14 +9426,24 @@ function _renderSampaignContacts(campaignId) {
     dead:          { label:'Dead',          color:'var(--coral)' },
     opted_out:     { label:'Opted out',     color:'var(--text3)' }
   };
-  var unenriched = contacts.filter(function(c){ return !c.enriched_at; }).length;
-  var html = '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">' +
+  var unenriched = all.filter(function(c){ return !c.enriched_at; }).length;
+
+  var tab = function(key, label, n) {
+    var on = _sampaignContactTab === key;
+    return '<span onclick="setSampaignContactTab(\''+esc(campaignId)+'\',\''+key+'\')" style="padding:5px 10px;cursor:pointer;font-size:11px;font-weight:600;border-bottom:2px solid '+(on?'var(--gold)':'transparent')+';color:'+(on?'var(--text)':'var(--text3)')+'">'+label+' <span style="font-size:9px;color:var(--text3)">'+n+'</span></span>';
+  };
+  var html = '<div style="display:flex;gap:2px;border-bottom:1px solid var(--border2);margin-bottom:8px">' +
+    tab('active','Active',active.length) + tab('prospective','Prospective',prospective.length) +
+  '</div>';
+
+  html += '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">' +
     '<label style="font-size:10px;color:var(--gold);padding:5px 10px;border-radius:8px;background:rgba(160,117,42,0.1);border:1px solid rgba(160,117,42,0.25);cursor:pointer">⇪ Upload CSV<input type="file" accept=".csv,text/csv" style="display:none" onchange="handleSampaignCsv(\''+esc(campaignId)+'\',this.files[0]);this.value=\'\'"/></label>' +
+    '<button onclick="scoutSampaignContacts(\''+esc(campaignId)+'\')" style="font-size:10px;color:var(--gold);padding:5px 10px;border-radius:8px;background:rgba(160,117,42,0.1);border:1px solid rgba(160,117,42,0.25);cursor:pointer">🔎 Scout more contacts</button>' +
     (unenriched ? '<button onclick="enrichSampaignContacts(\''+esc(campaignId)+'\')" style="font-size:10px;color:var(--blue);padding:5px 10px;border-radius:8px;background:rgba(74,158,255,0.1);border:1px solid rgba(74,158,255,0.25);cursor:pointer">✨ Enrich '+unenriched+' contact'+(unenriched!==1?'s':'')+'</button>' : '') +
     '<span style="font-size:9px;color:var(--text3)">Columns: name, email, phone, company, title (header names flexible)</span>' +
     '</div>';
   if (!contacts.length) {
-    html += '<div style="font-size:11px;color:var(--text3)">No contacts yet — upload a CSV to get started.</div>';
+    html += '<div style="font-size:11px;color:var(--text3)">' + (_sampaignContactTab==='prospective' ? 'No prospects yet — upload a CSV or scout more contacts above.' : 'No active contacts yet — mark someone sent/opened/replied to move them here.') + '</div>';
   } else {
     html += contacts.map(function(c) {
       var meta = STATUS_META[c.status] || STATUS_META.not_contacted;
@@ -9509,6 +9540,24 @@ async function _uploadSampaignCsvFile(campaignId, file) {
   } catch(e) { showToast('CSV error: '+e.message); }
 }
 
+// "Pull more profiles" — mirrors scoutStakeholders() on the account
+// Stakeholders tab, just pointed at this campaign's contact list instead.
+async function scoutSampaignContacts(campaignId) {
+  try {
+    showToast('🔎 Scouting more contacts…');
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'scout_sampaign_contacts', campaign_id: campaignId }) });
+    var d = await r.json();
+    if (!d.ok) { showToast('Error: '+(d.error||'Scout unavailable')); return; }
+    if (!d.scouted) { showToast(d.error || 'No new prospects found for this profile.'); return; }
+    showToast('✓ '+d.scouted+' prospect'+(d.scouted!==1?'s':'')+' scouted via '+(d.provider||'enrichment'));
+    var r2 = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body: JSON.stringify({ action:'list_sampaign_contacts', campaign_id: campaignId }) });
+    var d2 = await r2.json();
+    if (d2.ok) { window._sampaignContactsCache[campaignId] = d2.contacts || []; _sampaignContactTab = 'prospective'; _renderSampaignContacts(campaignId); }
+    loadSampaignCampaigns();
+  } catch(e) { showToast('Error: '+e.message); }
+}
+
 async function enrichSampaignContacts(campaignId) {
   try {
     showToast('✨ Enriching contacts…');
@@ -9555,7 +9604,11 @@ async function setSampaignContactStatus(contactId, status, campaignId) {
     if (!d.ok) { showToast('Error: '+(d.error||'Could not update')); return; }
     var list = window._sampaignContactsCache[campaignId] || [];
     var idx = list.findIndex(function(c){ return c.id === contactId; });
-    if (idx >= 0) list[idx] = d.contact;
+    // Merge (not replace) — update_contact_status only returns the raw
+    // sampaign_contacts row, not the computed `collision` field list_
+    // sampaign_contacts adds, so a plain replace would drop that badge.
+    if (idx >= 0) list[idx] = Object.assign({}, list[idx], d.contact);
+    _renderSampaignContacts(campaignId); // a status change can move a contact between the Active/Prospective tabs
     loadSampaignCampaigns(); // refresh badge counts on the collapsed header too
   } catch(e) { showToast('Error: '+e.message); }
 }
