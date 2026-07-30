@@ -82,7 +82,21 @@ export async function edge(accessToken, action, payload = {}) {
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}`, apikey: SB_ANON },
     body: JSON.stringify({ action, ...payload })
   });
-  if (!r.ok) throw new Error(`${action} failed (${r.status})`);
+  if (!r.ok) {
+    let detail = '';
+    try {
+      const bodyText = await r.text();
+      if (bodyText) {
+        try {
+          const parsed = JSON.parse(bodyText);
+          detail = ' — ' + (parsed.error || parsed.message || bodyText).toString().slice(0, 500);
+        } catch (_e) {
+          detail = ' — ' + bodyText.slice(0, 500);
+        }
+      }
+    } catch (_e) { /* body unreadable, fall back to bare status */ }
+    throw new Error(`${action} failed (${r.status})${detail}`);
+  }
   return r.json();
 }
 
