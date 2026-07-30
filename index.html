@@ -2243,7 +2243,18 @@ function renderListHTML(key, items) {
         ? '<span style="font-size:9px;font-weight:700;color:var(--green);background:rgba(74,140,92,0.12);border-radius:4px;padding:1px 6px;margin-left:6px;white-space:nowrap">' + verifyLabels[item.verifiedVia] + '</span>'
         : (item.meetingFlag ? '<span style="font-size:9px;font-weight:700;color:var(--amber);background:rgba(160,117,42,0.12);border-radius:4px;padding:1px 6px;margin-left:6px;white-space:nowrap">\u26a0 Meeting ' + item.meetingFlag + '</span>' : progressBadge);
       const carryMeta = item.carriedFrom ? '<div class="item-meta" style="color:var(--gold)">↗ Carried from ' + fmtDate(item.carriedFrom) + (item.carryReason?' · '+item.carryReason:'') + '</div>' : (item.carriedTo ? '<div class="item-meta" style="color:var(--text3)">' + (item.rescheduled ? '⟳ Rescheduled to ' : '⟶ Moved to ') + (item.carriedToLabel||item.carriedTo) + '</div>' : '');
-      const tsMeta = (item.addedAt ? '<div class="item-meta">' + (item.delegatedBy?'Delegated ':'Added ') + item.addedAt + (item.completedAt?' · Completed '+item.completedAt:'') + '</div>' : '') + carryMeta;
+      // Alt-contact CTA — surfaced when an OOO reply named someone else to
+      // reach in the meantime (see extractAltContact in process_ooo_mails).
+      // Snippet is the raw matched line, shown as the receipt so the rep can
+      // eyeball it before trusting the extracted email/phone.
+      const altContactCta = (item.altContactEmail || item.altContactPhone)
+        ? '<div class="item-meta" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:2px">' +
+            '<span style="color:var(--text3)">📇 Alt contact while OOO' + (item.altContactSnippet ? ': "' + esc(item.altContactSnippet) + '"' : '') + '</span>' +
+            (item.altContactEmail ? '<a href="mailto:' + esc(item.altContactEmail) + '" style="font-size:10px;font-weight:600;color:var(--gold);text-decoration:none;border:1px solid var(--border2);border-radius:5px;padding:1px 7px">✉ ' + esc(item.altContactEmail) + '</a>' : '') +
+            (item.altContactPhone ? '<a href="tel:' + esc(item.altContactPhone.replace(/[^\d+]/g,'')) + '" style="font-size:10px;font-weight:600;color:var(--gold);text-decoration:none;border:1px solid var(--border2);border-radius:5px;padding:1px 7px">☎ ' + esc(item.altContactPhone) + '</a>' : '') +
+          '</div>'
+        : '';
+      const tsMeta = (item.addedAt ? '<div class="item-meta">' + (item.delegatedBy?'Delegated ':'Added ') + item.addedAt + (item.completedAt?' · Completed '+item.completedAt:'') + '</div>' : '') + carryMeta + altContactCta;
       return '<div class="item ' + (item.done?'done':'') + ' ' + (isPriority?'priority-task':'') + '" data-task-idx="' + i + '" data-carry-text="' + esc(displayText) + '"' + (item.carriedTo?' style="opacity:0.5"':'') + '>' +
         '<div class="drag-handle"><svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="4" cy="3" r="1.5"/><circle cx="8" cy="3" r="1.5"/><circle cx="4" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="4" cy="13" r="1.5"/><circle cx="8" cy="13" r="1.5"/></svg></div>' +
         '<div class="chk ' + (item.done?'on':'') + '" onclick="' + (item.carriedTo?'':'toggleFromToday('+i+')') + '"' + (item.carriedTo?' title="Task moved forward"':'') + '></div>' +
@@ -5969,6 +5980,32 @@ async function reactToFeed(feedId, emoji) {
 // from the rep's own calendar (and caches it for manager/exec rollups);
 // team view just reads that cache. Period toggle re-fetches self, just
 // re-slices the same cached list for team (cheap, no new calendar calls).
+function _renderMeetingsReceipts(meetings, limit) {
+  var list = (meetings || []).slice(0, limit || 8);
+  if (!list.length) return '<div style="font-size:11px;color:var(--text3);padding:4px 0">No qualifying meetings in this window.</div>';
+  return list.map(function(m){
+    return '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);padding:3px 0;border-bottom:1px solid var(--border)">' +
+      '<span>' + esc(m.account_name) + ' — ' + esc(m.title||'').slice(0,40) + '</span><span>' + esc(m.date) + '</span></div>';
+  }).join('');
+}
+let _repMeetCache = {};
+async function toggleRepMeetings(userId, days, elId) {
+  var el = document.getElementById(elId); if (!el || !currentUser?.token) return;
+  var isOpen = el.getAttribute('data-open') === '1';
+  if (isOpen) { el.style.display = 'none'; el.setAttribute('data-open','0'); return; }
+  el.style.display = ''; el.setAttribute('data-open','1');
+  var cacheKey = userId + '_' + days;
+  if (_repMeetCache[cacheKey]) { el.innerHTML = _repMeetCache[cacheKey]; return; }
+  el.innerHTML = '<div style="font-size:10px;color:var(--text3);padding:4px 0">Loading…</div>';
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({ action:'get_rep_meetings_detail', user_id: userId, days: days }) });
+    var d = await r.json();
+    var html = d.ok ? _renderMeetingsReceipts(d.meetings, 20) : '<div style="font-size:10px;color:var(--coral)">' + esc(d.error||'Could not load.') + '</div>';
+    _repMeetCache[cacheKey] = html;
+    el.innerHTML = html;
+  } catch(e) { el.innerHTML = '<div style="font-size:10px;color:var(--coral)">Could not load.</div>'; }
+}
 let _meetingsKpiSelfDays = 30;
 async function loadMeetingsKpiSelf(days) {
   var el = document.getElementById('meetingsKpiSelf'); if (!el || !currentUser?.token) return;
@@ -5983,10 +6020,7 @@ async function loadMeetingsKpiSelf(days) {
       var active = p === _meetingsKpiSelfDays;
       return '<button onclick="loadMeetingsKpiSelf(' + p + ')" style="padding:3px 10px;border-radius:10px;border:1px solid ' + (active?'var(--gold)':'var(--border)') + ';background:' + (active?'rgba(184,134,11,0.12)':'var(--surface2)') + ';color:var(--text2);font-size:11px;cursor:pointer;margin-left:4px">' + p + 'd</button>';
     }).join('');
-    var list = (d.meetings || []).slice(0, 8).map(function(m){
-      return '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);padding:3px 0;border-bottom:1px solid var(--border)">' +
-        '<span>' + esc(m.account_name) + ' — ' + esc(m.title||'').slice(0,40) + '</span><span>' + esc(m.date) + '</span></div>';
-    }).join('');
+    var list = _renderMeetingsReceipts(d.meetings, 8);
     el.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
         '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em">📅 Relevant meetings booked</div>' +
@@ -5994,7 +6028,7 @@ async function loadMeetingsKpiSelf(days) {
       '</div>' +
       '<div style="font-size:28px;font-weight:700;color:var(--gold);margin-bottom:4px">' + (d.count||0) + '</div>' +
       '<div style="font-size:11px;color:var(--text3);margin-bottom:8px">Last ' + _meetingsKpiSelfDays + ' days · external attendee, tied to a real account, not an existing customer</div>' +
-      (list || '<div style="font-size:11px;color:var(--text3)">No qualifying meetings in this window.</div>') +
+      list +
     '</div>';
   } catch(e) { el.innerHTML = '<div style="font-size:12px;color:var(--coral)">Could not load meetings booked.</div>'; }
 }
@@ -6013,9 +6047,13 @@ async function loadMeetingsKpiTeam(days) {
       return '<button onclick="loadMeetingsKpiTeam(' + p + ')" style="padding:3px 10px;border-radius:10px;border:1px solid ' + (active?'var(--gold)':'var(--border)') + ';background:' + (active?'rgba(184,134,11,0.12)':'var(--surface2)') + ';color:var(--text2);font-size:11px;cursor:pointer;margin-left:4px">' + p + 'd</button>';
     }).join('');
     var rows = (d.byRep||[]).map(function(r2){
-      return '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);padding:5px 0;border-bottom:1px solid var(--border)">' +
-        '<span>' + esc(r2.name||r2.email||'—') + (r2.stale ? ' <span style="color:var(--text3);font-size:10px">(not synced yet)</span>' : '') + '</span>' +
-        '<span style="font-weight:600;color:var(--text)">' + r2.count + '</span></div>';
+      var rid = 'repMeet_team_' + r2.user_id;
+      return '<div>' +
+        '<div onclick="toggleRepMeetings(\'' + r2.user_id + '\',' + _meetingsKpiTeamDays + ',\'' + rid + '\')" style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);padding:5px 0;border-bottom:1px solid var(--border);cursor:pointer">' +
+          '<span>' + esc(r2.name||r2.email||'—') + (r2.stale ? ' <span style="color:var(--text3);font-size:10px">(not synced yet)</span>' : '') + ' <span style="color:var(--text3);font-size:9px">▾ view meetings</span></span>' +
+          '<span style="font-weight:600;color:var(--text)">' + r2.count + '</span></div>' +
+        '<div id="' + rid + '" style="display:none;padding-left:8px" data-open="0"></div>' +
+      '</div>';
     }).join('');
     el.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
@@ -6035,8 +6073,12 @@ async function loadMeetingsKpiOrg() {
     var d = await r.json();
     if (!d.ok) { el.innerHTML = '<div style="font-size:12px;color:var(--text3)">Not available.</div>'; return; }
     var rows = (d.byRep||[]).sort(function(a,b){return b.count-a.count;}).slice(0,10).map(function(r2){
-      return '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);padding:5px 0;border-bottom:1px solid var(--border)">' +
-        '<span>' + esc(r2.name||r2.email||'—') + '</span><span style="font-weight:600;color:var(--text)">' + r2.count + '</span></div>';
+      var rid = 'repMeet_org_' + r2.user_id;
+      return '<div>' +
+        '<div onclick="toggleRepMeetings(\'' + r2.user_id + '\',30,\'' + rid + '\')" style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);padding:5px 0;border-bottom:1px solid var(--border);cursor:pointer">' +
+          '<span>' + esc(r2.name||r2.email||'—') + ' <span style="color:var(--text3);font-size:9px">▾ view meetings</span></span><span style="font-weight:600;color:var(--text)">' + r2.count + '</span></div>' +
+        '<div id="' + rid + '" style="display:none;padding-left:8px" data-open="0"></div>' +
+      '</div>';
     }).join('');
     el.innerHTML = '<div style="font-size:28px;font-weight:700;color:var(--gold);margin-bottom:4px">' + (d.total||0) + '</div>' +
       '<div style="font-size:11px;color:var(--text3);margin-bottom:8px">Last 30 days, org-wide · external attendee, tied to a real account, not an existing customer</div>' +
