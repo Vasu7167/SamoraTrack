@@ -3871,121 +3871,120 @@ var SIGNAL_TYPE_CONFIG = {
   product_launch: { icon: '🚀', label: 'Product launch',  color: 'var(--amber)' }
 };
 
-async function loadSequencingStats() {
-  var btn = document.getElementById('seqStatsBtn');
-  var out = document.getElementById('seqStatsOutput');
-  if (!out) return;
-  if (btn) { btn.textContent = '📨 Loading…'; btn.disabled = true; }
-  out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0">Crunching SAMpaign signals…</div>';
+// Pure renderer — returns an html string for ONE analytics source (either
+// get_sequencing_stats or get_manual_sampaign_stats; both now share the same
+// response shape, including `benchmarks`, deliberately, so this one function
+// serves both). opts.title is the section label so the two sources render as
+// clearly distinguishable blocks rather than looking like one merged number.
+function _renderSampaignAnalyticsBlock(d, opts) {
+  opts = opts || {};
+  var s = d.org_summary;
+  var bm = d.benchmarks;
+  var html = '';
 
-  try {
-    var r = await fetch(EDGE_FN_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
-      body: JSON.stringify({ action: 'get_sequencing_stats', days: 90 })
-    });
-    var d = await r.json();
-    if (!d.ok) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">⚠ ' + esc(d.error||'Failed to load stats') + '</div>'; return; }
+  // ── Rate indicator helper ─────────────────────────────────────────────
+  var rateColor = function(rate, good, avg) {
+    return rate >= good ? 'var(--green)' : rate >= avg ? 'var(--amber)' : 'var(--coral)';
+  };
+  var rateLabel = function(rate, good, avg) {
+    return rate >= good ? '↑ above benchmark' : rate >= avg ? '≈ avg' : '↓ below benchmark';
+  };
 
-    var s = d.org_summary;
-    var bm = d.benchmarks;
-    var html = '';
+  // ── Org summary strip ─────────────────────────────────────────────────
+  // Base 4 tiles always present; OOO/No-reply tiles only appear when the
+  // source actually returns those buckets (today: the manual path) — an
+  // honest per-source grid rather than always-5-columns with blanks.
+  var tiles = [
+    { label: 'Prospects', val: s.total_prospects },
+    { label: 'Sent', val: s.sent },
+    { label: 'Opened', val: s.opened, rate: s.open_rate, good: bm.open_rate.good, avg: bm.open_rate.avg },
+    { label: 'Replied', val: s.replied, rate: s.reply_rate, good: bm.reply_rate.good, avg: bm.reply_rate.avg }
+  ];
+  if (s.ooo !== undefined) tiles.push({ label: 'OOO', val: s.ooo, color: 'var(--amber)' });
+  if (s.no_response !== undefined) tiles.push({ label: 'No reply', val: s.no_response, color: 'var(--text3)' });
+  tiles.push({ label: 'Dead', val: s.bounced||0, color: 'var(--coral)', sub: s.sent>0?Math.round((s.bounced||0)/s.sent*100)+'% of sent':'no longer working' });
 
-    // ── Rate indicator helper ─────────────────────────────────────────────
-    var rateColor = function(rate, good, avg) {
-      return rate >= good ? 'var(--green)' : rate >= avg ? 'var(--amber)' : 'var(--coral)';
-    };
-    var rateLabel = function(rate, good, avg) {
-      return rate >= good ? '↑ above benchmark' : rate >= avg ? '≈ avg' : '↓ below benchmark';
-    };
-
-    // ── Org summary strip ─────────────────────────────────────────────────
-    html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px">' +
-      '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">' +
-        '📨 SAMpaign Analytics · last 90 days' +
-        (d.synced_at ? '<span style="font-weight:400;margin-left:8px">Last sync: '+new Date(d.synced_at).toLocaleDateString()+'</span>' : '') +
+  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px">' +
+    '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">' +
+      esc(opts.title||'📨 SAMpaign Analytics') +
+      (d.synced_at ? '<span style="font-weight:400;margin-left:8px">Last sync: '+new Date(d.synced_at).toLocaleDateString()+'</span>' : '') +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:repeat('+tiles.length+',1fr);gap:8px">' +
+      tiles.map(function(t) {
+        var color = t.color || (t.rate !== undefined ? rateColor(t.rate, t.good, t.avg) : 'var(--text)');
+        var sub = t.sub !== undefined ? t.sub : (t.rate !== undefined ? t.rate+'% · '+rateLabel(t.rate,t.good,t.avg) : '');
+        return '<div style="background:var(--surface);border-radius:8px;padding:10px;text-align:center">' +
+          '<div style="font-size:20px;font-weight:700;color:'+color+'">'+t.val+'</div>' +
+          '<div style="font-size:11px;color:var(--text3)">'+t.label+'</div>' +
+          (sub?'<div style="font-size:9px;color:'+color+';margin-top:2px">'+sub+'</div>':'') +
+        '</div>';
+      }).join('') +
+    '</div>' +
+    // Benchmark bar
+    '<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">' +
+      '<div style="font-size:10px;color:var(--text3);margin-bottom:6px">'+bm.open_rate.label+' · '+bm.reply_rate.label+'</div>' +
+      '<div style="display:flex;gap:4px;height:6px">' +
+        '<div style="flex:'+s.replied+';background:var(--green);border-radius:3px" title="Replied"></div>' +
+        '<div style="flex:'+(s.opened-s.replied)+';background:var(--amber);border-radius:3px" title="Opened, not replied"></div>' +
+        '<div style="flex:'+(s.sent-s.opened-(s.bounced||0))+';background:var(--border2);border-radius:3px" title="Sent, not opened"></div>' +
+        '<div style="flex:'+(s.bounced||0)+';background:var(--coral);opacity:0.5;border-radius:3px" title="Bounced"></div>' +
       '</div>' +
-      '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px">' +
-        ['Prospects','Sent','Opened','Replied','Dead'].map(function(label, i) {
-          var vals = [s.total_prospects, s.sent, s.opened, s.replied, s.bounced||0];
-          var rates = [null, null, s.open_rate, s.reply_rate, null];
-          var goods = [null, null, bm.open_rate.good, bm.reply_rate.good, null];
-          var avgs  = [null, null, bm.open_rate.avg,  bm.reply_rate.avg,  null];
-          var color = i===4 ? 'var(--coral)' : (rates[i] !== null ? rateColor(rates[i], goods[i], avgs[i]) : 'var(--text)');
-          var sub   = i===4 ? (s.sent>0?Math.round((s.bounced||0)/s.sent*100)+'% of sent':'no longer working')
-                    : (rates[i] !== null ? rates[i]+'% · '+rateLabel(rates[i],goods[i],avgs[i]) : '');
-          return '<div style="background:var(--surface);border-radius:8px;padding:10px;text-align:center">' +
-            '<div style="font-size:20px;font-weight:700;color:'+color+'">'+vals[i]+'</div>' +
-            '<div style="font-size:11px;color:var(--text3)">'+label+'</div>' +
-            (sub?'<div style="font-size:9px;color:'+color+';margin-top:2px">'+sub+'</div>':'') +
-          '</div>';
-        }).join('') +
+      '<div style="display:flex;gap:10px;margin-top:4px">' +
+        '<span style="font-size:9px;color:var(--green)">■ Replied</span>' +
+        '<span style="font-size:9px;color:var(--amber)">■ Opened</span>' +
+        '<span style="font-size:9px;color:var(--text3)">■ Sent</span>' +
+        '<span style="font-size:9px;color:var(--coral)">■ Bounced</span>' +
       '</div>' +
-      // Benchmark bar
-      '<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">' +
-        '<div style="font-size:10px;color:var(--text3);margin-bottom:6px">'+bm.open_rate.label+' · '+bm.reply_rate.label+'</div>' +
-        '<div style="display:flex;gap:4px;height:6px">' +
-          '<div style="flex:'+s.replied+';background:var(--green);border-radius:3px" title="Replied"></div>' +
-          '<div style="flex:'+(s.opened-s.replied)+';background:var(--amber);border-radius:3px" title="Opened, not replied"></div>' +
-          '<div style="flex:'+(s.sent-s.opened-s.bounced)+';background:var(--border2);border-radius:3px" title="Sent, not opened"></div>' +
-          '<div style="flex:'+s.bounced+';background:var(--coral);opacity:0.5;border-radius:3px" title="Bounced"></div>' +
-        '</div>' +
-        '<div style="display:flex;gap:10px;margin-top:4px">' +
-          '<span style="font-size:9px;color:var(--green)">■ Replied</span>' +
-          '<span style="font-size:9px;color:var(--amber)">■ Opened</span>' +
-          '<span style="font-size:9px;color:var(--text3)">■ Sent</span>' +
-          '<span style="font-size:9px;color:var(--coral)">■ Bounced</span>' +
-        '</div>' +
-      '</div>' +
+    '</div>' +
+  '</div>';
+
+  // ── Hot signals (replied prospects) ───────────────────────────────────
+  if (d.hot_signals && d.hot_signals.length) {
+    html += '<div style="background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.25);border-radius:10px;padding:12px 14px;margin-bottom:10px">' +
+      '<div style="font-size:10px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">🔥 Replied prospects ('+d.hot_signals.length+') · Act now</div>' +
+      d.hot_signals.map(function(h) {
+        return '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-top:1px solid rgba(74,140,92,0.15)">' +
+          '<div>' +
+            '<div style="font-size:12px;font-weight:600;color:var(--text)">'+(h.prospect_name||h.prospect_email||'Unknown')+'</div>' +
+            '<div style="font-size:11px;color:var(--text3)">'+(h.prospect_company||'')+(h.account_name&&h.account_name!==h.prospect_company?' · matched: <strong>'+esc(h.account_name)+'</strong>':'')+'</div>' +
+            '<div style="font-size:10px;color:var(--text3);margin-top:1px">📨 '+esc(h.campaign_name||'')+(h.opens?' · '+h.opens+' opens':'')+'</div>' +
+          '</div>' +
+          '<div style="text-align:right;flex-shrink:0">' +
+            '<span style="font-size:10px;font-weight:700;color:var(--green);background:rgba(74,140,92,0.12);border-radius:5px;padding:3px 8px">↩ Replied</span>' +
+            (h.account_id ? '' : '<div style="font-size:9px;color:var(--amber);margin-top:3px">⚠ Not linked to account</div>') +
+          '</div>' +
+        '</div>';
+      }).join('') +
     '</div>';
+  }
 
-    // ── Hot signals (replied prospects) ───────────────────────────────────
-    if (d.hot_signals && d.hot_signals.length) {
-      html += '<div style="background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.25);border-radius:10px;padding:12px 14px;margin-bottom:10px">' +
-        '<div style="font-size:10px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">🔥 Replied prospects ('+d.hot_signals.length+') · Act now</div>' +
-        d.hot_signals.map(function(h) {
-          return '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-top:1px solid rgba(74,140,92,0.15)">' +
-            '<div>' +
-              '<div style="font-size:12px;font-weight:600;color:var(--text)">'+(h.prospect_name||h.prospect_email||'Unknown')+'</div>' +
-              '<div style="font-size:11px;color:var(--text3)">'+(h.prospect_company||'')+(h.account_name&&h.account_name!==h.prospect_company?' · matched: <strong>'+esc(h.account_name)+'</strong>':'')+'</div>' +
-              '<div style="font-size:10px;color:var(--text3);margin-top:1px">📨 '+esc(h.campaign_name||'')+(h.opens?' · '+h.opens+' opens':'')+'</div>' +
-            '</div>' +
-            '<div style="text-align:right;flex-shrink:0">' +
-              '<span style="font-size:10px;font-weight:700;color:var(--green);background:rgba(74,140,92,0.12);border-radius:5px;padding:3px 8px">↩ Replied</span>' +
-              (h.account_id ? '' : '<div style="font-size:9px;color:var(--amber);margin-top:3px">⚠ Not linked to account</div>') +
-            '</div>' +
-          '</div>';
-        }).join('') +
-      '</div>';
-    }
-
-    // ── By rep table ──────────────────────────────────────────────────────
-    if (d.by_rep && d.by_rep.length) {
-      html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px">' +
-        '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">👤 By rep</div>' +
-        '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
-        '<thead><tr style="border-bottom:1px solid var(--border)">' +
-          '<th style="text-align:left;padding:4px 8px;color:var(--text3);font-weight:500">Rep</th>' +
-          '<th style="text-align:center;padding:4px 6px;color:var(--text3);font-weight:500">Prospects</th>' +
-          '<th style="text-align:center;padding:4px 6px;color:var(--text3);font-weight:500">Sent</th>' +
-          '<th style="text-align:center;padding:4px 6px;color:var(--text3);font-weight:500">Open %</th>' +
-          '<th style="text-align:center;padding:4px 6px;color:var(--text3);font-weight:500">Reply %</th>' +
-          '<th style="text-align:left;padding:4px 6px;color:var(--text3);font-weight:500">SAMpaigns</th>' +
-        '</tr></thead><tbody>' +
-        d.by_rep.map(function(rep) {
-          var oc = rateColor(rep.open_rate, bm.open_rate.good, bm.open_rate.avg);
-          var rc = rateColor(rep.reply_rate, bm.reply_rate.good, bm.reply_rate.avg);
-          return '<tr style="border-bottom:1px solid var(--border)">' +
-            '<td style="padding:7px 8px"><div style="font-weight:600;color:var(--text)">'+esc(rep.rep_name)+'</div><div style="font-size:10px;color:var(--text3)">'+esc(rep.rep_email.split('@')[0])+'</div></td>' +
-            '<td style="text-align:center;padding:7px 6px;color:var(--text)">'+rep.prospects+'</td>' +
-            '<td style="text-align:center;padding:7px 6px;color:var(--text)">'+rep.sent+'</td>' +
-            '<td style="text-align:center;padding:7px 6px"><span style="color:'+oc+';font-weight:600">'+rep.open_rate+'%</span></td>' +
-            '<td style="text-align:center;padding:7px 6px"><span style="color:'+rc+';font-weight:600">'+rep.reply_rate+'%</span></td>' +
-            '<td style="padding:7px 6px;font-size:10px;color:var(--text3)">'+esc((rep.campaigns||[]).slice(0,2).join(', '))+'</td>' +
-          '</tr>';
-        }).join('') +
-        '</tbody></table></div>';
-    }
+  // ── By rep table ──────────────────────────────────────────────────────
+  if (d.by_rep && d.by_rep.length) {
+    html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px">' +
+      '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">👤 By rep</div>' +
+      '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
+      '<thead><tr style="border-bottom:1px solid var(--border)">' +
+        '<th style="text-align:left;padding:4px 8px;color:var(--text3);font-weight:500">Rep</th>' +
+        '<th style="text-align:center;padding:4px 6px;color:var(--text3);font-weight:500">Prospects</th>' +
+        '<th style="text-align:center;padding:4px 6px;color:var(--text3);font-weight:500">Sent</th>' +
+        '<th style="text-align:center;padding:4px 6px;color:var(--text3);font-weight:500">Open %</th>' +
+        '<th style="text-align:center;padding:4px 6px;color:var(--text3);font-weight:500">Reply %</th>' +
+        '<th style="text-align:left;padding:4px 6px;color:var(--text3);font-weight:500">SAMpaigns</th>' +
+      '</tr></thead><tbody>' +
+      d.by_rep.map(function(rep) {
+        var oc = rateColor(rep.open_rate, bm.open_rate.good, bm.open_rate.avg);
+        var rc = rateColor(rep.reply_rate, bm.reply_rate.good, bm.reply_rate.avg);
+        return '<tr style="border-bottom:1px solid var(--border)">' +
+          '<td style="padding:7px 8px"><div style="font-weight:600;color:var(--text)">'+esc(rep.rep_name)+'</div><div style="font-size:10px;color:var(--text3)">'+esc(rep.rep_email.split('@')[0])+'</div></td>' +
+          '<td style="text-align:center;padding:7px 6px;color:var(--text)">'+rep.prospects+'</td>' +
+          '<td style="text-align:center;padding:7px 6px;color:var(--text)">'+rep.sent+'</td>' +
+          '<td style="text-align:center;padding:7px 6px"><span style="color:'+oc+';font-weight:600">'+rep.open_rate+'%</span></td>' +
+          '<td style="text-align:center;padding:7px 6px"><span style="color:'+rc+';font-weight:600">'+rep.reply_rate+'%</span></td>' +
+          '<td style="padding:7px 6px;font-size:10px;color:var(--text3)">'+esc((rep.campaigns||[]).slice(0,2).join(', '))+'</td>' +
+        '</tr>';
+      }).join('') +
+      '</tbody></table></div>';
+  }
 
     // ── By account ────────────────────────────────────────────────────────
     if (d.by_account && d.by_account.length) {
@@ -4084,7 +4083,43 @@ async function loadSequencingStats() {
       '</div>';
     }
 
-    out.innerHTML = html || '<div style="font-size:12px;color:var(--text3)">No sequencing data yet. Run a sync first.</div>';
+    return html;
+}
+
+// Fetches BOTH SAMpaign analytics sources (tool-synced SmartReach and the
+// manual/no-tool path) in parallel and renders each through the shared
+// helper above, clearly labeled so they read as two lenses on one workspace
+// rather than a merged number — matches the "SAMpaign is one thing with two
+// paths" decision from earlier this session. Either source renders its own
+// honest empty state if it has nothing yet; neither blocks the other.
+async function loadSequencingStats() {
+  var btn = document.getElementById('seqStatsBtn');
+  var out = document.getElementById('seqStatsOutput');
+  if (!out) return;
+  if (btn) { btn.textContent = '📨 Loading…'; btn.disabled = true; }
+  out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0">Crunching SAMpaign signals…</div>';
+
+  try {
+    var results = await Promise.all([
+      fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify({ action: 'get_sequencing_stats', days: 90 }) }).then(function(r){ return r.json(); }).catch(function(e){ return { ok:false, error:e.message }; }),
+      fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify({ action: 'get_manual_sampaign_stats' }) }).then(function(r){ return r.json(); }).catch(function(e){ return { ok:false, error:e.message }; })
+    ]);
+    var toolD = results[0], manualD = results[1];
+    var html = '';
+
+    if (toolD.ok && toolD.org_summary && toolD.org_summary.total_prospects > 0) {
+      html += _renderSampaignAnalyticsBlock(toolD, { title: '📨 Tool-synced (SmartReach) · last 90 days' });
+    } else if (!toolD.ok) {
+      html += '<div style="font-size:11px;color:var(--coral);margin-bottom:10px">⚠ Tool-synced: ' + esc(toolD.error||'Failed to load') + '</div>';
+    }
+
+    if (manualD.ok && manualD.org_summary && manualD.org_summary.total_prospects > 0) {
+      html += _renderSampaignAnalyticsBlock(manualD, { title: '📋 My SAMpaigns (manual)' });
+    } else if (!manualD.ok) {
+      html += '<div style="font-size:11px;color:var(--coral)">⚠ Manual: ' + esc(manualD.error||'Failed to load') + '</div>';
+    }
+
+    out.innerHTML = html || '<div style="font-size:12px;color:var(--text3)">No SAMpaign data yet — sync a sequencing tool or upload contacts to a manual SAMpaign above.</div>';
 
   } catch(e) {
     if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: '+esc(e.message)+'</div>';
@@ -9370,8 +9405,10 @@ function _renderSampaignContacts(campaignId) {
     dead:          { label:'Dead',          color:'var(--coral)' },
     opted_out:     { label:'Opted out',     color:'var(--text3)' }
   };
-  var html = '<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">' +
+  var unenriched = contacts.filter(function(c){ return !c.enriched_at; }).length;
+  var html = '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">' +
     '<label style="font-size:10px;color:var(--gold);padding:5px 10px;border-radius:8px;background:rgba(160,117,42,0.1);border:1px solid rgba(160,117,42,0.25);cursor:pointer">⇪ Upload CSV<input type="file" accept=".csv,text/csv" style="display:none" onchange="handleSampaignCsv(\''+esc(campaignId)+'\',this.files[0]);this.value=\'\'"/></label>' +
+    (unenriched ? '<button onclick="enrichSampaignContacts(\''+esc(campaignId)+'\')" style="font-size:10px;color:var(--blue);padding:5px 10px;border-radius:8px;background:rgba(74,158,255,0.1);border:1px solid rgba(74,158,255,0.25);cursor:pointer">✨ Enrich '+unenriched+' contact'+(unenriched!==1?'s':'')+'</button>' : '') +
     '<span style="font-size:9px;color:var(--text3)">Columns: name, email, phone, company, title (header names flexible)</span>' +
     '</div>';
   if (!contacts.length) {
@@ -9401,10 +9438,11 @@ function _renderSampaignContacts(campaignId) {
           ? '<button onclick="promoteSampaignContact(\''+esc(c.id)+'\',\''+esc(campaignId)+'\')" style="font-size:9px;font-weight:600;padding:3px 8px;border-radius:6px;background:rgba(74,158,255,0.1);border:1px solid rgba(74,158,255,0.3);color:var(--blue);cursor:pointer;margin-top:3px">→ Promote to stakeholder</button>'
           : '<div style="font-size:9px;color:var(--text3);margin-top:3px">No matching tracked account yet — link one to promote</div>';
       }
+      var titleLine = (c.title || c.seniority) ? '<div style="font-size:10px;color:var(--text2);margin-top:1px">'+esc([c.title, c.seniority].filter(Boolean).join(' · '))+(c.linkedin_url?' · <a href="'+esc(c.linkedin_url)+'" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:none">LinkedIn ↗</a>':'')+'</div>' : '';
       return '<div style="padding:6px 0;border-top:1px solid var(--border)">' +
         '<div style="display:flex;align-items:center;justify-content:space-between">' +
         '<div style="min-width:0"><div style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(c.name||c.email||'—')+'</div>' +
-        '<div style="font-size:10px;color:var(--text3)">'+esc(c.email||'')+(c.company?' · '+esc(c.company):'')+'</div></div>' +
+        '<div style="font-size:10px;color:var(--text3)">'+esc(c.email||'')+(c.company?' · '+esc(c.company):'')+'</div>' + titleLine + '</div>' +
         '<select onchange="setSampaignContactStatus(\''+esc(c.id)+'\',this.value,\''+esc(campaignId)+'\')" style="font-size:10px;font-weight:600;color:'+meta.color+';background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:3px 6px;flex-shrink:0">'+opts+'</select>' +
         '</div>' + collisionLine + promoteBtn +
       '</div>';
@@ -9455,7 +9493,34 @@ async function _uploadSampaignCsvFile(campaignId, file) {
     var d = await res.json();
     if (!d.ok) { showToast('Error: '+(d.error||'Upload failed')); return; }
     showToast('✓ Added '+d.added+(d.skipped?' · skipped '+d.skipped+' duplicate/invalid':''));
+    // Power up the bare CSV row with real title/seniority/LinkedIn since the
+    // email is already in hand — same enrichment keys as stakeholder scout,
+    // just a by-email lookup instead of a by-domain search. Best-effort: a
+    // missing/quota-exhausted key just means contacts stay unenriched, never
+    // blocks the upload itself.
+    if (d.added > 0) {
+      try {
+        var er = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+          body: JSON.stringify({ action:'enrich_sampaign_contacts', campaign_id: campaignId }) });
+        var ed = await er.json();
+        if (ed.ok && ed.enriched > 0) showToast('✨ Enriched '+ed.enriched+' of '+ed.checked+' contacts via '+ed.provider);
+      } catch(e) { /* enrichment is best-effort, upload already succeeded */ }
+    }
   } catch(e) { showToast('CSV error: '+e.message); }
+}
+
+async function enrichSampaignContacts(campaignId) {
+  try {
+    showToast('✨ Enriching contacts…');
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'enrich_sampaign_contacts', campaign_id: campaignId }) });
+    var d = await r.json();
+    if (!d.ok) { showToast('Error: '+(d.error||'Enrichment unavailable')); return; }
+    showToast('✨ Enriched '+d.enriched+' of '+d.checked+' contacts via '+d.provider);
+    var r2 = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body: JSON.stringify({ action:'list_sampaign_contacts', campaign_id: campaignId }) });
+    var d2 = await r2.json();
+    if (d2.ok) { window._sampaignContactsCache[campaignId] = d2.contacts || []; _renderSampaignContacts(campaignId); }
+  } catch(e) { showToast('Error: '+e.message); }
 }
 
 async function handleSampaignCsv(campaignId, file) {
