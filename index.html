@@ -9466,19 +9466,96 @@ async function loadSampaignCampaigns() {
     var d = await r.json();
     if (!d.ok) { el.innerHTML = '<div style="font-size:11px;color:var(--coral)">'+esc(d.error||'Failed to load')+'</div>'; return; }
     if (!d.campaigns || !d.campaigns.length) { el.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:4px 0">No manual SAMpaigns yet. Create one above, or use a connected sequencing tool for SAMpaign Analytics instead.</div>'; return; }
+    // Cache full campaign objects (name/followup_days/alerts_enabled) so the
+    // edit form can prefill instantly without a second fetch.
+    window._sampaignCampaignsCache = {};
+    d.campaigns.forEach(function(c) { window._sampaignCampaignsCache[c.id] = c; });
     el.innerHTML = d.campaigns.map(function(c) {
       var s = c.stats || {};
       var badge = function(n, label, color) { return n ? '<span style="font-size:9px;font-weight:600;color:'+color+';margin-right:8px">'+n+' '+label+'</span>' : ''; };
+      var isOwner = c.owner_user_id === currentUser.id || !c.owner_user_id;
       return '<div style="background:var(--surface2);border-radius:10px;padding:10px 12px;margin-bottom:8px">' +
-        '<div onclick="toggleSampaignCampaign(\''+esc(c.id)+'\')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between">' +
-          '<div><div style="font-size:13px;font-weight:600;color:var(--text)">'+esc(c.name)+'</div>' +
+        '<div onclick="toggleSampaignCampaign(\''+esc(c.id)+'\')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px">' +
+          '<div style="min-width:0"><div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(c.name)+'</div>' +
           '<div style="font-size:10px;color:var(--text3);margin-top:2px">'+(s.total||0)+' contact'+((s.total||0)!==1?'s':'')+(c.owner_email?' · '+esc(c.owner_email.split('@')[0]):'')+'</div></div>' +
-          '<div style="text-align:right">' + badge(s.replied,'replied','var(--green)') + badge(s.ooo,'ooo','var(--amber)') + badge(s.no_response,'no-resp','var(--text3)') + badge(s.dead,'dead','var(--coral)') + '<span style="font-size:11px;color:var(--gold)">▾</span></div>' +
+          '<div style="display:flex;align-items:center;gap:2px;flex-shrink:0">' +
+            badge(s.replied,'replied','var(--green)') + badge(s.ooo,'ooo','var(--amber)') + badge(s.no_response,'no-resp','var(--text3)') + badge(s.dead,'dead','var(--coral)') +
+            (isOwner ? '<button onclick="event.stopPropagation();toggleEditSampaignForm(\''+esc(c.id)+'\')" title="Edit SAMpaign" style="background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;padding:3px 5px">✎</button>' : '') +
+            (isOwner ? '<button onclick="event.stopPropagation();deleteSampaignCampaign(\''+esc(c.id)+'\',\''+esc(c.name)+'\')" title="Delete SAMpaign" style="background:none;border:none;color:var(--coral);font-size:13px;cursor:pointer;padding:3px 5px">🗑</button>' : '') +
+            '<span style="font-size:11px;color:var(--gold)">▾</span>' +
+          '</div>' +
         '</div>' +
+        '<div id="sampaignEdit_'+esc(c.id)+'" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border2)"></div>' +
         '<div id="sampaignContacts_'+esc(c.id)+'" style="display:none;margin-top:10px"></div>' +
       '</div>';
     }).join('');
   } catch(e) { el.innerHTML = '<div style="font-size:11px;color:var(--coral)">Error: '+esc(e.message)+'</div>'; }
+}
+
+// ── Edit SAMpaign: name / follow-up cadence / alert toggles. Domain/account
+// linkage is deliberately not editable here — that is a structural decision,
+// recreate the campaign if it needs to change.
+function toggleEditSampaignForm(campaignId) {
+  var box = document.getElementById('sampaignEdit_'+campaignId);
+  if (!box) return;
+  if (box.style.display === 'none') {
+    var c = (window._sampaignCampaignsCache || {})[campaignId] || {};
+    var cadence = (c.followup_days && c.followup_days.length) ? c.followup_days.join(',') : '3,7,14';
+    var a = c.alerts_enabled || {};
+    box.innerHTML =
+      '<div style="display:flex;flex-direction:column;gap:8px">' +
+        '<input id="editSampaignName_'+esc(campaignId)+'" value="'+esc(c.name||'')+'" placeholder="Campaign name" style="padding:7px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
+        '<input id="editSampaignCadence_'+esc(campaignId)+'" value="'+esc(cadence)+'" placeholder="Follow-up days e.g. 3,7,14" style="padding:7px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
+        '<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--text2)">' +
+          '<label style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="editSampaignAlertOoo_'+esc(campaignId)+'" '+(a.ooo?'checked':'')+'/> OOO</label>' +
+          '<label style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="editSampaignAlertReplied_'+esc(campaignId)+'" '+(a.replied?'checked':'')+'/> Replied</label>' +
+          '<label style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="editSampaignAlertNoResp_'+esc(campaignId)+'" '+(a.no_response?'checked':'')+'/> No response</label>' +
+          '<label style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="editSampaignAlertDead_'+esc(campaignId)+'" '+(a.dead?'checked':'')+'/> Dead</label>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px">' +
+          '<button onclick="saveSampaignEdit(\''+esc(campaignId)+'\')" style="flex:1;padding:7px;border-radius:8px;background:var(--gold);border:none;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Save changes</button>' +
+          '<button onclick="toggleEditSampaignForm(\''+esc(campaignId)+'\')" style="padding:7px 12px;border-radius:8px;background:none;border:1px solid var(--border2);color:var(--text3);font-size:12px;cursor:pointer">Cancel</button>' +
+        '</div>' +
+      '</div>';
+    box.style.display = 'block';
+  } else {
+    box.style.display = 'none';
+  }
+}
+
+async function saveSampaignEdit(campaignId) {
+  var name = document.getElementById('editSampaignName_'+campaignId)?.value?.trim();
+  var cadenceRaw = document.getElementById('editSampaignCadence_'+campaignId)?.value || '3,7,14';
+  var followup_days = cadenceRaw.split(',').map(function(s){ return parseInt(s.trim(),10); }).filter(function(n){ return n > 0; });
+  var alerts_enabled = {
+    ooo: !!document.getElementById('editSampaignAlertOoo_'+campaignId)?.checked,
+    replied: !!document.getElementById('editSampaignAlertReplied_'+campaignId)?.checked,
+    no_response: !!document.getElementById('editSampaignAlertNoResp_'+campaignId)?.checked,
+    dead: !!document.getElementById('editSampaignAlertDead_'+campaignId)?.checked
+  };
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'update_sampaign', campaign_id: campaignId, name: name, followup_days: followup_days.length?followup_days:undefined, alerts_enabled: alerts_enabled }) });
+    var d = await r.json();
+    if (!d.ok) { showToast('Error: '+(d.error||'Could not update SAMpaign')); return; }
+    showToast('✓ SAMpaign updated');
+    loadSampaignCampaigns();
+  } catch(e) { showToast('Error: '+e.message); }
+}
+
+// Soft delete (archive) — reversible, matches existing codebase convention
+// of a native confirm() for destructive actions (see e.g. "Remove this
+// account?", "Disconnect provider?").
+async function deleteSampaignCampaign(campaignId, name) {
+  if (!confirm('Delete "'+name+'" and hide all its contacts? This can be undone by an admin, but not from here.')) return;
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'archive_sampaign', campaign_id: campaignId }) });
+    var d = await r.json();
+    if (!d.ok) { showToast('Error: '+(d.error||'Could not delete SAMpaign')); return; }
+    showToast('✓ SAMpaign deleted');
+    loadSampaignCampaigns();
+  } catch(e) { showToast('Error: '+e.message); }
 }
 
 async function toggleSampaignCampaign(campaignId) {
