@@ -9270,6 +9270,8 @@ function loadSampaignWorkspace() {
         '<label style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="sampaignAlertNoResp" checked/> No-response alerts</label>' +
         '<label style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="sampaignAlertDead" checked/> Dead-contact alerts</label>' +
       '</div>' +
+      '<div style="font-size:10px;color:var(--text3);margin-top:2px">Optionally attach who you\'re reaching out to now (CSV: name, email, phone, company, title) — or upload one later from the SAMpaign row.</div>' +
+      '<input type="file" id="sampaignNewCsv" accept=".csv,text/csv" style="font-size:11px;color:var(--text2)"/>' +
       '<button onclick="createSampaign()" style="padding:9px;border:none;border-radius:8px;background:var(--green);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--sans)">Create SAMpaign</button>' +
       '</div></div>' +
     '<div id="sampaignCampaignsList"><div style="font-size:12px;color:var(--text3);padding:6px 0">Loading…</div></div>';
@@ -9293,6 +9295,7 @@ async function createSampaign() {
     no_response: !!document.getElementById('sampaignAlertNoResp')?.checked,
     dead: !!document.getElementById('sampaignAlertDead')?.checked
   };
+  var csvFile = document.getElementById('sampaignNewCsv')?.files?.[0] || null;
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
       body: JSON.stringify({ action:'create_sampaign', name: name, followup_days: followup_days.length?followup_days:undefined, alerts_enabled: alerts_enabled }) });
@@ -9301,6 +9304,15 @@ async function createSampaign() {
     showToast('✓ SAMpaign created');
     document.getElementById('sampaignName').value = '';
     toggleNewSampaignForm();
+    // One-motion audience upload: if a CSV was attached at creation, add its
+    // contacts straight to the campaign we just created — name + define
+    // audience in one step (Outreach.io's pattern), rather than requiring a
+    // separate expand-and-upload pass right after. Uploading MORE contacts
+    // later, from the campaign row, still works unchanged.
+    if (csvFile && d.campaign?.id) {
+      await _uploadSampaignCsvFile(d.campaign.id, csvFile);
+      var csvEl = document.getElementById('sampaignNewCsv'); if (csvEl) csvEl.value = '';
+    }
     loadSampaignCampaigns();
   } catch(e) { showToast('Error: '+e.message); }
 }
@@ -9368,10 +9380,33 @@ function _renderSampaignContacts(campaignId) {
     html += contacts.map(function(c) {
       var meta = STATUS_META[c.status] || STATUS_META.not_contacted;
       var opts = Object.keys(STATUS_META).map(function(k){ return '<option value="'+k+'"'+(k===c.status?' selected':'')+'>'+STATUS_META[k].label+'</option>'; }).join('');
-      return '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-top:1px solid var(--border)">' +
+      // Domain-collision flag — visibility only, does NOT merge this contact
+      // into org_accounts/stakeholders. Same semantics + shape as
+      // get_sequencing_stats' by_account collision (open deal on the
+      // matched account = deal_value_usd set, not won/lost).
+      var collisionLine = '';
+      if (c.collision) {
+        collisionLine = '<div style="font-size:9px;margin-top:2px;color:'+(c.collision.is_same_user?'var(--green)':'var(--amber)')+'">' +
+          (c.collision.is_same_user
+            ? '✓ Your own tracked account'
+            : '⚡ Active deal: <strong>'+esc(c.collision.account_name)+'</strong>'+(c.collision.deal_value?' '+esc(c.collision.deal_value):'')+' · AE: '+esc(c.collision.ae)+' — coordinate before outreach') +
+        '</div>';
+      }
+      // Promote to stakeholder — only once the contact has actually replied
+      // (the "outcomes flow back" moment) AND is linked to a real tracked
+      // account. No account match yet → explain rather than fake a button.
+      var promoteBtn = '';
+      if (c.status === 'replied') {
+        promoteBtn = c.account_id
+          ? '<button onclick="promoteSampaignContact(\''+esc(c.id)+'\',\''+esc(campaignId)+'\')" style="font-size:9px;font-weight:600;padding:3px 8px;border-radius:6px;background:rgba(74,158,255,0.1);border:1px solid rgba(74,158,255,0.3);color:var(--blue);cursor:pointer;margin-top:3px">→ Promote to stakeholder</button>'
+          : '<div style="font-size:9px;color:var(--text3);margin-top:3px">No matching tracked account yet — link one to promote</div>';
+      }
+      return '<div style="padding:6px 0;border-top:1px solid var(--border)">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between">' +
         '<div style="min-width:0"><div style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(c.name||c.email||'—')+'</div>' +
         '<div style="font-size:10px;color:var(--text3)">'+esc(c.email||'')+(c.company?' · '+esc(c.company):'')+'</div></div>' +
         '<select onchange="setSampaignContactStatus(\''+esc(c.id)+'\',this.value,\''+esc(campaignId)+'\')" style="font-size:10px;font-weight:600;color:'+meta.color+';background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:3px 6px;flex-shrink:0">'+opts+'</select>' +
+        '</div>' + collisionLine + promoteBtn +
       '</div>';
     }).join('');
   }
@@ -9399,7 +9434,9 @@ function _detectSampaignColumns(headers) {
   };
 }
 
-async function handleSampaignCsv(campaignId, file) {
+// Shared by handleSampaignCsv (upload-to-existing-campaign) and createSampaign
+// (attach-at-creation) so both paths parse + post contacts identically.
+async function _uploadSampaignCsvFile(campaignId, file) {
   if (!file) return;
   try {
     var text = await file.text();
@@ -9418,10 +9455,31 @@ async function handleSampaignCsv(campaignId, file) {
     var d = await res.json();
     if (!d.ok) { showToast('Error: '+(d.error||'Upload failed')); return; }
     showToast('✓ Added '+d.added+(d.skipped?' · skipped '+d.skipped+' duplicate/invalid':''));
-    await toggleSampaignCampaign(campaignId); // close
-    await toggleSampaignCampaign(campaignId); // reopen refreshed
-    loadSampaignCampaigns();
   } catch(e) { showToast('CSV error: '+e.message); }
+}
+
+async function handleSampaignCsv(campaignId, file) {
+  if (!file) return;
+  await _uploadSampaignCsvFile(campaignId, file);
+  await toggleSampaignCampaign(campaignId); // close
+  await toggleSampaignCampaign(campaignId); // reopen refreshed
+  loadSampaignCampaigns();
+}
+
+// The "outcomes flow back" moment: once a contact has actually replied AND
+// is linked to a tracked account (account_id, set by the domain match in
+// upload_sampaign_contacts), let the rep add them to that account's real
+// Stakeholders tab. Does not create a new account — a contact with no
+// account match stays out of the CRM layer, same as CLAUDE.md's
+// activity-proven-only rule.
+async function promoteSampaignContact(contactId, campaignId) {
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'promote_sampaign_contact_to_stakeholder', contact_id: contactId }) });
+    var d = await r.json();
+    if (!d.ok) { showToast('Error: '+(d.error||'Could not promote')); return; }
+    showToast('✓ Added to stakeholders on '+(d.account_name||'the account'));
+  } catch(e) { showToast('Error: '+e.message); }
 }
 
 async function setSampaignContactStatus(contactId, status, campaignId) {
