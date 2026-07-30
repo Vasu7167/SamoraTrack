@@ -9153,55 +9153,256 @@ function _sdrDealCard(a, kind) {
 async function loadSdrPlayground() {
   var panel = document.getElementById('sdrPlayground');
   if (!panel) return;
-  if ((profile?.role||'').toLowerCase() !== 'sdr') { panel.innerHTML = ''; return; }
-  panel.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">Loading your team\'s deals…</div>';
+  // Opened up beyond SDR-only per the SAMpaign merge — AE/Manager can also
+  // work outreach here now, not just source leads for others to work.
+  var role = (profile?.role||'').toLowerCase();
+  if (!['sdr','ae','manager'].includes(role)) { panel.innerHTML = ''; return; }
+  panel.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">Loading SAMpaign…</div>';
   window._sdrDeals = {};
   try {
-    var org = profile.org_id, mgr = profile.manager_id || null;
-    // Team = peers under my manager + the manager themselves.
-    var teamIds = [];
-    var emailById = {};
-    if (mgr) {
-      var peers = await sbGet('user_profiles?org_id=eq.'+org+'&manager_id=eq.'+mgr+'&select=user_id,email,role');
-      (peers||[]).forEach(function(p){ if (p.user_id !== currentUser.id) { teamIds.push(p.user_id); emailById[p.user_id]=p.email; } });
-      teamIds.push(mgr);
-      try { var mgrRow = await sbGet('user_profiles?user_id=eq.'+mgr+'&select=user_id,email&limit=1'); if (mgrRow&&mgrRow[0]) emailById[mgr]=mgrRow[0].email; } catch(e){}
+    var leadsHtml = '';
+    if (role === 'sdr') {
+      var org = profile.org_id, mgr = profile.manager_id || null;
+      // Team = peers under my manager + the manager themselves.
+      var teamIds = [];
+      var emailById = {};
+      if (mgr) {
+        var peers = await sbGet('user_profiles?org_id=eq.'+org+'&manager_id=eq.'+mgr+'&select=user_id,email,role');
+        (peers||[]).forEach(function(p){ if (p.user_id !== currentUser.id) { teamIds.push(p.user_id); emailById[p.user_id]=p.email; } });
+        teamIds.push(mgr);
+        try { var mgrRow = await sbGet('user_profiles?user_id=eq.'+mgr+'&select=user_id,email&limit=1'); if (mgrRow&&mgrRow[0]) emailById[mgr]=mgrRow[0].email; } catch(e){}
+      }
+      // My leads (I'm the assigned SDR).
+      var myLeads = await sbGet('org_accounts?org_id=eq.'+org+'&sdr_user_id=eq.'+currentUser.id+'&select=id,account_name,domain,region,deal_value_usd,user_id,sdr_user_id&order=account_name');
+      // Team deals (owned by an AE/manager on my team), excluding ones I already source.
+      var teamDeals = [];
+      if (teamIds.length) {
+        teamDeals = await sbGet('org_accounts?org_id=eq.'+org+'&user_id=in.('+teamIds.join(',')+')&deal_status=not.in.(won,lost)&select=id,account_name,domain,region,deal_value_usd,user_id,sdr_user_id&order=account_name&limit=100') || [];
+      }
+      var mine = (myLeads||[]);
+      var mineIds = new Set(mine.map(function(a){return a.id;}));
+      teamDeals = teamDeals.filter(function(a){ return !mineIds.has(a.id); });
+      teamDeals.forEach(function(a){ a._owner_email = emailById[a.user_id] || ''; });
+      mine.concat(teamDeals).forEach(function(a){ window._sdrDeals[a.id] = { id:a.id, account:a.account_name, deal_value_usd:a.deal_value_usd||0, stage:'prospective', region:a.region||'' }; });
+
+      leadsHtml += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><span style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Lead sourcing</span>' +
+        '<button onclick="toggleSdrLeadForm()" id="sdrNewLeadBtn" style="font-size:11px;font-weight:600;padding:5px 12px;border-radius:8px;background:var(--gold);border:none;color:#18160F;cursor:pointer;font-family:var(--sans)">+ New lead</button></div>';
+      leadsHtml += '<div id="sdrLeadForm" style="display:none;background:var(--surface2);border-radius:10px;padding:10px;margin-bottom:12px">' +
+        '<div style="display:flex;flex-direction:column;gap:6px">' +
+        '<input id="sdrLeadName" placeholder="Company / account name" style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
+        '<div style="display:flex;gap:6px"><input id="sdrLeadDomain" placeholder="domain.com" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
+        '<input id="sdrLeadRegion" placeholder="Region (e.g. APAC)" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/></div>' +
+        '<div style="font-size:10px;color:var(--text3)">Domain powers contact scouting; region keeps prospects geo-consistent.</div>' +
+        '<button onclick="createSdrLead()" style="padding:9px;border:none;border-radius:8px;background:var(--gold);color:#18160F;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--sans)">Create lead &amp; open</button>' +
+        '</div></div>';
+      leadsHtml += '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:4px 0 6px">My leads ('+mine.length+')</div>';
+      leadsHtml += mine.length ? mine.map(function(a){ return _sdrDealCard(a,'lead'); }).join('') : '<div style="font-size:11px;color:var(--text3);padding:2px 0 8px">No leads yet. Create one to start scouting contacts.</div>';
+      leadsHtml += '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:12px 0 6px">Team deals ('+teamDeals.length+')</div>';
+      leadsHtml += teamDeals.length ? teamDeals.map(function(a){ return _sdrDealCard(a,'team'); }).join('') : '<div style="font-size:11px;color:var(--text3);padding:2px 0">' + (mgr?'No open deals on your team yet.':'You are not linked to a manager yet, so no team deals to show. Ask your manager to assign you.') + '</div>';
     }
-    // My leads (I'm the assigned SDR).
-    var myLeads = await sbGet('org_accounts?org_id=eq.'+org+'&sdr_user_id=eq.'+currentUser.id+'&select=id,account_name,domain,region,deal_value_usd,user_id,sdr_user_id&order=account_name');
-    // Team deals (owned by an AE/manager on my team), excluding ones I already source.
-    var teamDeals = [];
-    if (teamIds.length) {
-      teamDeals = await sbGet('org_accounts?org_id=eq.'+org+'&user_id=in.('+teamIds.join(',')+')&deal_status=not.in.(won,lost)&select=id,account_name,domain,region,deal_value_usd,user_id,sdr_user_id&order=account_name&limit=100') || [];
-    }
-    var mine = (myLeads||[]);
-    var mineIds = new Set(mine.map(function(a){return a.id;}));
-    teamDeals = teamDeals.filter(function(a){ return !mineIds.has(a.id); });
-    teamDeals.forEach(function(a){ a._owner_email = emailById[a.user_id] || ''; });
-    // Register all in the lookup so openDealDetail can find them.
-    mine.concat(teamDeals).forEach(function(a){ window._sdrDeals[a.id] = { id:a.id, account:a.account_name, deal_value_usd:a.deal_value_usd||0, stage:'prospective', region:a.region||'' }; });
 
     var html = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:14px;margin-bottom:14px">';
-    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><span style="font-size:13px;font-weight:600;color:var(--text)">🧭 SDR Playground</span>' +
-      '<button onclick="toggleSdrLeadForm()" id="sdrNewLeadBtn" style="font-size:11px;font-weight:600;padding:5px 12px;border-radius:8px;background:var(--gold);border:none;color:#18160F;cursor:pointer;font-family:var(--sans)">+ New lead</button></div>';
-    // Create-lead form (hidden by default)
-    html += '<div id="sdrLeadForm" style="display:none;background:var(--surface2);border-radius:10px;padding:10px;margin-bottom:12px">' +
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">' +
+      '<span style="font-size:13px;font-weight:600;color:var(--text)">🧭 SAMpaign</span>' +
+      '<button onclick="switchTab(\'signals\');setSamSubTab(\'signal\')" style="font-size:10px;color:var(--text3);background:none;border:none;cursor:pointer;text-decoration:underline">📨 SAMpaign Analytics (synced) ›</button>' +
+      '</div>';
+    if (leadsHtml) { html += leadsHtml + '<div style="height:1px;background:var(--border);margin:14px 0"></div>'; }
+
+    // ── Manual SAMpaigns (no sequencing tool required) ─────────────────────
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+      '<span style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">My SAMpaigns</span>' +
+      '<button onclick="toggleNewSampaignForm()" id="sampaignNewBtn" style="font-size:11px;font-weight:600;padding:5px 12px;border-radius:8px;background:var(--green);border:none;color:#fff;cursor:pointer;font-family:var(--sans)">+ New SAMpaign</button>' +
+      '</div>';
+    html += '<div id="sampaignNewForm" style="display:none;background:var(--surface2);border-radius:10px;padding:10px;margin-bottom:12px">' +
       '<div style="display:flex;flex-direction:column;gap:6px">' +
-      '<input id="sdrLeadName" placeholder="Company / account name" style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
-      '<div style="display:flex;gap:6px"><input id="sdrLeadDomain" placeholder="domain.com" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
-      '<input id="sdrLeadRegion" placeholder="Region (e.g. APAC)" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/></div>' +
-      '<div style="font-size:10px;color:var(--text3)">Domain powers contact scouting; region keeps prospects geo-consistent.</div>' +
-      '<button onclick="createSdrLead()" style="padding:9px;border:none;border-radius:8px;background:var(--gold);color:#18160F;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--sans)">Create lead &amp; open</button>' +
+      '<input id="sampaignName" placeholder="SAMpaign name (e.g. APAC manufacturing outreach)" style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
+      '<div style="font-size:10px;color:var(--text3)">Follow-up cadence (days after send) — e.g. 3, 7, 14 for follow-up 1/2/3</div>' +
+      '<input id="sampaignCadence" value="3,7,14" style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--text2)">' +
+        '<label style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="sampaignAlertOoo" checked/> OOO alerts</label>' +
+        '<label style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="sampaignAlertReplied" checked/> Reply alerts</label>' +
+        '<label style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="sampaignAlertNoResp" checked/> No-response alerts</label>' +
+        '<label style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="sampaignAlertDead" checked/> Dead-contact alerts</label>' +
+      '</div>' +
+      '<button onclick="createSampaign()" style="padding:9px;border:none;border-radius:8px;background:var(--green);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--sans)">Create SAMpaign</button>' +
       '</div></div>';
-    // My leads
-    html += '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:4px 0 6px">My leads ('+mine.length+')</div>';
-    html += mine.length ? mine.map(function(a){ return _sdrDealCard(a,'lead'); }).join('') : '<div style="font-size:11px;color:var(--text3);padding:2px 0 8px">No leads yet. Create one to start scouting contacts.</div>';
-    // Team deals
-    html += '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:12px 0 6px">Team deals ('+teamDeals.length+')</div>';
-    html += teamDeals.length ? teamDeals.map(function(a){ return _sdrDealCard(a,'team'); }).join('') : '<div style="font-size:11px;color:var(--text3);padding:2px 0">' + (mgr?'No open deals on your team yet.':'You are not linked to a manager yet, so no team deals to show. Ask your manager to assign you.') + '</div>';
+    html += '<div id="sampaignCampaignsList"><div style="font-size:12px;color:var(--text3);padding:6px 0">Loading…</div></div>';
     html += '</div>';
     panel.innerHTML = html;
-  } catch(e) { panel.innerHTML = '<div style="font-size:11px;color:var(--coral);padding:6px 0">Could not load playground: '+esc(e.message)+'</div>'; }
+    loadSampaignCampaigns();
+  } catch(e) { panel.innerHTML = '<div style="font-size:11px;color:var(--coral);padding:6px 0">Could not load SAMpaign: '+esc(e.message)+'</div>'; }
+}
+
+// ── Manual SAMpaigns (no sequencing tool) ───────────────────────────────────
+// Lets an AE/SDR/Manager run outreach entirely inside Samora — create a
+// campaign, set a follow-up cadence, upload a contact list (CSV — same
+// convention as the existing CRM-audit upload, no new client-side library),
+// log status per contact, and let sam-cron's run_sampaign_followups handle
+// the reminders. Deliberately separate from tool-synced SAMpaign Analytics
+// (get_sequencing_stats): different data, different alert engine, kept
+// honest rather than blended into one number.
+window._sampaignExpanded = {};
+window._sampaignContactsCache = {};
+
+function toggleNewSampaignForm() {
+  var f = document.getElementById('sampaignNewForm'); if (!f) return;
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+  if (f.style.display === 'block') document.getElementById('sampaignName')?.focus();
+}
+
+async function createSampaign() {
+  var name = document.getElementById('sampaignName')?.value?.trim();
+  if (!name) { showToast('Enter a SAMpaign name'); return; }
+  var cadenceRaw = document.getElementById('sampaignCadence')?.value || '3,7,14';
+  var followup_days = cadenceRaw.split(',').map(function(s){ return parseInt(s.trim(),10); }).filter(function(n){ return n > 0; });
+  var alerts_enabled = {
+    ooo: !!document.getElementById('sampaignAlertOoo')?.checked,
+    replied: !!document.getElementById('sampaignAlertReplied')?.checked,
+    no_response: !!document.getElementById('sampaignAlertNoResp')?.checked,
+    dead: !!document.getElementById('sampaignAlertDead')?.checked
+  };
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'create_sampaign', name: name, followup_days: followup_days.length?followup_days:undefined, alerts_enabled: alerts_enabled }) });
+    var d = await r.json();
+    if (!d.ok) { showToast('Error: '+(d.error||'Could not create SAMpaign')); return; }
+    showToast('✓ SAMpaign created');
+    document.getElementById('sampaignName').value = '';
+    toggleNewSampaignForm();
+    loadSampaignCampaigns();
+  } catch(e) { showToast('Error: '+e.message); }
+}
+
+async function loadSampaignCampaigns() {
+  var el = document.getElementById('sampaignCampaignsList');
+  if (!el) return;
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body: JSON.stringify({ action:'list_sampaigns' }) });
+    var d = await r.json();
+    if (!d.ok) { el.innerHTML = '<div style="font-size:11px;color:var(--coral)">'+esc(d.error||'Failed to load')+'</div>'; return; }
+    if (!d.campaigns || !d.campaigns.length) { el.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:4px 0">No manual SAMpaigns yet. Create one above, or use a connected sequencing tool for SAMpaign Analytics instead.</div>'; return; }
+    el.innerHTML = d.campaigns.map(function(c) {
+      var s = c.stats || {};
+      var badge = function(n, label, color) { return n ? '<span style="font-size:9px;font-weight:600;color:'+color+';margin-right:8px">'+n+' '+label+'</span>' : ''; };
+      return '<div style="background:var(--surface2);border-radius:10px;padding:10px 12px;margin-bottom:8px">' +
+        '<div onclick="toggleSampaignCampaign(\''+esc(c.id)+'\')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between">' +
+          '<div><div style="font-size:13px;font-weight:600;color:var(--text)">'+esc(c.name)+'</div>' +
+          '<div style="font-size:10px;color:var(--text3);margin-top:2px">'+(s.total||0)+' contact'+((s.total||0)!==1?'s':'')+(c.owner_email?' · '+esc(c.owner_email.split('@')[0]):'')+'</div></div>' +
+          '<div style="text-align:right">' + badge(s.replied,'replied','var(--green)') + badge(s.ooo,'ooo','var(--amber)') + badge(s.no_response,'no-resp','var(--text3)') + badge(s.dead,'dead','var(--coral)') + '<span style="font-size:11px;color:var(--gold)">▾</span></div>' +
+        '</div>' +
+        '<div id="sampaignContacts_'+esc(c.id)+'" style="display:none;margin-top:10px"></div>' +
+      '</div>';
+    }).join('');
+  } catch(e) { el.innerHTML = '<div style="font-size:11px;color:var(--coral)">Error: '+esc(e.message)+'</div>'; }
+}
+
+async function toggleSampaignCampaign(campaignId) {
+  var box = document.getElementById('sampaignContacts_'+campaignId);
+  if (!box) return;
+  var opening = box.style.display === 'none';
+  box.style.display = opening ? 'block' : 'none';
+  if (!opening) return;
+  box.innerHTML = '<div style="font-size:11px;color:var(--text3)">Loading contacts…</div>';
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body: JSON.stringify({ action:'list_sampaign_contacts', campaign_id: campaignId }) });
+    var d = await r.json();
+    if (!d.ok) { box.innerHTML = '<div style="font-size:11px;color:var(--coral)">'+esc(d.error||'Failed')+'</div>'; return; }
+    window._sampaignContactsCache[campaignId] = d.contacts || [];
+    _renderSampaignContacts(campaignId);
+  } catch(e) { box.innerHTML = '<div style="font-size:11px;color:var(--coral)">Error: '+esc(e.message)+'</div>'; }
+}
+
+function _renderSampaignContacts(campaignId) {
+  var box = document.getElementById('sampaignContacts_'+campaignId);
+  if (!box) return;
+  var contacts = window._sampaignContactsCache[campaignId] || [];
+  var STATUS_META = {
+    not_contacted: { label:'Not contacted', color:'var(--text3)' },
+    sent:          { label:'Sent',          color:'var(--blue)' },
+    opened:        { label:'Opened',        color:'var(--amber)' },
+    replied:       { label:'Replied',       color:'var(--green)' },
+    ooo:           { label:'OOO',           color:'var(--amber)' },
+    no_response:   { label:'No response',   color:'var(--text3)' },
+    dead:          { label:'Dead',          color:'var(--coral)' },
+    opted_out:     { label:'Opted out',     color:'var(--text3)' }
+  };
+  var html = '<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">' +
+    '<label style="font-size:10px;color:var(--gold);padding:5px 10px;border-radius:8px;background:rgba(160,117,42,0.1);border:1px solid rgba(160,117,42,0.25);cursor:pointer">⇪ Upload CSV<input type="file" accept=".csv,text/csv" style="display:none" onchange="handleSampaignCsv(\''+esc(campaignId)+'\',this.files[0]);this.value=\'\'"/></label>' +
+    '<span style="font-size:9px;color:var(--text3)">Columns: name, email, phone, company, title (header names flexible)</span>' +
+    '</div>';
+  if (!contacts.length) {
+    html += '<div style="font-size:11px;color:var(--text3)">No contacts yet — upload a CSV to get started.</div>';
+  } else {
+    html += contacts.map(function(c) {
+      var meta = STATUS_META[c.status] || STATUS_META.not_contacted;
+      var opts = Object.keys(STATUS_META).map(function(k){ return '<option value="'+k+'"'+(k===c.status?' selected':'')+'>'+STATUS_META[k].label+'</option>'; }).join('');
+      return '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-top:1px solid var(--border)">' +
+        '<div style="min-width:0"><div style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(c.name||c.email||'—')+'</div>' +
+        '<div style="font-size:10px;color:var(--text3)">'+esc(c.email||'')+(c.company?' · '+esc(c.company):'')+'</div></div>' +
+        '<select onchange="setSampaignContactStatus(\''+esc(c.id)+'\',this.value,\''+esc(campaignId)+'\')" style="font-size:10px;font-weight:600;color:'+meta.color+';background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:3px 6px;flex-shrink:0">'+opts+'</select>' +
+      '</div>';
+    }).join('');
+  }
+  box.innerHTML = html;
+}
+
+// Auto-detect contact columns by header name — flexible, same pattern as
+// _detectCrmColumns (CRM audit upload) so headers don't need to match exactly.
+function _detectSampaignColumns(headers) {
+  var find = function(patterns) {
+    for (var p = 0; p < patterns.length; p++) {
+      for (var i = 0; i < headers.length; i++) {
+        var h = headers[i].toLowerCase().trim();
+        if (patterns[p].test(h)) return i;
+      }
+    }
+    return -1;
+  };
+  return {
+    name:    find([/^(full\s*)?name$/, /^contact(\s*name)?$/, /first.*name/]),
+    email:   find([/^email$/, /e-?mail/]),
+    phone:   find([/^phone$/, /mobile/, /contact\s*number/]),
+    company: find([/^compan(y|ies)$/, /^account(\s*name)?$/, /organi[sz]ation/]),
+    title:   find([/^title$/, /^job\s*title$/, /designation/, /role/])
+  };
+}
+
+async function handleSampaignCsv(campaignId, file) {
+  if (!file) return;
+  try {
+    var text = await file.text();
+    var rows = _parseCsv(text);
+    if (rows.length < 2) { showToast('CSV appears empty'); return; }
+    var headers = rows[0];
+    var map = _detectSampaignColumns(headers);
+    if (map.email === -1) { showToast('Could not find an email column — email is required per contact'); return; }
+    var get = function(r, idx) { return idx >= 0 ? (r[idx]||'').trim() : ''; };
+    var contacts = rows.slice(1).filter(function(r){ return r.join('').trim(); }).slice(0, 2000).map(function(r) {
+      return { name: get(r,map.name), email: get(r,map.email), phone: get(r,map.phone), company: get(r,map.company), title: get(r,map.title) };
+    });
+    showToast('Uploading '+contacts.length+' contacts…');
+    var res = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'upload_sampaign_contacts', campaign_id: campaignId, contacts: contacts }) });
+    var d = await res.json();
+    if (!d.ok) { showToast('Error: '+(d.error||'Upload failed')); return; }
+    showToast('✓ Added '+d.added+(d.skipped?' · skipped '+d.skipped+' duplicate/invalid':''));
+    await toggleSampaignCampaign(campaignId); // close
+    await toggleSampaignCampaign(campaignId); // reopen refreshed
+    loadSampaignCampaigns();
+  } catch(e) { showToast('CSV error: '+e.message); }
+}
+
+async function setSampaignContactStatus(contactId, status, campaignId) {
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'update_contact_status', contact_id: contactId, status: status }) });
+    var d = await r.json();
+    if (!d.ok) { showToast('Error: '+(d.error||'Could not update')); return; }
+    var list = window._sampaignContactsCache[campaignId] || [];
+    var idx = list.findIndex(function(c){ return c.id === contactId; });
+    if (idx >= 0) list[idx] = d.contact;
+    loadSampaignCampaigns(); // refresh badge counts on the collapsed header too
+  } catch(e) { showToast('Error: '+e.message); }
 }
 function toggleSdrLeadForm() {
   var f = document.getElementById('sdrLeadForm'); if (!f) return;
