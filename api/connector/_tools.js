@@ -113,7 +113,8 @@ export const TOOL_SCHEMAS = [
   { name: 'get_analytics',         description: 'Pipeline analytics: verified vs partial, rep leaderboard, signal trends, win/loss.',                                params: { period: { type: 'string', enum: ['month','quarter','year'] } } },
   { name: 'send_email',            description: 'Send email via connected Gmail or Outlook. ALWAYS confirm with user before calling.',                               params: { to: { type: 'string', required: true }, subject: { type: 'string', required: true }, body: { type: 'string', required: true }, cc: { type: 'string' }, account_name: { type: 'string' } } },
   { name: 'get_sampaigns',         description: 'List the caller\'s manual SAMpaigns (account-anchored outreach campaigns) with contact-count and status summary. Call this first if you don\'t already have a campaign_id.', params: {} },
-  { name: 'get_sampaign_contacts', description: 'Full contact roster for one SAMpaign — enriched profile (title, seniority, LinkedIn), engagement status, and account-collision flag. Use this to personalize outreach emails.', params: { campaign_id: { type: 'string', required: true } } },
+  { name: 'get_sampaign_contacts', description: 'Full contact roster for one SAMpaign — enriched profile (title, seniority, LinkedIn), engagement status, and account-collision flag. Use this to personalize outreach emails. Call get_company_context too, before drafting any pitch copy, so you use the org\'s real product/ICP instead of asking the user what they sell.', params: { campaign_id: { type: 'string', required: true } } },
+  { name: 'get_company_context',   description: 'What this org actually sells: product names (from Admin → Products) and ICP definition (ideal use case, target industries/geographies/stakeholders, keywords, from Admin → ICP Definition). Call this BEFORE drafting any outreach, pitch, or personalized email copy — do not ask the user what they are pitching, this answers it.', params: {} },
 ];
 
 // ── Tool execution ────────────────────────────────────────────────────────────
@@ -145,6 +146,7 @@ export async function executeTool(accessToken, name, args = {}) {
     case 'send_email':            return edge(accessToken, 'send_email_via_provider', { to: args.to, subject: args.subject, body: args.body, cc: args.cc||null, account_name: args.account_name||null });
     case 'get_sampaigns':         return edge(accessToken, 'list_sampaigns', {});
     case 'get_sampaign_contacts': return edge(accessToken, 'list_sampaign_contacts', { campaign_id: args.campaign_id });
+    case 'get_company_context':  return edge(accessToken, 'get_company_context', {});
     default: throw new Error('Unknown tool: ' + name);
   }
 }
