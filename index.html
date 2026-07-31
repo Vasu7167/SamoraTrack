@@ -6640,7 +6640,12 @@ function showToast(msg) {
   if (!t) {
     t = document.createElement('div');
     t.id = 'samora-global-toast';
-    t.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surface);border:1px solid var(--gold);padding:10px 18px;border-radius:20px;font-size:13px;color:var(--text);z-index:9999;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;white-space:nowrap;font-family:var(--sans);box-shadow:0 4px 20px rgba(0,0,0,0.15)';
+    // z-index:100000 — one above the highest modal/overlay z-index anywhere
+    // in the app (99999, used by several full-screen overlays including the
+    // SAMpaign detail view). Toasts fired while a modal is open must always
+    // render on top of it, never behind — that was the bug: toast sat at
+    // 9999, well under 99999, so it was invisible any time a modal was open.
+    t.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surface);border:1px solid var(--gold);padding:10px 18px;border-radius:20px;font-size:13px;color:var(--text);z-index:100000;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;white-space:nowrap;font-family:var(--sans);box-shadow:0 4px 20px rgba(0,0,0,0.15)';
     document.body.appendChild(t);
   }
   t.textContent = msg;
