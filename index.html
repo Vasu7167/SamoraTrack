@@ -9679,6 +9679,18 @@ async function _loadSampaignContactsInto(campaignId) {
 // upload — all unchanged, just relocated). Same bottom-sheet modal
 // convention as openSampaignContactInsight (spc-insight-modal) for visual
 // consistency with the rest of the app.
+// True only when the signed-in user owns this campaign. Mutating actions
+// (sync, upload, scout, enrich, promote) are all owner-only on the backend;
+// managers get read visibility. Compares on email because list_sampaigns
+// returns owner_email, not owner_user_id.
+function _isSampaignOwner(c) {
+  if (!c) return false;
+  var me = ((typeof currentUser !== 'undefined' && currentUser && currentUser.email) || '').toLowerCase();
+  if (!me) return false;
+  if (!c.owner_email) return true;   // single-owner view, nothing to contradict
+  return String(c.owner_email).toLowerCase() === me;
+}
+
 async function openSampaignDetail(campaignId) {
   document.getElementById('sampaign-detail-overlay')?.remove();
   // Fresh overlay starts unfiltered — a filter left over from the last
@@ -9696,7 +9708,14 @@ async function openSampaignDetail(campaignId) {
         '<div style="font-size:11px;color:var(--text3);margin-top:3px">'+(s.total||0)+' contact'+((s.total||0)!==1?'s':'')+(c.owner_email?' · '+esc(c.owner_email.split('@')[0]):'')+(c.campaign_goal?' · '+esc(c.campaign_goal):'')+'</div>' +
       '</div>' +
       '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0">' +
-        '<button id="sampaignSyncBtn_'+esc(campaignId)+'" onclick="syncSampaignCampaign(\''+esc(campaignId)+'\')" style="font-size:10px;font-weight:600;color:var(--gold);padding:6px 11px;border-radius:8px;background:rgba(160,117,42,0.1);border:1px solid rgba(160,117,42,0.25);cursor:pointer;white-space:nowrap">🔄 Sync inbox</button>' +
+        // Syncing reads the OWNER's mailbox using the owner's own Gmail
+        // connection. A manager's session has no access to a report's
+        // mailbox (by design, and correctly so), so the button would only
+        // ever fail for them. Show who it belongs to instead of a control
+        // that cannot work.
+        (_isSampaignOwner(c)
+          ? '<button id="sampaignSyncBtn_'+esc(campaignId)+'" onclick="syncSampaignCampaign(\''+esc(campaignId)+'\')" style="font-size:10px;font-weight:600;color:var(--gold);padding:6px 11px;border-radius:8px;background:rgba(160,117,42,0.1);border:1px solid rgba(160,117,42,0.25);cursor:pointer;white-space:nowrap">🔄 Sync inbox</button>'
+          : '<span style="font-size:9px;color:var(--text3);text-align:right;line-height:1.35;max-width:150px">Syncs from '+esc((c.owner_email||'the owner').split('@')[0])+'’s inbox, hourly</span>') +
         '<button onclick="document.getElementById(\'sampaign-detail-overlay\').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text3);padding:0">✕</button>' +
       '</div>' +
     '</div>' +
