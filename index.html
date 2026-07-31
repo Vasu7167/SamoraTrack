@@ -9478,19 +9478,30 @@ async function loadSampaignCampaigns() {
       var s = c.stats || {};
       var badge = function(n, label, color) { return n ? '<span style="font-size:9px;font-weight:600;color:'+color+';margin-right:8px">'+n+' '+label+'</span>' : ''; };
       var isOwner = c.owner_user_id === currentUser.id || !c.owner_user_id;
+      // Follow-up schedule tags — "Follow-up 1 · 3 · due Aug 4" etc. One chip
+      // per stage that currently has contacts waiting on it, soonest date
+      // per stage (from list_sampaigns' new followup_schedule field). Kept
+      // compact and single-line on purpose — the full breakdown lives one
+      // click away in the detail view, not duplicated here.
+      var schedChips = (c.followup_schedule || []).map(function(fs) {
+        var d2 = new Date(fs.next_due);
+        var dLabel = isNaN(d2.getTime()) ? '' : d2.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+        var overdue = !isNaN(d2.getTime()) && d2 < new Date(new Date().toDateString());
+        return '<span style="font-size:9px;font-weight:600;color:'+(overdue?'var(--coral)':'var(--gold)')+';background:'+(overdue?'rgba(196,90,74,0.1)':'rgba(160,117,42,0.1)')+';border:1px solid '+(overdue?'rgba(196,90,74,0.25)':'rgba(160,117,42,0.25)')+';border-radius:6px;padding:2px 7px;margin-right:5px;white-space:nowrap;display:inline-block;margin-top:4px">📨 F'+fs.stage+' · '+fs.count+' · '+(overdue?'overdue':'due')+' '+dLabel+'</span>';
+      }).join('');
       return '<div style="background:var(--surface2);border-radius:10px;padding:10px 12px;margin-bottom:8px">' +
-        '<div onclick="toggleSampaignCampaign(\''+esc(c.id)+'\')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px">' +
+        '<div onclick="openSampaignDetail(\''+esc(c.id)+'\')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px">' +
           '<div style="min-width:0"><div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(c.name)+'</div>' +
           '<div style="font-size:10px;color:var(--text3);margin-top:2px">'+(s.total||0)+' contact'+((s.total||0)!==1?'s':'')+(c.owner_email?' · '+esc(c.owner_email.split('@')[0]):'')+'</div></div>' +
           '<div style="display:flex;align-items:center;gap:2px;flex-shrink:0">' +
             badge(s.replied,'replied','var(--green)') + badge(s.ooo,'ooo','var(--amber)') + badge(s.no_response,'no-resp','var(--text3)') + badge(s.dead,'dead','var(--coral)') +
             (isOwner ? '<button onclick="event.stopPropagation();toggleEditSampaignForm(\''+esc(c.id)+'\')" title="Edit SAMpaign" style="background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;padding:3px 5px">✎</button>' : '') +
             (isOwner ? '<button onclick="event.stopPropagation();deleteSampaignCampaign(\''+esc(c.id)+'\',\''+esc(c.name)+'\')" title="Delete SAMpaign" style="background:none;border:none;color:var(--coral);font-size:13px;cursor:pointer;padding:3px 5px">🗑</button>' : '') +
-            '<span style="font-size:11px;color:var(--gold)">▾</span>' +
+            '<span title="Open SAMpaign detail" style="font-size:12px;color:var(--gold)">⤢</span>' +
           '</div>' +
         '</div>' +
+        (schedChips ? '<div style="margin-top:2px">'+schedChips+'</div>' : '') +
         '<div id="sampaignEdit_'+esc(c.id)+'" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border2)"></div>' +
-        '<div id="sampaignContacts_'+esc(c.id)+'" style="display:none;margin-top:10px"></div>' +
       '</div>';
     }).join('');
   } catch(e) { el.innerHTML = '<div style="font-size:11px;color:var(--coral)">Error: '+esc(e.message)+'</div>'; }
@@ -9564,12 +9575,15 @@ async function deleteSampaignCampaign(campaignId, name) {
   } catch(e) { showToast('Error: '+e.message); }
 }
 
-async function toggleSampaignCampaign(campaignId) {
+// Fetches + caches + renders one campaign's contact roster into whatever
+// div#sampaignContacts_{campaignId} currently exists in the DOM — agnostic
+// to where that div lives (inline in a card, or inside the detail overlay
+// below), same "just target the id" pattern _renderSampaignContacts already
+// uses. Shared by openSampaignDetail (initial load) and anywhere else that
+// needs a post-mutation refresh (CSV upload, scout, enrich).
+async function _loadSampaignContactsInto(campaignId) {
   var box = document.getElementById('sampaignContacts_'+campaignId);
   if (!box) return;
-  var opening = box.style.display === 'none';
-  box.style.display = opening ? 'block' : 'none';
-  if (!opening) return;
   box.innerHTML = '<div style="font-size:11px;color:var(--text3)">Loading contacts…</div>';
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body: JSON.stringify({ action:'list_sampaign_contacts', campaign_id: campaignId }) });
@@ -9578,6 +9592,74 @@ async function toggleSampaignCampaign(campaignId) {
     window._sampaignContactsCache[campaignId] = d.contacts || [];
     _renderSampaignContacts(campaignId);
   } catch(e) { box.innerHTML = '<div style="font-size:11px;color:var(--coral)">Error: '+esc(e.message)+'</div>'; }
+}
+
+// ── SAMpaign detail — full-screen overlay ───────────────────────────────────
+// Clicking a campaign card used to expand its contact roster inline, which
+// got cluttered fast on a list of several campaigns each with dozens of
+// contacts. Now it opens a single dedicated overlay instead: campaign
+// header, this campaign's own performance analytics (scoped
+// get_manual_sampaign_stats call, same renderer used for the org-wide
+// SAMpaign Analytics view), the follow-up schedule in full, then the
+// existing contact roster (Active/Prospective tabs, scout, enrich, CSV
+// upload — all unchanged, just relocated). Same bottom-sheet modal
+// convention as openSampaignContactInsight (spc-insight-modal) for visual
+// consistency with the rest of the app.
+async function openSampaignDetail(campaignId) {
+  document.getElementById('sampaign-detail-overlay')?.remove();
+  var c = (window._sampaignCampaignsCache || {})[campaignId] || {};
+  var s = c.stats || {};
+  var modal = document.createElement('div');
+  modal.id = 'sampaign-detail-overlay';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(6px);z-index:99999;display:flex;align-items:flex-end;justify-content:center';
+  modal.innerHTML = '<div style="background:var(--bg);border-radius:18px 18px 0 0;width:100%;max-width:700px;max-height:92vh;overflow-y:auto;padding:22px;box-shadow:0 -10px 50px rgba(0,0,0,0.35)" onclick="event.stopPropagation()">' +
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">' +
+      '<div style="min-width:0">' +
+        '<div style="font-size:17px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:7px">🧭 '+esc(c.name||'SAMpaign')+'</div>' +
+        '<div style="font-size:11px;color:var(--text3);margin-top:3px">'+(s.total||0)+' contact'+((s.total||0)!==1?'s':'')+(c.owner_email?' · '+esc(c.owner_email.split('@')[0]):'')+(c.campaign_goal?' · '+esc(c.campaign_goal):'')+'</div>' +
+      '</div>' +
+      '<button onclick="document.getElementById(\'sampaign-detail-overlay\').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text3);flex-shrink:0;padding:0 0 0 10px">✕</button>' +
+    '</div>' +
+    '<div id="sampaignDetailPerf">'+
+      '<div style="font-size:11px;color:var(--text3);padding:10px 0">Loading performance…</div>'+
+    '</div>' +
+    '<div id="sampaignDetailSchedule" style="margin-bottom:6px"></div>' +
+    '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 8px">👥 Contacts</div>' +
+    '<div id="sampaignContacts_'+esc(campaignId)+'"><div style="font-size:11px;color:var(--text3)">Loading contacts…</div></div>' +
+  '</div>';
+  modal.addEventListener('click', function() { modal.remove(); });
+  document.body.appendChild(modal);
+
+  _loadSampaignContactsInto(campaignId);
+
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body: JSON.stringify({ action:'get_manual_sampaign_stats', campaign_id: campaignId }) });
+    var d = await r.json();
+    var perfBox = document.getElementById('sampaignDetailPerf');
+    if (perfBox) {
+      if (d.ok && d.org_summary && d.org_summary.total_prospects > 0) {
+        perfBox.innerHTML = _renderSampaignAnalyticsBlock(d, { title: '📊 Performance' });
+      } else if (!d.ok) {
+        perfBox.innerHTML = '<div style="font-size:11px;color:var(--coral)">⚠ '+esc(d.error||'Could not load performance')+'</div>';
+      } else {
+        perfBox.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:6px 0">No activity yet — status changes here will start showing up as performance data.</div>';
+      }
+    }
+    var schedBox = document.getElementById('sampaignDetailSchedule');
+    if (schedBox && c.followup_schedule && c.followup_schedule.length) {
+      var fmt = function(iso) { var dt = new Date(iso); return isNaN(dt.getTime()) ? '' : dt.toLocaleDateString('en-GB', { day:'numeric', month:'short' }); };
+      schedBox.innerHTML = '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:8px 0 6px">📨 Follow-up schedule</div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
+        c.followup_schedule.map(function(fs) {
+          var overdue = new Date(fs.next_due) < new Date(new Date().toDateString());
+          return '<span style="font-size:11px;font-weight:600;color:'+(overdue?'var(--coral)':'var(--gold)')+';background:'+(overdue?'rgba(196,90,74,0.1)':'rgba(160,117,42,0.1)')+';border:1px solid '+(overdue?'rgba(196,90,74,0.25)':'rgba(160,117,42,0.25)')+';border-radius:8px;padding:5px 10px">Follow-up '+fs.stage+' — '+fs.count+' contact'+(fs.count!==1?'s':'')+', '+(overdue?'overdue since':'scheduled')+' '+fmt(fs.next_due)+'</span>';
+        }).join('') +
+        '</div>';
+    }
+  } catch(e) {
+    var perfBox2 = document.getElementById('sampaignDetailPerf');
+    if (perfBox2) perfBox2.innerHTML = '<div style="font-size:11px;color:var(--coral)">Error: '+esc(e.message)+'</div>';
+  }
 }
 
 // Active/Prospective split mirrors the account Stakeholders tab's existing
@@ -9858,8 +9940,7 @@ async function enrichSampaignContacts(campaignId) {
 async function handleSampaignCsv(campaignId, file) {
   if (!file) return;
   await _uploadSampaignCsvFile(campaignId, file);
-  await toggleSampaignCampaign(campaignId); // close
-  await toggleSampaignCampaign(campaignId); // reopen refreshed
+  await _loadSampaignContactsInto(campaignId);
   loadSampaignCampaigns();
 }
 
