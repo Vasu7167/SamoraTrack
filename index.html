@@ -5139,6 +5139,14 @@ async function autoCompleteTasks(silent) {
 setInterval(function(){ try { if (typeof currentUser !== 'undefined' && currentUser && currentUser.token) autoCompleteTasks(true); } catch(e) {} }, 3600000);
 setTimeout(function(){ try { if (typeof currentUser !== 'undefined' && currentUser && currentUser.token) autoCompleteTasks(true); } catch(e) {} }, 120000);
 
+// SAMpaign inbox sync rides the exact same cadence as auto-complete: both are
+// "scan my own mailbox for evidence and update state accordingly", both run
+// under the signed-in user's own token, both stay silent when nothing changed.
+// Offset by 30s from the auto-complete pass so two Gmail-heavy scans don't
+// fire simultaneously on load.
+setInterval(function(){ try { syncSampaignsQuiet(); } catch(e) {} }, 3600000);
+setTimeout(function(){ try { syncSampaignsQuiet(); } catch(e) {} }, 150000);
+
 async function runLocalIntelligence(repId, resultElId) {
   const isManager = !!repId;
   const out = document.getElementById(resultElId || 'samLocalIntelOutput');
@@ -9623,7 +9631,10 @@ async function openSampaignDetail(campaignId) {
         '<div style="font-size:17px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:7px">🧭 '+esc(c.name||'SAMpaign')+'</div>' +
         '<div style="font-size:11px;color:var(--text3);margin-top:3px">'+(s.total||0)+' contact'+((s.total||0)!==1?'s':'')+(c.owner_email?' · '+esc(c.owner_email.split('@')[0]):'')+(c.campaign_goal?' · '+esc(c.campaign_goal):'')+'</div>' +
       '</div>' +
-      '<button onclick="document.getElementById(\'sampaign-detail-overlay\').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text3);flex-shrink:0;padding:0 0 0 10px">✕</button>' +
+      '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0">' +
+        '<button id="sampaignSyncBtn_'+esc(campaignId)+'" onclick="syncSampaignCampaign(\''+esc(campaignId)+'\')" style="font-size:10px;font-weight:600;color:var(--gold);padding:6px 11px;border-radius:8px;background:rgba(160,117,42,0.1);border:1px solid rgba(160,117,42,0.25);cursor:pointer;white-space:nowrap">🔄 Sync inbox</button>' +
+        '<button onclick="document.getElementById(\'sampaign-detail-overlay\').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text3);padding:0">✕</button>' +
+      '</div>' +
     '</div>' +
     '<div id="sampaignDetailPerf">'+
       '<div style="font-size:11px;color:var(--text3);padding:10px 0">Loading performance…</div>'+
@@ -9636,7 +9647,12 @@ async function openSampaignDetail(campaignId) {
   document.body.appendChild(modal);
 
   _loadSampaignContactsInto(campaignId);
+  _loadSampaignDetailPerf(campaignId, c);
+}
 
+// Shared by openSampaignDetail (initial load) and syncSampaignCampaign (post-sync
+// refresh) so both paths render performance + follow-up schedule identically.
+async function _loadSampaignDetailPerf(campaignId, c) {
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body: JSON.stringify({ action:'get_manual_sampaign_stats', campaign_id: campaignId }) });
     var d = await r.json();
@@ -9651,7 +9667,7 @@ async function openSampaignDetail(campaignId) {
       }
     }
     var schedBox = document.getElementById('sampaignDetailSchedule');
-    if (schedBox && c.followup_schedule && c.followup_schedule.length) {
+    if (schedBox && c && c.followup_schedule && c.followup_schedule.length) {
       var fmt = function(iso) { var dt = new Date(iso); return isNaN(dt.getTime()) ? '' : dt.toLocaleDateString('en-GB', { day:'numeric', month:'short' }); };
       schedBox.innerHTML = '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:8px 0 6px">📨 Follow-up schedule</div>' +
         '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
@@ -9665,6 +9681,79 @@ async function openSampaignDetail(campaignId) {
     var perfBox2 = document.getElementById('sampaignDetailPerf');
     if (perfBox2) perfBox2.innerHTML = '<div style="font-size:11px;color:var(--coral)">Error: '+esc(e.message)+'</div>';
   }
+}
+
+// Turns a sync response into "3 sent, 1 replied, 2 OOO" style text.
+function _sampaignSyncSummary(d) {
+  var parts = [];
+  if (d.sent_detected) parts.push(d.sent_detected + ' sent');
+  if (d.replied_detected) parts.push(d.replied_detected + ' replied');
+  if (d.ooo_auto_detected) parts.push(d.ooo_auto_detected + ' OOO');
+  if (d.bounced_detected) parts.push(d.bounced_detected + ' bounced');
+  return parts.join(', ');
+}
+
+// Manual inbox sync for ONE campaign — scans the rep's own Gmail for this
+// campaign's contacts (sent/replied/OOO/bounced) and re-buckets them right
+// now, rather than waiting for the hourly pass. Runs under the rep's own
+// login against only their own mailbox (see sync_sampaigns_patch.ts).
+async function syncSampaignCampaign(campaignId) {
+  var btn = document.getElementById('sampaignSyncBtn_'+campaignId);
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; btn.textContent = '🔄 Syncing…'; }
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body: JSON.stringify({ action:'sync_sampaigns', campaign_id: campaignId }) });
+    var d = await r.json();
+    if (!d.ok) {
+      showToast('⚠ ' + (d.error || 'Sync failed'));
+    } else {
+      var summary = _sampaignSyncSummary(d);
+      showToast(summary ? '✓ Synced: ' + summary : '✓ ' + (d.note || 'Inbox scanned, nothing new.'));
+      var c = (window._sampaignCampaignsCache || {})[campaignId] || {};
+      _loadSampaignDetailPerf(campaignId, c);
+      _loadSampaignContactsInto(campaignId);
+    }
+  } catch(e) {
+    showToast('⚠ Sync error: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; btn.textContent = '🔄 Sync inbox'; }
+  }
+}
+
+// Background sync across ALL of this rep's active SAMpaigns. Same idea as
+// autoCompleteTasks(silent): runs quietly on a timer, reads only the signed-in
+// user's own mailbox, and stays silent when nothing changed so it never nags.
+// Only speaks up (a toast) when it actually re-bucketed something, and only
+// refreshes visible UI if the relevant panel happens to be open.
+var _sampaignSyncBusy = false;
+async function syncSampaignsQuiet() {
+  if (_sampaignSyncBusy) return;
+  if (typeof currentUser === 'undefined' || !currentUser || !currentUser.token) return;
+  _sampaignSyncBusy = true;
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body: JSON.stringify({ action:'sync_sampaigns' }) });
+    var d = await r.json();
+    // No Gmail connected / no campaigns yet are normal states, not errors
+    // worth interrupting anyone over — stay silent.
+    if (!d.ok) return;
+    var summary = _sampaignSyncSummary(d);
+    if (!summary) return;
+    showToast('📨 SAMpaign sync: ' + summary);
+    // Refresh whatever's on screen, if anything.
+    var overlay = document.getElementById('sampaign-detail-overlay');
+    if (overlay) {
+      var openId = (overlay.querySelector('[id^="sampaignContacts_"]') || {}).id || '';
+      var cid = openId.replace('sampaignContacts_', '');
+      if (cid) {
+        var c = (window._sampaignCampaignsCache || {})[cid] || {};
+        _loadSampaignDetailPerf(cid, c);
+        _loadSampaignContactsInto(cid);
+      }
+    }
+    if (typeof loadSampaignCampaigns === 'function' && document.getElementById('sampaignCampaignsList')) {
+      try { loadSampaignCampaigns(); } catch(e) {}
+    }
+  } catch(e) { /* non-fatal, try again next tick */ }
+  finally { _sampaignSyncBusy = false; }
 }
 
 // Active/Prospective split mirrors the account Stakeholders tab's existing
