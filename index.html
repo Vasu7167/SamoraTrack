@@ -3876,6 +3876,43 @@ var SIGNAL_TYPE_CONFIG = {
 // response shape, including `benchmarks`, deliberately, so this one function
 // serves both). opts.title is the section label so the two sources render as
 // clearly distinguishable blocks rather than looking like one merged number.
+// Active status filter for the campaign contact roster, driven by clicking a
+// performance tile. Global (not per-campaign) for the same reason
+// _sampaignContactTab is: only one campaign overlay is ever open at a time.
+window._sampaignStatusFilter = null;
+
+var _SAMPAIGN_STATUS_LABELS = {
+  not_contacted: 'Not contacted', sent: 'Sent', opened: 'Opened',
+  replied: 'Replied', ooo: 'OOO', no_response: 'No reply',
+  dead: 'Dead', opted_out: 'Opted out'
+};
+function _sampaignStatusLabel(k) { return _SAMPAIGN_STATUS_LABELS[k] || k; }
+
+// Clicking a performance tile filters the roster below to that status.
+// Passing null clears it. Re-clicking the active tile also clears, so the
+// tiles toggle rather than trapping you in a filtered view.
+function setSampaignStatusFilter(campaignId, status) {
+  window._sampaignStatusFilter = (window._sampaignStatusFilter === status) ? null : status;
+  // A status filter and the Active/Prospective tabs would otherwise fight
+  // each other (e.g. filter=sent while the Prospective tab is showing only
+  // not_contacted would render an empty list for no visible reason). The
+  // filter wins, and the tabs are hidden while one is active.
+  var c = (window._sampaignCampaignsCache || {})[campaignId] || {};
+  _loadSampaignDetailPerf(campaignId, c);
+  _renderSampaignContacts(campaignId);
+  var box = document.getElementById('sampaignContacts_'+campaignId);
+  if (box && window._sampaignStatusFilter) box.scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
+
+// Same LinkedIn treatment the contact roster uses: solid when enrichment
+// found a real profile URL, faint with a people-search fallback when it
+// hasn't. Shared so the two places can't drift apart.
+function _sampaignLinkedInIcon(url, name) {
+  var href = url ? url : ('https://www.linkedin.com/search/results/people/?keywords=' + encodeURIComponent(name || ''));
+  var op = url ? '1' : '0.3';
+  return '<a href="'+esc(href)+'" target="_blank" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;color:#0A66C2;opacity:'+op+';text-decoration:none;flex-shrink:0" title="'+(url?'Open LinkedIn profile':'Search LinkedIn (not enriched yet)')+'"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></a>';
+}
+
 function _renderSampaignAnalyticsBlock(d, opts) {
   opts = opts || {};
   var s = d.org_summary;
@@ -3894,15 +3931,20 @@ function _renderSampaignAnalyticsBlock(d, opts) {
   // Base 4 tiles always present; OOO/No-reply tiles only appear when the
   // source actually returns those buckets (today: the manual path) — an
   // honest per-source grid rather than always-5-columns with blanks.
+  // `filter` is the roster status each tile drills into. null = show everything
+  // (Prospects is the "all contacts" tile, so it doubles as clear-filter).
+  // Tiles are only interactive when opts.campaignId is set, i.e. when there's
+  // actually a contact roster on screen to filter — the shared tool-synced
+  // analytics view has no roster, so there it stays a plain readout.
   var tiles = [
-    { label: 'Prospects', val: s.total_prospects },
-    { label: 'Sent', val: s.sent },
-    { label: 'Opened', val: s.opened, rate: s.open_rate, good: bm.open_rate.good, avg: bm.open_rate.avg },
-    { label: 'Replied', val: s.replied, rate: s.reply_rate, good: bm.reply_rate.good, avg: bm.reply_rate.avg }
+    { label: 'Prospects', val: s.total_prospects, filter: null },
+    { label: 'Sent', val: s.sent, filter: 'sent' },
+    { label: 'Opened', val: s.opened, rate: s.open_rate, good: bm.open_rate.good, avg: bm.open_rate.avg, filter: 'opened' },
+    { label: 'Replied', val: s.replied, rate: s.reply_rate, good: bm.reply_rate.good, avg: bm.reply_rate.avg, filter: 'replied' }
   ];
-  if (s.ooo !== undefined) tiles.push({ label: 'OOO', val: s.ooo, color: 'var(--amber)' });
-  if (s.no_response !== undefined) tiles.push({ label: 'No reply', val: s.no_response, color: 'var(--text3)' });
-  tiles.push({ label: 'Dead', val: s.bounced||0, color: 'var(--coral)', sub: s.sent>0?Math.round((s.bounced||0)/s.sent*100)+'% of sent':'no longer working' });
+  if (s.ooo !== undefined) tiles.push({ label: 'OOO', val: s.ooo, color: 'var(--amber)', filter: 'ooo' });
+  if (s.no_response !== undefined) tiles.push({ label: 'No reply', val: s.no_response, color: 'var(--text3)', filter: 'no_response' });
+  tiles.push({ label: 'Dead', val: s.bounced||0, color: 'var(--coral)', sub: s.sent>0?Math.round((s.bounced||0)/s.sent*100)+'% of sent':'no longer working', filter: 'dead' });
 
   html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px">' +
     '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">' +
@@ -3913,13 +3955,29 @@ function _renderSampaignAnalyticsBlock(d, opts) {
       tiles.map(function(t) {
         var color = t.color || (t.rate !== undefined ? rateColor(t.rate, t.good, t.avg) : 'var(--text)');
         var sub = t.sub !== undefined ? t.sub : (t.rate !== undefined ? t.rate+'% · '+rateLabel(t.rate,t.good,t.avg) : '');
-        return '<div style="background:var(--surface);border-radius:8px;padding:10px;text-align:center">' +
+        var clickable = !!opts.campaignId;
+        var isActive = clickable && (window._sampaignStatusFilter || null) === (t.filter || null);
+        // An empty bucket has nothing to drill into, so it stays inert rather
+        // than offering a click that would land on an empty list.
+        var hasRows = t.val > 0 || t.filter === null;
+        var interactive = clickable && hasRows;
+        return '<div' +
+          (interactive ? ' onclick="setSampaignStatusFilter(\''+esc(opts.campaignId)+'\','+(t.filter?'\''+t.filter+'\'':'null')+')"' : '') +
+          ' style="background:'+(isActive?'var(--surface2)':'var(--surface)')+';border-radius:8px;padding:10px;text-align:center;' +
+            'border:1px solid '+(isActive?color:'transparent')+';' +
+            (interactive?'cursor:pointer;':'') +
+            (clickable && !hasRows?'opacity:0.55;':'') + '"' +
+          (interactive ? ' title="Show only '+esc(t.label)+'"' : '') + '>' +
           '<div style="font-size:20px;font-weight:700;color:'+color+'">'+t.val+'</div>' +
           '<div style="font-size:11px;color:var(--text3)">'+t.label+'</div>' +
           (sub?'<div style="font-size:9px;color:'+color+';margin-top:2px">'+sub+'</div>':'') +
         '</div>';
       }).join('') +
     '</div>' +
+    (opts.campaignId && window._sampaignStatusFilter
+      ? '<div style="margin-top:8px;font-size:10px;color:var(--text3)">Showing <strong style="color:var(--text)">'+esc(_sampaignStatusLabel(window._sampaignStatusFilter))+'</strong> only in the contact list below · ' +
+        '<span onclick="setSampaignStatusFilter(\''+esc(opts.campaignId)+'\',null)" style="color:var(--gold);cursor:pointer;text-decoration:underline dotted">show all</span></div>'
+      : '') +
     // Benchmark bar
     '<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">' +
       '<div style="font-size:10px;color:var(--text3);margin-bottom:6px">'+bm.open_rate.label+' · '+bm.reply_rate.label+'</div>' +
@@ -3945,8 +4003,11 @@ function _renderSampaignAnalyticsBlock(d, opts) {
       d.hot_signals.map(function(h) {
         return '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-top:1px solid rgba(74,140,92,0.15)">' +
           '<div>' +
-            '<div style="font-size:12px;font-weight:600;color:var(--text)">'+(h.prospect_name||h.prospect_email||'Unknown')+'</div>' +
-            '<div style="font-size:11px;color:var(--text3)">'+(h.prospect_company||'')+(h.account_name&&h.account_name!==h.prospect_company?' · matched: <strong>'+esc(h.account_name)+'</strong>':'')+'</div>' +
+            '<div style="font-size:12px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:5px">' +
+              (h.prospect_name||h.prospect_email||'Unknown') +
+              _sampaignLinkedInIcon(h.linkedin_url, h.prospect_name || h.prospect_email) +
+            '</div>' +
+            '<div style="font-size:11px;color:var(--text3)">'+(h.prospect_title?esc(h.prospect_title)+' · ':'')+(h.prospect_company||'')+(h.account_name&&h.account_name!==h.prospect_company?' · matched: <strong>'+esc(h.account_name)+'</strong>':'')+'</div>' +
             '<div style="font-size:10px;color:var(--text3);margin-top:1px">📨 '+esc(h.campaign_name||'')+(h.opens?' · '+h.opens+' opens':'')+'</div>' +
           '</div>' +
           '<div style="text-align:right;flex-shrink:0">' +
@@ -9620,6 +9681,9 @@ async function _loadSampaignContactsInto(campaignId) {
 // consistency with the rest of the app.
 async function openSampaignDetail(campaignId) {
   document.getElementById('sampaign-detail-overlay')?.remove();
+  // Fresh overlay starts unfiltered — a filter left over from the last
+  // campaign you looked at would silently hide most of this one's roster.
+  window._sampaignStatusFilter = null;
   var c = (window._sampaignCampaignsCache || {})[campaignId] || {};
   var s = c.stats || {};
   var modal = document.createElement('div');
@@ -9659,7 +9723,7 @@ async function _loadSampaignDetailPerf(campaignId, c) {
     var perfBox = document.getElementById('sampaignDetailPerf');
     if (perfBox) {
       if (d.ok && d.org_summary && d.org_summary.total_prospects > 0) {
-        perfBox.innerHTML = _renderSampaignAnalyticsBlock(d, { title: '📊 Performance' });
+        perfBox.innerHTML = _renderSampaignAnalyticsBlock(d, { title: '📊 Performance', campaignId: campaignId });
       } else if (!d.ok) {
         perfBox.innerHTML = '<div style="font-size:11px;color:var(--coral)">⚠ '+esc(d.error||'Could not load performance')+'</div>';
       } else {
@@ -9772,7 +9836,22 @@ function _renderSampaignContacts(campaignId) {
   var all = window._sampaignContactsCache[campaignId] || [];
   var active = all.filter(function(c){ return c.status !== 'not_contacted'; });
   var prospective = all.filter(function(c){ return c.status === 'not_contacted'; });
-  var contacts = _sampaignContactTab === 'prospective' ? prospective : active;
+  // Tile-driven status filter wins over the tab split when one is set.
+  // Note "Sent" on the tiles counts everything that left the mailbox
+  // (sent/opened/replied/ooo/no_response/dead), matching how the backend
+  // computes it, so clicking that tile must not narrow to status==='sent'
+  // alone or the count on the tile wouldn't match the list underneath.
+  var statusFilter = window._sampaignStatusFilter || null;
+  var contacts;
+  if (statusFilter === 'sent') {
+    contacts = all.filter(function(c){ return c.status !== 'not_contacted'; });
+  } else if (statusFilter === 'opened') {
+    contacts = all.filter(function(c){ return c.status === 'opened' || c.status === 'replied'; });
+  } else if (statusFilter) {
+    contacts = all.filter(function(c){ return c.status === statusFilter; });
+  } else {
+    contacts = _sampaignContactTab === 'prospective' ? prospective : active;
+  }
   var STATUS_META = {
     not_contacted: { label:'Not contacted', color:'var(--text3)' },
     sent:          { label:'Sent',          color:'var(--blue)' },
@@ -9793,9 +9872,22 @@ function _renderSampaignContacts(campaignId) {
     var on = _sampaignContactTab === key;
     return '<span onclick="setSampaignContactTab(\''+esc(campaignId)+'\',\''+key+'\')" style="padding:5px 10px;cursor:pointer;font-size:11px;font-weight:600;border-bottom:2px solid '+(on?'var(--gold)':'transparent')+';color:'+(on?'var(--text)':'var(--text3)')+'">'+label+' <span style="font-size:9px;color:var(--text3)">'+n+'</span></span>';
   };
-  var html = '<div style="display:flex;gap:2px;border-bottom:1px solid var(--border2);margin-bottom:8px">' +
-    tab('active','Active',active.length) + tab('prospective','Prospective',prospective.length) +
-  '</div>';
+  // A tile filter takes precedence over the Active/Prospective tabs: showing
+  // both at once would let you pick contradictory views (filter=Sent while on
+  // the Prospective tab renders an empty list for no visible reason). While a
+  // filter is on, the tabs are replaced by a single clearable filter chip.
+  var html;
+  if (statusFilter) {
+    html = '<div style="display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border2);margin-bottom:8px;padding-bottom:6px">' +
+      '<span style="font-size:11px;font-weight:600;color:var(--text)">'+esc(_sampaignStatusLabel(statusFilter))+'</span>' +
+      '<span style="font-size:9px;color:var(--text3)">'+contacts.length+' contact'+(contacts.length!==1?'s':'')+'</span>' +
+      '<span onclick="setSampaignStatusFilter(\''+esc(campaignId)+'\',null)" style="margin-left:auto;font-size:10px;color:var(--gold);cursor:pointer;text-decoration:underline dotted">✕ clear filter</span>' +
+    '</div>';
+  } else {
+    html = '<div style="display:flex;gap:2px;border-bottom:1px solid var(--border2);margin-bottom:8px">' +
+      tab('active','Active',active.length) + tab('prospective','Prospective',prospective.length) +
+    '</div>';
+  }
 
   html += '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">' +
     '<label style="font-size:10px;color:var(--gold);padding:5px 10px;border-radius:8px;background:rgba(160,117,42,0.1);border:1px solid rgba(160,117,42,0.25);cursor:pointer">⇪ Upload CSV<input type="file" accept=".csv,text/csv" style="display:none" onchange="handleSampaignCsv(\''+esc(campaignId)+'\',this.files[0]);this.value=\'\'"/></label>' +
@@ -9805,7 +9897,7 @@ function _renderSampaignContacts(campaignId) {
     '<span style="font-size:9px;color:var(--text3)">Columns: name, email, phone, company, title (header names flexible)</span>' +
     '</div>';
   if (!contacts.length) {
-    html += '<div style="font-size:11px;color:var(--text3)">' + (_sampaignContactTab==='prospective' ? 'No prospects yet — upload a CSV or scout more contacts above.' : 'No active contacts yet — mark someone sent/opened/replied to move them here.') + '</div>';
+    html += '<div style="font-size:11px;color:var(--text3)">' + (statusFilter ? 'No contacts with status "'+esc(_sampaignStatusLabel(statusFilter))+'" in this SAMpaign.' : (_sampaignContactTab==='prospective' ? 'No prospects yet — upload a CSV or scout more contacts above.' : 'No active contacts yet — mark someone sent/opened/replied to move them here.')) + '</div>';
   } else {
     html += contacts.map(function(c) {
       var meta = STATUS_META[c.status] || STATUS_META.not_contacted;
