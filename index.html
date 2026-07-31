@@ -9456,6 +9456,184 @@ window._sampaignContactsCache = {};
 // is — self/team/org via canSeeTeam/canSeeCrossTeam/canSeeFullOrg), so no
 // backend change was needed for "manager should see the team's analytics
 // too" — this was purely a frontend wiring gap.
+// ═══════════════════════════════════════════════════════════════════════════
+// Follow-up scheduler — pick actual calendar dates, with weekends in red.
+//
+// Replaces the old "3,7,14 days after send" box. Day offsets meant you had to
+// do date arithmetic in your head at creation time, so follow-up 2 would
+// quietly land on a Saturday. Here you see the calendar while choosing, and
+// weekends are marked, so a weekend date is always a deliberate choice.
+//
+// State is keyed by scope: 'new' for the create form, or the campaignId for
+// an edit form, so both can be open at once without colliding.
+// ═══════════════════════════════════════════════════════════════════════════
+window._fupState = {};        // scope -> ['2026-08-05', ...]
+window._fupCalOpen = null;    // 'scope:index' of the open calendar, if any
+window._fupCalMonth = {};     // 'scope:index' -> {y, m} being browsed
+
+var _FUP_MAX = 5;
+var _FUP_DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+var _FUP_MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function _fupIsWeekend(key) { var d = parseDate(key); return d.getDay() === 0 || d.getDay() === 6; }
+function _fupPretty(key) {
+  var d = parseDate(key);
+  return _FUP_DOW[d.getDay()] + ' ' + d.getDate() + ' ' + _FUP_MON[d.getMonth()];
+}
+// Default suggestion for a newly added follow-up: a week after the previous
+// one (or a week out from today for the first), nudged off a weekend since an
+// unreviewed default landing on Saturday is the exact trap this replaces.
+function _fupSuggest(existing) {
+  var base = existing.length ? parseDate(existing[existing.length - 1]) : new Date();
+  var d = new Date(base.getFullYear(), base.getMonth(), base.getDate() + 7);
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+  return dateKey(d);
+}
+
+function _fupGet(scope) { return window._fupState[scope] || (window._fupState[scope] = []); }
+
+function _fupSetCount(scope, n) {
+  var cur = _fupGet(scope);
+  n = Math.max(0, Math.min(_FUP_MAX, parseInt(n, 10) || 0));
+  while (cur.length > n) cur.pop();
+  while (cur.length < n) cur.push(_fupSuggest(cur));
+  window._fupCalOpen = null;
+  _fupRender(scope);
+}
+function _fupAdd(scope) {
+  var cur = _fupGet(scope);
+  if (cur.length >= _FUP_MAX) { showToast('Up to ' + _FUP_MAX + ' follow-ups'); return; }
+  cur.push(_fupSuggest(cur));
+  _fupRender(scope);
+}
+function _fupRemove(scope, i) {
+  var cur = _fupGet(scope);
+  cur.splice(i, 1);
+  window._fupCalOpen = null;
+  _fupRender(scope);
+}
+function _fupToggleCal(scope, i) {
+  var key = scope + ':' + i;
+  window._fupCalOpen = (window._fupCalOpen === key) ? null : key;
+  if (window._fupCalOpen) {
+    var d = parseDate(_fupGet(scope)[i]);
+    window._fupCalMonth[key] = { y: d.getFullYear(), m: d.getMonth() };
+  }
+  _fupRender(scope);
+}
+function _fupNavMonth(scope, i, delta) {
+  var key = scope + ':' + i;
+  var cur = window._fupCalMonth[key] || { y: new Date().getFullYear(), m: new Date().getMonth() };
+  var d = new Date(cur.y, cur.m + delta, 1);
+  window._fupCalMonth[key] = { y: d.getFullYear(), m: d.getMonth() };
+  _fupRender(scope);
+}
+function _fupPick(scope, i, key) {
+  var cur = _fupGet(scope);
+  cur[i] = key;
+  // Dates stay in chronological order so "follow-up 2" always means the
+  // second one that happens, regardless of the order they were filled in.
+  cur.sort();
+  window._fupCalOpen = null;
+  _fupRender(scope);
+}
+
+function _fupCalendarHtml(scope, i) {
+  var key = scope + ':' + i;
+  var sel = _fupGet(scope)[i];
+  var mm = window._fupCalMonth[key] || { y: parseDate(sel).getFullYear(), m: parseDate(sel).getMonth() };
+  var first = new Date(mm.y, mm.m, 1);
+  var startPad = first.getDay();
+  var daysInMonth = new Date(mm.y, mm.m + 1, 0).getDate();
+  var todayK = todayKey();
+  var taken = _fupGet(scope);
+
+  var head = _FUP_DOW.map(function(d, idx) {
+    var wk = (idx === 0 || idx === 6);
+    return '<div style="font-size:9px;font-weight:700;text-align:center;padding:3px 0;color:'+(wk?'var(--coral)':'var(--text3)')+'">'+d.charAt(0)+'</div>';
+  }).join('');
+
+  var cells = '';
+  for (var p = 0; p < startPad; p++) cells += '<div></div>';
+  for (var day = 1; day <= daysInMonth; day++) {
+    var k = dateKey(new Date(mm.y, mm.m, day));
+    var dow = new Date(mm.y, mm.m, day).getDay();
+    var wknd = (dow === 0 || dow === 6);
+    var isSel = (k === sel);
+    var isPast = k < todayK;
+    var isDupe = taken.indexOf(k) !== -1 && !isSel;
+    var col = isSel ? '#fff' : (wknd ? 'var(--coral)' : 'var(--text)');
+    var bg = isSel ? 'var(--gold)' : (wknd ? 'rgba(196,90,74,0.07)' : 'transparent');
+    var dis = isPast || isDupe;
+    cells += '<div' + (dis ? '' : ' onclick="_fupPick(\''+esc(scope)+'\','+i+',\''+k+'\')"') +
+      ' title="'+(isDupe?'Already used by another follow-up':(isPast?'In the past':(wknd?'Weekend':'')))+'"' +
+      ' style="text-align:center;font-size:11px;padding:5px 0;border-radius:6px;background:'+bg+';color:'+col+';' +
+        (dis ? 'opacity:0.28;' : 'cursor:pointer;') + (isSel?'font-weight:700;':'') + '">' + day + '</div>';
+  }
+
+  return '<div style="margin-top:6px;padding:8px;border:1px solid var(--border2);border-radius:8px;background:var(--bg)">' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">' +
+      '<span onclick="_fupNavMonth(\''+esc(scope)+'\','+i+',-1)" style="cursor:pointer;padding:2px 7px;font-size:13px;color:var(--text3)">‹</span>' +
+      '<span style="font-size:11px;font-weight:700;color:var(--text)">'+_FUP_MON[mm.m]+' '+mm.y+'</span>' +
+      '<span onclick="_fupNavMonth(\''+esc(scope)+'\','+i+',1)" style="cursor:pointer;padding:2px 7px;font-size:13px;color:var(--text3)">›</span>' +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px">' + head + cells + '</div>' +
+    '<div style="font-size:9px;color:var(--coral);margin-top:5px">Weekends in red</div>' +
+  '</div>';
+}
+
+function _fupRender(scope) {
+  var box = document.getElementById('fupRows_' + scope);
+  if (!box) return;
+  var dates = _fupGet(scope);
+  var html = '';
+
+  if (!dates.length) {
+    html += '<div style="font-size:10px;color:var(--text3);padding:4px 0">No follow-ups — one send only.</div>';
+  }
+  dates.forEach(function(k, i) {
+    var wknd = _fupIsWeekend(k);
+    var open = (window._fupCalOpen === scope + ':' + i);
+    html += '<div style="border:1px solid '+(wknd?'rgba(196,90,74,0.35)':'var(--border2)')+';border-radius:8px;padding:7px 9px;background:var(--bg)">' +
+      '<div style="display:flex;align-items:center;gap:8px">' +
+        '<span style="font-size:11px;font-weight:600;color:var(--text3);min-width:74px">Follow-up '+(i+1)+'</span>' +
+        '<span onclick="_fupToggleCal(\''+esc(scope)+'\','+i+')" style="flex:1;font-size:12px;font-weight:600;color:'+(wknd?'var(--coral)':'var(--text)')+';cursor:pointer">' +
+          '📅 '+_fupPretty(k)+(wknd?' <span style="font-size:9px;font-weight:600">· weekend</span>':'') +
+        '</span>' +
+        '<span onclick="_fupRemove(\''+esc(scope)+'\','+i+')" style="cursor:pointer;color:var(--text3);font-size:13px;padding:0 2px" title="Remove this follow-up">✕</span>' +
+      '</div>' +
+      (open ? _fupCalendarHtml(scope, i) : '') +
+    '</div>';
+  });
+
+  html += '<div style="display:flex;align-items:center;gap:8px;margin-top:2px">' +
+    (dates.length < _FUP_MAX
+      ? '<span onclick="_fupAdd(\''+esc(scope)+'\')" style="font-size:11px;font-weight:600;color:var(--gold);cursor:pointer">+ Add follow-up</span>'
+      : '<span style="font-size:10px;color:var(--text3)">Maximum '+_FUP_MAX+' follow-ups</span>') +
+  '</div>';
+
+  box.innerHTML = html;
+  var sel = document.getElementById('fupCount_' + scope);
+  if (sel && String(sel.value) !== String(dates.length)) sel.value = String(dates.length);
+}
+
+// The whole control: count dropdown + rows + add button.
+function _fupEditorHtml(scope, initial) {
+  window._fupState[scope] = (initial || []).map(function(d){ return String(d).slice(0,10); }).sort();
+  window._fupCalOpen = null;
+  var n = window._fupState[scope].length;
+  var opts = '';
+  for (var i = 0; i <= _FUP_MAX; i++) opts += '<option value="'+i+'"'+(i===n?' selected':'')+'>'+i+'</option>';
+  return '<div style="display:flex;flex-direction:column;gap:6px">' +
+    '<div style="display:flex;align-items:center;gap:8px">' +
+      '<span style="font-size:10px;color:var(--text3)">How many follow-ups?</span>' +
+      '<select id="fupCount_'+esc(scope)+'" onchange="_fupSetCount(\''+esc(scope)+'\',this.value)" style="padding:5px 8px;border-radius:7px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px">'+opts+'</select>' +
+      '<span style="font-size:9px;color:var(--text3)">Pick the actual dates, weekends are flagged</span>' +
+    '</div>' +
+    '<div id="fupRows_'+esc(scope)+'" style="display:flex;flex-direction:column;gap:5px"></div>' +
+  '</div>';
+}
+
 function loadSampaignWorkspace() {
   var role = (profile?.role||'').toLowerCase();
   var el = document.getElementById('sampaignManualSection');
@@ -9474,8 +9652,8 @@ function loadSampaignWorkspace() {
       '<input id="sampaignRegion" placeholder="Region (optional)" style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
       '<div style="font-size:10px;color:var(--text3)">Campaign goal / ask — what are you pitching and what do you want them to do? (used by AI drafting tools, e.g. Claude via connector)</div>' +
       '<textarea id="sampaignGoal" rows="2" placeholder="e.g. Introduce our retail execution platform, get a 15-min discovery call booked with the regional sales lead" style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans);resize:vertical;height:48px"></textarea>' +
-      '<div style="font-size:10px;color:var(--text3)">Follow-up cadence (days after send) — e.g. 3, 7, 14 for follow-up 1/2/3</div>' +
-      '<input id="sampaignCadence" value="3,7,14" style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
+      '<div style="font-size:10px;color:var(--text3)">Follow-up schedule — these become tasks on your own list for those days</div>' +
+      _fupEditorHtml('new', [_fupSuggest([])]) +
       '<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--text2)">' +
         '<label style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="sampaignAlertOoo" checked/> OOO alerts</label>' +
         '<label style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="sampaignAlertReplied" checked/> Reply alerts</label>' +
@@ -9487,7 +9665,66 @@ function loadSampaignWorkspace() {
       '<button onclick="createSampaign()" style="padding:9px;border:none;border-radius:8px;background:var(--green);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--sans)">Create SAMpaign</button>' +
       '</div></div>' +
     '<div id="sampaignCampaignsList"><div style="font-size:12px;color:var(--text3);padding:6px 0">Loading…</div></div>';
+  _fupRender('new');
   loadSampaignCampaigns();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Follow-up tasks — put each follow-up on the owner's own task list for its
+// date, and move it when the date changes.
+//
+// Written client-side into allData + save(dayKey), the same path every other
+// task uses, rather than having the edge function write into daytrack behind
+// the app's back. Two reasons: the person editing the campaign is by
+// definition the owner (edit is owner-only), so their own session already has
+// the right identity and the right local state; and a server-side write would
+// race the client's own copy of allData, which syncDown resolves by task
+// count, not by recency.
+//
+// Tasks are keyed `sampaign:{campaignId}:{stage}` so a date change MOVES the
+// task instead of leaving a duplicate behind. Completion is not carried
+// across a move on purpose: if you reschedule follow-up 2, it hasn't been
+// done yet, so re-opening it is the truthful state.
+// ═══════════════════════════════════════════════════════════════════════════
+function _fupTaskId(campaignId, stage) { return 'sampaign:' + campaignId + ':' + stage; }
+
+async function _syncSampaignFupTasks(campaignId, campaignName, oldDates, newDates) {
+  if (typeof allData === 'undefined' || typeof save !== 'function') return 0;
+  oldDates = (oldDates || []).map(function(d){ return String(d).slice(0,10); });
+  newDates = (newDates || []).map(function(d){ return String(d).slice(0,10); });
+
+  // Every day that might need rewriting: anywhere this campaign had a task
+  // before, plus anywhere it should have one now.
+  var touched = {};
+  oldDates.concat(newDates).forEach(function(k){ touched[k] = true; });
+
+  // Strip this campaign's follow-up tasks from all affected days first, so a
+  // moved date can't leave an orphan behind on the old day.
+  Object.keys(touched).forEach(function(k) {
+    var d = dayData(k);
+    d.tasks = (d.tasks || []).filter(function(t){ return !(t && t.sampaignId === campaignId); });
+  });
+
+  // Then place one task per follow-up on its (new) date.
+  newDates.forEach(function(k, i) {
+    var d = dayData(k);
+    d.tasks.push({
+      id: _fupTaskId(campaignId, i + 1),
+      text: 'Follow-up ' + (i + 1) + ' — ' + (campaignName || 'SAMpaign'),
+      done: false,
+      source: 'sampaign',
+      sampaignId: campaignId,
+      fupStage: i + 1,
+      createdAt: new Date().toISOString()
+    });
+  });
+
+  var keys = Object.keys(touched);
+  for (var i = 0; i < keys.length; i++) { try { await save(keys[i]); } catch(e) {} }
+  // Report only genuine reschedules (a date that changed), not first-time
+  // creation, so the toast doesn't claim work it didn't do.
+  var movedCount = newDates.filter(function(k){ return oldDates.indexOf(k) === -1; }).length;
+  return oldDates.length ? movedCount : 0;
 }
 
 function toggleNewSampaignForm() {
@@ -9503,8 +9740,7 @@ async function createSampaign() {
   if (!accountName) { showToast('Enter a company name'); return; }
   if (!domain) { showToast('Enter a domain — SAMpaigns are anchored to a tracked account, same as an SDR lead'); return; }
   var campaignGoal = document.getElementById('sampaignGoal')?.value?.trim() || null;
-  var cadenceRaw = document.getElementById('sampaignCadence')?.value || '3,7,14';
-  var followup_days = cadenceRaw.split(',').map(function(s){ return parseInt(s.trim(),10); }).filter(function(n){ return n > 0; });
+  var followup_dates = (window._fupState['new'] || []).slice();
   var alerts_enabled = {
     ooo: !!document.getElementById('sampaignAlertOoo')?.checked,
     replied: !!document.getElementById('sampaignAlertReplied')?.checked,
@@ -9514,14 +9750,18 @@ async function createSampaign() {
   var csvFile = document.getElementById('sampaignNewCsv')?.files?.[0] || null;
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
-      body: JSON.stringify({ action:'create_sampaign', account_name: accountName, domain: domain, region: region, campaign_goal: campaignGoal, followup_days: followup_days.length?followup_days:undefined, alerts_enabled: alerts_enabled }) });
+      body: JSON.stringify({ action:'create_sampaign', account_name: accountName, domain: domain, region: region, campaign_goal: campaignGoal, followup_dates: followup_dates, alerts_enabled: alerts_enabled }) });
     var d = await r.json();
     if (!d.ok) { showToast('Error: '+(d.error||'Could not create SAMpaign')); return; }
     showToast(d.account_linked ? '✓ SAMpaign linked to existing account' : '✓ SAMpaign + account created');
+    // Put the follow-ups on the owner's own task list for those days.
+    if (d.campaign?.id) await _syncSampaignFupTasks(d.campaign.id, accountName, [], followup_dates);
     document.getElementById('sampaignName').value = '';
     document.getElementById('sampaignDomain').value = '';
     document.getElementById('sampaignRegion').value = '';
     document.getElementById('sampaignGoal').value = '';
+    _fupState['new'] = [_fupSuggest([])];
+    _fupRender('new');
     toggleNewSampaignForm();
     // One-motion audience upload: if a CSV was attached at creation, add its
     // contacts straight to the campaign we just created — name + define
@@ -9544,7 +9784,7 @@ async function loadSampaignCampaigns() {
     var d = await r.json();
     if (!d.ok) { el.innerHTML = '<div style="font-size:11px;color:var(--coral)">'+esc(d.error||'Failed to load')+'</div>'; return; }
     if (!d.campaigns || !d.campaigns.length) { el.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:4px 0">No manual SAMpaigns yet. Create one above, or use a connected sequencing tool for SAMpaign Analytics instead.</div>'; return; }
-    // Cache full campaign objects (name/followup_days/alerts_enabled) so the
+    // Cache full campaign objects (name/followup_dates/alerts_enabled) so the
     // edit form can prefill instantly without a second fetch.
     window._sampaignCampaignsCache = {};
     d.campaigns.forEach(function(c) { window._sampaignCampaignsCache[c.id] = c; });
@@ -9589,13 +9829,13 @@ function toggleEditSampaignForm(campaignId) {
   if (!box) return;
   if (box.style.display === 'none') {
     var c = (window._sampaignCampaignsCache || {})[campaignId] || {};
-    var cadence = (c.followup_days && c.followup_days.length) ? c.followup_days.join(',') : '3,7,14';
     var a = c.alerts_enabled || {};
     box.innerHTML =
       '<div style="display:flex;flex-direction:column;gap:8px">' +
         '<input id="editSampaignName_'+esc(campaignId)+'" value="'+esc(c.name||'')+'" placeholder="Campaign name" style="padding:7px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
         '<textarea id="editSampaignGoal_'+esc(campaignId)+'" rows="2" placeholder="Campaign goal / ask — what are you pitching, what do you want them to do?" style="padding:7px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px;resize:vertical;height:46px">'+esc(c.campaign_goal||'')+'</textarea>' +
-        '<input id="editSampaignCadence_'+esc(campaignId)+'" value="'+esc(cadence)+'" placeholder="Follow-up days e.g. 3,7,14" style="padding:7px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
+        '<div style="font-size:10px;color:var(--text3)">Follow-up schedule — moving a date moves its task too</div>' +
+        _fupEditorHtml(campaignId, c.followup_dates || []) +
         '<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--text2)">' +
           '<label style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="editSampaignAlertOoo_'+esc(campaignId)+'" '+(a.ooo?'checked':'')+'/> OOO</label>' +
           '<label style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="editSampaignAlertReplied_'+esc(campaignId)+'" '+(a.replied?'checked':'')+'/> Replied</label>' +
@@ -9608,6 +9848,7 @@ function toggleEditSampaignForm(campaignId) {
         '</div>' +
       '</div>';
     box.style.display = 'block';
+    _fupRender(campaignId);
   } else {
     box.style.display = 'none';
   }
@@ -9616,8 +9857,9 @@ function toggleEditSampaignForm(campaignId) {
 async function saveSampaignEdit(campaignId) {
   var name = document.getElementById('editSampaignName_'+campaignId)?.value?.trim();
   var campaignGoal = document.getElementById('editSampaignGoal_'+campaignId)?.value ?? '';
-  var cadenceRaw = document.getElementById('editSampaignCadence_'+campaignId)?.value || '3,7,14';
-  var followup_days = cadenceRaw.split(',').map(function(s){ return parseInt(s.trim(),10); }).filter(function(n){ return n > 0; });
+  var cachedC = (window._sampaignCampaignsCache || {})[campaignId] || {};
+  var oldDates = (cachedC.followup_dates || []).map(function(d){ return String(d).slice(0,10); });
+  var followup_dates = (window._fupState[campaignId] || []).slice();
   var alerts_enabled = {
     ooo: !!document.getElementById('editSampaignAlertOoo_'+campaignId)?.checked,
     replied: !!document.getElementById('editSampaignAlertReplied_'+campaignId)?.checked,
@@ -9626,10 +9868,11 @@ async function saveSampaignEdit(campaignId) {
   };
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
-      body: JSON.stringify({ action:'update_sampaign', campaign_id: campaignId, name: name, campaign_goal: campaignGoal, followup_days: followup_days.length?followup_days:undefined, alerts_enabled: alerts_enabled }) });
+      body: JSON.stringify({ action:'update_sampaign', campaign_id: campaignId, name: name, campaign_goal: campaignGoal, followup_dates: followup_dates, alerts_enabled: alerts_enabled }) });
     var d = await r.json();
     if (!d.ok) { showToast('Error: '+(d.error||'Could not update SAMpaign')); return; }
-    showToast('✓ SAMpaign updated');
+    var moved = await _syncSampaignFupTasks(campaignId, name || cachedC.name, oldDates, followup_dates);
+    showToast('✓ SAMpaign updated' + (moved ? ' · ' + moved + ' task' + (moved!==1?'s':'') + ' rescheduled' : ''));
     loadSampaignCampaigns();
   } catch(e) { showToast('Error: '+e.message); }
 }
