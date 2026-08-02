@@ -9474,20 +9474,24 @@ window._sampaignContactsCache = {};
 function _detectiveSamAvatar(size) {
   var s = size || 44, cid = 'dsC' + s;
   return '<svg width="'+s+'" height="'+s+'" viewBox="190 10 300 300" style="flex-shrink:0;display:block">' +
-    '<defs><clipPath id="'+cid+'"><circle cx="340" cy="160" r="150"/></clipPath></defs>' +
+    '<defs><clipPath id="'+cid+'"><circle cx="340" cy="160" r="150"/></clipPath>' +
+      '<linearGradient id="h'+cid+'" x1="0" y1="0" x2="0" y2="1">' +
+        '<stop offset="0%" stop-color="#3B2A1E"/><stop offset="38%" stop-color="#6B4A2E"/>' +
+        '<stop offset="72%" stop-color="#A87C4C"/><stop offset="100%" stop-color="#CDA470"/>' +
+      '</linearGradient></defs>' +
     '<circle cx="340" cy="160" r="150" fill="#F2E9DC"/>' +
     '<g clip-path="url(#'+cid+')">' +
-      '<path d="M248 148 Q248 54 340 50 Q432 54 432 148 L432 196 Q432 214 414 216 L266 216 Q248 214 248 196 Z" fill="#D9AE52"/>' +
-      '<path d="M254 148 Q254 60 340 56 Q426 60 426 148 L426 194 Q426 210 410 212 L270 212 Q254 210 254 194 Z" fill="#EDCB74"/>' +
-      '<path d="M254 150 Q254 62 340 58 Q340 96 340 96 Q276 100 276 150 Z" fill="#F2D98C" opacity="0.55"/>' +
+      '<path d="M246 148 Q246 50 340 46 Q434 50 434 148 L434 206 Q434 220 414 222 L266 222 Q246 220 246 206 Z" fill="#2E2016" opacity="0.55"/>' +
+      '<path d="M252 148 Q252 56 340 52 Q428 56 428 148 L428 200 Q428 214 410 216 L270 216 Q252 214 252 200 Z" fill="url(#h'+cid+')"/>' +
+      '<path d="M252 210 Q252 120 300 100 L318 108 Q272 132 268 212 Z" fill="#2E2016" opacity="0.28"/>' +
+      '<path d="M270 104 Q306 66 372 72 Q412 78 420 104 Q384 84 336 92 Q296 99 278 122 Z" fill="url(#h'+cid+')"/>' +
       '<path d="M262 300 Q268 236 300 214 L340 246 L380 214 Q412 236 418 300 Z" fill="#7B4E2C"/>' +
       '<path d="M300 214 L340 246 L380 214 L380 300 L300 300 Z" fill="#FBF8F3"/>' +
       '<path d="M304 212 L340 244 L322 300 L300 300 Z" fill="#E7E1D6"/>' +
       '<path d="M376 212 L340 244 L358 300 L380 300 Z" fill="#E7E1D6"/>' +
       '<path d="M316 246 L364 246 L352 300 L328 300 Z" fill="#3B2A1B"/>' +
-      '<path d="M320 172 L360 172 L360 206 L320 206 Z" fill="#EFC9AE"/>' +
-      '<ellipse cx="340" cy="130" rx="51" ry="57" fill="#F7DCC7"/>' +
-      '<path d="M289 124 Q287 64 340 60 Q393 64 391 124 Q391 84 340 80 Q289 84 289 124 Z" fill="#EDCB74"/>' +
+      '<path d="M320 172 L360 172 L360 206 L320 206 Z" fill="#E8BE9E"/>' +
+      '<ellipse cx="340" cy="130" rx="51" ry="57" fill="#F2CDAC"/>' +
       '<circle cx="316" cy="128" r="21" fill="#26211C"/>' +
       '<circle cx="364" cy="128" r="21" fill="#26211C"/>' +
       '<path d="M303 116 Q311 109 322 114 Q311 120 306 128 Z" fill="#FFFFFF" opacity="0.5"/>' +
@@ -9499,7 +9503,7 @@ function _detectiveSamAvatar(size) {
       '<path d="M337 128 L343 128" stroke="#26211C" stroke-width="6" stroke-linecap="round"/>' +
       '<path d="M295 126 L278 119" stroke="#26211C" stroke-width="4" stroke-linecap="round"/>' +
       '<path d="M385 126 L402 119" stroke="#26211C" stroke-width="4" stroke-linecap="round"/>' +
-      '<path d="M328 164 Q340 158 352 164 Q340 176 328 164 Z" fill="#C4726A"/>' +
+      '<path d="M328 164 Q340 157 352 164 Q340 177 328 164 Z" fill="#C05F5C"/>' +
       '<circle cx="293" cy="150" r="6" fill="#E8B84B"/>' +
       '<ellipse cx="340" cy="72" rx="94" ry="17" fill="#7A4A2A"/>' +
       '<path d="M278 74 Q282 20 340 16 Q398 20 402 74 Z" fill="#8A5A38"/>' +
@@ -9669,6 +9673,26 @@ function _renderDetectiveSamResult(d) {
     }
     if (p.seniority || p.department) {
       html += '<div style="margin-top:10px;font-size:11px;color:var(--text3)">'+[p.seniority,p.department].filter(Boolean).map(esc).join(' · ')+'</div>';
+    }
+
+    // The brief. Deterministic, derived from what was actually found, and
+    // every line carries the evidence it rests on rather than asserting.
+    if ((d.intel||[]).length) {
+      html += '<div style="margin-top:13px;padding-top:11px;border-top:1px solid var(--border)">' +
+        '<div style="display:flex;align-items:center;gap:7px;margin-bottom:7px">' +
+          _detectiveSamAvatar(22) +
+          '<span style="font-size:11px;font-weight:700;color:var(--text)">Here is what Detective SAM would like you to know about '+esc((p.name||'them').split(' ')[0])+' before you reach out</span>' +
+        '</div>' +
+        d.intel.map(function(it) {
+          return '<div style="display:flex;gap:8px;align-items:flex-start;padding:6px 9px;margin-bottom:4px;background:rgba(160,117,42,0.07);border-radius:8px">' +
+            '<span style="flex-shrink:0;font-size:12px">'+esc(it.icon||'•')+'</span>' +
+            '<div style="min-width:0">' +
+              '<div style="font-size:11px;color:var(--text);line-height:1.45">'+esc(it.text)+'</div>' +
+              (it.basis ? '<div style="font-size:9px;color:var(--text3);margin-top:2px">based on: '+esc(it.basis)+'</div>' : '') +
+            '</div>' +
+          '</div>';
+        }).join('') +
+      '</div>';
     }
     // Only shown when there is actually something to attribute. "Sources:
     // none" under a result is a contradiction, and absent data needs no
