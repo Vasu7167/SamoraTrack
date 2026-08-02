@@ -9465,42 +9465,62 @@ window._sampaignContactsCache = {};
 // and costs nothing, so internal always wins and every field is labelled
 // with where it came from.
 // ═══════════════════════════════════════════════════════════════════════════
+// She, not he — the reference character is female. Long wavy hair, lashes,
+// lip, earring. The gold S is her TIE, drawn large and high enough in the
+// collar V to sit fully inside the clip circle: the first version put it at
+// the very bottom edge, where the circular mask ate it.
+// viewBox is cropped around the circle rather than rescaled, so the geometry
+// is identical to what was reviewed.
 function _detectiveSamAvatar(size) {
-  var s = size || 44;
-  return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 240 240" style="flex-shrink:0;display:block">' +
-    '<defs><clipPath id="dsClip'+s+'"><circle cx="120" cy="120" r="112"/></clipPath></defs>' +
-    '<circle cx="120" cy="120" r="112" fill="#F0E6D8"/>' +
-    '<g clip-path="url(#dsClip'+s+')">' +
-      '<path d="M48 88 L48 174 Q48 196 30 208 L2 224 L2 250 L238 250 L238 224 L210 208 Q192 196 192 174 L192 88 Z" fill="#8A5A38"/>' +
-      '<path d="M44 66 Q48 30 76 22 L76 140 Q54 132 48 106 Z" fill="#E8C36A"/>' +
-      '<path d="M196 66 Q192 30 164 22 L164 140 Q186 132 192 106 Z" fill="#E8C36A"/>' +
-      '<ellipse cx="120" cy="98" rx="48" ry="54" fill="#F6D9C4"/>' +
-      '<path d="M80 212 L120 174 L160 212 L160 250 L80 250 Z" fill="#E9E4DA"/>' +
-      '<path d="M84 204 L120 172 L100 224 Z" fill="#FBF8F3"/>' +
-      '<path d="M156 204 L120 172 L140 224 Z" fill="#FBF8F3"/>' +
-      '<path d="M30 208 L2 224 L2 250 L80 250 L80 208 L120 174 L84 162 Q58 176 46 196 Z" fill="#6E4526"/>' +
-      '<path d="M210 208 L238 224 L238 250 L160 250 L160 208 L120 174 L156 162 Q182 176 194 196 Z" fill="#6E4526"/>' +
-      '<ellipse cx="120" cy="52" rx="80" ry="16" fill="#7A4A2A"/>' +
-      '<path d="M66 54 Q70 8 120 4 Q170 8 174 54 Z" fill="#8A5A38"/>' +
-      '<path d="M66 48 Q120 62 174 48 L174 56 Q120 70 66 56 Z" fill="#5E3620"/>' +
-      '<circle cx="98" cy="94" r="18" fill="#241F1B"/>' +
-      '<circle cx="142" cy="94" r="18" fill="#241F1B"/>' +
-      '<circle cx="92" cy="88" r="6" fill="#4A423A"/>' +
-      '<circle cx="136" cy="88" r="6" fill="#4A423A"/>' +
-      '<path d="M116 94 L124 94" stroke="#241F1B" stroke-width="5" stroke-linecap="round"/>' +
-      '<path d="M80 92 L64 86" stroke="#241F1B" stroke-width="4" stroke-linecap="round"/>' +
-      '<path d="M160 92 L176 86" stroke="#241F1B" stroke-width="4" stroke-linecap="round"/>' +
-      '<path d="M111 130 Q120 139 129 130" stroke="#B5765C" stroke-width="4" fill="none" stroke-linecap="round"/>' +
-      '<path d="M131 134 Q168 140 177 162" stroke="#4A2E1C" stroke-width="7" fill="none" stroke-linecap="round"/>' +
-      '<path d="M168 162 Q168 190 188 190 Q208 190 208 162 Z" fill="#5E3A22"/>' +
-      '<ellipse cx="188" cy="162" rx="20" ry="6" fill="#3A2314"/>' +
-      '<path d="M184 146 Q175 133 188 122 Q201 111 192 98" stroke="#CFC6BA" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.7"/>' +
-      '<path d="M204 144 Q197 133 208 124" stroke="#CFC6BA" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.45"/>' +
-      '<path d="M120 214 L104 224 L120 250 L136 224 Z" fill="#C8961E"/>' +
-      '<text x="120" y="246" text-anchor="middle" font-family="Georgia,serif" font-size="42" font-weight="700" fill="#E8B84B">S</text>' +
+  var s = size || 44, cid = 'dsC' + s;
+  return '<svg width="'+s+'" height="'+s+'" viewBox="190 10 300 300" style="flex-shrink:0;display:block">' +
+    '<defs><clipPath id="'+cid+'"><circle cx="340" cy="160" r="150"/></clipPath></defs>' +
+    '<circle cx="340" cy="160" r="150" fill="#F2E9DC"/>' +
+    '<g clip-path="url(#'+cid+')">' +
+      '<path d="M238 178 Q234 78 340 70 L340 102 Q286 108 286 178 L286 286 Q286 300 272 300 L252 300 Q238 300 238 286 Z" fill="#D9AE52"/>' +
+      '<path d="M442 178 Q446 78 340 70 L340 102 Q394 108 394 178 L394 286 Q394 300 408 300 L428 300 Q442 300 442 286 Z" fill="#D9AE52"/>' +
+      '<path d="M246 186 Q240 96 340 88 Q440 96 434 186 L434 262 Q414 244 410 200 Q404 138 340 132 Q276 138 270 200 Q266 244 246 262 Z" fill="#EDCB74"/>' +
+      '<path d="M262 300 Q268 236 300 214 L340 246 L380 214 Q412 236 418 300 Z" fill="#7B4E2C"/>' +
+      '<path d="M300 214 L340 246 L380 214 L380 300 L300 300 Z" fill="#FBF8F3"/>' +
+      '<path d="M304 212 L340 244 L322 300 L300 300 Z" fill="#E7E1D6"/>' +
+      '<path d="M376 212 L340 244 L358 300 L380 300 Z" fill="#E7E1D6"/>' +
+      '<path d="M316 246 L364 246 L352 300 L328 300 Z" fill="#3B2A1B"/>' +
+      '<path d="M320 174 L360 174 L360 206 L320 206 Z" fill="#EFC9AE"/>' +
+      '<ellipse cx="340" cy="132" rx="52" ry="58" fill="#F7DCC7"/>' +
+      '<path d="M288 130 Q286 66 340 62 Q394 66 392 130 Q392 88 340 84 Q288 88 288 130 Z" fill="#EDCB74"/>' +
+      '<circle cx="316" cy="130" r="21" fill="#26211C"/>' +
+      '<circle cx="364" cy="130" r="21" fill="#26211C"/>' +
+      '<circle cx="309" cy="123" r="7" fill="#4E463D"/>' +
+      '<circle cx="357" cy="123" r="7" fill="#4E463D"/>' +
+      '<path d="M337 130 L343 130" stroke="#26211C" stroke-width="6" stroke-linecap="round"/>' +
+      '<path d="M295 128 L276 121" stroke="#26211C" stroke-width="4" stroke-linecap="round"/>' +
+      '<path d="M385 128 L404 121" stroke="#26211C" stroke-width="4" stroke-linecap="round"/>' +
+      '<path d="M292 112 L300 106 M300 104 L308 100" stroke="#4A3A22" stroke-width="3" stroke-linecap="round"/>' +
+      '<path d="M388 112 L380 106 M380 104 L372 100" stroke="#4A3A22" stroke-width="3" stroke-linecap="round"/>' +
+      '<path d="M328 166 Q340 160 352 166 Q340 178 328 166 Z" fill="#C4726A"/>' +
+      '<circle cx="290" cy="146" r="6" fill="#E8B84B"/>' +
+      '<ellipse cx="340" cy="74" rx="94" ry="17" fill="#7A4A2A"/>' +
+      '<path d="M278 76 Q282 22 340 18 Q398 22 402 76 Z" fill="#8A5A38"/>' +
+      '<path d="M278 70 Q340 86 402 70 L402 78 Q340 94 278 78 Z" fill="#5E3620"/>' +
+      '<path d="M354 170 Q396 178 406 202" stroke="#4A2E1C" stroke-width="8" fill="none" stroke-linecap="round"/>' +
+      '<path d="M396 202 Q396 234 420 234 Q444 234 444 202 Z" fill="#5E3A22"/>' +
+      '<ellipse cx="420" cy="202" rx="24" ry="7" fill="#3A2314"/>' +
+      '<path d="M416 182 Q404 166 420 152 Q436 138 424 122" stroke="#D6CDC1" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.7"/>' +
+      '<text x="340" y="300" text-anchor="middle" font-family="Georgia,serif" font-size="66" font-weight="700" fill="#C8961E">S</text>' +
+      '<text x="340" y="297" text-anchor="middle" font-family="Georgia,serif" font-size="66" font-weight="700" fill="#F0C660">S</text>' +
     '</g>' +
-    '<circle cx="120" cy="120" r="112" fill="none" stroke="#C8961E" stroke-width="5"/>' +
+    '<circle cx="340" cy="160" r="150" fill="none" stroke="#C8961E" stroke-width="6"/>' +
   '</svg>';
+}
+
+// The branding chip on its own. _samoraIntelLabel(text) interpolates its
+// argument, so calling it with none rendered the literal string "undefined"
+// next to the logo — that was the stray word in the header.
+function _samoraIntelChip() {
+  return '<span style="display:inline-flex;align-items:center;gap:6px">' +
+    '<img src="icons/icon-48.png" alt="Samora" style="width:15px;height:15px;border-radius:50%;flex-shrink:0"/>' +
+    '<span style="font-size:8px;font-weight:700;letter-spacing:.1em;color:var(--gold);text-transform:uppercase;background:rgba(160,117,42,0.12);padding:2px 6px;border-radius:4px;white-space:nowrap">Samora Intelligence</span>' +
+  '</span>';
 }
 
 function _magnifierIcon(sz, col) {
@@ -9515,7 +9535,7 @@ function detectiveSamCardHtml() {
       '<div style="flex:1;min-width:0">' +
         '<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">' +
           '<span style="font-size:14px;font-weight:700;color:var(--text)">Detective SAM</span>' +
-          _samoraIntelLabel() +
+          _samoraIntelChip() +
         '</div>' +
         '<div style="font-size:11px;color:var(--text3);margin-top:2px">Find anyone: LinkedIn, emails, phone numbers, current and past employers.</div>' +
       '</div>' +
@@ -9536,7 +9556,7 @@ function openDetectiveSam() {
     '<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px">' +
       _detectiveSamAvatar(52) +
       '<div style="flex:1;min-width:0">' +
-        '<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><span style="font-size:16px;font-weight:700;color:var(--text)">Detective SAM</span>'+_samoraIntelLabel()+'</div>' +
+        '<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><span style="font-size:16px;font-weight:700;color:var(--text)">Detective SAM</span>'+_samoraIntelChip()+'</div>' +
         '<div style="font-size:13px;color:var(--text2);margin-top:3px">Who do you wish to get intelligence on?</div>' +
       '</div>' +
       '<button onclick="document.getElementById(\'detective-sam-modal\').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text3);padding:0">✕</button>' +
@@ -9604,7 +9624,7 @@ function _renderDetectiveSamResult(d) {
   var html = '';
 
   if (!d.found) {
-    html += '<div style="background:var(--surface2);border-radius:10px;padding:14px;font-size:12px;color:var(--text2)">No match found.</div>';
+    html += '<div style="background:var(--surface2);border-radius:10px;padding:14px;font-size:12px;color:var(--text2)">Nothing found on that person yet.</div>';
   } else {
     html += '<div style="background:var(--surface2);border:1px solid var(--border2);border-radius:12px;padding:14px">' +
       '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">' +
@@ -9648,7 +9668,12 @@ function _renderDetectiveSamResult(d) {
     if (p.seniority || p.department) {
       html += '<div style="margin-top:10px;font-size:11px;color:var(--text3)">'+[p.seniority,p.department].filter(Boolean).map(esc).join(' · ')+'</div>';
     }
-    html += '<div style="margin-top:11px;padding-top:9px;border-top:1px solid var(--border);font-size:9px;color:var(--text3)">Sources: '+((d.sources_used||[]).map(function(s){ return (_DS_SRC_META[s]||{label:s}).label; }).join(', ')||'none')+(d.internal_hits?' · '+d.internal_hits+' match'+(d.internal_hits!==1?'es':'')+' already in your data':'')+'</div>';
+    // Only shown when there is actually something to attribute. "Sources:
+    // none" under a result is a contradiction, and absent data needs no
+    // announcement.
+    if ((d.sources_used||[]).length) {
+      html += '<div style="margin-top:11px;padding-top:9px;border-top:1px solid var(--border);font-size:9px;color:var(--text3)">Sources: '+d.sources_used.map(function(s){ return (_DS_SRC_META[s]||{label:s}).label; }).join(', ')+(d.internal_hits?' · '+d.internal_hits+' match'+(d.internal_hits!==1?'es':'')+' already in your data':'')+'</div>';
+    }
     html += '</div>';
   }
 
