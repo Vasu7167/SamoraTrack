@@ -9660,7 +9660,10 @@ function loadSampaignWorkspace() {
         '<label style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="sampaignAlertNoResp" checked/> No-response alerts</label>' +
         '<label style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="sampaignAlertDead" checked/> Dead-contact alerts</label>' +
       '</div>' +
-      '<div style="font-size:10px;color:var(--text3);margin-top:2px">Optionally attach who you\'re reaching out to now (CSV: name, email, phone, company, title) — or upload one later from the SAMpaign row.</div>' +
+      '<div style="font-size:10px;color:var(--text3);margin-top:2px">Who are you reaching out to? Type them in, attach a CSV, or do neither and add people later.</div>' +
+      '<div><span onclick="addSampaignContactRows(\'new\')" style="font-size:11px;font-weight:600;color:var(--green);cursor:pointer">＋ Add people manually</span></div>' +
+      '<div id="sampaignAddRows_new"></div>' +
+      '<div style="font-size:10px;color:var(--text3)">Or attach a CSV (name, email, phone, company, title)</div>' +
       '<input type="file" id="sampaignNewCsv" accept=".csv,text/csv" style="font-size:11px;color:var(--text2)"/>' +
       '<button onclick="createSampaign()" style="padding:9px;border:none;border-radius:8px;background:var(--green);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--sans)">Create SAMpaign</button>' +
       '</div></div>' +
@@ -9748,6 +9751,13 @@ async function createSampaign() {
     dead: !!document.getElementById('sampaignAlertDead')?.checked
   };
   var csvFile = document.getElementById('sampaignNewCsv')?.files?.[0] || null;
+  // Collected BEFORE the create call so a validation problem (bad email
+  // format) stops us here rather than after a campaign already exists.
+  var typedContacts = null;
+  if ((window._sampAddRows['new'] || []).length) {
+    typedContacts = _collectSampAddRows('new');
+    if (!typedContacts) return;
+  }
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
       body: JSON.stringify({ action:'create_sampaign', account_name: accountName, domain: domain, region: region, campaign_goal: campaignGoal, followup_dates: followup_dates, alerts_enabled: alerts_enabled }) });
@@ -9763,11 +9773,21 @@ async function createSampaign() {
     _fupState['new'] = [_fupSuggest([])];
     _fupRender('new');
     toggleNewSampaignForm();
-    // One-motion audience upload: if a CSV was attached at creation, add its
-    // contacts straight to the campaign we just created — name + define
-    // audience in one step (Outreach.io's pattern), rather than requiring a
-    // separate expand-and-upload pass right after. Uploading MORE contacts
-    // later, from the campaign row, still works unchanged.
+    // One-motion audience definition: people typed into the form and/or a CSV
+    // attached at creation both go straight into the campaign we just made —
+    // name it and define who it targets in one step (Outreach.io's pattern),
+    // rather than forcing a separate pass right afterwards. Adding MORE
+    // people later, from the campaign itself, still works unchanged.
+    if (d.campaign?.id && typedContacts && typedContacts.length) {
+      try {
+        var ar = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+          body: JSON.stringify({ action:'upload_sampaign_contacts', campaign_id: d.campaign.id, contacts: typedContacts }) });
+        var ad = await ar.json();
+        if (ad.ok) showToast('✓ Added ' + (ad.added||0) + ' contact' + ((ad.added||0)!==1?'s':'') + (ad.need_email ? ' · ' + ad.need_email + ' need an email lookup' : ''));
+      } catch(e) { showToast('Campaign created, but adding people failed: '+e.message); }
+      window._sampAddRows['new'] = null;
+      var addBox = document.getElementById('sampaignAddRows_new'); if (addBox) addBox.innerHTML = '';
+    }
     if (csvFile && d.campaign?.id) {
       await _uploadSampaignCsvFile(d.campaign.id, csvFile);
       var csvEl = document.getElementById('sampaignNewCsv'); if (csvEl) csvEl.value = '';
@@ -10209,7 +10229,16 @@ function _renderSampaignContacts(campaignId) {
       return '<div style="padding:6px 0;border-top:1px solid var(--border)">' +
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px">' +
         '<div style="min-width:0;flex:1"><div style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(c.name||c.email||'—')+'</div>' +
-        '<div style="font-size:10px;color:var(--text3)">'+esc(c.email||'')+(c.company?' · '+esc(c.company):'')+'</div>' + titleLine + '</div>' +
+        '<div style="font-size:10px;color:var(--text3)">' +
+          (c.email
+            // A found email is an inference, not a fact — Hunter scores it
+            // because it is guessing the pattern from other addresses at the
+            // domain. Label it, never let it sit unmarked next to one the rep
+            // typed in themselves.
+            ? esc(c.email) + (c.email_source ? '<span style="color:var(--gold)" title="Found by '+esc(c.email_source)+(c.email_confidence!=null?', '+c.email_confidence+'% confidence':'')+', not supplied"> ◇'+(c.email_confidence!=null?' '+c.email_confidence+'%':'')+'</span>' : '')
+            : '<span style="color:var(--gold)">🔍 no email yet — run Enrich to look it up</span>') +
+          (c.company?' · '+esc(c.company):'') +
+        '</div>' + titleLine + '</div>' +
         '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">' + intelBtn +
         '<select onchange="setSampaignContactStatus(\''+esc(c.id)+'\',this.value,\''+esc(campaignId)+'\')" style="font-size:10px;font-weight:600;color:'+meta.color+';background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:3px 6px">'+opts+'</select>' +
         '<span onclick="removeSampaignContact(\''+esc(c.id)+'\',\''+esc(campaignId)+'\',\''+esc(c.name||c.email||'')+'\')" style="cursor:pointer;color:var(--text3);font-size:13px;padding:0 2px" title="Remove from SAMpaign">✕</span>' +
@@ -10355,12 +10384,19 @@ function _renderSampAddRows(campaignId, focusLast) {
       'style="flex:1;min-width:0;padding:5px 7px;border-radius:6px;border:1px solid '+(req?'rgba(160,117,42,0.4)':'var(--border2)')+';background:var(--bg);color:var(--text);font-family:var(--sans);font-size:11px"/>';
   };
   var html = '<div style="border:1px solid var(--border2);border-radius:8px;padding:9px;margin-bottom:8px;background:var(--surface)">' +
-    '<div style="font-size:10px;color:var(--text3);margin-bottom:6px">Add people manually · <strong style="color:var(--gold)">*</strong> required, everything else optional (enrichment can fill the rest)</div>';
+    '<div style="font-size:10px;color:var(--text3);margin-bottom:6px">Add people manually · give a <strong style="color:var(--gold)">name or an email</strong>, the rest is optional</div>';
   rows.forEach(function(r, i) {
-    html += '<div style="display:flex;gap:4px;align-items:center;margin-bottom:5px">' +
-      f(i,'name','Name',false,r.name) + f(i,'email','Email',true,r.email) +
-      f(i,'company','Company',false,r.company) + f(i,'title','Title',false,r.title) +
-      '<span onclick="_sampRemoveAddRow(\''+esc(campaignId)+'\','+i+')" style="cursor:pointer;color:var(--text3);font-size:13px;padding:0 3px;flex-shrink:0" title="Remove this row">✕</span>' +
+    // Neither name nor email is individually required — you need one of the
+    // two. Not knowing someone's address is the normal starting point, and
+    // Enrich looks it up from the account domain plus their name.
+    var noEmail = !!((r.name||'').trim()) && !((r.email||'').trim());
+    html += '<div style="margin-bottom:5px">' +
+      '<div style="display:flex;gap:4px;align-items:center">' +
+        f(i,'name','Name',false,r.name) + f(i,'email','Email',false,r.email) +
+        f(i,'company','Company',false,r.company) + f(i,'title','Title',false,r.title) +
+        '<span onclick="_sampRemoveAddRow(\''+esc(campaignId)+'\','+i+')" style="cursor:pointer;color:var(--text3);font-size:13px;padding:0 3px;flex-shrink:0" title="Remove this row">✕</span>' +
+      '</div>' +
+      (noEmail ? '<div style="font-size:9px;color:var(--gold);margin-top:2px">🔍 No email — Enrich will try to find it from the account domain</div>' : '') +
     '</div>';
   });
   html += '<div style="display:flex;gap:8px;align-items:center;margin-top:7px">' +
@@ -10372,20 +10408,30 @@ function _renderSampAddRows(campaignId, focusLast) {
   if (focusLast) { var ins = box.querySelectorAll('input'); if (ins.length) ins[Math.max(0, ins.length - 4)].focus(); }
 }
 
-async function submitSampaignContactRows(campaignId) {
+// Collect + validate the typed rows. Shared by the in-campaign form and the
+// creation form, which is why it returns the array rather than posting.
+function _collectSampAddRows(campaignId) {
   var rows = window._sampAddRows[campaignId] || [];
   var contacts = rows
     .map(function(r){ return { name:(r.name||'').trim(), email:(r.email||'').trim(), phone:(r.phone||'').trim(), company:(r.company||'').trim(), title:(r.title||'').trim() }; })
-    .filter(function(r){ return r.email; });
-  if (!contacts.length) { showToast('Email is required — add at least one'); return; }
-  var bad = contacts.filter(function(r){ return !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(r.email); });
-  if (bad.length) { showToast('Check the email format: ' + bad[0].email); return; }
+    .filter(function(r){ return r.email || r.name; });
+  if (!contacts.length) { showToast('Add a name or an email for at least one person'); return null; }
+  // Only validate addresses that were actually typed — a blank email is a
+  // legitimate "look this up for me", not a mistake.
+  var bad = contacts.filter(function(r){ return r.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(r.email); });
+  if (bad.length) { showToast('Check the email format: ' + bad[0].email); return null; }
+  return contacts;
+}
+
+async function submitSampaignContactRows(campaignId) {
+  var contacts = _collectSampAddRows(campaignId);
+  if (!contacts) return;
   try {
     var res = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
       body: JSON.stringify({ action:'upload_sampaign_contacts', campaign_id: campaignId, contacts: contacts }) });
     var d = await res.json();
     if (!d.ok) { showToast('Error: '+(d.error||'Could not add contacts')); return; }
-    showToast('✓ Added ' + (d.added||0) + (d.skipped ? ' · ' + d.skipped + ' skipped (duplicate or no email)' : ''));
+    showToast('✓ Added ' + (d.added||0) + (d.need_email ? ' · ' + d.need_email + ' need an email lookup' : '') + (d.skipped ? ' · ' + d.skipped + ' skipped (already in this SAMpaign)' : ''));
     window._sampAddRows[campaignId] = null;
     var box = document.getElementById('sampaignAddRows_'+campaignId); if (box) box.innerHTML = '';
     await _loadSampaignContactsInto(campaignId);
