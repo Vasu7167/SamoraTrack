@@ -9457,6 +9457,287 @@ window._sampaignContactsCache = {};
 // backend change was needed for "manager should see the team's analytics
 // too" — this was purely a frontend wiring gap.
 // ═══════════════════════════════════════════════════════════════════════════
+// DETECTIVE SAM — person intelligence from whatever you happen to know.
+//
+// Backed by detective_sam_lookup, which searches the org's OWN data first
+// (stakeholders, SAMpaign contacts) before spending a provider credit. An
+// address that came from real correspondence beats a pattern-inferred guess
+// and costs nothing, so internal always wins and every field is labelled
+// with where it came from.
+// ═══════════════════════════════════════════════════════════════════════════
+function _detectiveSamAvatar(size) {
+  var s = size || 44;
+  return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 240 240" style="flex-shrink:0;display:block">' +
+    '<defs><clipPath id="dsClip'+s+'"><circle cx="120" cy="120" r="112"/></clipPath></defs>' +
+    '<circle cx="120" cy="120" r="112" fill="#F0E6D8"/>' +
+    '<g clip-path="url(#dsClip'+s+')">' +
+      '<path d="M48 88 L48 174 Q48 196 30 208 L2 224 L2 250 L238 250 L238 224 L210 208 Q192 196 192 174 L192 88 Z" fill="#8A5A38"/>' +
+      '<path d="M44 66 Q48 30 76 22 L76 140 Q54 132 48 106 Z" fill="#E8C36A"/>' +
+      '<path d="M196 66 Q192 30 164 22 L164 140 Q186 132 192 106 Z" fill="#E8C36A"/>' +
+      '<ellipse cx="120" cy="98" rx="48" ry="54" fill="#F6D9C4"/>' +
+      '<path d="M80 212 L120 174 L160 212 L160 250 L80 250 Z" fill="#E9E4DA"/>' +
+      '<path d="M84 204 L120 172 L100 224 Z" fill="#FBF8F3"/>' +
+      '<path d="M156 204 L120 172 L140 224 Z" fill="#FBF8F3"/>' +
+      '<path d="M30 208 L2 224 L2 250 L80 250 L80 208 L120 174 L84 162 Q58 176 46 196 Z" fill="#6E4526"/>' +
+      '<path d="M210 208 L238 224 L238 250 L160 250 L160 208 L120 174 L156 162 Q182 176 194 196 Z" fill="#6E4526"/>' +
+      '<ellipse cx="120" cy="52" rx="80" ry="16" fill="#7A4A2A"/>' +
+      '<path d="M66 54 Q70 8 120 4 Q170 8 174 54 Z" fill="#8A5A38"/>' +
+      '<path d="M66 48 Q120 62 174 48 L174 56 Q120 70 66 56 Z" fill="#5E3620"/>' +
+      '<circle cx="98" cy="94" r="18" fill="#241F1B"/>' +
+      '<circle cx="142" cy="94" r="18" fill="#241F1B"/>' +
+      '<circle cx="92" cy="88" r="6" fill="#4A423A"/>' +
+      '<circle cx="136" cy="88" r="6" fill="#4A423A"/>' +
+      '<path d="M116 94 L124 94" stroke="#241F1B" stroke-width="5" stroke-linecap="round"/>' +
+      '<path d="M80 92 L64 86" stroke="#241F1B" stroke-width="4" stroke-linecap="round"/>' +
+      '<path d="M160 92 L176 86" stroke="#241F1B" stroke-width="4" stroke-linecap="round"/>' +
+      '<path d="M111 130 Q120 139 129 130" stroke="#B5765C" stroke-width="4" fill="none" stroke-linecap="round"/>' +
+      '<path d="M131 134 Q168 140 177 162" stroke="#4A2E1C" stroke-width="7" fill="none" stroke-linecap="round"/>' +
+      '<path d="M168 162 Q168 190 188 190 Q208 190 208 162 Z" fill="#5E3A22"/>' +
+      '<ellipse cx="188" cy="162" rx="20" ry="6" fill="#3A2314"/>' +
+      '<path d="M184 146 Q175 133 188 122 Q201 111 192 98" stroke="#CFC6BA" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.7"/>' +
+      '<path d="M204 144 Q197 133 208 124" stroke="#CFC6BA" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.45"/>' +
+      '<path d="M120 214 L104 224 L120 250 L136 224 Z" fill="#C8961E"/>' +
+      '<text x="120" y="246" text-anchor="middle" font-family="Georgia,serif" font-size="42" font-weight="700" fill="#E8B84B">S</text>' +
+    '</g>' +
+    '<circle cx="120" cy="120" r="112" fill="none" stroke="#C8961E" stroke-width="5"/>' +
+  '</svg>';
+}
+
+function _magnifierIcon(sz, col) {
+  var s = sz || 14;
+  return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 24 24" fill="none" stroke="'+(col||'currentColor')+'" stroke-width="2.4" stroke-linecap="round" style="flex-shrink:0"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 L21 21"/></svg>';
+}
+
+function detectiveSamCardHtml() {
+  return '<div style="background:var(--surface2);border:1px solid rgba(160,117,42,0.28);border-radius:12px;padding:12px;margin-bottom:14px">' +
+    '<div style="display:flex;align-items:center;gap:11px">' +
+      _detectiveSamAvatar(46) +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">' +
+          '<span style="font-size:14px;font-weight:700;color:var(--text)">Detective SAM</span>' +
+          _samoraIntelLabel() +
+        '</div>' +
+        '<div style="font-size:11px;color:var(--text3);margin-top:2px">Find anyone: LinkedIn, emails, phone numbers, current and past employers.</div>' +
+      '</div>' +
+      '<button onclick="openDetectiveSam()" style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:8px 14px;border-radius:9px;background:linear-gradient(135deg,#B8860B,#E8B84B,#C8961E);border:none;color:#2A1F0C;cursor:pointer;font-family:var(--sans);flex-shrink:0">' +
+        _magnifierIcon(14, '#2A1F0C') + 'Investigate</button>' +
+    '</div>' +
+  '</div>';
+}
+
+window._dsResult = null;
+
+function openDetectiveSam() {
+  document.getElementById('detective-sam-modal')?.remove();
+  var m = document.createElement('div');
+  m.id = 'detective-sam-modal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(6px);z-index:100000;display:flex;align-items:flex-end;justify-content:center';
+  m.innerHTML = '<div style="background:var(--bg);border-radius:18px 18px 0 0;width:100%;max-width:640px;max-height:92vh;overflow-y:auto;padding:20px" onclick="event.stopPropagation()">' +
+    '<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px">' +
+      _detectiveSamAvatar(52) +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><span style="font-size:16px;font-weight:700;color:var(--text)">Detective SAM</span>'+_samoraIntelLabel()+'</div>' +
+        '<div style="font-size:13px;color:var(--text2);margin-top:3px">Who do you wish to get intelligence on?</div>' +
+      '</div>' +
+      '<button onclick="document.getElementById(\'detective-sam-modal\').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text3);padding:0">✕</button>' +
+    '</div>' +
+    '<div style="font-size:10px;color:var(--text3);margin-bottom:7px">Fill in whatever you know. More detail means a better match, a company domain helps most.</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">' +
+      '<input id="dsName" placeholder="Full name" style="padding:8px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
+      '<input id="dsCompany" placeholder="Company" style="padding:8px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
+      '<input id="dsDomain" placeholder="Company domain (e.g. acme.com)" style="padding:8px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
+      '<input id="dsEmail" placeholder="Email (if known)" style="padding:8px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
+      '<input id="dsPhone" placeholder="Phone (if known)" style="padding:8px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
+      '<input id="dsLinkedin" placeholder="LinkedIn URL (if known)" style="padding:8px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
+    '</div>' +
+    '<button id="dsSearchBtn" onclick="runDetectiveSam()" style="width:100%;margin-top:10px;display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;border-radius:10px;background:linear-gradient(135deg,#B8860B,#E8B84B,#C8961E);border:none;color:#2A1F0C;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--sans)">' +
+      _magnifierIcon(17, '#2A1F0C') + 'Search</button>' +
+    '<div id="dsResults" style="margin-top:14px"></div>' +
+  '</div>';
+  m.addEventListener('click', function(){ m.remove(); });
+  document.body.appendChild(m);
+  setTimeout(function(){ document.getElementById('dsName')?.focus(); }, 50);
+}
+
+var _DS_SRC_META = {
+  internal: { label: 'Your own data', color: 'var(--green)' },
+  lusha:    { label: 'Lusha',        color: 'var(--blue)' },
+  apollo:   { label: 'Apollo',       color: 'var(--blue)' },
+  hunter:   { label: 'Hunter',       color: 'var(--amber)' }
+};
+function _dsSrcChip(src, note) {
+  var m = _DS_SRC_META[src] || { label: src, color: 'var(--text3)' };
+  return '<span style="font-size:9px;font-weight:600;color:'+m.color+';background:rgba(128,128,128,0.09);border-radius:5px;padding:2px 6px;white-space:nowrap" title="'+esc(note||'')+'">'+esc(m.label)+(note?' · '+esc(note):'')+'</span>';
+}
+
+async function runDetectiveSam() {
+  var btn = document.getElementById('dsSearchBtn');
+  var out = document.getElementById('dsResults');
+  var q = {
+    name: document.getElementById('dsName')?.value?.trim() || '',
+    company: document.getElementById('dsCompany')?.value?.trim() || '',
+    domain: document.getElementById('dsDomain')?.value?.trim() || '',
+    email: document.getElementById('dsEmail')?.value?.trim() || '',
+    phone: document.getElementById('dsPhone')?.value?.trim() || '',
+    linkedin_url: document.getElementById('dsLinkedin')?.value?.trim() || ''
+  };
+  if (!q.name && !q.email && !q.phone && !q.linkedin_url) { showToast('Give a name, email, phone or LinkedIn to search on'); return; }
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.65'; btn.innerHTML = _magnifierIcon(17,'#2A1F0C') + 'Investigating…'; }
+  if (out) out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:10px 0">Checking your own records first, then the enrichment providers…</div>';
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify(Object.assign({ action:'detective_sam_lookup' }, q)) });
+    var d = await r.json();
+    if (!d.ok) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">⚠ '+esc(d.error||'Search failed')+'</div>'; return; }
+    window._dsResult = d;
+    out.innerHTML = _renderDetectiveSamResult(d);
+  } catch(e) {
+    if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: '+esc(e.message)+'</div>';
+  } finally {
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; btn.innerHTML = _magnifierIcon(17,'#2A1F0C') + 'Search'; }
+  }
+}
+
+function _renderDetectiveSamResult(d) {
+  var p = d.profile || {};
+  var fs = d.field_sources || {};
+  var html = '';
+
+  if (!d.found) {
+    html += '<div style="background:var(--surface2);border-radius:10px;padding:14px;font-size:12px;color:var(--text2)">No match found.</div>';
+  } else {
+    html += '<div style="background:var(--surface2);border:1px solid var(--border2);border-radius:12px;padding:14px">' +
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">' +
+        '<div style="min-width:0">' +
+          '<div style="font-size:16px;font-weight:700;color:var(--text)">'+esc(p.name||'Unknown')+'</div>' +
+          (p.title ? '<div style="font-size:12px;color:var(--text2);margin-top:2px">'+esc(p.title)+(p.current_org?' · '+esc(p.current_org):'')+'</div>' : (p.current_org?'<div style="font-size:12px;color:var(--text2);margin-top:2px">'+esc(p.current_org)+'</div>':'')) +
+          (p.location ? '<div style="font-size:11px;color:var(--text3);margin-top:2px">📍 '+esc(p.location)+'</div>' : '') +
+        '</div>' +
+        (p.linkedin_url ? '<a href="'+esc(p.linkedin_url)+'" target="_blank" style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#fff;background:#0A66C2;border-radius:7px;padding:6px 10px;text-decoration:none;flex-shrink:0">in LinkedIn</a>' : '') +
+      '</div>';
+
+    if ((d.emails||[]).length) {
+      html += '<div style="margin-top:12px"><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px">✉ Email'+(d.emails.length>1?'s':'')+' ('+d.emails.length+')</div>' +
+        d.emails.map(function(e){
+          return '<div style="display:flex;align-items:center;gap:7px;padding:4px 0;flex-wrap:wrap">' +
+            '<span style="font-size:12px;color:var(--text);font-weight:600">'+esc(e.value)+'</span>' + _dsSrcChip(e.source, e.note) +
+            '<span onclick="navigator.clipboard?.writeText(\''+esc(e.value)+'\');showToast(\'✓ Copied\')" style="cursor:pointer;font-size:10px;color:var(--text3);margin-left:auto">copy</span>' +
+          '</div>';
+        }).join('') + '</div>';
+    }
+    if ((d.phones||[]).length) {
+      html += '<div style="margin-top:12px"><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px">☎ Phone'+(d.phones.length>1?'s':'')+' ('+d.phones.length+')</div>' +
+        d.phones.map(function(e){
+          return '<div style="display:flex;align-items:center;gap:7px;padding:4px 0;flex-wrap:wrap">' +
+            '<span style="font-size:12px;color:var(--text);font-weight:600">'+esc(e.value)+'</span>' + _dsSrcChip(e.source, e.note) +
+            '<span onclick="navigator.clipboard?.writeText(\''+esc(e.value)+'\');showToast(\'✓ Copied\')" style="cursor:pointer;font-size:10px;color:var(--text3);margin-left:auto">copy</span>' +
+          '</div>';
+        }).join('') + '</div>';
+    }
+    if ((p.previous_orgs||[]).length) {
+      html += '<div style="margin-top:12px"><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px">🏢 Previously</div>' +
+        p.previous_orgs.slice(0,6).map(function(h){
+          var yrs = [String(h.start||'').slice(0,4), String(h.end||'').slice(0,4)].filter(Boolean).join(' – ');
+          return '<div style="display:flex;align-items:baseline;gap:7px;padding:3px 0;border-top:1px solid var(--border)">' +
+            '<span style="font-size:12px;color:var(--text);font-weight:600">'+esc(h.organization)+'</span>' +
+            (h.title?'<span style="font-size:11px;color:var(--text3)">'+esc(h.title)+'</span>':'') +
+            (yrs?'<span style="font-size:10px;color:var(--text3);margin-left:auto">'+esc(yrs)+'</span>':'') +
+          '</div>';
+        }).join('') + '</div>';
+    }
+    if (p.seniority || p.department) {
+      html += '<div style="margin-top:10px;font-size:11px;color:var(--text3)">'+[p.seniority,p.department].filter(Boolean).map(esc).join(' · ')+'</div>';
+    }
+    html += '<div style="margin-top:11px;padding-top:9px;border-top:1px solid var(--border);font-size:9px;color:var(--text3)">Sources: '+((d.sources_used||[]).map(function(s){ return (_DS_SRC_META[s]||{label:s}).label; }).join(', ')||'none')+(d.internal_hits?' · '+d.internal_hits+' match'+(d.internal_hits!==1?'es':'')+' already in your data':'')+'</div>';
+    html += '</div>';
+  }
+
+  (d.notes||[]).forEach(function(n){
+    html += '<div style="margin-top:8px;font-size:11px;color:var(--amber);background:rgba(212,160,74,0.08);border-radius:8px;padding:8px 10px">ⓘ '+esc(n)+'</div>';
+  });
+
+  if (d.found) html += _dsActionsHtml();
+  return html;
+}
+
+// "What now?" — asked once a result exists, rather than assuming.
+function _dsActionsHtml() {
+  var camps = window._sampaignCampaignsCache || {};
+  var ids = Object.keys(camps);
+  var opts = ids.map(function(id){ return '<option value="'+esc(id)+'">'+esc(camps[id].name||'SAMpaign')+'</option>'; }).join('');
+  return '<div style="margin-top:12px;background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:12px">' +
+    '<div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:8px">What do you want to do with this?</div>' +
+    (ids.length
+      ? '<div style="display:flex;gap:6px;align-items:center;margin-bottom:7px">' +
+          '<select id="dsCampaignPick" style="flex:1;padding:7px 9px;border-radius:8px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px">'+opts+'</select>' +
+          '<button onclick="dsAddToSampaign()" style="font-size:11px;font-weight:600;padding:7px 12px;border-radius:8px;background:var(--green);border:none;color:#fff;cursor:pointer;font-family:var(--sans);white-space:nowrap">Add to SAMpaign</button>' +
+        '</div>'
+      : '<div style="font-size:10px;color:var(--text3);margin-bottom:7px">No SAMpaigns yet, create one to add people to it.</div>') +
+    '<div style="display:flex;gap:6px;align-items:center;margin-bottom:7px">' +
+      '<input id="dsAccountSearch" placeholder="Account name to attach as stakeholder…" oninput="dsFindAccounts(this.value)" style="flex:1;padding:7px 9px;border-radius:8px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
+    '</div>' +
+    '<div id="dsAccountResults"></div>' +
+    '<div style="font-size:9px;color:var(--text3);margin-top:6px">Saved to an account, they are marked <strong>prospective</strong> until you have actually contacted them, so coverage and champion metrics stay honest.</div>' +
+    '<div style="text-align:right;margin-top:8px"><span onclick="document.getElementById(\'detective-sam-modal\').remove()" style="font-size:11px;color:var(--text3);cursor:pointer">Just show me, close</span></div>' +
+  '</div>';
+}
+
+async function dsAddToSampaign() {
+  var d = window._dsResult; if (!d) return;
+  var cid = document.getElementById('dsCampaignPick')?.value;
+  if (!cid) { showToast('Pick a SAMpaign'); return; }
+  var p = d.profile || {};
+  var contact = {
+    name: p.name || '', email: (d.emails||[])[0]?.value || '',
+    phone: (d.phones||[])[0]?.value || '', company: p.current_org || p.company || '', title: p.title || ''
+  };
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'upload_sampaign_contacts', campaign_id: cid, contacts: [contact] }) });
+    var j = await r.json();
+    if (!j.ok) { showToast('Error: '+(j.error||'Could not add')); return; }
+    showToast(j.added ? '✓ Added to SAMpaign' : 'Already in that SAMpaign');
+  } catch(e) { showToast('Error: '+e.message); }
+}
+
+var _dsAcctTimer = null;
+function dsFindAccounts(q) {
+  clearTimeout(_dsAcctTimer);
+  var box = document.getElementById('dsAccountResults');
+  if (!box) return;
+  if (!q || q.trim().length < 2) { box.innerHTML = ''; return; }
+  _dsAcctTimer = setTimeout(function() {
+    var needle = q.trim().toLowerCase();
+    // Search the pipeline already loaded in this session rather than adding a
+    // lookup endpoint for something the client already holds. _pipelineData
+    // is the global; the `allDeals` arrays elsewhere in this file are local
+    // to their own functions and not reachable from here.
+    var pd = (typeof _pipelineData !== 'undefined' && _pipelineData) ? _pipelineData : null;
+    if (!pd) { box.innerHTML = '<div style="font-size:10px;color:var(--text3);padding:3px 0">Open the Pipeline tab once so your accounts are loaded, then try again.</div>'; return; }
+    var pool = [].concat(pd.verified||[], pd.partial||[], pd.unverified||[]);
+    var hits = pool.filter(function(a){ return String(a.account_name||'').toLowerCase().indexOf(needle) !== -1; }).slice(0, 5);
+    if (!hits.length) { box.innerHTML = '<div style="font-size:10px;color:var(--text3);padding:3px 0">No matching account in your pipeline.</div>'; return; }
+    box.innerHTML = hits.map(function(a){
+      return '<div onclick="dsSaveStakeholder(\''+esc(a.id)+'\',\''+esc(a.account_name)+'\')" style="cursor:pointer;font-size:11px;color:var(--text);padding:5px 7px;border-radius:6px;background:var(--surface2);margin-top:3px">＋ '+esc(a.account_name)+'</div>';
+    }).join('');
+  }, 200);
+}
+
+async function dsSaveStakeholder(accountId, accountName) {
+  var d = window._dsResult; if (!d) return;
+  var p = d.profile || {};
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'detective_sam_save_stakeholder', account_id: accountId,
+        name: p.name, email: (d.emails||[])[0]?.value || null, phone: (d.phones||[])[0]?.value || null,
+        title: p.title, linkedin_url: p.linkedin_url, seniority: p.seniority, department: p.department }) });
+    var j = await r.json();
+    if (!j.ok) { showToast('Error: '+(j.error||'Could not save')); return; }
+    showToast(j.added ? '✓ Added to '+accountName+' as prospective' : (j.note||'Already a stakeholder'));
+  } catch(e) { showToast('Error: '+e.message); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Follow-up scheduler — pick actual calendar dates, with weekends in red.
 //
 // Replaces the old "3,7,14 days after send" box. Day offsets meant you had to
@@ -9638,8 +9919,12 @@ function loadSampaignWorkspace() {
   var role = (profile?.role||'').toLowerCase();
   var el = document.getElementById('sampaignManualSection');
   if (!el) return;
-  if (!['sdr','ae','manager'].includes(role)) { el.innerHTML = ''; return; }
+  // Detective SAM is a research tool, not a campaign tool, so it is NOT
+  // behind the sdr/ae/manager gate the SAMpaign workspace sits behind —
+  // anyone who needs to look a person up should be able to.
+  if (!['sdr','ae','manager'].includes(role)) { el.innerHTML = detectiveSamCardHtml(); return; }
   el.innerHTML =
+    detectiveSamCardHtml() +
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
       '<span style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">My SAMpaigns'+(role==='manager'?' (you + your team)':'')+'</span>' +
       '<button onclick="toggleNewSampaignForm()" id="sampaignNewBtn" style="font-size:11px;font-weight:600;padding:5px 12px;border-radius:8px;background:var(--green);border:none;color:#fff;cursor:pointer;font-family:var(--sans)">+ New SAMpaign</button>' +
