@@ -14,9 +14,23 @@ export default async function handler(req, res) {
   const action = req.query.action;
   try {
     const accessToken = await getValidAccessToken(session, token);
-    const result = await executeTool(accessToken, action, req.body || {});
+    let result;
+    try {
+      result = await executeTool(accessToken, action, req.body || {});
+    } catch (err) {
+      // Self-heal on a stale token. Expiry bookkeeping can be wrong for
+      // reasons outside this code (clock skew, a session revoked server-side,
+      // a rotated refresh token), and the honest signal that it IS wrong is
+      // the 401 itself. Force one refresh and retry rather than making the
+      // user delete and re-add the connector in Claude's settings.
+      if (err.status !== 401) throw err;
+      const retryToken = await getValidAccessToken(session, token, true);
+      result = await executeTool(retryToken, action, req.body || {});
+    }
     res.json({ ok: true, result });
   } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
+    // 401 that survived a forced refresh means the session really is dead,
+    // and the caller deserves that status rather than a generic 500.
+    res.status(err.status === 401 ? 401 : 500).json({ ok: false, error: err.message });
   }
 }
