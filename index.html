@@ -9574,6 +9574,85 @@ async function submitSampaignSchedule(campaignId) {
   } catch(e) { showToast('Error: ' + e.message); }
 }
 
+// Drafts written by an AI tool via the connector. Reviewed here BEFORE
+// anything is scheduled: copy that goes straight from a model into a send
+// queue means the first human to read it is the prospect.
+function _renderSampaignDrafts(campaignId, drafts) {
+  if (!drafts.length) return '';
+  var byTool = {};
+  drafts.forEach(function(d){ var k = d.generated_by || 'ai'; byTool[k] = (byTool[k]||0)+1; });
+  return '<div style="border:1px solid rgba(160,117,42,0.3);border-radius:10px;padding:11px;margin-bottom:10px;background:rgba(160,117,42,0.05)">' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;flex-wrap:wrap">' +
+      '<span style="font-size:11px;font-weight:700;color:var(--text)">✍ '+drafts.length+' personalised draft'+(drafts.length!==1?'s':'')+' to review</span>' +
+      '<span style="font-size:9px;color:var(--text3)">'+Object.keys(byTool).map(function(k){ return esc(k)+' · '+byTool[k]; }).join(', ')+'</span>' +
+      '<span onclick="planSampaignDrafts(\''+esc(campaignId)+'\')" style="margin-left:auto;font-size:10px;font-weight:600;color:var(--gold);cursor:pointer">Preview send plan →</span>' +
+    '</div>' +
+    '<div style="font-size:9px;color:var(--text3);margin-bottom:7px">Nothing sends until you schedule it. Click a draft to read and edit it.</div>' +
+    drafts.slice(0, 40).map(function(x) {
+      return '<div style="border-top:1px solid var(--border);padding:6px 0">' +
+        '<div onclick="_toggleDraft(\''+esc(x.id)+'\')" style="cursor:pointer;display:flex;gap:7px;align-items:baseline">' +
+          '<span style="font-size:11px;font-weight:600;color:var(--text);flex-shrink:0">'+esc(x.name||x.email||'—')+'</span>' +
+          '<span style="font-size:10px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(x.subject||'')+'</span>' +
+          (x.edited_by_human ? '<span style="font-size:8px;color:var(--green);flex-shrink:0;margin-left:auto">edited</span>' : '') +
+        '</div>' +
+        '<div id="draft_'+esc(x.id)+'" style="display:none;margin-top:6px">' +
+          '<input id="draftSubj_'+esc(x.id)+'" value="'+esc(x.subject||'')+'" style="width:100%;box-sizing:border-box;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:11px;margin-bottom:4px"/>' +
+          '<textarea id="draftBody_'+esc(x.id)+'" rows="7" style="width:100%;box-sizing:border-box;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:11px;line-height:1.5;resize:vertical">'+esc(x.body||'')+'</textarea>' +
+          '<div style="display:flex;gap:6px;margin-top:4px">' +
+            '<button onclick="saveSampaignDraftEdit(\''+esc(campaignId)+'\',\''+esc(x.id)+'\',\''+esc(x.contact_id)+'\')" style="font-size:10px;font-weight:600;padding:5px 10px;border-radius:6px;background:var(--green);border:none;color:#fff;cursor:pointer;font-family:var(--sans)">Save edit</button>' +
+            '<span onclick="cancelSampaignSends(\''+esc(campaignId)+'\',\''+esc(x.id)+'\')" style="font-size:10px;color:var(--coral);cursor:pointer;align-self:center">Discard</span>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('') +
+  '</div>';
+}
+function _toggleDraft(id) {
+  var el = document.getElementById('draft_'+id);
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+async function saveSampaignDraftEdit(campaignId, sendId, contactId) {
+  var subject = document.getElementById('draftSubj_'+sendId)?.value?.trim();
+  var body = document.getElementById('draftBody_'+sendId)?.value;
+  if (!subject || !body || !body.trim()) { showToast('Subject and body are both needed'); return; }
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'save_sampaign_drafts', campaign_id: campaignId, generated_by: 'manual', drafts: [{ contact_id: contactId, subject: subject, body: body }] }) });
+    var d = await r.json();
+    if (!d.ok) { showToast('⚠ ' + (d.error||'Could not save')); return; }
+    showToast('✓ Draft updated');
+    loadSampaignSendQueue(campaignId);
+  } catch(e) { showToast('Error: '+e.message); }
+}
+
+// dry_run first, always. Committing a multi-day send plan without showing it
+// is exactly the surprise this feature exists to prevent.
+async function planSampaignDrafts(campaignId) {
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'schedule_sampaign_drafts', campaign_id: campaignId, dry_run: true }) });
+    var d = await r.json();
+    if (!d.ok) { showToast('⚠ ' + (d.error||'Could not plan')); return; }
+    var days = Object.keys(d.per_day||{}).sort();
+    var lines = days.map(function(k){ return k + ': ' + d.per_day[k]; }).join('\n');
+    var first = d.first_send ? new Date(d.first_send).toLocaleString('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '—';
+    var last  = d.last_send  ? new Date(d.last_send).toLocaleString('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '—';
+    var msg = d.scheduled + ' emails over ' + d.days + ' day' + (d.days!==1?'s':'') + '\n\n' +
+      lines + '\n\n' +
+      'First: ' + first + '\nLast:  ' + last + '\n\n' +
+      'Ramping from ' + d.policy.ramp_start + '/day to a cap of ' + d.policy.daily_cap + '/day, ' +
+      d.policy.window_start_hour + ':00-' + d.policy.window_end_hour + ':00' + (d.policy.skip_weekends ? ', weekdays only' : '') + '.\n\n' +
+      'Spread out on purpose: sending a whole campaign at once from one mailbox risks it being suspended.\n\nSchedule these now?';
+    if (!confirm(msg)) return;
+    var r2 = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'schedule_sampaign_drafts', campaign_id: campaignId }) });
+    var d2 = await r2.json();
+    if (!d2.ok) { showToast('⚠ ' + (d2.error||'Could not schedule')); return; }
+    showToast('✓ Scheduled ' + d2.scheduled + ' over ' + d2.days + ' day' + (d2.days!==1?'s':''));
+    loadSampaignSendQueue(campaignId);
+  } catch(e) { showToast('Error: '+e.message); }
+}
+
 async function loadSampaignSendQueue(campaignId) {
   var box = document.getElementById('sampSendQueue');
   if (!box) return;
@@ -9582,6 +9661,12 @@ async function loadSampaignSendQueue(campaignId) {
       body: JSON.stringify({ action:'list_sampaign_scheduled_sends', campaign_id: campaignId }) });
     var d = await r.json();
     if (!d.ok || !d.sends || !d.sends.length) { box.innerHTML = ''; return; }
+    // Drafts are shown separately and above: they need a decision, the queue
+    // is just a record of one already made.
+    var draftRows = d.sends.filter(function(x){ return x.status === 'draft'; });
+    d.sends = d.sends.filter(function(x){ return x.status !== 'draft'; });
+    var draftHtml = _renderSampaignDrafts(campaignId, draftRows);
+    if (!d.sends.length) { box.innerHTML = draftHtml; return; }
     var META = {
       pending:   { label:'Queued',    color:'var(--gold)' },
       sent:      { label:'Sent',      color:'var(--green)' },
@@ -9589,7 +9674,7 @@ async function loadSampaignSendQueue(campaignId) {
       cancelled: { label:'Cancelled', color:'var(--text3)' }
     };
     var s = d.summary || {};
-    box.innerHTML = '<div style="border-top:1px solid var(--border);padding-top:11px">' +
+    box.innerHTML = draftHtml + '<div style="border-top:1px solid var(--border);padding-top:11px">' +
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">' +
         '<span style="font-size:11px;font-weight:700;color:var(--text)">Queue</span>' +
         Object.keys(META).filter(function(k){ return s[k]; }).map(function(k){
