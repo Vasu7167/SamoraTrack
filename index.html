@@ -9615,7 +9615,7 @@ function _renderSampaignDrafts(campaignId, drafts) {
           '<input id="draftSubj_'+esc(x.id)+'" value="'+esc(x.subject||'')+'" style="width:100%;box-sizing:border-box;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:11px;margin-bottom:4px"/>' +
           '<textarea id="draftBody_'+esc(x.id)+'" rows="7" style="width:100%;box-sizing:border-box;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:11px;line-height:1.5;resize:vertical">'+esc(x.body||'')+'</textarea>' +
           '<div style="display:flex;gap:6px;margin-top:4px">' +
-            '<button onclick="saveSampaignDraftEdit(\''+esc(campaignId)+'\',\''+esc(x.id)+'\',\''+esc(x.contact_id)+'\')" style="font-size:10px;font-weight:600;padding:5px 10px;border-radius:6px;background:var(--green);border:none;color:#fff;cursor:pointer;font-family:var(--sans)">Save edit</button>' +
+            '<button onclick="saveSampaignDraftEdit(\''+esc(campaignId)+'\',\''+esc(x.id)+'\')" style="font-size:10px;font-weight:600;padding:5px 10px;border-radius:6px;background:var(--green);border:none;color:#fff;cursor:pointer;font-family:var(--sans)">Save edit</button>' +
             '<span onclick="cancelSampaignSends(\''+esc(campaignId)+'\',\''+esc(x.id)+'\')" style="font-size:10px;color:var(--coral);cursor:pointer;align-self:center">Discard</span>' +
           '</div>' +
         '</div>' +
@@ -9627,16 +9627,22 @@ function _toggleDraft(id) {
   var el = document.getElementById('draft_'+id);
   if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
-async function saveSampaignDraftEdit(campaignId, sendId, contactId) {
+// Edits go through update_sampaign_scheduled_send, NOT save_sampaign_drafts.
+// The latter writes status='draft' with a null send_at, so using it to fix a
+// typo in a queued email would silently un-schedule it — the send would just
+// stop happening, with no symptom until someone noticed the mail never
+// arrived. This updates the text in place and leaves status and send time
+// exactly as they were.
+async function saveSampaignDraftEdit(campaignId, sendId) {
   var subject = document.getElementById('draftSubj_'+sendId)?.value?.trim();
   var body = document.getElementById('draftBody_'+sendId)?.value;
   if (!subject || !body || !body.trim()) { showToast('Subject and body are both needed'); return; }
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
-      body: JSON.stringify({ action:'save_sampaign_drafts', campaign_id: campaignId, generated_by: 'manual', drafts: [{ contact_id: contactId, subject: subject, body: body }] }) });
+      body: JSON.stringify({ action:'update_sampaign_scheduled_send', send_id: sendId, subject: subject, body: body }) });
     var d = await r.json();
     if (!d.ok) { showToast('⚠ ' + (d.error||'Could not save')); return; }
-    showToast('✓ Draft updated');
+    showToast('✓ ' + (d.note || 'Updated'));
     loadSampaignSendQueue(campaignId);
   } catch(e) { showToast('Error: '+e.message); }
 }
@@ -9701,12 +9707,34 @@ async function loadSampaignSendQueue(campaignId) {
       d.sends.slice(0, 60).map(function(x) {
         var mm = META[x.status] || META.pending;
         var when = new Date(x.send_at);
+        // Anything not yet delivered can be opened and edited. A queued email
+        // is still just text in a table until the cron picks it up, and
+        // hiding it until after it lands is the wrong side of that line.
+        var editable = (x.status === 'pending') && d.is_owner;
+        var readable = editable || x.status === 'sent' || x.status === 'cancelled';
         return '<div style="display:flex;align-items:center;gap:7px;padding:5px 0;border-top:1px solid var(--border);font-size:11px">' +
-          '<span style="min-width:0;flex:1;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(x.name||x.email||'—')+'<span style="color:var(--text3)"> · '+esc(x.email||'')+'</span></span>' +
+          '<span '+(readable?'onclick="_toggleDraft(\''+esc(x.id)+'\')" style="cursor:pointer;':'style="')+'min-width:0;flex:1;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+
+            (readable?'<span style="color:var(--text3);font-size:9px">▸ </span>':'')+
+            esc(x.name||x.email||'—')+'<span style="color:var(--text3)"> · '+esc(x.email||'')+'</span></span>' +
           '<span style="color:var(--text3);font-size:10px;white-space:nowrap">'+(isNaN(when.getTime())?'':when.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' '+when.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}))+'</span>' +
           '<span style="font-size:9px;font-weight:700;color:'+mm.color+';white-space:nowrap">'+mm.label+'</span>' +
           (x.status==='pending' && d.is_owner ? '<span onclick="cancelSampaignSends(\''+esc(campaignId)+'\',\''+esc(x.id)+'\')" style="cursor:pointer;color:var(--text3);font-size:12px" title="Cancel this one">✕</span>' : '') +
         '</div>' +
+        (readable ? '<div id="draft_'+esc(x.id)+'" style="display:none;padding:0 0 8px 0">' +
+          (editable
+            ? '<input id="draftSubj_'+esc(x.id)+'" value="'+esc(x.subject||'')+'" style="width:100%;box-sizing:border-box;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:11px;margin-bottom:4px"/>' +
+              '<textarea id="draftBody_'+esc(x.id)+'" rows="7" style="width:100%;box-sizing:border-box;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:11px;line-height:1.5;resize:vertical">'+esc(x.body||'')+'</textarea>' +
+              '<div style="display:flex;gap:8px;align-items:center;margin-top:4px">' +
+                '<button onclick="saveSampaignDraftEdit(\''+esc(campaignId)+'\',\''+esc(x.id)+'\')" style="font-size:10px;font-weight:600;padding:5px 10px;border-radius:6px;background:var(--green);border:none;color:#fff;cursor:pointer;font-family:var(--sans)">Save edit</button>' +
+                '<span style="font-size:9px;color:var(--text3)">Editing does not change the send time</span>' +
+              '</div>'
+            // Sent and cancelled are read-only. Showing an editable box for a
+            // delivered email would let the UI display corrected text the
+            // recipient never received.
+            : '<div style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:3px">'+esc(x.subject||'')+'</div>' +
+              '<div style="font-size:11px;color:var(--text2);white-space:pre-wrap;line-height:1.5;background:var(--surface);border-radius:6px;padding:7px 9px">'+esc(x.body||'')+'</div>' +
+              '<div style="font-size:9px;color:var(--text3);margin-top:3px">'+(x.status==='sent'?'Already sent, read only':'Cancelled')+'</div>') +
+        '</div>' : '') +
         (x.error ? '<div style="font-size:9px;color:var(--coral);padding-bottom:4px">'+esc(x.error)+'</div>' : '');
       }).join('') +
     '</div>';
