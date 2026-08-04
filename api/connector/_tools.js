@@ -129,6 +129,8 @@ export const TOOL_SCHEMAS = [
   { name: 'get_sampaigns',         description: 'List the caller\'s manual SAMpaigns (account-anchored outreach campaigns) with contact-count and status summary, INCLUDING campaign_goal (the specific pitch/ask for that campaign, e.g. "book a 15-min demo"). Call this first if you don\'t already have a campaign_id — campaign_goal answers "what is this campaign about", do not ask the user that if it is present.', params: {} },
   { name: 'get_sampaign_contacts', description: 'Full contact roster for one SAMpaign — enriched profile (title, seniority, LinkedIn), engagement status, and account-collision flag. Use this to personalize outreach emails. Call get_company_context too, before drafting any pitch copy, so you use the org\'s real product/ICP instead of asking the user what they sell.', params: { campaign_id: { type: 'string', required: true } } },
   { name: 'get_company_context',   description: 'What this org actually sells: product names (from Admin → Products) and ICP definition (ideal use case, target industries/geographies/stakeholders, keywords, from Admin → ICP Definition). Call this BEFORE drafting any outreach, pitch, or personalized email copy — do not ask the user what they are pitching, this answers it.', params: {} },
+  { name: 'save_sampaign_drafts',  description: 'Write ONE PERSONALIZED EMAIL PER CONTACT back into a SAMpaign as drafts. This is how you deliver outreach copy: never send mail yourself, and never ask the user to copy-paste it. Workflow: get_sampaigns (goal) → get_sampaign_contacts (who, with title/seniority/LinkedIn) → get_company_context (what we sell) → write a genuinely different email per person → save here → then schedule_sampaign_drafts. Drafts do NOT send until scheduled, so it is safe to save and let the user review. Re-saving for the same contact replaces that draft.', params: { campaign_id: { type: 'string', required: true }, drafts: { type: 'array', required: true }, generated_by: { type: 'string' } } },
+  { name: 'schedule_sampaign_drafts', description: 'Turn saved drafts into scheduled sends, automatically spread over multiple days at a deliverability-safe rate. ALWAYS call with dry_run=true first and show the user the plan (how many days, how many per day, first and last send) before committing. Samora throttles on purpose: cold sending from one mailbox is safe at roughly 20-50/day, ramping up from ~8, and blasting a whole campaign at once risks the mailbox being suspended. Do not try to defeat this by scheduling batches back to back — the cap is enforced again at send time per mailbox per day.', params: { campaign_id: { type: 'string', required: true }, start_at: { type: 'string' }, daily_cap: { type: 'number' }, window_start_hour: { type: 'number' }, window_end_hour: { type: 'number' }, skip_weekends: { type: 'boolean' }, dry_run: { type: 'boolean' } } },
 ];
 
 // ── Tool execution ────────────────────────────────────────────────────────────
@@ -161,6 +163,29 @@ export async function executeTool(accessToken, name, args = {}) {
     case 'get_sampaigns':         return edge(accessToken, 'list_sampaigns', {});
     case 'get_sampaign_contacts': return edge(accessToken, 'list_sampaign_contacts', { campaign_id: args.campaign_id });
     case 'get_company_context':  return edge(accessToken, 'get_company_context', {});
+    case 'save_sampaign_drafts': {
+      // Normalise here rather than trusting the model's shape. Different
+      // tools emit {contact_id,subject,body} vs {id,...} vs {contactId,...},
+      // and a silently-dropped draft is worse than a loud rejection.
+      const raw = Array.isArray(args.drafts) ? args.drafts : [];
+      const drafts = raw.map(d => ({
+        contact_id: d.contact_id || d.contactId || d.id || null,
+        subject: d.subject || d.title || '',
+        body: d.body || d.message || d.text || ''
+      })).filter(d => d.contact_id);
+      if (!drafts.length) throw new Error('drafts must be a non-empty array of { contact_id, subject, body }');
+      return edge(accessToken, 'save_sampaign_drafts', { campaign_id: args.campaign_id, drafts, generated_by: args.generated_by || 'ai' });
+    }
+    case 'schedule_sampaign_drafts':
+      return edge(accessToken, 'schedule_sampaign_drafts', {
+        campaign_id: args.campaign_id,
+        start_at: args.start_at || null,
+        daily_cap: args.daily_cap ?? null,
+        window_start_hour: args.window_start_hour ?? null,
+        window_end_hour: args.window_end_hour ?? null,
+        skip_weekends: args.skip_weekends ?? null,
+        dry_run: !!args.dry_run
+      });
     default: throw new Error('Unknown tool: ' + name);
   }
 }
