@@ -9457,6 +9457,176 @@ window._sampaignContactsCache = {};
 // backend change was needed for "manager should see the team's analytics
 // too" — this was purely a frontend wiring gap.
 // ═══════════════════════════════════════════════════════════════════════════
+// SAMpaign SCHEDULER — write once, queue it, let it go out on time.
+//
+// Sends leave from the rep's own Gmail via a narrow server action, so they
+// land at the scheduled minute whether or not anyone is logged in. The queue
+// deliberately shows every individual recipient BEFORE anything is sent:
+// scheduled outbound that you cannot inspect in advance is how accidents
+// happen.
+// ═══════════════════════════════════════════════════════════════════════════
+var _SAMPAIGN_SEND_VARS = [
+  { k: '{{first_name}}', d: 'First name only' },
+  { k: '{{name}}',       d: 'Full name' },
+  { k: '{{company}}',    d: 'Company' },
+  { k: '{{title}}',      d: 'Job title' }
+];
+
+function openSampaignComposer(campaignId) {
+  document.getElementById('sampaign-composer-modal')?.remove();
+  var c = (window._sampaignCampaignsCache || {})[campaignId] || {};
+  var all = (window._sampaignContactsCache || {})[campaignId] || [];
+  var sendable = all.filter(function(x){ return x.email && x.status === 'not_contacted'; });
+  var noEmail = all.filter(function(x){ return !x.email; }).length;
+
+  // Default to the next weekday at 9am. A default that lands on Saturday, or
+  // three minutes from now, is a trap.
+  var d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0);
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+
+  var m = document.createElement('div');
+  m.id = 'sampaign-composer-modal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(6px);z-index:100000;display:flex;align-items:flex-end;justify-content:center';
+  m.innerHTML = '<div style="background:var(--bg);border-radius:18px 18px 0 0;width:100%;max-width:640px;max-height:92vh;overflow-y:auto;padding:20px" onclick="event.stopPropagation()">' +
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">' +
+      '<div><div style="font-size:16px;font-weight:700;color:var(--text)">✉ Schedule outreach</div>' +
+      '<div style="font-size:11px;color:var(--text3);margin-top:2px">'+esc(c.name||'SAMpaign')+' · sends from your own Gmail</div></div>' +
+      '<button onclick="document.getElementById(\'sampaign-composer-modal\').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text3);padding:0">✕</button>' +
+    '</div>' +
+    (sendable.length
+      ? '<div style="font-size:11px;color:var(--text2);background:var(--surface2);border-radius:8px;padding:8px 10px;margin-bottom:10px">Will queue <strong>'+sendable.length+'</strong> contact'+(sendable.length!==1?'s':'')+' who have an email and have not been contacted yet.'+(noEmail?' <span style="color:var(--gold)">'+noEmail+' skipped, no email yet.</span>':'')+'</div>'
+      : '<div style="font-size:11px;color:var(--coral);background:rgba(196,90,74,0.08);border-radius:8px;padding:8px 10px;margin-bottom:10px">No contacts are ready to send to. They need an email address and a "Not contacted" status.</div>') +
+    '<input id="sampSendSubject" placeholder="Subject" style="width:100%;box-sizing:border-box;padding:9px 11px;border-radius:8px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;margin-bottom:6px"/>' +
+    '<textarea id="sampSendBody" rows="9" placeholder="Hi {{first_name}},&#10;&#10;..." style="width:100%;box-sizing:border-box;padding:9px 11px;border-radius:8px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;resize:vertical;line-height:1.5"></textarea>' +
+    '<div style="display:flex;gap:5px;flex-wrap:wrap;margin:7px 0">' +
+      '<span style="font-size:10px;color:var(--text3);align-self:center">Insert:</span>' +
+      _SAMPAIGN_SEND_VARS.map(function(v){
+        return '<span onclick="_sampInsertVar(\''+v.k+'\')" title="'+esc(v.d)+'" style="cursor:pointer;font-size:10px;font-family:var(--mono,monospace);color:var(--gold);background:rgba(160,117,42,0.1);border:1px solid rgba(160,117,42,0.25);border-radius:6px;padding:3px 7px">'+esc(v.k)+'</span>';
+      }).join('') +
+    '</div>' +
+    '<div style="font-size:9px;color:var(--text3);margin-bottom:10px">Filled in per person at send time, so anything Enrich finds between now and then is used. A variable with no value becomes blank, never the raw {{tag}}.</div>' +
+    '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">' +
+      '<span style="font-size:11px;color:var(--text3)">Send at</span>' +
+      '<input type="date" id="sampSendDate" value="'+dateKey(d)+'" style="padding:7px 9px;border-radius:8px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
+      '<input type="time" id="sampSendTime" value="09:00" style="padding:7px 9px;border-radius:8px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
+      '<span id="sampSendWhen" style="font-size:10px;color:var(--text3)"></span>' +
+    '</div>' +
+    '<div id="sampSendWeekendWarn"></div>' +
+    '<button onclick="submitSampaignSchedule(\''+esc(campaignId)+'\')" '+(sendable.length?'':'disabled')+' style="width:100%;margin-top:10px;padding:11px;border-radius:10px;background:'+(sendable.length?'var(--green)':'var(--border2)')+';border:none;color:#fff;font-size:14px;font-weight:700;cursor:'+(sendable.length?'pointer':'not-allowed')+';font-family:var(--sans)">Queue '+(sendable.length||0)+' email'+(sendable.length!==1?'s':'')+'</button>' +
+    '<div id="sampSendQueue" style="margin-top:14px"></div>' +
+  '</div>';
+  m.addEventListener('click', function(){ m.remove(); });
+  document.body.appendChild(m);
+  ['sampSendDate','sampSendTime'].forEach(function(id){
+    document.getElementById(id)?.addEventListener('change', _sampSendWhenHint);
+  });
+  _sampSendWhenHint();
+  loadSampaignSendQueue(campaignId);
+}
+
+function _sampSendWhenHint() {
+  var dv = document.getElementById('sampSendDate')?.value;
+  var tv = document.getElementById('sampSendTime')?.value || '09:00';
+  var warn = document.getElementById('sampSendWeekendWarn');
+  var hint = document.getElementById('sampSendWhen');
+  if (!dv) return;
+  var dt = new Date(dv + 'T' + tv);
+  if (hint) hint.textContent = isNaN(dt.getTime()) ? '' : dt.toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'short' });
+  // Same weekend honesty as the follow-up picker: flag it, never override.
+  if (warn) {
+    var wknd = dt.getDay() === 0 || dt.getDay() === 6;
+    warn.innerHTML = wknd ? '<div style="font-size:10px;color:var(--coral);margin-top:2px">⚠ That is a weekend. Fine if deliberate, worth a second look if not.</div>' : '';
+  }
+}
+
+function _sampInsertVar(v) {
+  var ta = document.getElementById('sampSendBody');
+  if (!ta) return;
+  var s = ta.selectionStart || 0, e = ta.selectionEnd || 0;
+  ta.value = ta.value.slice(0, s) + v + ta.value.slice(e);
+  ta.focus();
+  ta.selectionStart = ta.selectionEnd = s + v.length;
+}
+
+async function submitSampaignSchedule(campaignId) {
+  var subject = document.getElementById('sampSendSubject')?.value?.trim();
+  var body = document.getElementById('sampSendBody')?.value;
+  var dv = document.getElementById('sampSendDate')?.value;
+  var tv = document.getElementById('sampSendTime')?.value || '09:00';
+  if (!subject) { showToast('Add a subject'); return; }
+  if (!body || !body.trim()) { showToast('Add a message'); return; }
+  if (!dv) { showToast('Pick a date'); return; }
+  var when = new Date(dv + 'T' + tv);
+  if (isNaN(when.getTime())) { showToast('That date/time is not valid'); return; }
+  if (when.getTime() < Date.now()) { showToast('That time has already passed'); return; }
+
+  var all = (window._sampaignContactsCache || {})[campaignId] || [];
+  var sendable = all.filter(function(x){ return x.email && x.status === 'not_contacted'; });
+  if (!confirm('Queue ' + sendable.length + ' email' + (sendable.length!==1?'s':'') + ' to go out at ' + when.toLocaleString('en-GB', { weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) + '?\n\nThey will send from your Gmail automatically, whether or not you are logged in.')) return;
+
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'schedule_sampaign_send', campaign_id: campaignId, subject: subject, body: body, send_at: when.toISOString() }) });
+    var d = await r.json();
+    if (!d.ok) { showToast('⚠ ' + (d.error || 'Could not schedule')); return; }
+    showToast('✓ Queued ' + d.scheduled + ' email' + (d.scheduled!==1?'s':''));
+    loadSampaignSendQueue(campaignId);
+  } catch(e) { showToast('Error: ' + e.message); }
+}
+
+async function loadSampaignSendQueue(campaignId) {
+  var box = document.getElementById('sampSendQueue');
+  if (!box) return;
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'list_sampaign_scheduled_sends', campaign_id: campaignId }) });
+    var d = await r.json();
+    if (!d.ok || !d.sends || !d.sends.length) { box.innerHTML = ''; return; }
+    var META = {
+      pending:   { label:'Queued',    color:'var(--gold)' },
+      sent:      { label:'Sent',      color:'var(--green)' },
+      failed:    { label:'Failed',    color:'var(--coral)' },
+      cancelled: { label:'Cancelled', color:'var(--text3)' }
+    };
+    var s = d.summary || {};
+    box.innerHTML = '<div style="border-top:1px solid var(--border);padding-top:11px">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">' +
+        '<span style="font-size:11px;font-weight:700;color:var(--text)">Queue</span>' +
+        Object.keys(META).filter(function(k){ return s[k]; }).map(function(k){
+          return '<span style="font-size:10px;font-weight:600;color:'+META[k].color+'">'+s[k]+' '+META[k].label.toLowerCase()+'</span>';
+        }).join('<span style="color:var(--text3)">·</span>') +
+        (s.pending ? '<span onclick="cancelSampaignSends(\''+esc(campaignId)+'\',null)" style="margin-left:auto;font-size:10px;color:var(--coral);cursor:pointer">Cancel all queued</span>' : '') +
+      '</div>' +
+      d.sends.slice(0, 60).map(function(x) {
+        var mm = META[x.status] || META.pending;
+        var when = new Date(x.send_at);
+        return '<div style="display:flex;align-items:center;gap:7px;padding:5px 0;border-top:1px solid var(--border);font-size:11px">' +
+          '<span style="min-width:0;flex:1;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(x.name||x.email||'—')+'<span style="color:var(--text3)"> · '+esc(x.email||'')+'</span></span>' +
+          '<span style="color:var(--text3);font-size:10px;white-space:nowrap">'+(isNaN(when.getTime())?'':when.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' '+when.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}))+'</span>' +
+          '<span style="font-size:9px;font-weight:700;color:'+mm.color+';white-space:nowrap">'+mm.label+'</span>' +
+          (x.status==='pending' && d.is_owner ? '<span onclick="cancelSampaignSends(\''+esc(campaignId)+'\',\''+esc(x.id)+'\')" style="cursor:pointer;color:var(--text3);font-size:12px" title="Cancel this one">✕</span>' : '') +
+        '</div>' +
+        (x.error ? '<div style="font-size:9px;color:var(--coral);padding-bottom:4px">'+esc(x.error)+'</div>' : '');
+      }).join('') +
+    '</div>';
+  } catch(e) { box.innerHTML = ''; }
+}
+
+async function cancelSampaignSends(campaignId, sendId) {
+  var payload = sendId
+    ? { action:'cancel_sampaign_scheduled_send', send_ids:[sendId] }
+    : { action:'cancel_sampaign_scheduled_send', campaign_id: campaignId, all_pending: true };
+  if (!sendId && !confirm('Cancel every queued email for this SAMpaign?')) return;
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body: JSON.stringify(payload) });
+    var d = await r.json();
+    if (!d.ok) { showToast('⚠ ' + (d.error||'Could not cancel')); return; }
+    showToast('✓ Cancelled ' + d.cancelled);
+    loadSampaignSendQueue(campaignId);
+  } catch(e) { showToast('Error: ' + e.message); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // DETECTIVE SAM — person intelligence from whatever you happen to know.
 //
 // Backed by detective_sam_lookup, which searches the org's OWN data first
@@ -10313,7 +10483,8 @@ async function openSampaignDetail(campaignId) {
         // ever fail for them. Show who it belongs to instead of a control
         // that cannot work.
         (_isSampaignOwner(c)
-          ? '<button id="sampaignSyncBtn_'+esc(campaignId)+'" onclick="syncSampaignCampaign(\''+esc(campaignId)+'\')" style="font-size:10px;font-weight:600;color:var(--gold);padding:6px 11px;border-radius:8px;background:rgba(160,117,42,0.1);border:1px solid rgba(160,117,42,0.25);cursor:pointer;white-space:nowrap">🔄 Sync inbox</button>'
+          ? '<button onclick="openSampaignComposer(\''+esc(campaignId)+'\')" style="font-size:10px;font-weight:600;color:#fff;padding:6px 11px;border-radius:8px;background:var(--green);border:none;cursor:pointer;white-space:nowrap">✉ Schedule</button>' +
+            '<button id="sampaignSyncBtn_'+esc(campaignId)+'" onclick="syncSampaignCampaign(\''+esc(campaignId)+'\')" style="font-size:10px;font-weight:600;color:var(--gold);padding:6px 11px;border-radius:8px;background:rgba(160,117,42,0.1);border:1px solid rgba(160,117,42,0.25);cursor:pointer;white-space:nowrap">🔄 Sync inbox</button>'
           : '<span style="font-size:9px;color:var(--text3);text-align:right;line-height:1.35;max-width:150px">Syncs from '+esc((c.owner_email||'the owner').split('@')[0])+'’s inbox, hourly</span>') +
         '<button onclick="document.getElementById(\'sampaign-detail-overlay\').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text3);padding:0">✕</button>' +
       '</div>' +
@@ -10322,6 +10493,7 @@ async function openSampaignDetail(campaignId) {
       '<div style="font-size:11px;color:var(--text3);padding:10px 0">Loading performance…</div>'+
     '</div>' +
     '<div id="sampaignDetailSchedule" style="margin-bottom:6px"></div>' +
+    '<div id="sampaignDetailTrend"></div>' +
     '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 8px">👥 Contacts</div>' +
     '<div id="sampaignContacts_'+esc(campaignId)+'"><div style="font-size:11px;color:var(--text3)">Loading contacts…</div></div>' +
   '</div>';
@@ -10330,6 +10502,54 @@ async function openSampaignDetail(campaignId) {
 
   _loadSampaignContactsInto(campaignId);
   _loadSampaignDetailPerf(campaignId, c);
+  _loadSampaignTrend(campaignId);
+}
+
+// Performance over time, from the nightly snapshots. Live counts can only say
+// where a campaign IS; only stored history says whether it is improving,
+// which is the question worth acting on. Renders nothing at all until there
+// are at least two days — a "trend" drawn from one point would be a fiction.
+async function _loadSampaignTrend(campaignId) {
+  var box = document.getElementById('sampaignDetailTrend');
+  if (!box) return;
+  try {
+    var r = await fetch(SB_URL + '/rest/v1/sampaign_perf_snapshots?campaign_id=eq.' + campaignId + '&select=snapshot_date,total,sent,replied,ooo,dead,no_response&order=snapshot_date.asc&limit=60', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token }
+    });
+    var rows = await r.json();
+    if (!Array.isArray(rows) || rows.length < 2) { box.innerHTML = ''; return; }
+
+    var maxV = Math.max.apply(null, rows.map(function(x){ return x.total || 0; })) || 1;
+    var W = 100, H = 34;
+    var line = function(key, col) {
+      var pts = rows.map(function(x, i) {
+        var px = rows.length > 1 ? (i / (rows.length - 1)) * W : 0;
+        var py = H - ((x[key] || 0) / maxV) * H;
+        return px.toFixed(1) + ',' + py.toFixed(1);
+      }).join(' ');
+      return '<polyline points="'+pts+'" fill="none" stroke="'+col+'" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>';
+    };
+    var last = rows[rows.length - 1], first = rows[0];
+    var delta = function(k) {
+      var v = (last[k]||0) - (first[k]||0);
+      return v === 0 ? '' : (v > 0 ? ' +' + v : ' ' + v);
+    };
+
+    box.innerHTML = '<div style="background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:11px;margin-bottom:8px">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
+        '<span style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">📈 Trend</span>' +
+        '<span style="font-size:9px;color:var(--text3)">'+rows.length+' days · '+esc(String(first.snapshot_date).slice(5))+' to '+esc(String(last.snapshot_date).slice(5))+'</span>' +
+      '</div>' +
+      '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" style="width:100%;height:44px;display:block">' +
+        line('sent', 'var(--blue)') + line('replied', 'var(--green)') + line('dead', 'var(--coral)') +
+      '</svg>' +
+      '<div style="display:flex;gap:12px;margin-top:5px;flex-wrap:wrap">' +
+        '<span style="font-size:9px;color:var(--blue)">■ Sent '+(last.sent||0)+esc(delta('sent'))+'</span>' +
+        '<span style="font-size:9px;color:var(--green)">■ Replied '+(last.replied||0)+esc(delta('replied'))+'</span>' +
+        '<span style="font-size:9px;color:var(--coral)">■ Dead '+(last.dead||0)+esc(delta('dead'))+'</span>' +
+      '</div>' +
+    '</div>';
+  } catch(e) { box.innerHTML = ''; }
 }
 
 // Shared by openSampaignDetail (initial load) and syncSampaignCampaign (post-sync
