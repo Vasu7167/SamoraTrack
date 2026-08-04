@@ -9506,13 +9506,14 @@ function openSampaignComposer(campaignId) {
     '</div>' +
     '<div style="font-size:9px;color:var(--text3);margin-bottom:10px">Filled in per person at send time, so anything Enrich finds between now and then is used. A variable with no value becomes blank, never the raw {{tag}}.</div>' +
     '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">' +
-      '<span style="font-size:11px;color:var(--text3)">Send at</span>' +
+      '<span style="font-size:11px;color:var(--text3)">Start</span>' +
       '<input type="date" id="sampSendDate" value="'+dateKey(d)+'" style="padding:7px 9px;border-radius:8px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
       '<input type="time" id="sampSendTime" value="09:00" style="padding:7px 9px;border-radius:8px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
       '<span id="sampSendWhen" style="font-size:10px;color:var(--text3)"></span>' +
     '</div>' +
     '<div id="sampSendWeekendWarn"></div>' +
-    '<button onclick="submitSampaignSchedule(\''+esc(campaignId)+'\')" '+(sendable.length?'':'disabled')+' style="width:100%;margin-top:10px;padding:11px;border-radius:10px;background:'+(sendable.length?'var(--green)':'var(--border2)')+';border:none;color:#fff;font-size:14px;font-weight:700;cursor:'+(sendable.length?'pointer':'not-allowed')+';font-family:var(--sans)">Queue '+(sendable.length||0)+' email'+(sendable.length!==1?'s':'')+'</button>' +
+    '<div style="font-size:9px;color:var(--text3);margin-top:2px">Sends are spread over several days from this start, at a safe rate. You will see the exact plan before anything is committed.</div>' +
+    '<button onclick="submitSampaignSchedule(\''+esc(campaignId)+'\')" '+(sendable.length?'':'disabled')+' style="width:100%;margin-top:10px;padding:11px;border-radius:10px;background:'+(sendable.length?'var(--green)':'var(--border2)')+';border:none;color:#fff;font-size:14px;font-weight:700;cursor:'+(sendable.length?'pointer':'not-allowed')+';font-family:var(--sans)">Prepare '+(sendable.length||0)+' email'+(sendable.length!==1?'s':'')+'</button>' +
     '<div id="sampSendQueue" style="margin-top:14px"></div>' +
   '</div>';
   m.addEventListener('click', function(){ m.remove(); });
@@ -9562,15 +9563,25 @@ async function submitSampaignSchedule(campaignId) {
 
   var all = (window._sampaignContactsCache || {})[campaignId] || [];
   var sendable = all.filter(function(x){ return x.email && x.status === 'not_contacted'; });
-  if (!confirm('Queue ' + sendable.length + ' email' + (sendable.length!==1?'s':'') + ' to go out at ' + when.toLocaleString('en-GB', { weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) + '?\n\nThey will send from your Gmail automatically, whether or not you are logged in.')) return;
+  if (!sendable.length) { showToast('No contacts ready to send to'); return; }
 
+  // Two steps on purpose, and the same two the AI path uses: write drafts,
+  // then schedule them through the warm-up engine. This used to call
+  // schedule_sampaign_send, which stamped ONE identical send time on every
+  // recipient — the whole campaign leaving in the same minute, which is what
+  // gets a mailbox suspended. Template sends now get the same spreading,
+  // the same review step and the same daily cap as personalised ones.
   try {
+    var drafts = sendable.map(function(c){ return { contact_id: c.id, subject: subject, body: body }; });
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
-      body: JSON.stringify({ action:'schedule_sampaign_send', campaign_id: campaignId, subject: subject, body: body, send_at: when.toISOString() }) });
+      body: JSON.stringify({ action:'save_sampaign_drafts', campaign_id: campaignId, drafts: drafts, generated_by: 'template', personalised: false }) });
     var d = await r.json();
-    if (!d.ok) { showToast('⚠ ' + (d.error || 'Could not schedule')); return; }
-    showToast('✓ Queued ' + d.scheduled + ' email' + (d.scheduled!==1?'s':''));
+    if (!d.ok) { showToast('⚠ ' + (d.error || 'Could not prepare')); return; }
+    showToast('✓ Prepared ' + d.saved + ', now pick the schedule');
     loadSampaignSendQueue(campaignId);
+    // Straight into the same dry-run preview, seeded with the time chosen
+    // above, so the person sees the real multi-day plan before committing.
+    planSampaignDrafts(campaignId, when.toISOString());
   } catch(e) { showToast('Error: ' + e.message); }
 }
 
@@ -9581,9 +9592,13 @@ function _renderSampaignDrafts(campaignId, drafts) {
   if (!drafts.length) return '';
   var byTool = {};
   drafts.forEach(function(d){ var k = d.generated_by || 'ai'; byTool[k] = (byTool[k]||0)+1; });
+  // One shared body sent to everyone is not personalisation, and calling it
+  // that in the review header would be a small lie that compounds.
+  var anyPersonalised = drafts.some(function(d){ return d.personalised; });
+  var label = anyPersonalised ? 'personalised draft' : 'draft';
   return '<div style="border:1px solid rgba(160,117,42,0.3);border-radius:10px;padding:11px;margin-bottom:10px;background:rgba(160,117,42,0.05)">' +
     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;flex-wrap:wrap">' +
-      '<span style="font-size:11px;font-weight:700;color:var(--text)">✍ '+drafts.length+' personalised draft'+(drafts.length!==1?'s':'')+' to review</span>' +
+      '<span style="font-size:11px;font-weight:700;color:var(--text)">✍ '+drafts.length+' '+label+(drafts.length!==1?'s':'')+' to review</span>' +
       '<span style="font-size:9px;color:var(--text3)">'+Object.keys(byTool).map(function(k){ return esc(k)+' · '+byTool[k]; }).join(', ')+'</span>' +
       '<span onclick="planSampaignDrafts(\''+esc(campaignId)+'\')" style="margin-left:auto;font-size:10px;font-weight:600;color:var(--gold);cursor:pointer">Preview send plan →</span>' +
     '</div>' +
@@ -9627,10 +9642,10 @@ async function saveSampaignDraftEdit(campaignId, sendId, contactId) {
 
 // dry_run first, always. Committing a multi-day send plan without showing it
 // is exactly the surprise this feature exists to prevent.
-async function planSampaignDrafts(campaignId) {
+async function planSampaignDrafts(campaignId, startAt) {
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
-      body: JSON.stringify({ action:'schedule_sampaign_drafts', campaign_id: campaignId, dry_run: true }) });
+      body: JSON.stringify({ action:'schedule_sampaign_drafts', campaign_id: campaignId, start_at: startAt || null, dry_run: true }) });
     var d = await r.json();
     if (!d.ok) { showToast('⚠ ' + (d.error||'Could not plan')); return; }
     var days = Object.keys(d.per_day||{}).sort();
@@ -9645,7 +9660,7 @@ async function planSampaignDrafts(campaignId) {
       'Spread out on purpose: sending a whole campaign at once from one mailbox risks it being suspended.\n\nSchedule these now?';
     if (!confirm(msg)) return;
     var r2 = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
-      body: JSON.stringify({ action:'schedule_sampaign_drafts', campaign_id: campaignId }) });
+      body: JSON.stringify({ action:'schedule_sampaign_drafts', campaign_id: campaignId, start_at: startAt || null }) });
     var d2 = await r2.json();
     if (!d2.ok) { showToast('⚠ ' + (d2.error||'Could not schedule')); return; }
     showToast('✓ Scheduled ' + d2.scheduled + ' over ' + d2.days + ' day' + (d2.days!==1?'s':''));
