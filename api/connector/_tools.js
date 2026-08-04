@@ -54,17 +54,58 @@ export async function supabaseLogin(email, password) {
   return d;
 }
 
-export async function getValidAccessToken(session, token) {
-  if (Date.now() < (session.expires_at || 0) - 120_000) return session.access_token;
-  // Refresh
+// expires_at has been read back in more than one shape depending on the
+// column type: a bigint comes back as a number (or a numeric string), a
+// timestamptz comes back as an ISO string. The original code did
+// `Date.now() < session.expires_at - 120000`, which on an ISO string
+// evaluates to `Date.now() < NaN` — always false, so it refreshed on EVERY
+// call. Supabase rotates the refresh token each time it is used, so two
+// concurrent tool calls would present the same refresh token, trip reuse
+// detection, and get the whole token family revoked. That is what a
+// connector "logging itself out" looks like from the outside.
+function parseExpiry(v) {
+  if (v === null || v === undefined || v === '') return 0;
+  if (typeof v === 'number') return v;
+  const s = String(v);
+  if (/^\d+$/.test(s)) return Number(s);         // bigint, possibly stringified
+  const t = Date.parse(s);                        // ISO timestamptz
+  return Number.isNaN(t) ? 0 : t;
+}
+
+export async function getValidAccessToken(session, token, force = false) {
+  if (!force && Date.now() < parseExpiry(session.expires_at) - 120_000) {
+    return session.access_token;
+  }
+
+  // Concurrency guard. Claude fires several tool calls in parallel; without
+  // this they would all refresh at once with the same refresh token and
+  // revoke each other. Re-read the row first: if another in-flight request
+  // already refreshed, adopt its result instead of spending our own.
+  const fresh = await getSession(token);
+  if (fresh && fresh.access_token && fresh.access_token !== session.access_token) {
+    Object.assign(session, fresh);
+    if (Date.now() < parseExpiry(fresh.expires_at) - 120_000) return fresh.access_token;
+  }
+
+  const refreshToken = (fresh && fresh.refresh_token) || session.refresh_token;
   const r = await fetch(`${SB_URL}/auth/v1/token?grant_type=refresh_token`, {
     method: 'POST',
     headers: { apikey: SB_ANON, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refresh_token: session.refresh_token })
+    body: JSON.stringify({ refresh_token: refreshToken })
   });
   const d = await r.json();
-  if (!d.access_token) throw new Error('Session expired — reconnect at ' + HOST + '/api/connector/connect');
-  const updates = { access_token: d.access_token, expires_at: Date.now() + (d.expires_in || 3600) * 1000, ...(d.refresh_token ? { refresh_token: d.refresh_token } : {}) };
+  if (!d.access_token) {
+    throw new Error('Samora session expired and could not be renewed. Reconnect at ' + HOST + '/api/connector/connect');
+  }
+  const updates = {
+    access_token: d.access_token,
+    // Stored as a number. If the column is timestamptz this write will fail
+    // loudly rather than silently round-trip into something unusable — which
+    // is the outcome to want, because parseExpiry above tolerates both but
+    // the write is where the ambiguity should be settled.
+    expires_at: Date.now() + (d.expires_in || 3600) * 1000,
+    ...(d.refresh_token ? { refresh_token: d.refresh_token } : {})
+  };
   Object.assign(session, updates);
   await updateSession(token, updates);
   return session.access_token;
@@ -95,7 +136,12 @@ export async function edge(accessToken, action, payload = {}) {
         }
       }
     } catch (_e) { /* body unreadable, fall back to bare status */ }
-    throw new Error(`${action} failed (${r.status})${detail}`);
+    const err = new Error(`${action} failed (${r.status})${detail}`);
+    // Carried so callers can distinguish "your token is stale" from "that
+    // action genuinely failed". Without it, a 401 is indistinguishable from
+    // a 500 and the only recovery anyone can offer the user is "relink it".
+    err.status = r.status;
+    throw err;
   }
   return r.json();
 }
