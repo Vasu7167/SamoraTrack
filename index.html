@@ -9600,7 +9600,8 @@ function _renderSampaignDrafts(campaignId, drafts) {
     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;flex-wrap:wrap">' +
       '<span style="font-size:11px;font-weight:700;color:var(--text)">✍ '+drafts.length+' '+label+(drafts.length!==1?'s':'')+' to review</span>' +
       '<span style="font-size:9px;color:var(--text3)">'+Object.keys(byTool).map(function(k){ return esc(k)+' · '+byTool[k]; }).join(', ')+'</span>' +
-      '<span onclick="planSampaignDrafts(\''+esc(campaignId)+'\')" style="margin-left:auto;font-size:10px;font-weight:600;color:var(--gold);cursor:pointer">Preview send plan →</span>' +
+      '<span onclick="cancelSampaignSends(\''+esc(campaignId)+'\',null,\'Discard all '+drafts.length+' draft'+(drafts.length!==1?'s':'')+'? The copy is deleted and cannot be recovered.\')" style="margin-left:auto;font-size:10px;color:var(--coral);cursor:pointer">Discard all</span>' +
+      '<span onclick="planSampaignDrafts(\''+esc(campaignId)+'\')" style="font-size:10px;font-weight:600;color:var(--gold);cursor:pointer">Preview send plan →</span>' +
     '</div>' +
     '<div style="font-size:9px;color:var(--text3);margin-bottom:7px">Nothing sends until you schedule it. Click a draft to read and edit it.</div>' +
     drafts.slice(0, 40).map(function(x) {
@@ -9712,16 +9713,22 @@ async function loadSampaignSendQueue(campaignId) {
   } catch(e) { box.innerHTML = ''; }
 }
 
-async function cancelSampaignSends(campaignId, sendId) {
+async function cancelSampaignSends(campaignId, sendId, confirmMsg) {
   var payload = sendId
     ? { action:'cancel_sampaign_scheduled_send', send_ids:[sendId] }
     : { action:'cancel_sampaign_scheduled_send', campaign_id: campaignId, all_pending: true };
-  if (!sendId && !confirm('Cancel every queued email for this SAMpaign?')) return;
+  if (!sendId && !confirm(confirmMsg || 'Cancel every queued email for this SAMpaign?')) return;
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body: JSON.stringify(payload) });
     var d = await r.json();
     if (!d.ok) { showToast('⚠ ' + (d.error||'Could not cancel')); return; }
-    showToast('✓ Cancelled ' + d.cancelled);
+    // Drafts are deleted, queued sends are cancelled — report whichever
+    // actually happened rather than always saying "cancelled 0", which is
+    // what the old version did for drafts.
+    var parts = [];
+    if (d.discarded) parts.push(d.discarded + ' draft' + (d.discarded!==1?'s':'') + ' discarded');
+    if (d.cancelled) parts.push(d.cancelled + ' queued cancelled');
+    showToast(parts.length ? '✓ ' + parts.join(', ') : 'Nothing to remove');
     loadSampaignSendQueue(campaignId);
   } catch(e) { showToast('Error: ' + e.message); }
 }
