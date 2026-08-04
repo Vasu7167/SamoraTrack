@@ -56,7 +56,17 @@ export default async function handler(req, res) {
 
       if (method === 'tools/call') {
         const { name, arguments: args } = params || {};
-        const result = await executeTool(accessToken, name, args || {});
+        let result;
+        try {
+          result = await executeTool(accessToken, name, args || {});
+        } catch (err) {
+          // Same self-heal as the REST route. This is the path Claude
+          // actually uses, so it is the one that matters most: a stale token
+          // here is what forced the user to remove and re-add the connector.
+          if (err.status !== 401) throw err;
+          const retryToken = await getValidAccessToken(session, token, true);
+          result = await executeTool(retryToken, name, args || {});
+        }
         return res.json({
           jsonrpc: '2.0', id,
           result: { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] }
