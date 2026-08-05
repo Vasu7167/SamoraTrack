@@ -8316,7 +8316,15 @@ function _renderSampaignDrafts(campaignId, drafts) {
 }
 function _toggleDraft(id) {
   var el = document.getElementById('draft_'+id);
-  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+  if (!el) return;
+  var open = el.style.display === 'none';
+  el.style.display = open ? 'block' : 'none';
+  // The chevron is the only persistent signal of which row is open once the
+  // body has scrolled, so it turns rather than staying static.
+  var chev = document.getElementById('chev_'+id);
+  if (chev) chev.style.transform = open ? 'rotate(180deg)' : '';
+  var row = chev && chev.parentElement;
+  if (row && row.classList) row.classList.toggle('open', open);
 }
 // Edits go through update_sampaign_scheduled_send, NOT save_sampaign_drafts.
 // The latter writes status='draft' with a null send_at, so using it to fix a
@@ -8469,7 +8477,10 @@ async function loadSampaignSendQueue(campaignId) {
     // agree with the rows underneath them.
     var s = { pending:0, sent:0, failed:0, cancelled:0 };
     d.sends.forEach(function(x){ s[x.status] = (s[x.status]||0) + 1; });
-    box.innerHTML = tabsHtml + draftHtml + '<div style="border-top:1px solid var(--border);padding-top:11px">' +
+    box.innerHTML = tabsHtml + draftHtml +
+      // Hover state makes the rows read as clickable before anyone clicks.
+      '<style>.samp-send-row:hover{background:var(--surface)}.samp-send-row.open{background:var(--surface)}</style>' +
+      '<div style="border-top:1px solid var(--border);padding-top:11px">' +
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">' +
         '<span style="font-size:11px;font-weight:700;color:var(--text)">Queue</span>' +
         Object.keys(META).filter(function(k){ return s[k]; }).map(function(k){
@@ -8477,39 +8488,75 @@ async function loadSampaignSendQueue(campaignId) {
         }).join('<span style="color:var(--text3)">·</span>') +
         (s.pending ? '<span onclick="cancelSampaignSends(\''+esc(campaignId)+'\',null)" style="margin-left:auto;font-size:10px;color:var(--coral);cursor:pointer">Cancel all queued</span>' : '') +
       '</div>' +
-      d.sends.slice(0, 60).map(function(x) {
-        var mm = META[x.status] || META.pending;
-        var when = new Date(x.send_at);
-        // Anything not yet delivered can be opened and edited. A queued email
-        // is still just text in a table until the cron picks it up, and
-        // hiding it until after it lands is the wrong side of that line.
-        var editable = (x.status === 'pending') && d.is_owner;
-        var readable = editable || x.status === 'sent' || x.status === 'cancelled';
-        return '<div style="display:flex;align-items:center;gap:7px;padding:5px 0;border-top:1px solid var(--border);font-size:11px">' +
-          '<span '+(readable?'onclick="_toggleDraft(\''+esc(x.id)+'\')" style="cursor:pointer;':'style="')+'min-width:0;flex:1;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+
-            (readable?'<span style="color:var(--text3);font-size:9px">▸ </span>':'')+
-            esc(x.name||x.email||'—')+'<span style="color:var(--text3)"> · '+esc(x.email||'')+'</span></span>' +
-          '<span style="color:var(--text3);font-size:10px;white-space:nowrap">'+(isNaN(when.getTime())?'':when.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' '+when.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}))+'</span>' +
-          '<span style="font-size:9px;font-weight:700;color:'+mm.color+';white-space:nowrap">'+mm.label+'</span>' +
-          (x.status==='pending' && d.is_owner ? '<span onclick="cancelSampaignSends(\''+esc(campaignId)+'\',\''+esc(x.id)+'\')" style="cursor:pointer;color:var(--text3);font-size:12px" title="Cancel this one">✕</span>' : '') +
-        '</div>' +
-        (readable ? '<div id="draft_'+esc(x.id)+'" style="display:none;padding:0 0 8px 0">' +
-          (editable
-            ? '<input id="draftSubj_'+esc(x.id)+'" value="'+esc(x.subject||'')+'" style="width:100%;box-sizing:border-box;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:11px;margin-bottom:4px"/>' +
-              '<textarea id="draftBody_'+esc(x.id)+'" rows="7" style="width:100%;box-sizing:border-box;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:11px;line-height:1.5;resize:vertical">'+esc(x.body||'')+'</textarea>' +
-              '<div style="display:flex;gap:8px;align-items:center;margin-top:4px">' +
-                '<button onclick="saveSampaignDraftEdit(\''+esc(campaignId)+'\',\''+esc(x.id)+'\')" style="font-size:10px;font-weight:600;padding:5px 10px;border-radius:6px;background:var(--green);border:none;color:#fff;cursor:pointer;font-family:var(--sans)">Save edit</button>' +
-                '<span style="font-size:9px;color:var(--text3)">Editing does not change the send time</span>' +
-              '</div>'
-            // Sent and cancelled are read-only. Showing an editable box for a
-            // delivered email would let the UI display corrected text the
-            // recipient never received.
-            : '<div style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:3px">'+esc(x.subject||'')+'</div>' +
-              '<div style="font-size:11px;color:var(--text2);white-space:pre-wrap;line-height:1.5;background:var(--surface);border-radius:6px;padding:7px 9px">'+esc(x.body||'')+'</div>' +
-              '<div style="font-size:9px;color:var(--text3);margin-top:3px">'+(x.status==='sent'?'Already sent, read only':'Cancelled')+'</div>') +
-        '</div>' : '') +
-        (x.error ? '<div style="font-size:9px;color:var(--coral);padding-bottom:4px">'+esc(x.error)+'</div>' : '');
-      }).join('') +
+      // Grouped by send day. A flat list of 48 rows spanning four dates makes
+      // the reader parse every timestamp to work out where one day ends; a
+      // date header answers "what goes out on Monday" at a glance, which is
+      // the question someone reviewing a queue actually has.
+      (function() {
+        var rows = d.sends.slice(0, 120);
+        var groups = [], lastKey = null;
+        rows.forEach(function(x) {
+          // The null check has to come first: new Date(null) is the epoch,
+          // not an invalid date, so an undated row would silently group under
+          // "Thu 1 Jan 1970" instead of being called out as having no date.
+          var dt = x.send_at ? new Date(x.send_at) : null;
+          var key = (!dt || isNaN(dt.getTime())) ? 'nodate' : dt.toISOString().slice(0, 10);
+          if (key !== lastKey) { groups.push({ key: key, date: dt, items: [] }); lastKey = key; }
+          groups[groups.length - 1].items.push(x);
+        });
+        return groups.map(function(g) {
+          var head = g.key === 'nodate' ? 'No date' :
+            g.date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+          return '<div style="display:flex;align-items:baseline;justify-content:space-between;margin:14px 0 4px">' +
+              '<span style="font-size:11px;font-weight:700;color:var(--text2)">'+esc(head)+'</span>' +
+              '<span style="font-size:10px;color:var(--text3)">'+g.items.length+' email'+(g.items.length!==1?'s':'')+'</span>' +
+            '</div>' +
+            g.items.map(function(x) {
+              var mm = META[x.status] || META.pending;
+              var when = new Date(x.send_at);
+              // A manager can READ a report's queued email but not change it —
+              // same read/write split as everywhere else in SAMpaign. This
+              // previously required ownership even to open the row, so a
+              // manager saw 48 unopenable lines with no indication why.
+              var editable = (x.status === 'pending') && d.is_owner;
+              var readable = true;
+              var who = x.name || x.email || '—';
+              var initial = String(who).trim().charAt(0).toUpperCase() || '?';
+              return '<div class="samp-send-row" onclick="_toggleDraft(\''+esc(x.id)+'\')" ' +
+                  'style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;cursor:pointer;transition:background .12s">' +
+                  '<span style="flex-shrink:0;width:26px;height:26px;border-radius:50%;background:var(--surface);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--text3)">'+esc(initial)+'</span>' +
+                  '<span style="min-width:0;flex:1">' +
+                    '<span style="display:block;font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(who)+'</span>' +
+                    '<span style="display:block;font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(x.email||'')+'</span>' +
+                  '</span>' +
+                  '<span style="font-size:11px;color:var(--text3);white-space:nowrap;flex-shrink:0">'+(isNaN(when.getTime())?'':when.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}))+'</span>' +
+                  '<span style="font-size:9px;font-weight:700;color:'+mm.color+';background:rgba(128,128,128,0.10);border-radius:6px;padding:2px 7px;white-space:nowrap;flex-shrink:0">'+mm.label+'</span>' +
+                  (editable ? '<span onclick="event.stopPropagation();cancelSampaignSends(\''+esc(campaignId)+'\',\''+esc(x.id)+'\')" style="cursor:pointer;color:var(--text3);font-size:13px;flex-shrink:0;padding:0 2px" title="Cancel this one">✕</span>' : '') +
+                  '<span id="chev_'+esc(x.id)+'" style="font-size:10px;color:var(--text3);flex-shrink:0;transition:transform .15s">▾</span>' +
+                '</div>' +
+                '<div id="draft_'+esc(x.id)+'" style="display:none;padding:2px 10px 12px 46px">' +
+                  (editable
+                    ? '<input id="draftSubj_'+esc(x.id)+'" value="'+esc(x.subject||'')+'" style="width:100%;box-sizing:border-box;padding:7px 9px;border-radius:7px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px;font-weight:600;margin-bottom:5px"/>' +
+                      '<textarea id="draftBody_'+esc(x.id)+'" rows="8" style="width:100%;box-sizing:border-box;padding:8px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px;line-height:1.6;resize:vertical">'+esc(x.body||'')+'</textarea>' +
+                      '<div style="display:flex;gap:9px;align-items:center;margin-top:6px">' +
+                        '<button onclick="event.stopPropagation();saveSampaignDraftEdit(\''+esc(campaignId)+'\',\''+esc(x.id)+'\')" style="font-size:11px;font-weight:600;padding:6px 13px;border-radius:7px;background:var(--green);border:none;color:#fff;cursor:pointer;font-family:var(--sans)">Save edit</button>' +
+                        '<span style="font-size:10px;color:var(--text3)">Send time stays the same</span>' +
+                      '</div>'
+                    // Read-only for sent, cancelled, and for anyone who is not
+                    // the owner. An editable box on delivered mail would let
+                    // the UI show corrected text the recipient never received.
+                    : '<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:5px">'+esc(x.subject||'')+'</div>' +
+                      '<div style="font-size:12px;color:var(--text2);white-space:pre-wrap;line-height:1.6;background:var(--surface);border-radius:8px;padding:10px 12px;border:1px solid var(--border)">'+esc(x.body||'')+'</div>' +
+                      '<div style="font-size:10px;color:var(--text3);margin-top:5px">'+
+                        (x.status==='sent' ? 'Already sent, read only'
+                         : x.status==='cancelled' ? 'Cancelled, never sent'
+                         : !d.is_owner ? 'Read only — this is '+esc((camp.owner_email||'the owner').split('@')[0])+'’s campaign'
+                         : 'Read only')+'</div>') +
+                '</div>' +
+                (x.error ? '<div style="font-size:10px;color:var(--coral);padding:0 10px 8px 46px">'+esc(x.error)+'</div>' : '');
+            }).join('');
+        }).join('');
+      })() +
     '</div>';
   } catch(e) { box.innerHTML = ''; }
 }
@@ -9654,11 +9701,15 @@ async function _loadSampaignDetailPerf(campaignId, c) {
     var perfBox = document.getElementById('sampaignDetailPerf');
     if (perfBox) {
       if (d.ok && d.org_summary && d.org_summary.total_prospects > 0) {
-        perfBox.innerHTML = _sampMetricStrip(d, campaignId) + _sampHotSignals(d);
+        perfBox.innerHTML = _sampGoalBlock(campaignId) + _sampMetricStrip(d, campaignId) + _sampHotSignals(d);
       } else if (!d.ok) {
         perfBox.innerHTML = '<div style="font-size:11px;color:var(--coral)">⚠ '+esc(d.error||'Could not load performance')+'</div>';
       } else {
-        perfBox.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:14px 0;text-align:center">Nothing has happened yet.<br><span style="font-size:11px">Add contacts, then Schedule or Sync inbox.</span></div>';
+        // Goal shows here too. A brand-new campaign is exactly when someone
+        // is about to write copy against it, so hiding it on the empty state
+        // would remove it at the moment it is most needed.
+        perfBox.innerHTML = _sampGoalBlock(campaignId) +
+          '<div style="font-size:12px;color:var(--text3);padding:14px 0;text-align:center">Nothing has happened yet.<br><span style="font-size:11px">Add contacts, then Schedule or Sync inbox.</span></div>';
       }
     }
     var schedBox = document.getElementById('sampaignDetailSchedule');
@@ -9676,6 +9727,42 @@ async function _loadSampaignDetailPerf(campaignId, c) {
     var perfBox2 = document.getElementById('sampaignDetailPerf');
     if (perfBox2) perfBox2.innerHTML = '<div style="font-size:11px;color:var(--coral)">Error: '+esc(e.message)+'</div>';
   }
+}
+
+// The campaign goal, restored to Overview. It used to live in the header
+// subtitle and was lost in the tab rebuild — which mattered more than it
+// looks: the goal is what every AI-written email is generated against, so a
+// rep reviewing drafts needs to see what they were supposed to be aiming at.
+// Long goals are clamped with a Read more rather than pushed off screen,
+// since these are often a paragraph pasted from a brief.
+window._sampGoalOpen = false;
+function toggleSampGoal(campaignId) {
+  window._sampGoalOpen = !window._sampGoalOpen;
+  var el = document.getElementById('sampGoalText');
+  var lnk = document.getElementById('sampGoalMore');
+  if (!el) return;
+  if (window._sampGoalOpen) {
+    el.style.webkitLineClamp = 'unset'; el.style.display = 'block';
+    if (lnk) lnk.textContent = 'Show less';
+  } else {
+    el.style.display = '-webkit-box'; el.style.webkitLineClamp = '2';
+    if (lnk) lnk.textContent = 'Read more';
+  }
+}
+function _sampGoalBlock(campaignId) {
+  var c = (window._sampaignCampaignsCache || {})[campaignId] || {};
+  var goal = (c.campaign_goal || '').trim();
+  if (!goal) {
+    return '<div style="font-size:11px;color:var(--text3);margin-bottom:12px">' +
+      'No goal set. Add one with the pencil on the campaign — it is what Claude writes every email against.</div>';
+  }
+  var long = goal.length > 150;
+  return '<div style="margin-bottom:14px">' +
+    '<div id="sampGoalText" style="font-size:12px;color:var(--text2);line-height:1.6;' +
+      (long ? 'display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden' : '') + '">' +
+      esc(goal) + '</div>' +
+    (long ? '<span id="sampGoalMore" onclick="toggleSampGoal(\''+esc(campaignId)+'\')" style="font-size:11px;font-weight:600;color:var(--gold);cursor:pointer">Read more</span>' : '') +
+  '</div>';
 }
 
 // Kite's PE / Sector PE / P/B row: label above, value below, hairline rules
