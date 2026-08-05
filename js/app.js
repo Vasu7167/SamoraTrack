@@ -8164,6 +8164,22 @@ function openSampaignComposer(campaignId) {
       }).join('') +
     '</div>' +
     '<div style="font-size:9px;color:var(--text3);margin-bottom:10px">Filled in per person at send time, so anything Enrich finds between now and then is used. A variable with no value becomes blank, never the raw {{tag}}.</div>' +
+    // Which wave this copy belongs to. Follow-ups already have a date on the
+    // campaign, so picking one here also fixes when it goes out.
+    '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">' +
+      '<span style="font-size:11px;color:var(--text3)">Wave</span>' +
+      '<select id="sampSendLaunch" onchange="_sampComposerLaunchChanged(\''+esc(campaignId)+'\')" style="padding:6px 9px;border-radius:8px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px">' +
+        (function(){
+          var dates = (c.followup_dates||[]).map(function(x){ return String(x).slice(0,10); }).sort();
+          var opts = '<option value="1">Initial send</option>';
+          dates.forEach(function(dt, i) {
+            opts += '<option value="'+(i+2)+'">Follow-up '+(i+1)+' · '+new Date(dt+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'})+'</option>';
+          });
+          return opts;
+        })() +
+      '</select>' +
+      '<span id="sampSendLaunchHint" style="font-size:10px;color:var(--text3)"></span>' +
+    '</div>' +
     '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">' +
       '<span style="font-size:11px;color:var(--text3)">Start</span>' +
       '<input type="date" id="sampSendDate" value="'+dateKey(d)+'" style="padding:7px 9px;border-radius:8px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
@@ -8230,18 +8246,34 @@ async function submitSampaignSchedule(campaignId) {
   // recipient — the whole campaign leaving in the same minute, which is what
   // gets a mailbox suspended. Template sends now get the same spreading,
   // the same review step and the same daily cap as personalised ones.
+  var launch = parseInt(document.getElementById('sampSendLaunch')?.value || '1', 10) || 1;
   try {
     var drafts = sendable.map(function(c){ return { contact_id: c.id, subject: subject, body: body }; });
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
-      body: JSON.stringify({ action:'save_sampaign_drafts', campaign_id: campaignId, drafts: drafts, generated_by: 'template', personalised: false }) });
+      body: JSON.stringify({ action:'save_sampaign_drafts', campaign_id: campaignId, drafts: drafts, generated_by: 'template', personalised: false, launch: launch }) });
     var d = await r.json();
     if (!d.ok) { showToast('⚠ ' + (d.error || 'Could not prepare')); return; }
     showToast('✓ Prepared ' + d.saved + ', now pick the schedule');
+    window._sampLaunch = launch;
     loadSampaignSendQueue(campaignId);
     // Straight into the same dry-run preview, seeded with the time chosen
     // above, so the person sees the real multi-day plan before committing.
-    planSampaignDrafts(campaignId, when.toISOString());
+    planSampaignDrafts(campaignId, when.toISOString(), launch);
   } catch(e) { showToast('Error: ' + e.message); }
+}
+
+// A follow-up already has a date on the campaign, so choosing that wave sets
+// the start date too rather than leaving two controls that can disagree.
+function _sampComposerLaunchChanged(campaignId) {
+  var n = parseInt(document.getElementById('sampSendLaunch')?.value || '1', 10) || 1;
+  var c = (window._sampaignCampaignsCache || {})[campaignId] || {};
+  var hint = document.getElementById('sampSendLaunchHint');
+  var dateEl = document.getElementById('sampSendDate');
+  if (n === 1) { if (hint) hint.textContent = ''; return; }
+  var dates = (c.followup_dates || []).map(function(x){ return String(x).slice(0,10); }).sort();
+  var dt = dates[n - 2];
+  if (dt && dateEl) { dateEl.value = dt; _sampSendWhenHint(); }
+  if (hint) hint.textContent = dt ? 'Date taken from the campaign schedule' : 'No date set for this follow-up yet';
 }
 
 // Drafts written by an AI tool via the connector. Reviewed here BEFORE
@@ -8260,7 +8292,7 @@ function _renderSampaignDrafts(campaignId, drafts) {
       '<span style="font-size:11px;font-weight:700;color:var(--text)">✍ '+drafts.length+' '+label+(drafts.length!==1?'s':'')+' to review</span>' +
       '<span style="font-size:9px;color:var(--text3)">'+Object.keys(byTool).map(function(k){ return esc(k)+' · '+byTool[k]; }).join(', ')+'</span>' +
       '<span onclick="cancelSampaignSends(\''+esc(campaignId)+'\',null,\'Discard all '+drafts.length+' draft'+(drafts.length!==1?'s':'')+'? The copy is deleted and cannot be recovered.\')" style="margin-left:auto;font-size:10px;color:var(--coral);cursor:pointer">Discard all</span>' +
-      '<span onclick="planSampaignDrafts(\''+esc(campaignId)+'\')" style="font-size:10px;font-weight:600;color:var(--gold);cursor:pointer">Preview send plan →</span>' +
+      '<span onclick="planSampaignDrafts(\''+esc(campaignId)+'\',null,window._sampLaunch)" style="font-size:10px;font-weight:600;color:var(--gold);cursor:pointer">Preview send plan →</span>' +
     '</div>' +
     '<div style="font-size:9px;color:var(--text3);margin-bottom:7px">Nothing sends until you schedule it. Click a draft to read and edit it.</div>' +
     drafts.slice(0, 40).map(function(x) {
@@ -8308,10 +8340,10 @@ async function saveSampaignDraftEdit(campaignId, sendId) {
 
 // dry_run first, always. Committing a multi-day send plan without showing it
 // is exactly the surprise this feature exists to prevent.
-async function planSampaignDrafts(campaignId, startAt) {
+async function planSampaignDrafts(campaignId, startAt, launch) {
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
-      body: JSON.stringify({ action:'schedule_sampaign_drafts', campaign_id: campaignId, start_at: startAt || null, dry_run: true }) });
+      body: JSON.stringify({ action:'schedule_sampaign_drafts', campaign_id: campaignId, start_at: startAt || null, launch: launch || window._sampLaunch || 1, dry_run: true }) });
     var d = await r.json();
     if (!d.ok) { showToast('⚠ ' + (d.error||'Could not plan')); return; }
     var days = Object.keys(d.per_day||{}).sort();
@@ -8326,12 +8358,48 @@ async function planSampaignDrafts(campaignId, startAt) {
       'Spread out on purpose: sending a whole campaign at once from one mailbox risks it being suspended.\n\nSchedule these now?';
     if (!confirm(msg)) return;
     var r2 = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
-      body: JSON.stringify({ action:'schedule_sampaign_drafts', campaign_id: campaignId, start_at: startAt || null }) });
+      body: JSON.stringify({ action:'schedule_sampaign_drafts', campaign_id: campaignId, start_at: startAt || null, launch: launch || window._sampLaunch || 1 }) });
     var d2 = await r2.json();
     if (!d2.ok) { showToast('⚠ ' + (d2.error||'Could not schedule')); return; }
     showToast('✓ Scheduled ' + d2.scheduled + ' over ' + d2.days + ' day' + (d2.days!==1?'s':''));
     loadSampaignSendQueue(campaignId);
   } catch(e) { showToast('Error: '+e.message); }
+}
+
+// Which wave is being viewed. Null means "the first one that has anything",
+// resolved on load, so opening Launches lands somewhere useful rather than on
+// an empty wave 1 after the initial send has gone out.
+window._sampLaunch = null;
+function setSampLaunch(campaignId, n) {
+  window._sampLaunch = n;
+  loadSampaignSendQueue(campaignId);
+}
+
+// Sub-tab strip: one per wave the campaign can have. A wave with nothing in
+// it is still shown but dimmed, because "follow-up 2 exists and is empty" is
+// information — it is the prompt to go and write it.
+function _renderLaunchTabs(campaignId, byLaunch, maxLaunch) {
+  var c = (window._sampaignCampaignsCache || {})[campaignId] || {};
+  var dates = (c.followup_dates || []).map(function(d){ return String(d).slice(0,10); }).sort();
+  var out = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">';
+  for (var n = 1; n <= maxLaunch; n++) {
+    var rows = byLaunch[n] || [];
+    var on = window._sampLaunch === n;
+    var drafts = rows.filter(function(x){ return x.status === 'draft'; }).length;
+    // Launch 1 is the initial send and has no follow-up date; waves above it
+    // are dated by the campaign's own follow-up schedule.
+    var when = n === 1 ? '' : (dates[n-2] ? new Date(dates[n-2]+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'}) : 'no date set');
+    out += '<span onclick="setSampLaunch(\''+esc(campaignId)+'\','+n+')" style="cursor:pointer;font-size:11px;padding:6px 11px;border-radius:8px;' +
+      'border:1px solid '+(on?'var(--gold)':'var(--border2)')+';background:'+(on?'rgba(160,117,42,0.09)':'transparent')+';' +
+      'color:'+(rows.length?'var(--text)':'var(--text3)')+'">' +
+      '<span style="font-weight:'+(on?'700':'600')+'">'+(n===1?'Initial send':'Follow-up '+(n-1))+'</span>' +
+      (when ? '<span style="color:var(--text3)"> · '+esc(when)+'</span>' : '') +
+      (drafts ? '<span style="font-size:9px;font-weight:700;background:rgba(160,117,42,0.16);color:var(--gold);border-radius:7px;padding:1px 5px;margin-left:5px">'+drafts+' to review</span>'
+              : (rows.length ? '<span style="color:var(--text3);font-size:10px"> · '+rows.length+'</span>' : '<span style="color:var(--text3);font-size:10px"> · empty</span>')) +
+    '</span>';
+  }
+  out += '</div>';
+  return out;
 }
 
 async function loadSampaignSendQueue(campaignId) {
@@ -8341,25 +8409,67 @@ async function loadSampaignSendQueue(campaignId) {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
       body: JSON.stringify({ action:'list_sampaign_scheduled_sends', campaign_id: campaignId }) });
     var d = await r.json();
-    if (!d.ok || !d.sends || !d.sends.length) { box.innerHTML = ''; return; }
+    var all = (d.ok && d.sends) ? d.sends : [];
+
+    // Group by wave. How many waves exist is a property of the CAMPAIGN
+    // (initial send + one per follow-up date), not of what happens to be in
+    // the table — otherwise an unwritten follow-up would be invisible and
+    // there would be nothing to click to go and write it.
+    var camp = (window._sampaignCampaignsCache || {})[campaignId] || {};
+    var maxLaunch = Math.max(1, ((camp.followup_dates || []).length + 1),
+                             all.reduce(function(m,x){ return Math.max(m, x.launch||1); }, 1));
+    var byLaunch = {};
+    all.forEach(function(x){ var n = x.launch || 1; (byLaunch[n] = byLaunch[n] || []).push(x); });
+
+    // Land on the wave that needs attention: first with drafts, else first
+    // with anything, else wave 1.
+    if (window._sampLaunch == null) {
+      var withDrafts = null, withAny = null;
+      for (var n = 1; n <= maxLaunch; n++) {
+        var rows = byLaunch[n] || [];
+        if (!withDrafts && rows.some(function(x){ return x.status === 'draft'; })) withDrafts = n;
+        if (!withAny && rows.length) withAny = n;
+      }
+      window._sampLaunch = withDrafts || withAny || 1;
+    }
+
+    // Badge counts drafts across ALL waves — it is asking "does anything need
+    // reviewing", which is not a per-wave question.
+    window._sampDraftCount = window._sampDraftCount || {};
+    window._sampDraftCount[campaignId] = all.filter(function(x){ return x.status === 'draft'; }).length;
+    try { _renderSampTabs(campaignId); } catch(e) {}
+
+    var tabsHtml = _renderLaunchTabs(campaignId, byLaunch, maxLaunch);
+    var mine = byLaunch[window._sampLaunch] || [];
+
+    if (!mine.length) {
+      box.innerHTML = tabsHtml +
+        '<div style="text-align:center;padding:24px 16px;border:1px dashed var(--border2);border-radius:10px">' +
+          '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px">Nothing written for this wave yet</div>' +
+          '<div style="font-size:11px;color:var(--text3);line-height:1.55">Use Schedule below to write it yourself, or ask Claude to draft one email per person for '+
+            (window._sampLaunch === 1 ? 'the initial send' : 'follow-up ' + (window._sampLaunch - 1)) + '.</div>' +
+        '</div>';
+      return;
+    }
+
+    d.sends = mine;
     // Drafts are shown separately and above: they need a decision, the queue
     // is just a record of one already made.
     var draftRows = d.sends.filter(function(x){ return x.status === 'draft'; });
     d.sends = d.sends.filter(function(x){ return x.status !== 'draft'; });
-    // Feeds the Queue tab badge, so the count is visible without opening it.
-    window._sampDraftCount = window._sampDraftCount || {};
-    window._sampDraftCount[campaignId] = draftRows.length;
-    try { _renderSampTabs(campaignId); } catch(e) {}
     var draftHtml = _renderSampaignDrafts(campaignId, draftRows);
-    if (!d.sends.length) { box.innerHTML = draftHtml; return; }
+    if (!d.sends.length) { box.innerHTML = tabsHtml + draftHtml; return; }
     var META = {
       pending:   { label:'Queued',    color:'var(--gold)' },
       sent:      { label:'Sent',      color:'var(--green)' },
       failed:    { label:'Failed',    color:'var(--coral)' },
       cancelled: { label:'Cancelled', color:'var(--text3)' }
     };
-    var s = d.summary || {};
-    box.innerHTML = draftHtml + '<div style="border-top:1px solid var(--border);padding-top:11px">' +
+    // Summary counts the WAVE being viewed, not the campaign, so the numbers
+    // agree with the rows underneath them.
+    var s = { pending:0, sent:0, failed:0, cancelled:0 };
+    d.sends.forEach(function(x){ s[x.status] = (s[x.status]||0) + 1; });
+    box.innerHTML = tabsHtml + draftHtml + '<div style="border-top:1px solid var(--border);padding-top:11px">' +
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">' +
         '<span style="font-size:11px;font-weight:700;color:var(--text)">Queue</span>' +
         Object.keys(META).filter(function(k){ return s[k]; }).map(function(k){
@@ -9112,33 +9222,67 @@ async function loadSampaignCampaigns() {
     // edit form can prefill instantly without a second fetch.
     window._sampaignCampaignsCache = {};
     d.campaigns.forEach(function(c) { window._sampaignCampaignsCache[c.id] = c; });
+    // ── Card layout mirrors the detail view: same headline number, same
+    // meaning. Reply rate leads because it answers "is this working"; the
+    // contact count is inventory and sits secondary. The previous card led
+    // with the count and showed status pills only when non-zero, so cards
+    // were inconsistent widths and told you nothing about performance.
     el.innerHTML = d.campaigns.map(function(c) {
       var s = c.stats || {};
-      var badge = function(n, label, color) { return n ? '<span style="font-size:9px;font-weight:600;color:'+color+';margin-right:8px">'+n+' '+label+'</span>' : ''; };
       var isOwner = c.owner_user_id === currentUser.id || !c.owner_user_id;
-      // Follow-up schedule tags — "Follow-up 1 · 3 · due Aug 4" etc. One chip
-      // per stage that currently has contacts waiting on it, soonest date
-      // per stage (from list_sampaigns' new followup_schedule field). Kept
-      // compact and single-line on purpose — the full breakdown lives one
-      // click away in the detail view, not duplicated here.
-      var schedChips = (c.followup_schedule || []).map(function(fs) {
-        var d2 = new Date(fs.next_due);
-        var dLabel = isNaN(d2.getTime()) ? '' : d2.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+      var sent = s.sent || 0;
+      var rate = sent > 0 ? Math.round(((s.replied || 0) / sent) * 100) : null;
+      var rateCol = rate === null ? 'var(--text3)' : rate >= 12 ? 'var(--green)' : rate >= 7 ? 'var(--amber)' : 'var(--coral)';
+
+      // Two campaigns can share a company name (one per quarter, per region,
+      // per SDR). Without a second identifier they are indistinguishable in
+      // the list, which was happening with the two TotalEnergies rows.
+      var sub = [];
+      sub.push((s.total || 0) + ' contact' + ((s.total || 0) !== 1 ? 's' : ''));
+      if (c.owner_email) sub.push(esc(c.owner_email.split('@')[0]));
+      if (c.created_at) sub.push('from ' + new Date(c.created_at).toLocaleDateString('en-GB', { day:'numeric', month:'short' }));
+
+      // Fixed order, always the same slots, so the eye learns one position
+      // per meaning instead of re-reading every card.
+      var pill = function(n, label, color) {
+        if (!n) return '';
+        return '<span style="font-size:9px;font-weight:700;color:'+color+';background:rgba(128,128,128,0.10);border-radius:6px;padding:2px 6px;white-space:nowrap">'+n+' '+label+'</span>';
+      };
+      var pills = [ pill(s.replied,'replied','var(--green)'), pill(s.ooo,'OOO','var(--amber)'),
+                    pill(s.no_response,'no reply','var(--text3)'), pill(s.dead,'dead','var(--coral)') ].join('');
+
+      // "F1 · 21 · due 10 Aug" needed decoding. Spelled out, and only the
+      // single most urgent wave is shown — the rest are one click away.
+      var next = (c.followup_schedule || []).slice().sort(function(a,b){ return String(a.next_due).localeCompare(String(b.next_due)); })[0];
+      var nextChip = '';
+      if (next) {
+        var d2 = new Date(next.next_due);
+        var lbl = isNaN(d2.getTime()) ? '' : d2.toLocaleDateString('en-GB', { day:'numeric', month:'short' });
         var overdue = !isNaN(d2.getTime()) && d2 < new Date(new Date().toDateString());
-        return '<span style="font-size:9px;font-weight:600;color:'+(overdue?'var(--coral)':'var(--gold)')+';background:'+(overdue?'rgba(196,90,74,0.1)':'rgba(160,117,42,0.1)')+';border:1px solid '+(overdue?'rgba(196,90,74,0.25)':'rgba(160,117,42,0.25)')+';border-radius:6px;padding:2px 7px;margin-right:5px;white-space:nowrap;display:inline-block;margin-top:4px">📨 F'+fs.stage+' · '+fs.count+' · '+(overdue?'overdue':'due')+' '+dLabel+'</span>';
-      }).join('');
-      return '<div style="background:var(--surface2);border-radius:10px;padding:10px 12px;margin-bottom:8px">' +
-        '<div onclick="openSampaignDetail(\''+esc(c.id)+'\')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px">' +
-          '<div style="min-width:0"><div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(c.name)+'</div>' +
-          '<div style="font-size:10px;color:var(--text3);margin-top:2px">'+(s.total||0)+' contact'+((s.total||0)!==1?'s':'')+(c.owner_email?' · '+esc(c.owner_email.split('@')[0]):'')+'</div></div>' +
-          '<div style="display:flex;align-items:center;gap:2px;flex-shrink:0">' +
-            badge(s.replied,'replied','var(--green)') + badge(s.ooo,'ooo','var(--amber)') + badge(s.no_response,'no-resp','var(--text3)') + badge(s.dead,'dead','var(--coral)') +
-            (isOwner ? '<button onclick="event.stopPropagation();toggleEditSampaignForm(\''+esc(c.id)+'\')" title="Edit SAMpaign" style="background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;padding:3px 5px">✎</button>' : '') +
-            (isOwner ? '<button onclick="event.stopPropagation();deleteSampaignCampaign(\''+esc(c.id)+'\',\''+esc(c.name)+'\')" title="Delete SAMpaign" style="background:none;border:none;color:var(--coral);font-size:13px;cursor:pointer;padding:3px 5px">🗑</button>' : '') +
-            '<span title="Open SAMpaign detail" style="font-size:12px;color:var(--gold)">⤢</span>' +
+        nextChip = '<span style="font-size:10px;color:'+(overdue?'var(--coral)':'var(--text3)')+'">' +
+          (overdue ? 'Follow-up ' + next.stage + ' overdue since ' : 'Follow-up ' + next.stage + ' due ') + lbl +
+          ' · ' + next.count + ' contact' + (next.count !== 1 ? 's' : '') + '</span>';
+      }
+
+      return '<div style="background:var(--surface2);border-radius:10px;padding:11px 13px;margin-bottom:8px">' +
+        '<div onclick="openSampaignDetail(\''+esc(c.id)+'\')" style="cursor:pointer">' +
+          '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">' +
+            '<div style="min-width:0;display:flex;align-items:baseline;gap:9px;flex-wrap:wrap">' +
+              '<span style="font-size:14px;font-weight:700;color:var(--text)">'+esc(c.name)+'</span>' +
+              (rate !== null
+                ? '<span style="font-size:13px;font-weight:700;color:'+rateCol+'">'+rate+'%</span><span style="font-size:10px;color:var(--text3)">reply</span>'
+                : '<span style="font-size:10px;color:var(--text3)">not sent yet</span>') +
+            '</div>' +
+            '<div style="display:flex;align-items:center;gap:3px;flex-shrink:0">' +
+              (isOwner ? '<button onclick="event.stopPropagation();toggleEditSampaignForm(\''+esc(c.id)+'\')" title="Edit SAMpaign" style="background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;padding:3px 5px">✎</button>' : '') +
+              (isOwner ? '<button onclick="event.stopPropagation();deleteSampaignCampaign(\''+esc(c.id)+'\',\''+esc(c.name)+'\')" title="Delete SAMpaign" style="background:none;border:none;color:var(--coral);font-size:13px;cursor:pointer;padding:3px 5px">🗑</button>' : '') +
+              '<span title="Open" style="font-size:12px;color:var(--gold)">⤢</span>' +
+            '</div>' +
           '</div>' +
+          '<div style="font-size:10px;color:var(--text3);margin-top:3px">'+sub.join(' · ')+'</div>' +
+          (pills ? '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:7px">'+pills+'</div>' : '') +
+          (nextChip ? '<div style="margin-top:6px">'+nextChip+'</div>' : '') +
         '</div>' +
-        (schedChips ? '<div style="margin-top:2px">'+schedChips+'</div>' : '') +
         '<div id="sampaignEdit_'+esc(c.id)+'" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border2)"></div>' +
       '</div>';
     }).join('');
@@ -9344,7 +9488,7 @@ function _sampTabDefs(campaignId) {
     { key: 'contacts', label: 'Contacts' },
     // The badge is the point: the one tab that may be waiting on a decision
     // says so without being opened.
-    { key: 'queue',    label: 'Queue', badge: pending },
+    { key: 'queue',    label: 'Launches', badge: pending },
     { key: 'trend',    label: 'Trend' }
   ];
 }
