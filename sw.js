@@ -1,6 +1,6 @@
 // ── SamoraTrack Service Worker ──────────────────────────────────────
 // BUMP THIS VERSION NUMBER every time you push an update.
-const VERSION = 'v1.0.11';
+const VERSION = 'v1.0.12';
 const CACHE = `samoratrack-${VERSION}`;
 
 const PRECACHE = [
@@ -9,6 +9,9 @@ const PRECACHE = [
   '/manifest.json',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
+  '/js/app.js',
+  '/js/app-tail.js',
+  '/js/vendor/sortable.min.js',
 ];
 
 self.addEventListener('install', event => {
@@ -103,6 +106,33 @@ self.addEventListener('fetch', event => {
     url.protocol === 'chrome-extension:'
   ) {
     event.respondWith(fetch(request));
+    return;
+  }
+
+  // ── App JS: network-first, cache as fallback ────────────────────────────
+  // The generic handler below is cache-first with no revalidation, which was
+  // safe while all the JS lived inline in index.html: navigations are
+  // network-first, so a deploy shipped fresh code immediately whether or not
+  // VERSION was bumped.
+  //
+  // Now that the app is /js/app.js, cache-first would pin a returning user to
+  // whatever JS they downloaded first — new HTML running against old code —
+  // until someone remembered to bump VERSION. That failure is silent and
+  // would look like "the feature I just shipped doesn't exist for some
+  // users". Network-first removes the dependency on remembering; the cache
+  // still answers when the network doesn't, so offline is unaffected.
+  if (url.origin === self.location.origin && url.pathname.startsWith('/js/')) {
+    event.respondWith(
+      fetch(request)
+        .then(response => {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE).then(cache => cache.put(request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(request))
+    );
     return;
   }
 
