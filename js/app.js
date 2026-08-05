@@ -8346,6 +8346,10 @@ async function loadSampaignSendQueue(campaignId) {
     // is just a record of one already made.
     var draftRows = d.sends.filter(function(x){ return x.status === 'draft'; });
     d.sends = d.sends.filter(function(x){ return x.status !== 'draft'; });
+    // Feeds the Queue tab badge, so the count is visible without opening it.
+    window._sampDraftCount = window._sampDraftCount || {};
+    window._sampDraftCount[campaignId] = draftRows.length;
+    try { _renderSampTabs(campaignId); } catch(e) {}
     var draftHtml = _renderSampaignDrafts(campaignId, draftRows);
     if (!d.sends.length) { box.innerHTML = draftHtml; return; }
     var META = {
@@ -9254,64 +9258,211 @@ function _isSampaignOwner(c) {
   return String(c.owner_email).toLowerCase() === me;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// SAMpaign detail — restructured after Kite's instrument view.
+//
+// The old overlay was one long scroll: performance, follow-up schedule,
+// trend, contacts, add-people, drafts and queue all stacked. Everything was
+// visible, so nothing was prominent, and the two things a rep actually needs
+// on opening ("is this working?" and "is anything waiting on me?") were
+// buried among the things they rarely touch.
+//
+// Three ideas taken from Kite:
+//   1. ONE headline number. Kite leads with price and change; a campaign's
+//      equivalent is reply rate against benchmark. Contact count is inventory,
+//      not performance, so it moves to the right as secondary.
+//   2. A divided metric strip, label above value, thin rules between — the
+//      PE / P/B row. Scannable without reading.
+//   3. Everything else behind tabs, so the default view is small.
+// ═══════════════════════════════════════════════════════════════════════════
+window._sampTab = 'overview';
+
 async function openSampaignDetail(campaignId) {
   document.getElementById('sampaign-detail-overlay')?.remove();
-  // Fresh overlay starts unfiltered — a filter left over from the last
-  // campaign you looked at would silently hide most of this one's roster.
+  // Fresh overlay starts unfiltered and on Overview — a filter or tab left
+  // over from the last campaign would silently hide most of this one.
   window._sampaignStatusFilter = null;
+  window._sampTab = 'overview';
   var c = (window._sampaignCampaignsCache || {})[campaignId] || {};
-  var s = c.stats || {};
+  var isOwner = _isSampaignOwner(c);
+
   var modal = document.createElement('div');
   modal.id = 'sampaign-detail-overlay';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(6px);z-index:99999;display:flex;align-items:flex-end;justify-content:center';
-  modal.innerHTML = '<div style="background:var(--bg);border-radius:18px 18px 0 0;width:100%;max-width:700px;max-height:92vh;overflow-y:auto;padding:22px;box-shadow:0 -10px 50px rgba(0,0,0,0.35)" onclick="event.stopPropagation()">' +
-    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">' +
-      '<div style="min-width:0">' +
-        '<div style="font-size:17px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:7px">🧭 '+esc(c.name||'SAMpaign')+'</div>' +
-        '<div style="font-size:11px;color:var(--text3);margin-top:3px">'+(s.total||0)+' contact'+((s.total||0)!==1?'s':'')+(c.owner_email?' · '+esc(c.owner_email.split('@')[0]):'')+(c.campaign_goal?' · '+esc(c.campaign_goal):'')+'</div>' +
+  modal.innerHTML =
+    '<div style="background:var(--bg);border-radius:18px 18px 0 0;width:100%;max-width:720px;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 -10px 50px rgba(0,0,0,0.35)" onclick="event.stopPropagation()">' +
+      // ── Header: fixed, never scrolls away ──
+      '<div style="padding:18px 20px 0;flex-shrink:0">' +
+        '<div id="sampHeader_'+esc(campaignId)+'"></div>' +
+        '<div id="sampTabs_'+esc(campaignId)+'" style="display:flex;gap:20px;margin-top:14px;border-bottom:1px solid var(--border)"></div>' +
       '</div>' +
-      '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0">' +
-        // Syncing reads the OWNER's mailbox using the owner's own Gmail
-        // connection. A manager's session has no access to a report's
-        // mailbox (by design, and correctly so), so the button would only
-        // ever fail for them. Show who it belongs to instead of a control
-        // that cannot work.
-        (_isSampaignOwner(c)
-          ? '<button onclick="openSampaignComposer(\''+esc(campaignId)+'\')" style="font-size:10px;font-weight:600;color:#fff;padding:6px 11px;border-radius:8px;background:var(--green);border:none;cursor:pointer;white-space:nowrap">✉ Schedule</button>' +
-            '<button id="sampaignSyncBtn_'+esc(campaignId)+'" onclick="syncSampaignCampaign(\''+esc(campaignId)+'\')" style="font-size:10px;font-weight:600;color:var(--gold);padding:6px 11px;border-radius:8px;background:rgba(160,117,42,0.1);border:1px solid rgba(160,117,42,0.25);cursor:pointer;white-space:nowrap">🔄 Sync inbox</button>'
-          : '<span style="font-size:9px;color:var(--text3);text-align:right;line-height:1.35;max-width:150px">Syncs from '+esc((c.owner_email||'the owner').split('@')[0])+'’s inbox, hourly</span>') +
-        '<button onclick="document.getElementById(\'sampaign-detail-overlay\').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text3);padding:0">✕</button>' +
+      // ── Body: the only scrolling region ──
+      '<div id="sampBody_'+esc(campaignId)+'" style="flex:1;overflow-y:auto;padding:16px 20px 20px;min-height:180px">' +
+        '<div style="font-size:11px;color:var(--text3)">Loading…</div>' +
       '</div>' +
-    '</div>' +
-    '<div id="sampaignDetailPerf">'+
-      '<div style="font-size:11px;color:var(--text3);padding:10px 0">Loading performance…</div>'+
-    '</div>' +
-    '<div id="sampaignDetailSchedule" style="margin-bottom:6px"></div>' +
-    '<div id="sampaignDetailTrend"></div>' +
-    '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 8px">👥 Contacts</div>' +
-    '<div id="sampaignContacts_'+esc(campaignId)+'"><div style="font-size:11px;color:var(--text3)">Loading contacts…</div></div>' +
-  '</div>';
+      // ── Footer: actions always reachable, never scrolled past ──
+      '<div style="flex-shrink:0;display:flex;justify-content:flex-end;gap:8px;padding:12px 20px;border-top:1px solid var(--border);background:var(--surface2)">' +
+        (isOwner
+          ? '<button id="sampaignSyncBtn_'+esc(campaignId)+'" onclick="syncSampaignCampaign(\''+esc(campaignId)+'\')" style="font-size:12px;font-weight:600;color:var(--gold);padding:8px 16px;border-radius:8px;background:transparent;border:1px solid rgba(160,117,42,0.4);cursor:pointer;font-family:var(--sans)">Sync inbox</button>' +
+            '<button onclick="openSampaignComposer(\''+esc(campaignId)+'\')" style="font-size:12px;font-weight:600;color:#fff;padding:8px 16px;border-radius:8px;background:var(--green);border:none;cursor:pointer;font-family:var(--sans)">Schedule</button>'
+          : '<span style="font-size:10px;color:var(--text3);align-self:center;margin-right:auto">Syncs from '+esc((c.owner_email||'the owner').split('@')[0])+'’s inbox, hourly</span>') +
+        '<button onclick="document.getElementById(\'sampaign-detail-overlay\').remove()" style="font-size:12px;font-weight:600;color:var(--text3);padding:8px 16px;border-radius:8px;background:transparent;border:1px solid var(--border2);cursor:pointer;font-family:var(--sans)">Close</button>' +
+      '</div>' +
+    '</div>';
   modal.addEventListener('click', function() { modal.remove(); });
   document.body.appendChild(modal);
 
-  _loadSampaignContactsInto(campaignId);
-  _loadSampaignDetailPerf(campaignId, c);
+  // Must go through setSampTab rather than calling the loader directly: the
+  // body starts as a placeholder, and it is setSampTab that creates the
+  // containers each loader writes into. Calling _loadSampaignDetailPerf here
+  // would target a #sampaignDetailPerf that does not exist yet, silently do
+  // nothing, and leave the panel on "Loading…" forever.
+  setSampTab(campaignId, 'overview');
+  // Fetched once in the background so the Queue tab's badge is accurate
+  // before anyone opens that tab.
+  _primeSampDraftCount(campaignId);
+}
+
+// Badge-only fetch. Deliberately does not render anything — it exists so the
+// tab strip can say "6" without the rep having to go looking.
+async function _primeSampDraftCount(campaignId) {
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'list_sampaign_scheduled_sends', campaign_id: campaignId }) });
+    var d = await r.json();
+    if (!d.ok) return;
+    window._sampDraftCount = window._sampDraftCount || {};
+    window._sampDraftCount[campaignId] = (d.summary && d.summary.draft) || 0;
+    _renderSampTabs(campaignId);
+  } catch(e) { /* badge is a nicety, never block the overlay on it */ }
+}
+
+function _sampTabDefs(campaignId) {
+  var pending = (window._sampDraftCount || {})[campaignId] || 0;
+  return [
+    { key: 'overview', label: 'Overview' },
+    { key: 'contacts', label: 'Contacts' },
+    // The badge is the point: the one tab that may be waiting on a decision
+    // says so without being opened.
+    { key: 'queue',    label: 'Queue', badge: pending },
+    { key: 'trend',    label: 'Trend' }
+  ];
+}
+
+function _renderSampTabs(campaignId) {
+  var el = document.getElementById('sampTabs_' + campaignId);
+  if (!el) return;
+  el.innerHTML = _sampTabDefs(campaignId).map(function(t) {
+    var on = window._sampTab === t.key;
+    return '<span onclick="setSampTab(\''+esc(campaignId)+'\',\''+t.key+'\')" ' +
+      'style="font-size:13px;font-weight:'+(on?'700':'500')+';padding-bottom:9px;cursor:pointer;white-space:nowrap;' +
+        'border-bottom:2px solid '+(on?'var(--gold)':'transparent')+';color:'+(on?'var(--text)':'var(--text3)')+'">' +
+      esc(t.label) +
+      (t.badge ? '<span style="font-size:9px;font-weight:700;background:rgba(160,117,42,0.16);color:var(--gold);border-radius:8px;padding:1px 6px;margin-left:5px">'+t.badge+'</span>' : '') +
+    '</span>';
+  }).join('');
+}
+
+function setSampTab(campaignId, tab) {
+  window._sampTab = tab;
+  _renderSampTabs(campaignId);
+  var body = document.getElementById('sampBody_' + campaignId);
+  if (!body) return;
+  var c = (window._sampaignCampaignsCache || {})[campaignId] || {};
+
+  if (tab === 'overview') {
+    body.innerHTML = '<div id="sampaignDetailPerf"></div><div id="sampaignDetailSchedule"></div>';
+    _loadSampaignDetailPerf(campaignId, c);
+  } else if (tab === 'contacts') {
+    body.innerHTML = '<div id="sampaignContacts_'+esc(campaignId)+'"><div style="font-size:11px;color:var(--text3)">Loading contacts…</div></div>' +
+                     '<div id="sampaignAddRows_'+esc(campaignId)+'"></div>';
+    _loadSampaignContactsInto(campaignId);
+  } else if (tab === 'queue') {
+    body.innerHTML = '<div id="sampSendQueue"><div style="font-size:11px;color:var(--text3)">Loading queue…</div></div>';
+    loadSampaignSendQueue(campaignId);
+  } else if (tab === 'trend') {
+    body.innerHTML = '<div id="sampaignDetailTrend"><div style="font-size:11px;color:var(--text3)">Loading…</div></div>';
+    _loadSampaignTrend(campaignId);
+  }
+}
+
+// Header: one headline number, everything else secondary.
+function _renderSampHeader(campaignId, d) {
+  var el = document.getElementById('sampHeader_' + campaignId);
+  if (!el) return;
+  var c = (window._sampaignCampaignsCache || {})[campaignId] || {};
+  var s = (d && d.org_summary) || {};
+  var bm = (d && d.benchmarks) || { reply_rate: { good: 12, avg: 7 } };
+  var rate = s.reply_rate || 0;
+  var good = bm.reply_rate.good, avg = bm.reply_rate.avg;
+  var col = rate >= good ? 'var(--green)' : rate >= avg ? 'var(--amber)' : 'var(--coral)';
+  var verdict = rate >= good ? 'above benchmark' : rate >= avg ? 'around average' : 'below benchmark';
+
+  el.innerHTML =
+    '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap">' +
+      '<div style="min-width:0">' +
+        '<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">' +
+          '<span style="font-size:17px;font-weight:700;color:var(--text)">'+esc(c.name||'SAMpaign')+'</span>' +
+          '<span style="color:var(--border2)">|</span>' +
+          '<span style="font-size:17px;font-weight:700;color:'+col+'">'+rate+'%</span>' +
+          '<span style="font-size:11px;color:'+col+'">'+verdict+' (reply rate)</span>' +
+        '</div>' +
+        '<div style="font-size:11px;color:var(--text3);margin-top:2px">'+
+          esc((c.owner_email||'').split('@')[0]||'')+
+          (c.created_at ? ' · started '+new Date(c.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}) : '')+
+        '</div>' +
+      '</div>' +
+      '<div style="text-align:right;flex-shrink:0">' +
+        '<div style="font-size:17px;font-weight:700;color:var(--text)">'+(s.total_prospects||0)+'</div>' +
+        '<div style="font-size:11px;color:var(--text3)">contacts</div>' +
+      '</div>' +
+    '</div>';
+}
+
+// Period selector, Kite's YTD/1M/1Y row. Days, not labels, so the filter is
+// a simple slice.
+window._sampTrendDays = 30;
+function setSampTrendPeriod(campaignId, days) {
+  window._sampTrendDays = days;
   _loadSampaignTrend(campaignId);
 }
 
 // Performance over time, from the nightly snapshots. Live counts can only say
 // where a campaign IS; only stored history says whether it is improving,
-// which is the question worth acting on. Renders nothing at all until there
-// are at least two days — a "trend" drawn from one point would be a fiction.
+// which is the question worth acting on. A line drawn through one point is a
+// fiction, so below two snapshots this says so plainly rather than drawing
+// something meaningless or rendering nothing and looking broken.
 async function _loadSampaignTrend(campaignId) {
   var box = document.getElementById('sampaignDetailTrend');
   if (!box) return;
+  var periods = [ { d: 7, l: '7D' }, { d: 30, l: '30D' }, { d: 3650, l: 'All' } ];
+  var picker = '<div style="display:flex;gap:16px;margin-bottom:12px">' +
+    periods.map(function(p) {
+      var on = window._sampTrendDays === p.d;
+      return '<span onclick="setSampTrendPeriod(\''+esc(campaignId)+'\','+p.d+')" style="font-size:12px;font-weight:'+(on?'700':'500')+';color:'+(on?'var(--gold)':'var(--text3)')+';cursor:pointer;border-bottom:2px solid '+(on?'var(--gold)':'transparent')+';padding-bottom:3px">'+p.l+'</span>';
+    }).join('') + '</div>';
+
   try {
-    var r = await fetch(SB_URL + '/rest/v1/sampaign_perf_snapshots?campaign_id=eq.' + campaignId + '&select=snapshot_date,total,sent,replied,ooo,dead,no_response&order=snapshot_date.asc&limit=60', {
+    var r = await fetch(SB_URL + '/rest/v1/sampaign_perf_snapshots?campaign_id=eq.' + campaignId + '&select=snapshot_date,total,sent,replied,ooo,dead,no_response&order=snapshot_date.asc&limit=400', {
       headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token }
     });
-    var rows = await r.json();
-    if (!Array.isArray(rows) || rows.length < 2) { box.innerHTML = ''; return; }
+    var all = await r.json();
+    if (!Array.isArray(all)) all = [];
+    var cutoff = new Date(Date.now() - window._sampTrendDays * 86400000).toISOString().slice(0, 10);
+    var rows = all.filter(function(x){ return String(x.snapshot_date) >= cutoff; });
+
+    if (rows.length < 2) {
+      // Explains itself instead of being an empty tab. The nightly job is the
+      // thing being waited on, so name it and say when.
+      box.innerHTML = picker +
+        '<div style="text-align:center;padding:26px 16px;border:1px dashed var(--border2);border-radius:10px">' +
+          '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:5px">History starts building tonight</div>' +
+          '<div style="font-size:11px;color:var(--text3);line-height:1.55">A snapshot of this campaign is recorded once a day, so the first line appears after two nights.' +
+          (all.length === 1 ? '<br>One day recorded so far.' : '') + '</div>' +
+          '<div style="font-size:10px;color:var(--text3);margin-top:9px">Live numbers are on Overview in the meantime.</div>' +
+        '</div>';
+      return;
+    }
 
     var maxV = Math.max.apply(null, rows.map(function(x){ return x.total || 0; })) || 1;
     var W = 100, H = 34;
@@ -9329,7 +9480,7 @@ async function _loadSampaignTrend(campaignId) {
       return v === 0 ? '' : (v > 0 ? ' +' + v : ' ' + v);
     };
 
-    box.innerHTML = '<div style="background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:11px;margin-bottom:8px">' +
+    box.innerHTML = picker + '<div style="background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:11px;margin-bottom:8px">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
         '<span style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">📈 Trend</span>' +
         '<span style="font-size:9px;color:var(--text3)">'+rows.length+' days · '+esc(String(first.snapshot_date).slice(5))+' to '+esc(String(last.snapshot_date).slice(5))+'</span>' +
@@ -9352,14 +9503,18 @@ async function _loadSampaignDetailPerf(campaignId, c) {
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body: JSON.stringify({ action:'get_manual_sampaign_stats', campaign_id: campaignId }) });
     var d = await r.json();
+    // The header always updates, even when the body is showing another tab —
+    // the headline number should never go stale behind a tab switch.
+    _renderSampHeader(campaignId, d);
+
     var perfBox = document.getElementById('sampaignDetailPerf');
     if (perfBox) {
       if (d.ok && d.org_summary && d.org_summary.total_prospects > 0) {
-        perfBox.innerHTML = _renderSampaignAnalyticsBlock(d, { title: '📊 Performance', campaignId: campaignId });
+        perfBox.innerHTML = _sampMetricStrip(d, campaignId) + _sampHotSignals(d);
       } else if (!d.ok) {
         perfBox.innerHTML = '<div style="font-size:11px;color:var(--coral)">⚠ '+esc(d.error||'Could not load performance')+'</div>';
       } else {
-        perfBox.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:6px 0">No activity yet — status changes here will start showing up as performance data.</div>';
+        perfBox.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:14px 0;text-align:center">Nothing has happened yet.<br><span style="font-size:11px">Add contacts, then Schedule or Sync inbox.</span></div>';
       }
     }
     var schedBox = document.getElementById('sampaignDetailSchedule');
@@ -9377,6 +9532,71 @@ async function _loadSampaignDetailPerf(campaignId, c) {
     var perfBox2 = document.getElementById('sampaignDetailPerf');
     if (perfBox2) perfBox2.innerHTML = '<div style="font-size:11px;color:var(--coral)">Error: '+esc(e.message)+'</div>';
   }
+}
+
+// Kite's PE / Sector PE / P/B row: label above, value below, hairline rules
+// between. Clickable, so each cell is also the filter for that bucket — the
+// number and the way to see what it is made of are the same control.
+function _sampMetricStrip(d, campaignId) {
+  var s = d.org_summary || {};
+  var bm = d.benchmarks || { reply_rate: { good: 12 } };
+  var cells = [
+    { label: 'Sent',    val: s.sent || 0,        filter: 'sent' },
+    { label: 'Opened',  val: s.opened || 0,      filter: 'opened' },
+    { label: 'Replied', val: s.replied || 0,     filter: 'replied', color: 'var(--green)' },
+    { label: 'OOO',     val: s.ooo || 0,         filter: 'ooo',     color: 'var(--amber)' },
+    { label: 'No reply',val: s.no_response || 0, filter: 'no_response' },
+    { label: 'Dead',    val: s.bounced || 0,     filter: 'dead',    color: 'var(--coral)' }
+  ];
+  var rate = s.reply_rate || 0, good = bm.reply_rate.good || 12;
+  // Marker position is clamped so an unusually good campaign pins at the end
+  // rather than running off the bar.
+  var pos = Math.max(0, Math.min(100, (rate / good) * 100));
+
+  var html = '<div style="display:flex;border-top:1px solid var(--border);border-bottom:1px solid var(--border);flex-wrap:wrap">';
+  cells.forEach(function(c, i) {
+    if (i) html += '<div style="width:1px;background:var(--border)"></div>';
+    html += '<div onclick="setSampTab(\''+esc(campaignId)+'\',\'contacts\');setSampaignStatusFilter(\''+esc(campaignId)+'\',\''+c.filter+'\')" ' +
+      'style="flex:1;min-width:62px;padding:11px 10px;cursor:pointer" title="Show these contacts">' +
+      '<div style="font-size:11px;color:var(--text3)">'+c.label+'</div>' +
+      '<div style="font-size:16px;font-weight:700;color:'+(c.val?(c.color||'var(--text)'):'var(--text3)')+';margin-top:2px">'+c.val+'</div>' +
+    '</div>';
+  });
+  html += '</div>';
+
+  // The 52-week-range analogue: where this campaign's reply rate sits between
+  // nothing and a genuinely good result. Answers "am I doing well" without
+  // needing to know what a good reply rate is.
+  html += '<div style="padding:12px 2px 4px">' +
+    '<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text3)">' +
+      '<span>0%</span><span>reply rate vs industry</span><span>'+good+'%</span>' +
+    '</div>' +
+    '<div style="height:5px;border-radius:3px;margin-top:6px;background:linear-gradient(90deg,var(--coral),var(--amber),var(--green))"></div>' +
+    '<div style="position:relative;height:12px">' +
+      '<span style="position:absolute;left:'+pos.toFixed(1)+'%;transform:translateX(-50%);font-size:10px;color:var(--text)">▲</span>' +
+    '</div>' +
+  '</div>';
+  return html;
+}
+
+// Replied prospects, kept on Overview because it is the one thing that should
+// interrupt whatever else the rep was about to do.
+function _sampHotSignals(d) {
+  var hot = d.hot_signals || [];
+  if (!hot.length) return '';
+  return '<div style="margin-top:14px;border:1px solid rgba(74,140,92,0.3);background:rgba(74,140,92,0.07);border-radius:10px;padding:12px 14px">' +
+    '<div style="font-size:10px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.06em;margin-bottom:7px">Replied · act now</div>' +
+    hot.map(function(h) {
+      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0">' +
+        '<div style="min-width:0">' +
+          '<div style="font-size:13px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:5px">' +
+            esc(h.prospect_name||h.prospect_email||'Unknown') + _sampaignLinkedInIcon(h.linkedin_url, h.prospect_name||h.prospect_email) +
+          '</div>' +
+          '<div style="font-size:11px;color:var(--text3)">'+(h.prospect_title?esc(h.prospect_title)+' · ':'')+esc(h.prospect_company||'')+'</div>' +
+        '</div>' +
+      '</div>';
+    }).join('') +
+  '</div>';
 }
 
 // Turns a sync response into "3 sent, 1 replied, 2 OOO" style text.
