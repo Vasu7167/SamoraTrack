@@ -9113,6 +9113,8 @@ function loadSampaignWorkspace() {
       '<input id="sampaignRegion" placeholder="Region (optional)" style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
       '<div style="font-size:10px;color:var(--text3)">Campaign goal / ask — what are you pitching and what do you want them to do? (used by AI drafting tools, e.g. Claude via connector)</div>' +
       '<textarea id="sampaignGoal" rows="2" placeholder="e.g. Introduce our retail execution platform, get a 15-min discovery call booked with the regional sales lead" style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans);resize:vertical;height:48px"></textarea>' +
+      '<div style="font-size:10px;color:var(--text3)">Who is this one for? A short label so you can tell it apart later (e.g. RTM leadership, Plant heads)</div>' +
+      '<input id="sampaignFocus" maxlength="48" placeholder="Focus (e.g. RTM leadership)" style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
       '<div style="font-size:10px;color:var(--text3)">Follow-up schedule — these become tasks on your own list for those days</div>' +
       _fupEditorHtml('new', [_fupSuggest([])]) +
       '<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--text2)">' +
@@ -9221,7 +9223,7 @@ async function createSampaign() {
   }
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
-      body: JSON.stringify({ action:'create_sampaign', account_name: accountName, domain: domain, region: region, campaign_goal: campaignGoal, followup_dates: followup_dates, alerts_enabled: alerts_enabled }) });
+      body: JSON.stringify({ action:'create_sampaign', account_name: accountName, domain: domain, region: region, campaign_goal: campaignGoal, focus: (document.getElementById('sampaignFocus')?.value||'').trim() || null, followup_dates: followup_dates, alerts_enabled: alerts_enabled }) });
     var d = await r.json();
     if (!d.ok) { showToast('Error: '+(d.error||'Could not create SAMpaign')); return; }
     showToast(d.account_linked ? '✓ SAMpaign linked to existing account' : '✓ SAMpaign + account created');
@@ -9231,6 +9233,7 @@ async function createSampaign() {
     document.getElementById('sampaignDomain').value = '';
     document.getElementById('sampaignRegion').value = '';
     document.getElementById('sampaignGoal').value = '';
+    var fEl = document.getElementById('sampaignFocus'); if (fEl) fEl.value = '';
     _fupState['new'] = [_fupSuggest([])];
     _fupRender('new');
     toggleNewSampaignForm();
@@ -9285,6 +9288,9 @@ async function loadSampaignCampaigns() {
       // per SDR). Without a second identifier they are indistinguishable in
       // the list, which was happening with the two TotalEnergies rows.
       var sub = [];
+      // Focus leads: when three campaigns share an account name it is the
+      // only thing that says which is which, so it goes before the counts.
+      if (c.focus) sub.push('<strong style="color:var(--text2)">'+esc(c.focus)+'</strong>');
       sub.push((s.total || 0) + ' contact' + ((s.total || 0) !== 1 ? 's' : ''));
       if (c.owner_email) sub.push(esc(c.owner_email.split('@')[0]));
       if (c.created_at) sub.push('from ' + new Date(c.created_at).toLocaleDateString('en-GB', { day:'numeric', month:'short' }));
@@ -9349,6 +9355,7 @@ function toggleEditSampaignForm(campaignId) {
       '<div style="display:flex;flex-direction:column;gap:8px">' +
         '<input id="editSampaignName_'+esc(campaignId)+'" value="'+esc(c.name||'')+'" placeholder="Campaign name" style="padding:7px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
         '<textarea id="editSampaignGoal_'+esc(campaignId)+'" rows="2" placeholder="Campaign goal / ask — what are you pitching, what do you want them to do?" style="padding:7px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px;resize:vertical;height:46px">'+esc(c.campaign_goal||'')+'</textarea>' +
+        '<input id="editSampaignFocus_'+esc(campaignId)+'" maxlength="48" value="'+esc(c.focus||'')+'" placeholder="Focus (e.g. RTM leadership)" style="padding:7px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
         '<div style="font-size:10px;color:var(--text3)">Follow-up schedule — moving a date moves its task too</div>' +
         _fupEditorHtml(campaignId, c.followup_dates || []) +
         '<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--text2)">' +
@@ -9383,7 +9390,7 @@ async function saveSampaignEdit(campaignId) {
   };
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
-      body: JSON.stringify({ action:'update_sampaign', campaign_id: campaignId, name: name, campaign_goal: campaignGoal, followup_dates: followup_dates, alerts_enabled: alerts_enabled }) });
+      body: JSON.stringify({ action:'update_sampaign', campaign_id: campaignId, name: name, campaign_goal: campaignGoal, focus: (document.getElementById('editSampaignFocus_'+campaignId)?.value||'').trim(), followup_dates: followup_dates, alerts_enabled: alerts_enabled }) });
     var d = await r.json();
     if (!d.ok) { showToast('Error: '+(d.error||'Could not update SAMpaign')); return; }
     var moved = await _syncSampaignFupTasks(campaignId, name || cachedC.name, oldDates, followup_dates);
@@ -9599,6 +9606,7 @@ function _renderSampHeader(campaignId, d) {
           '<span style="font-size:11px;color:'+col+'">'+verdict+' (reply rate)</span>' +
         '</div>' +
         '<div style="font-size:11px;color:var(--text3);margin-top:2px">'+
+          (c.focus ? '<strong style="color:var(--text2)">'+esc(c.focus)+'</strong> · ' : '')+
           esc((c.owner_email||'').split('@')[0]||'')+
           (c.created_at ? ' · started '+new Date(c.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}) : '')+
         '</div>' +
@@ -10018,7 +10026,20 @@ function _renderSampaignContacts(campaignId) {
       // when it hasn't (yet).
       var liHref = c.linkedin_url ? c.linkedin_url : ('https://www.linkedin.com/search/results/people/?keywords=' + encodeURIComponent(c.name || ''));
       var liOpacity = c.linkedin_url ? '1' : '0.3';
-      var liIcon = '<a href="'+esc(liHref)+'" target="_blank" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;color:#0A66C2;opacity:'+liOpacity+';text-decoration:none;flex-shrink:0" title="'+(c.linkedin_url?'Open LinkedIn profile':'Search LinkedIn (not enriched yet)')+'"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></a>';
+      // Clicking the icon copies the connection note AND opens the profile in
+      // one motion. Sending a LinkedIn invite cannot be automated from here —
+      // the rep has to do it by hand — so the only useful thing the product
+      // can do is have the right words already on the clipboard at the moment
+      // the invite box opens. Without a note it just opens the profile.
+      var hasNote = !!(c.linkedin_note && c.linkedin_note.trim());
+      var liTitle = hasNote ? 'Copy connection note and open profile'
+                            : (c.linkedin_url ? 'Open LinkedIn profile' : 'Search LinkedIn (not enriched yet)');
+      var liIcon = '<a href="'+esc(liHref)+'" target="_blank"' +
+        (hasNote ? ' onclick="event.stopPropagation();_copyLinkedInNote(\''+esc(c.id)+'\')"' : ' onclick="event.stopPropagation()"') +
+        ' style="display:inline-flex;align-items:center;color:#0A66C2;opacity:'+liOpacity+';text-decoration:none;flex-shrink:0;position:relative" title="'+esc(liTitle)+'"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>' +
+        (hasNote ? '<span style="position:absolute;top:-3px;right:-4px;width:6px;height:6px;border-radius:50%;background:var(--green)"></span>' : '') +
+        '</a>' +
+        '<span onclick="event.stopPropagation();_toggleLinkedInNote(\''+esc(c.id)+'\')" style="cursor:pointer;font-size:9px;font-weight:600;color:'+(hasNote?'var(--gold)':'var(--text3)')+';white-space:nowrap" title="Write or edit the connection note">'+(hasNote?'note':'+ note')+'</span>';
       var titleLine = (c.title || c.seniority) ? '<div style="font-size:10px;color:var(--text2);margin-top:1px;display:flex;align-items:center;gap:5px"><span>'+esc([c.title, c.seniority].filter(Boolean).join(' · '))+'</span>'+liIcon+'</div>' : '<div style="margin-top:1px">'+liIcon+'</div>';
       // Enrichment-derived talking point — computed once at enrich/scout time
       // from title/seniority/department (deterministic, no AI, no Gmail
@@ -10027,6 +10048,17 @@ function _renderSampaignContacts(campaignId) {
       // give prospects, since they have no message history to read.
       var noteLine = c.outreach_note ? '<div style="font-size:10px;color:var(--gold);margin-top:3px;display:flex;gap:5px;align-items:flex-start;background:rgba(160,117,42,0.06);border-radius:6px;padding:4px 7px"><span style="flex-shrink:0">✦</span><span>'+esc(c.outreach_note)+'</span></div>' : '';
       var intelBtn = _samoraIntelBtn('openSampaignContactInsight(\''+esc(c.id)+'\',\''+esc(c.name||c.email||'')+'\')', true);
+      // Editor is collapsed by default — most rows do not need it open, and
+      // 54 always-visible textareas would bury the roster.
+      var noteLen = (c.linkedin_note || '').length;
+      var noteEditor = '<div id="liNote_'+esc(c.id)+'" style="display:none;margin-top:5px">' +
+          '<textarea id="liNoteText_'+esc(c.id)+'" maxlength="300" rows="3" oninput="_liNoteCount(\''+esc(c.id)+'\')" placeholder="Connection note, max 300 characters…" style="width:100%;box-sizing:border-box;padding:7px 9px;border-radius:7px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:11px;line-height:1.5;resize:vertical">'+esc(c.linkedin_note||'')+'</textarea>' +
+          '<div style="display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap">' +
+            '<button onclick="event.stopPropagation();saveLinkedInNote(\''+esc(c.id)+'\',\''+esc(campaignId)+'\')" style="font-size:10px;font-weight:600;padding:5px 11px;border-radius:6px;background:var(--green);border:none;color:#fff;cursor:pointer;font-family:var(--sans)">Save note</button>' +
+            '<span id="liNoteCount_'+esc(c.id)+'" style="font-size:9px;color:var(--text3)">'+noteLen+' / 300</span>' +
+            (c.linkedin_note_by ? '<span style="font-size:9px;color:var(--text3)">written by '+esc(c.linkedin_note_by)+'</span>' : '') +
+          '</div>' +
+        '</div>';
       return '<div style="padding:6px 0;border-top:1px solid var(--border)">' +
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px">' +
         '<div style="min-width:0;flex:1"><div style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(c.name||c.email||'—')+'</div>' +
@@ -10043,7 +10075,7 @@ function _renderSampaignContacts(campaignId) {
         '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">' + intelBtn +
         '<select onchange="setSampaignContactStatus(\''+esc(c.id)+'\',this.value,\''+esc(campaignId)+'\')" style="font-size:10px;font-weight:600;color:'+meta.color+';background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:3px 6px">'+opts+'</select>' +
         '<span onclick="removeSampaignContact(\''+esc(c.id)+'\',\''+esc(campaignId)+'\',\''+esc(c.name||c.email||'')+'\')" style="cursor:pointer;color:var(--text3);font-size:13px;padding:0 2px" title="Remove from SAMpaign">✕</span>' +
-        '</div></div>' + noteLine + collisionLine + promoteBtn +
+        '</div></div>' + noteEditor + noteLine + collisionLine + promoteBtn +
       '</div>';
     }).join('');
   }
@@ -10239,6 +10271,69 @@ async function submitSampaignContactRows(campaignId) {
     var c = (window._sampaignCampaignsCache || {})[campaignId] || {};
     _loadSampaignDetailPerf(campaignId, c);
   } catch(e) { showToast('Error: '+e.message); }
+}
+
+// ── LinkedIn connection notes ───────────────────────────────────────────────
+// LinkedIn caps a connection note at 300 characters. Two things worth knowing
+// beyond the length, because no code here can work around either: free
+// accounts get roughly five personalised invitations per MONTH (past that
+// LinkedIn sends the request but silently drops the note), and the invite
+// itself cannot be automated — the rep opens the profile and pastes. So the
+// only useful job for the product is having the right words on the clipboard
+// at the exact moment the invite box opens.
+function _toggleLinkedInNote(contactId) {
+  var el = document.getElementById('liNote_' + contactId);
+  if (!el) return;
+  var open = el.style.display === 'none';
+  el.style.display = open ? 'block' : 'none';
+  if (open) document.getElementById('liNoteText_' + contactId)?.focus();
+}
+
+function _liNoteCount(contactId) {
+  var ta = document.getElementById('liNoteText_' + contactId);
+  var out = document.getElementById('liNoteCount_' + contactId);
+  if (!ta || !out) return;
+  var n = ta.value.length;
+  out.textContent = n + ' / 300';
+  // Amber past 200: sources disagree on whether free LinkedIn accounts are
+  // held to 200 rather than 300, so this warns instead of blocking.
+  out.style.color = n > 300 ? 'var(--coral)' : n > 200 ? 'var(--amber)' : 'var(--text3)';
+  out.title = n > 200 ? 'Some free LinkedIn accounts cap notes at 200 characters' : '';
+}
+
+async function saveLinkedInNote(contactId, campaignId) {
+  var ta = document.getElementById('liNoteText_' + contactId);
+  if (!ta) return;
+  var note = ta.value.replace(/\s+/g, ' ').trim();
+  if (!note) { showToast('Write something first'); return; }
+  if (note.length > 300) { showToast('Too long by ' + (note.length - 300) + ' characters'); return; }
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'save_sampaign_linkedin_notes', campaign_id: campaignId, generated_by: 'manual', notes: [{ contact_id: contactId, note: note }] }) });
+    var d = await r.json();
+    if (!d.ok || !d.saved) { showToast('⚠ ' + (d.note || d.error || 'Could not save')); return; }
+    showToast('✓ Note saved');
+    _loadSampaignContactsInto(campaignId);
+  } catch(e) { showToast('Error: ' + e.message); }
+}
+
+// Copies on the way to the profile. The anchor still navigates, so this runs
+// alongside rather than instead of opening LinkedIn.
+function _copyLinkedInNote(contactId) {
+  var all = window._sampaignContactsCache || {};
+  var found = null;
+  Object.keys(all).forEach(function(k) {
+    (all[k] || []).forEach(function(c) { if (c.id === contactId) found = c; });
+  });
+  if (!found || !found.linkedin_note) return;
+  try {
+    navigator.clipboard.writeText(found.linkedin_note);
+    showToast('✓ Note copied — paste it into the invite');
+  } catch(e) {
+    // Clipboard can be blocked by permissions or a non-secure context, and
+    // failing silently would leave the rep pasting whatever was there before.
+    showToast('Could not copy automatically — open the note and copy it');
+  }
 }
 
 // ── Remove a contact from the campaign ──────────────────────────────────────
