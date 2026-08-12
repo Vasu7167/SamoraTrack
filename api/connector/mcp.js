@@ -5,7 +5,7 @@
  * We respond synchronously — Vercel doesn't support persistent SSE,
  * but Claude's remote MCP mode works fine with request/response per call.
  */
-import { resolveToken, getSession, getValidAccessToken, executeTool, TOOL_SCHEMAS } from './_tools.js';
+import { resolveToken, authenticate, getValidAccessToken, executeTool, TOOL_SCHEMAS } from './_tools.js';
 
 // Convert schemas to MCP format
 function toMcpTools() {
@@ -25,9 +25,10 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const token = resolveToken(req);
-  const session = token ? await getSession(token) : null;
-  if (!session) {
-    return res.status(401).json({ error: 'Invalid token. Visit /connector/connect to get yours.' });
+  // Accepts an API key or a legacy session token.
+  const auth = await authenticate(token);
+  if (auth.error) {
+    return res.status(auth.status || 401).json({ error: auth.error });
   }
 
   // GET /mcp → return tool list (MCP initialize response)
@@ -44,7 +45,7 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     const { method, params, id } = req.body || {};
     try {
-      const accessToken = await getValidAccessToken(session, token);
+      const accessToken = auth.accessToken;
 
       if (method === 'initialize') {
         return res.json({ jsonrpc: '2.0', id, result: { protocolVersion: '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'samoratrack', version: '1.0.0' } } });
@@ -63,8 +64,11 @@ export default async function handler(req, res) {
           // Same self-heal as the REST route. This is the path Claude
           // actually uses, so it is the one that matters most: a stale token
           // here is what forced the user to remove and re-add the connector.
-          if (err.status !== 401) throw err;
-          const retryToken = await getValidAccessToken(session, token, true);
+          //
+          // Keys mint a fresh JWT per request, so there is nothing stale to
+          // heal — a 401 there is a real authorisation failure.
+          if (err.status !== 401 || auth.kind !== 'session') throw err;
+          const retryToken = await getValidAccessToken(auth.session, token, true);
           result = await executeTool(retryToken, name, args || {});
         }
         return res.json({
