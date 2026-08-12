@@ -1238,9 +1238,10 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
           <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Create a Gem with SamoraTrack built in. Share the Gem link — native Gemini chat with live pipeline access.</div>
           <button onclick="copyGeminiSetup()" style="width:100%;padding:8px;border-radius:7px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">📋 Copy admin Gemini setup steps</button>
         </div>
-        <div style="font-size:10px;color:var(--text3);text-align:center;display:flex;justify-content:space-between;margin-top:4px">
-          <span id="connectorExpiry"></span>
-          <button onclick="getConnectorToken()" style="background:none;border:none;color:var(--text3);font-size:10px;cursor:pointer;text-decoration:underline;font-family:var(--sans)">Refresh token</button>
+        <div id="connectorKeysPanel"></div>
+        <div style="font-size:10px;color:var(--text3);text-align:center;display:flex;justify-content:space-between;gap:8px;margin-top:4px">
+          <span id="connectorExpiry" style="text-align:left"></span>
+          <button onclick="getConnectorToken()" style="background:none;border:none;color:var(--text3);font-size:10px;cursor:pointer;text-decoration:underline;font-family:var(--sans);white-space:nowrap">New key</button>
         </div>
       </div>
     </div>
