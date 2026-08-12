@@ -5,6 +5,8 @@
  * No Vercel KV, no extra services — Supabase is already here.
  */
 
+import crypto from 'node:crypto';
+
 export const SB_URL   = process.env.SB_URL   || 'https://gowpuicpmrwsohongosf.supabase.co';
 export const SB_ANON  = process.env.SB_ANON  || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdvd3B1aWNwbXJ3c29ob25nb3NmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzOTExMDgsImV4cCI6MjA5NTk2NzEwOH0.35CjODxyxOjAKp-xBOBx4oAXO_qjLyVttVaJEhp7YEg';
 const SB_SERVICE      = process.env.SUPABASE_SERVICE_ROLE_KEY || SB_ANON;
@@ -114,6 +116,107 @@ export async function getValidAccessToken(session, token, force = false) {
 export function resolveToken(req) {
   const auth = (req.headers.authorization || req.headers['Authorization'] || '').replace(/^Bearer\s+/i, '');
   return auth || (req.query && req.query.token) || null;
+}
+
+// ── API key auth ──────────────────────────────────────────────────────────────
+// Replaces storing a Supabase user session. A session is built for a person at
+// a browser: refresh tokens rotate on every use, are single-use, and can be
+// revoked server-side in ways this code cannot observe. That is why the
+// connector died roughly daily and had to be re-added in Claude by hand.
+//
+// A key has no expiry and no rotating state. On each request we look it up and
+// mint a short-lived Supabase JWT for that user, signed with the project's own
+// JWT secret. Nothing is stored between calls, so nothing can drift out of
+// sync — the failure mode is designed out rather than patched.
+
+const JWT_SECRET = process.env.SUPABASE_JWT_SECRET || '';
+
+export function isApiKey(token) {
+  return typeof token === 'string' && token.startsWith('sk_samora_');
+}
+
+function b64url(input) {
+  return Buffer.from(input).toString('base64url');
+}
+
+// A Supabase-shaped user JWT. GoTrue validates the signature against the
+// project secret and resolves the user from `sub`, so the edge function sees
+// an ordinary authenticated user and needs no changes at all.
+//
+// Ten minutes deliberately: long enough for the slowest tool call, short
+// enough that a leaked token is worthless almost immediately. It is minted
+// per request and never stored.
+export function mintUserJwt(userId, email, ttlSeconds = 600) {
+  if (!JWT_SECRET) throw new Error('SUPABASE_JWT_SECRET is not set on the server — add it in Vercel environment variables (Supabase → Settings → API → JWT Secret).');
+  const now = Math.floor(Date.now() / 1000);
+  const header = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const payload = b64url(JSON.stringify({
+    aud: 'authenticated',
+    role: 'authenticated',
+    sub: userId,
+    email: email || undefined,
+    iat: now,
+    exp: now + ttlSeconds
+  }));
+  const sig = crypto.createHmac('sha256', JWT_SECRET).update(header + '.' + payload).digest('base64url');
+  return header + '.' + payload + '.' + sig;
+}
+
+// Looks up a live key by hash. The raw key is never stored, so this is the
+// only way to resolve one — and a revoked key simply does not match.
+export async function resolveApiKey(rawKey) {
+  const hash = crypto.createHash('sha256').update(rawKey).digest('hex');
+  const r = await fetch(
+    `${SB_URL}/rest/v1/mcp_api_keys?key_hash=eq.${hash}&revoked_at=is.null&select=id,user_id&limit=1`,
+    { headers: { apikey: SB_SERVICE, Authorization: `Bearer ${SB_SERVICE}` } }
+  );
+  const rows = await r.json();
+  if (!Array.isArray(rows) || !rows.length) return null;
+
+  const row = rows[0];
+  // Email is needed for the JWT's email claim; taken from the profile rather
+  // than duplicated onto the key row, so it stays correct if it changes.
+  let email = null;
+  try {
+    const p = await (await fetch(
+      `${SB_URL}/rest/v1/user_profiles?user_id=eq.${row.user_id}&select=email&limit=1`,
+      { headers: { apikey: SB_SERVICE, Authorization: `Bearer ${SB_SERVICE}` } }
+    )).json();
+    email = Array.isArray(p) && p[0] ? p[0].email : null;
+  } catch (_e) { /* non-fatal, the claim is optional */ }
+
+  // Fire and forget: useful for spotting a stale key before revoking the
+  // wrong one, never worth failing or delaying a request over.
+  fetch(`${SB_URL}/rest/v1/mcp_api_keys?id=eq.${row.id}`, {
+    method: 'PATCH',
+    headers: { apikey: SB_SERVICE, Authorization: `Bearer ${SB_SERVICE}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    body: JSON.stringify({ last_used_at: new Date().toISOString() })
+  }).catch(() => {});
+
+  return { user_id: row.user_id, email };
+}
+
+// One entry point for both credential types. API keys are the path forward;
+// existing session tokens keep working so nobody is locked out mid-migration.
+// Returns { accessToken, kind, session? } on success, or { error, status } on
+// failure. Returning the reason rather than a bare null matters here: "your
+// key was revoked" and "the server is misconfigured" are different problems
+// and a single 401 for both would send the user hunting in the wrong place.
+export async function authenticate(token) {
+  if (!token) return { error: 'No credential supplied.', status: 401 };
+
+  if (isApiKey(token)) {
+    if (!JWT_SECRET) {
+      return { error: 'Server is missing SUPABASE_JWT_SECRET, so API keys cannot be used yet. Add it in Vercel environment variables (Supabase dashboard, Settings, API, JWT Secret).', status: 500 };
+    }
+    const resolved = await resolveApiKey(token);
+    if (!resolved) return { error: 'That key is not valid, or it has been revoked.', status: 401 };
+    return { accessToken: mintUserJwt(resolved.user_id, resolved.email), kind: 'api_key' };
+  }
+
+  const session = await getSession(token);
+  if (!session) return { error: 'Invalid token. Generate a key in Samora under You, then Claude connector.', status: 401 };
+  return { accessToken: await getValidAccessToken(session, token), session, token, kind: 'session' };
 }
 
 // ── Edge function caller ──────────────────────────────────────────────────────
