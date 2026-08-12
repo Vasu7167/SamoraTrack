@@ -1147,6 +1147,17 @@ var _connectorToken = null;
 var _currentInstallCmd  = '';
 var _connectorHost  = 'https://samoratrack.vercel.app';
 
+// Issues an API key, not a login session.
+//
+// The old flow handed out a Supabase session token. A session is built for a
+// person sitting at a browser: it expires, its refresh token rotates and is
+// single-use, and it can be killed server-side without the connector ever
+// knowing. That is why this connection died roughly daily and had to be
+// removed and re-added in Claude by hand.
+//
+// A key has no expiry and nothing to rotate. Same button, same URLs, same
+// install commands — the credential inside them is just a different kind of
+// thing now.
 async function getConnectorToken() {
   var btn    = document.getElementById('connectorBtn');
   var status = document.getElementById('connectorStatus');
@@ -1155,15 +1166,30 @@ async function getConnectorToken() {
     var r = await fetch(EDGE_FN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
-      body: JSON.stringify({ action: 'get_connector_token' })
+      body: JSON.stringify({ action: 'create_connector_key', label: 'Claude connector' })
     });
     var d = await r.json();
-    if (!d.ok) {
-      if (status) status.textContent = 'Error: ' + esc(d.error || 'Failed');
-      if (btn) { btn.textContent = '🔌 Connect to AI →'; btn.disabled = false; }
-      return;
+
+    // Falls back to the old session token if the key action is not deployed
+    // yet, so this page keeps working during the rollout rather than showing
+    // an error for something the user cannot fix.
+    var usedKey = true;
+    if (!d.ok || !d.key) {
+      usedKey = false;
+      var r2 = await fetch(EDGE_FN_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
+        body: JSON.stringify({ action: 'get_connector_token' })
+      });
+      d = await r2.json();
+      if (!d.ok) {
+        if (status) status.textContent = 'Error: ' + esc(d.error || 'Failed');
+        if (btn) { btn.textContent = '🔌 Connect to AI →'; btn.disabled = false; }
+        return;
+      }
     }
-    _connectorToken = d.token;
+
+    _connectorToken = usedKey ? d.key : d.token;
     _connectorHost  = d.host || 'https://samoratrack.vercel.app';
     document.getElementById('connectorNotGenerated').style.display = 'none';
     document.getElementById('connectorGenerated').style.display    = 'block';
@@ -1173,15 +1199,77 @@ async function getConnectorToken() {
     // Populate the browser URL (same URL — claude.ai Integrations uses the same endpoint)
     var browserUrlEl = document.getElementById('claudeBrowserUrl');
     if (browserUrlEl) browserUrlEl.textContent = _connectorHost + '/api/connector/mcp?token=' + _connectorToken;
+
     var expiry = document.getElementById('connectorExpiry');
-    if (expiry && d.expires_at) {
-      var days = Math.round((d.expires_at - Date.now()) / 86400000);
-      expiry.textContent = 'Token valid for ' + days + ' more days';
+    if (expiry) {
+      if (usedKey) {
+        // The headline of this whole change, so it says so plainly.
+        expiry.innerHTML = '<span style="color:var(--green)">This key does not expire.</span> Copy the URL now, it is shown once.';
+      } else if (d.expires_at) {
+        var days = Math.round((d.expires_at - Date.now()) / 86400000);
+        expiry.textContent = 'Token valid for ' + days + ' more days';
+      }
     }
+    if (usedKey) renderConnectorKeys();
   } catch(e) {
     if (status) status.textContent = 'Error: ' + esc(e.message);
     if (btn) { btn.textContent = '🔌 Connect to AI →'; btn.disabled = false; }
   }
+}
+
+// Lists keys by prefix, with last use and a revoke control. Keys are cheap to
+// create, so without a list they quietly pile up and nobody can tell which
+// machine holds which. Last used is the one signal that says which is dead.
+async function renderConnectorKeys() {
+  var box = document.getElementById('connectorKeysPanel');
+  if (!box) return;
+  try {
+    var r = await fetch(EDGE_FN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
+      body: JSON.stringify({ action: 'list_connector_keys' })
+    });
+    var d = await r.json();
+    var keys = (d && d.keys) || [];
+    var live = keys.filter(function(k){ return !k.revoked_at; });
+    if (!live.length) { box.innerHTML = ''; return; }
+
+    box.innerHTML =
+      '<div style="font-size:10px;color:var(--text3);margin:10px 0 6px;text-transform:uppercase;letter-spacing:0.5px">Your keys</div>' +
+      live.map(function(k) {
+        var used = k.last_used_at
+          ? 'last used ' + _relDays(k.last_used_at)
+          : 'never used';
+        return '<div style="display:flex;align-items:center;gap:8px;padding:7px 8px;background:var(--bg);border:1px solid var(--border2);border-radius:6px;margin-bottom:4px">' +
+          '<div style="flex:1;min-width:0">' +
+            '<div style="font-size:10px;font-family:monospace;color:var(--text2)">' + esc(k.key_prefix) + '…</div>' +
+            '<div style="font-size:10px;color:var(--text3)">' + esc(k.label || 'Key') + ' · ' + used + '</div>' +
+          '</div>' +
+          '<button onclick="revokeConnectorKey(\'' + k.id + '\')" style="background:none;border:1px solid var(--border2);border-radius:5px;color:var(--text3);font-size:10px;cursor:pointer;padding:3px 8px;font-family:var(--sans)">Revoke</button>' +
+        '</div>';
+      }).join('');
+  } catch(e) { box.innerHTML = ''; }
+}
+
+function _relDays(iso) {
+  var t = new Date(iso).getTime();
+  if (!t) return 'unknown';
+  var days = Math.floor((Date.now() - t) / 86400000);
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  return days + ' days ago';
+}
+
+async function revokeConnectorKey(keyId) {
+  if (!confirm('Revoke this key? Any Claude connection using it stops working immediately.')) return;
+  try {
+    await fetch(EDGE_FN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
+      body: JSON.stringify({ action: 'revoke_connector_key', key_id: keyId })
+    });
+    renderConnectorKeys();
+  } catch(e) { alert('Could not revoke: ' + e.message); }
 }
 
 function getClaudeConfig() {
@@ -8187,7 +8275,7 @@ function openSampaignComposer(campaignId) {
       '<span id="sampSendWhen" style="font-size:10px;color:var(--text3)"></span>' +
     '</div>' +
     '<div id="sampSendWeekendWarn"></div>' +
-    '<div style="font-size:9px;color:var(--text3);margin-top:2px">Sends are spread over several days from this start, at a safe rate. You will see the exact plan before anything is committed.</div>' +
+    '<div id="sampSendLimit" style="margin-top:8px"></div>' +
     '<button onclick="submitSampaignSchedule(\''+esc(campaignId)+'\')" '+(sendable.length?'':'disabled')+' style="width:100%;margin-top:10px;padding:11px;border-radius:10px;background:'+(sendable.length?'var(--green)':'var(--border2)')+';border:none;color:#fff;font-size:14px;font-weight:700;cursor:'+(sendable.length?'pointer':'not-allowed')+';font-family:var(--sans)">Prepare '+(sendable.length||0)+' email'+(sendable.length!==1?'s':'')+'</button>' +
     '<div id="sampSendQueue" style="margin-top:14px"></div>' +
   '</div>';
@@ -8198,6 +8286,36 @@ function openSampaignComposer(campaignId) {
   });
   _sampSendWhenHint();
   loadSampaignSendQueue(campaignId);
+  _loadSendingLimit();
+}
+
+// Today's allowance, shown BEFORE anyone writes anything. A limit discovered
+// by being refused reads as a broken tool — which is exactly how this
+// surfaced with Prachi.
+async function _loadSendingLimit() {
+  var box = document.getElementById('sampSendLimit');
+  if (!box) return;
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'get_sending_limit' }) });
+    var d = await r.json();
+    if (!d.ok) { box.innerHTML = ''; return; }
+    var used = (d.sent_today || 0) + (d.queued_today || 0);
+    var pct = d.today_limit ? Math.min(100, Math.round((used / d.today_limit) * 100)) : 0;
+    box.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:9px;padding:9px 11px">' +
+      '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap">' +
+        '<span style="font-size:11px;font-weight:600;color:var(--text)">'+d.remaining_today+' of '+d.today_limit+' left to send today</span>' +
+        '<span style="font-size:10px;color:var(--text3)">'+esc(d.reason||'')+'</span>' +
+      '</div>' +
+      '<div style="height:4px;border-radius:2px;background:var(--border2);margin-top:6px;overflow:hidden">' +
+        '<div style="height:100%;width:'+pct+'%;background:'+(pct>=100?'var(--coral)':'var(--gold)')+'"></div>' +
+      '</div>' +
+      // Stated plainly because both of these are things a rep would otherwise
+      // learn by being surprised: the budget is shared with follow-ups, and
+      // going over delays rather than drops.
+      '<div style="font-size:9px;color:var(--text3);margin-top:6px;line-height:1.5">First emails and follow-ups share this number. Anything over it moves to the next day, nothing is lost. Your limit rises as the mailbox builds a sending history.</div>' +
+    '</div>';
+  } catch(e) { box.innerHTML = ''; }
 }
 
 function _sampSendWhenHint() {
@@ -8361,9 +8479,11 @@ async function planSampaignDrafts(campaignId, startAt, launch) {
     var msg = d.scheduled + ' emails over ' + d.days + ' day' + (d.days!==1?'s':'') + '\n\n' +
       lines + '\n\n' +
       'First: ' + first + '\nLast:  ' + last + '\n\n' +
-      'Ramping from ' + d.policy.ramp_start + '/day to a cap of ' + d.policy.daily_cap + '/day, ' +
-      d.policy.window_start_hour + ':00-' + d.policy.window_end_hour + ':00' + (d.policy.skip_weekends ? ', weekdays only' : '') + '.\n\n' +
-      'Spread out on purpose: sending a whole campaign at once from one mailbox risks it being suspended.\n\nSchedule these now?';
+      // Why this many today, in the rep's words rather than policy numbers.
+      'Today you can send ' + (d.today_limit || d.policy.daily_cap) + ' (' + (d.ramp_reason || 'current limit') + ').\n' +
+      (d.overrode_ramp ? 'You asked for more than the suggested number, so this overrides it.\n' : '') +
+      'Sending window ' + d.policy.window_start_hour + ':00-' + d.policy.window_end_hour + ':00' + (d.policy.skip_weekends ? ', weekdays only' : '') + '.\n\n' +
+      'First emails and follow-ups share the same daily number. Spreading them out protects the mailbox — sending a whole campaign at once is what gets inboxes blocked.\n\nSchedule these now?';
     if (!confirm(msg)) return;
     var r2 = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
       body: JSON.stringify({ action:'schedule_sampaign_drafts', campaign_id: campaignId, start_at: startAt || null, launch: launch || window._sampLaunch || 1 }) });
