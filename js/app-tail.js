@@ -20,7 +20,7 @@ window._doCarry = function(e) {
     {label:'Tomorrow · '+lbl(tomorrow), val:fmt(tomorrow)},
     {label:lbl(dayAfter), val:fmt(dayAfter)},
     {label:'Next Mon · '+lbl(nextMon), val:fmt(nextMon)}
-  ].map(function(o){ return '<button onclick="window._pickDate(\'' + o.val + '\')" style="padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text2);font-size:12px;cursor:pointer;white-space:nowrap">'+o.label+'</button>'; }).join('');
+  ].map(function(o){ return '<button onclick="window._pickDate(\'' + o.val + '\')" style="padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:2px;color:var(--text2);font-size:12px;cursor:pointer;white-space:nowrap">'+o.label+'</button>'; }).join('');
   document.getElementById('carryFwdDate').value = fmt(tomorrow);
   window._pendingCarryIdx = idx;
   window._pendingCarryText = text;
@@ -70,8 +70,8 @@ window.confirmCarryForward = function() {
     render();
   }, 100);
   var t = document.createElement('div');
-  t.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#231F17;border:1px solid #A0752A;padding:10px 18px;border-radius:8px;font-size:13px;color:#D6CFC4;z-index:9999;font-family:"DM Sans",sans-serif;white-space:nowrap';
-  t.textContent = 'Moved to ' + targetLbl + ' ✓';
+  t.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#231F17;border:1px solid #A0752A;padding:10px 18px;border-radius:2px;font-size:13px;color:#D6CFC4;z-index:9999;font-family:"DM Sans",sans-serif;white-space:nowrap';
+  t.textContent = 'Moved to ' + targetLbl + ' <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg>';
   document.body.appendChild(t);
   setTimeout(function(){ t.remove(); }, 3000);
 };
