@@ -4441,8 +4441,8 @@ async function delegateTask(memberId, memberEmail) {
       var _when = (selectedDate === todayKey()) ? 'today' : 'for ' + fmtDate(selectedDate);
       fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
         body:JSON.stringify({ action:'send_push', user_ids:[memberId],
-          title:'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.5h6v3H9zM7 5H5.5v15h13V5H17"/></svg> New task from ' + _mgr,
-          body:(isPriority?'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.8l2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 10l5.9-.8z"/></svg> ':'') + cleanText.slice(0,140) + ' (' + _when + ')',
+          title:'New task from ' + _mgr,
+          body:(isPriority?'':'') + cleanText.slice(0,140) + ' (' + _when + ')',
           url:'/?tab=today' }) }).catch(function(){});
     } catch(e) {}
     inp.value = ''; alert('Task delegated to ' + memberEmail + ' '); renderTeam();
@@ -4683,7 +4683,7 @@ async function loadExecDashboard() {
 // section (loadExecDashboard above) and a compact widget on the Today tab
 // (loadTodayFeedWidget). Same data, same react_to_feed action either way.
 const FEED_EVENT_ICON = { deal_won: '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4h10v5a5 5 0 01-10 0zM7 6H4v1.5A3.5 3.5 0 007.5 11M17 6h3v1.5a3.5 3.5 0 01-3.5 3.5M9.5 20h5M12 14v6"/></svg>', champion_confirmed: '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 12l-3-3 4-4 3 2 3-2 4 4-3 3M8 12l3 3 2-2 3 3M8 12l-2.5 2.5"/></svg>', momentum_up: '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg>', milestone: '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.8l2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 10l5.9-.8z"/></svg>' };
-const FEED_EMOJIS = ['<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 12l-3-3 4-4 3 2 3-2 4 4-3 3M8 12l3 3 2-2 3 3M8 12l-2.5 2.5"/></svg>', '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5s5.5 4.3 5.5 9a5.5 5.5 0 01-11 0c0-2 1-3.4 1-3.4s.6 1.6 1.8 1.6c1.6 0 1.4-3.4 2.7-7.2z"/></svg>', '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4h10v5a5 5 0 01-10 0zM7 6H4v1.5A3.5 3.5 0 007.5 11M17 6h3v1.5a3.5 3.5 0 01-3.5 3.5M9.5 20h5M12 14v6"/></svg>'];
+const FEED_EMOJIS = ['👏', '🔥', '🎉'];
 function _feedTimeAgo(iso) {
   var diffMin = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
   if (diffMin < 60) return diffMin + 'm ago';
