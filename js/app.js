@@ -450,7 +450,7 @@ function renderList(key, items) {
       const priorityBadge = isPriority ? '<span class="priority-badge">Priority</span>' : '';
       const delegatedBadge = item.delegatedBy ? `<span class="delegated-badge">↓ from ${item.delegatedBy.split('@')[0]}</span>` : '';
       const tsMeta = item.addedAt ? `<div class="item-meta">${item.delegatedBy?'Delegated ':'Added '}${item.addedAt}${item.completedAt?' · Completed '+item.completedAt:''}</div>` : '';
-      return `<div class="item ${item.done?'done':''} ${isPriority?'priority-task':''}" data-task-idx="${i}"><div class="drag-handle"><svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor" opacity="0.5"><circle cx="4" cy="3" r="1.5"/><circle cx="8" cy="3" r="1.5"/><circle cx="4" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="4" cy="13" r="1.5"/><circle cx="8" cy="13" r="1.5"/></svg></div><div class="chk ${item.done?'on':''}" onclick="toggle(${i})"></div><div style="flex:1"><div class="item-text">${esc(displayText)} ${priorityBadge}${delegatedBadge}</div>${tsMeta}</div><button class="idel" onclick="del('tasks',${i})"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>`;
+      return `<div class="item ${item.done?'done':''} ${isPriority?'priority-task':''}" data-task-idx="${i}"><div class="drag-handle"><svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor" opacity="0.5"><circle cx="4" cy="3" r="1.5"/><circle cx="8" cy="3" r="1.5"/><circle cx="4" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="4" cy="13" r="1.5"/><circle cx="8" cy="13" r="1.5"/></svg></div><div class="chk ${item.done?'on':''}" onclick="toggle(${i})"></div><div style="flex:1"><div class="item-text">${esc(displayText)} ${priorityBadge}${delegatedBadge}</div>${tsMeta}</div><button class="idel" onclick="del('tasks',${i})"></button></div>`;
     }
     if (key === 'wins') {
       const isPriority = item.priority === true || item.text?.startsWith('*');
@@ -460,8 +460,8 @@ function renderList(key, items) {
       const priorityBadge = isPriority ? '<span class="priority-badge">Priority</span>' : '';
       const delegatedBadge = isDelegated ? `<span class="delegated-badge">↓ from ${item.delegatedBy.split('@')[0]}</span>` : '';
       const winTs = item.completedAt ? `<div class="item-meta">${item.fromTask?'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg> completed · ':isDelegated?'↓ delegated · ':''}${item.completedAt}</div>` : (item.fromTask ? '<div class="item-meta"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg> from completed task</div>' : '');
-      const noteHtml = item.completionNote ? `<div style="font-size:11px;color:var(--text2);background:var(--surface2);border-radius:2px;padding:4px 8px;margin-top:4px;font-style:italic"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5z"/></svg> ${esc(item.completionNote)}</div>` : '';
-      return `<div class="item win-item ${extraClass}"><div class="idot dg"></div><div style="flex:1"><div class="item-text">${esc(displayText)} ${priorityBadge}${delegatedBadge}</div>${winTs}${noteHtml}</div><button class="idel" onclick="del('wins',${i})"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>`;
+      const noteHtml = item.completionNote ? `<div style="font-size:11px;color:var(--text2);background:var(--surface2);border-radius:2px;padding:4px 8px;margin-top:4px;font-style:italic">${esc(item.completionNote)}</div>` : '';
+      return `<div class="item win-item ${extraClass}"><div class="idot dg"></div><div style="flex:1"><div class="item-text">${esc(displayText)} ${priorityBadge}${delegatedBadge}</div>${winTs}${noteHtml}</div><button class="idel" onclick="del('wins',${i})"></button></div>`;
     }
     if (key === 'misses') {
       const missLabel = item.issueMiss ? '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> Unresolved issue' : '○ Incomplete task';
@@ -478,7 +478,7 @@ function renderList(key, items) {
     }
     const issueTs = item.addedAt ? `<div class="item-meta">${item.anonymous?'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 10.5V7.5a5.5 5.5 0 0111 0v3M5 10.5h14v10H5z"/></svg> Anonymous · ':''}Logged ${item.addedAt}</div>` : (item.anonymous ? '<div class="item-meta"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 10.5V7.5a5.5 5.5 0 0111 0v3M5 10.5h14v10H5z"/></svg> Anonymous</div>' : '');
     const anonBadge = item.anonymous ? '<span style="font-size:11px;background:rgba(160,117,42,0.15);color:var(--gold);border-radius:2px;padding:1px 6px;margin-left:6px;font-weight:600">Anon</span>' : '';
-    return `<div class="item"><div class="idot dc"></div><div style="flex:1"><div class="item-text">${esc(item.text)}${anonBadge}</div>${issueTs}</div><button class="idel" onclick="del('issues',${i})"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>`;
+    return `<div class="item"><div class="idot dc"></div><div style="flex:1"><div class="item-text">${esc(item.text)}${anonBadge}</div>${issueTs}</div><button class="idel" onclick="del('issues',${i})"></button></div>`;
   }).join('');
 }
 
@@ -793,9 +793,9 @@ function renderListHTML(key, items) {
       // eyeball it before trusting the extracted email/phone.
       const altContactCta = (item.altContactEmail || item.altContactPhone)
         ? '<div class="item-meta" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:2px">' +
-            '<span style="color:var(--text3)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6.5h6l2 2.5h9v11h-17z"/></svg> Alt contact while OOO' + (item.altContactSnippet ? ': "' + esc(item.altContactSnippet) + '"' : '') + '</span>' +
-            (item.altContactEmail ? '<a href="mailto:' + esc(item.altContactEmail) + '" style="font-size:11px;font-weight:600;color:var(--gold);text-decoration:none;border:1px solid var(--border2);border-radius:2px;padding:1px 7px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> ' + esc(item.altContactEmail) + '</a>' : '') +
-            (item.altContactPhone ? '<a href="tel:' + esc(item.altContactPhone.replace(/[^\d+]/g,'')) + '" style="font-size:11px;font-weight:600;color:var(--gold);text-decoration:none;border:1px solid var(--border2);border-radius:2px;padding:1px 7px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3.5H4.5A1.5 1.5 0 003 5c0 8.8 7.2 16 16 16a1.5 1.5 0 001.5-1.5V17l-4.5-2-2.5 2.5A15 15 0 018.5 11L11 8.5z"/></svg> ' + esc(item.altContactPhone) + '</a>' : '') +
+            '<span style="color:var(--text3)">Alt contact while OOO' + (item.altContactSnippet ? ': "' + esc(item.altContactSnippet) + '"' : '') + '</span>' +
+            (item.altContactEmail ? '<a href="mailto:' + esc(item.altContactEmail) + '" style="font-size:11px;font-weight:600;color:var(--gold);text-decoration:none;border:1px solid var(--border2);border-radius:2px;padding:1px 7px">' + esc(item.altContactEmail) + '</a>' : '') +
+            (item.altContactPhone ? '<a href="tel:' + esc(item.altContactPhone.replace(/[^\d+]/g,'')) + '" style="font-size:11px;font-weight:600;color:var(--gold);text-decoration:none;border:1px solid var(--border2);border-radius:2px;padding:1px 7px">' + esc(item.altContactPhone) + '</a>' : '') +
           '</div>'
         : '';
       const tsMeta = (item.addedAt ? '<div class="item-meta">' + (item.delegatedBy?'Delegated ':'Added ') + item.addedAt + (item.completedAt?' · Completed '+item.completedAt:'') + '</div>' : '') + carryMeta + altContactCta;
@@ -815,7 +815,7 @@ function renderListHTML(key, items) {
       const priorityBadge = isPriority ? '<span class="priority-badge">Priority</span>' : '';
       const delegatedBadge = isDelegated ? '<span class="delegated-badge">\u2193 ' + esc(item.delegatedBy.split('@')[0]) + '</span>' : '';
       const winTs = item.completedAt ? '<div class="item-meta">' + (item.fromTask?'\u2726 completed · ':isDelegated?'\u2193 delegated · ':'') + item.completedAt + '</div>' : (item.fromTask ? '<div class="item-meta">\u2726 from completed task</div>' : '');
-      return '<div class="item win-item ' + extraClass + '"><div class="idot dg"></div><div style="flex:1"><div class="item-text">' + esc(displayText) + ' ' + priorityBadge + delegatedBadge + '</div>' + winTs + '</div><button class="idel" onclick="delFromToday(\'wins\',' + i + ')"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>';
+      return '<div class="item win-item ' + extraClass + '"><div class="idot dg"></div><div style="flex:1"><div class="item-text">' + esc(displayText) + ' ' + priorityBadge + delegatedBadge + '</div>' + winTs + '</div><button class="idel" onclick="delFromToday(\'wins\',' + i + ')"></button></div>';
     }
     if (key === 'misses') {
       const missLabel = item.issueMiss ? '\u26a1 Unresolved issue' : '\u25cb Incomplete task';
@@ -831,7 +831,7 @@ function renderListHTML(key, items) {
     }
     const issueTs = item.addedAt ? '<div class="item-meta">' + (item.anonymous?'\uD83D\uDD12 Anonymous · ':'') + 'Logged ' + item.addedAt + '</div>' : (item.anonymous ? '<div class="item-meta">\uD83D\uDD12 Anonymous</div>' : '');
     const anonBadge = item.anonymous ? '<span style="font-size:11px;background:rgba(160,117,42,0.15);color:var(--gold);border-radius:2px;padding:1px 6px;margin-left:6px;font-weight:600">Anon</span>' : '';
-    return '<div class="item"><div class="idot dc"></div><div style="flex:1"><div class="item-text">' + esc(item.text) + anonBadge + '</div>' + issueTs + '</div><button class="idel" onclick="delFromToday(\'issues\',' + i + ')"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>';
+    return '<div class="item"><div class="idot dc"></div><div style="flex:1"><div class="item-text">' + esc(item.text) + anonBadge + '</div>' + issueTs + '</div><button class="idel" onclick="delFromToday(\'issues\',' + i + ')"></button></div>';
   }).join('');
 }
 
@@ -939,7 +939,7 @@ async function loadSamSignals() {
     const signals = data.signals ?? data.analysis?.signals ?? [];
     const rawAnalysis = data.analysis;
     if (!signals || !signals.length) {
-      if (rawAnalysis?.summary) { feed.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;font-size:14px;color:var(--text2);line-height:1.7"><div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> SAM Analysis</div>' + esc(rawAnalysis.summary) + '</div>'; }
+      if (rawAnalysis?.summary) { feed.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;font-size:14px;color:var(--text2);line-height:1.7"><div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">SAM Analysis</div>' + esc(rawAnalysis.summary) + '</div>'; }
       else { feed.innerHTML = '<div style="text-align:center;padding:32px 20px;color:var(--text3);font-size:13px">No strong signals found — pipeline looks healthy <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg></div>'; }
       return;
     }
@@ -957,7 +957,7 @@ function renderSignalCards(signals) {
   const feed = document.getElementById('samFeed'); if (!feed) return;
   feed.innerHTML = signals.map(s => {
     const t = typeMap[s.type] || typeMap.warm;
-    return '<div class="sam-card ' + t.cls + '"><div class="sam-card-header"><span class="sam-tag ' + t.cls + '">' + t.icon + ' ' + t.label + '</span><span class="sam-time">' + (s.daysAgo?s.daysAgo+' days ago':'Recent') + '</span></div><div class="sam-account">' + esc(s.account) + '</div><div class="sam-body">' + esc(s.body) + '</div><div class="sam-action' + (t.cls==='dying'?' dying-action':'') + '"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 11v5.5M12 7.8v.4"/></svg> ' + esc(s.action) + '</div></div>';
+    return '<div class="sam-card ' + t.cls + '"><div class="sam-card-header"><span class="sam-tag ' + t.cls + '">' + t.icon + ' ' + t.label + '</span><span class="sam-time">' + (s.daysAgo?s.daysAgo+' days ago':'Recent') + '</span></div><div class="sam-account">' + esc(s.account) + '</div><div class="sam-body">' + esc(s.body) + '</div><div class="sam-action' + (t.cls==='dying'?' dying-action':'') + '">' + esc(s.action) + '</div></div>';
   }).join('');
 }
 function connectOutlook() {
@@ -995,7 +995,7 @@ async function handleMicrosoftCallback(code) {
     });
     var d = await r.json();
     if (d.ok) {
-      showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> Outlook connected — ' + d.email);
+      showToast('Outlook connected — ' + d.email);
       var sub = document.getElementById('samGmailSub');
       if (sub) sub.textContent = 'Outlook connected · ' + d.email;
       if (btn) { btn.textContent = 'Outlook connected'; btn.style.background = 'var(--green)'; }
@@ -1062,7 +1062,7 @@ function addCalendarTaskByIndex(idx) {
   var d = dayData(viewDate);
   d.tasks.push({ text: t.text, done:false, priority:false, source:'calendar', calendarEventId: t.calendar_event_id||null, account: t.account_name||null, completionNote: cleanAgenda||null });
   save(viewDate); render();
-  showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4"/></svg> Added from calendar');
+  showToast('Added from calendar');
 }
 
 function addAllCalendarTasks() {
@@ -1075,7 +1075,7 @@ function addAllCalendarTasks() {
   });
   save(viewDate); render();
   var row = document.getElementById('calendarSyncRow'); if (row) row.style.display = 'none';
-  showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4"/></svg> Calendar events added as tasks');
+  showToast('Calendar events added as tasks');
 }
 
 // ── Reconcile calendar-sourced tasks when a meeting is moved/cancelled ─────────
@@ -1119,7 +1119,7 @@ async function reconcileCalendarTasks() {
       saveLocal();
       dates.forEach(function(dk){ try { save(dk); } catch(e){} });
       render();
-      if (moved) showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4"/></svg> ' + moved + ' rescheduled meeting' + (moved>1?'s':'') + ' moved to ' + (moved>1?'their new dates':'its new date'));
+      if (moved) showToast('' + moved + ' rescheduled meeting' + (moved>1?'s':'') + ' moved to ' + (moved>1?'their new dates':'its new date'));
     }
   } catch(e) { /* non-fatal */ }
 }
@@ -1403,8 +1403,8 @@ async function refreshYouTabConnections() {
     var gmailBtn = document.getElementById('youGmailBtn');
     var outlookBtn = document.getElementById('youOutlookBtn');
     if (d.connected) {
-      var icon = d.provider === 'microsoft' ? '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> Outlook' : '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> Gmail';
-      if (lbl) lbl.innerHTML = '<span style="color:var(--green)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg></span> ' + icon + ' connected — ' + esc(d.email);
+      var icon = d.provider === 'microsoft' ? 'Outlook' : 'Gmail';
+      if (lbl) lbl.innerHTML = '<span style="color:var(--green)"></span> ' + icon + ' connected — ' + esc(d.email);
       if (sub) sub.textContent = 'Signals refreshed from your ' + (d.provider === 'microsoft' ? 'Outlook' : 'Gmail') + ' account';
       if (gmailBtn && d.provider === 'google') { gmailBtn.textContent = 'Gmail connected'; gmailBtn.style.background = 'var(--green)'; }
       if (outlookBtn && d.provider === 'microsoft') { outlookBtn.textContent = 'Outlook connected'; outlookBtn.style.background = 'var(--green)'; }
@@ -1426,7 +1426,7 @@ async function refreshYouTabConnections() {
     var nd = await nr.json();
     var ns = document.getElementById('youNotetakerStatus');
     if (ns && nd.connections && nd.connections.length) {
-      ns.innerHTML = nd.connections.map(function(c){ return '<span style="color:var(--green)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> '+esc(c.provider)+(c.provider_email?' ('+esc(c.provider_email)+')':'')+'</span>'; }).join(', ');
+      ns.innerHTML = nd.connections.map(function(c){ return '<span style="color:var(--green)">'+esc(c.provider)+(c.provider_email?' ('+esc(c.provider_email)+')':'')+'</span>'; }).join(', ');
     }
   } catch(e) {}
 
@@ -1525,7 +1525,7 @@ async function enablePushNotifications() {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
       body:JSON.stringify({ action:'save_push_subscription', endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth, user_agent: navigator.userAgent }) });
     var d = await r.json();
-    if (d.ok) showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 10a5.5 5.5 0 0111 0c0 4.4 2 6 2 6h-15s2-1.6 2-6zM10.3 20a2 2 0 003.4 0"/></svg> Notifications enabled'); else showToast('Could not save subscription');
+    if (d.ok) showToast('Notifications enabled'); else showToast('Could not save subscription');
   } catch(e) { showToast('Enable failed: ' + (e.message||'error')); }
   finally { if (btn) btn.disabled = false; refreshPushStatus(); }
 }
@@ -1835,7 +1835,7 @@ async function runSamAccountSearch() {
     if (a.sentiment) html += '<span style="padding:2px 8px;border-radius:3px;background:rgba(0,0,0,0.1);color:'+sentimentColor+';font-weight:500">'+a.sentiment+'</span>';
     html += '</div>';
 
-    if (a.summary) html += '<div style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:14px;padding:12px 14px;background:var(--surface2);border-radius:var(--radius);border-left:3px solid var(--gold)"><div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> SAM Analysis</div>' + esc(a.summary) + '</div>';
+    if (a.summary) html += '<div style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:14px;padding:12px 14px;background:var(--surface2);border-radius:var(--radius);border-left:3px solid var(--gold)"><div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">SAM Analysis</div>' + esc(a.summary) + '</div>';
 
     // Recent replies — the actual evidence of two-way engagement, not just outbound
     if (data.inboxThreads?.length) {
@@ -1881,7 +1881,7 @@ async function runSamAccountSearch() {
       matchedDeal = allDeals.find(function(d) { return (d.account||'').toLowerCase().includes(query.toLowerCase()) || query.toLowerCase().includes((d.account||'').toLowerCase().split(' ')[0]); });
     }
     if (matchedDeal) {
-      html += '<button onclick="openDealDetail(\'' + esc(matchedDeal.id) + '\',\'' + esc(matchedDeal.account) + '\');setTimeout(function(){switchDealTab(\'signals\');},400)" style="width:100%;margin-top:10px;padding:9px;border-radius:2px;background:rgba(58,110,168,0.08);border:1px solid rgba(58,110,168,0.2);color:var(--blue);font-family:var(--sans);font-size:12px;font-weight:500;cursor:pointer;text-align:center"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM3.2 9.5h17.6M3.2 14.5h17.6M12 3a14 14 0 000 18 14 14 0 000-18z"/></svg> View market signals for ' + esc(matchedDeal.account) + ' →</button>';
+      html += '<button onclick="openDealDetail(\'' + esc(matchedDeal.id) + '\',\'' + esc(matchedDeal.account) + '\');setTimeout(function(){switchDealTab(\'signals\');},400)" style="width:100%;margin-top:10px;padding:9px;border-radius:2px;background:rgba(58,110,168,0.08);border:1px solid rgba(58,110,168,0.2);color:var(--blue);font-family:var(--sans);font-size:12px;font-weight:500;cursor:pointer;text-align:center">View market signals for ' + esc(matchedDeal.account) + ' →</button>';
     }
 
     if (out) out.innerHTML = html;
@@ -1911,12 +1911,12 @@ async function loadMyAccounts() {
         '<span style="font-size:12px;color:var(--text)">' + esc(r.account_name) + '</span>' +
         (r.region ? '<span style="font-size:11px;color:var(--text3);background:rgba(0,0,0,0.1);border-radius:2px;padding:1px 5px">' + esc(r.region) + '</span>' : '') +
         valueTag +
-        '<button onclick="openDealValueForm(\'' + r.id + '\',\'' + esc(r.account_name) + '\')" style="background:none;border:none;color:' + (hasValue ? 'var(--text3)' : 'var(--amber)') + ';cursor:pointer;font-size:11px;padding:0" title="' + (hasValue ? 'Edit deal value' : 'Add deal value') + '">' + (hasValue ? '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 7v10M14.8 9.3A3 3 0 0012 7.8h-.4a2.2 2.2 0 000 4.4h.8a2.2 2.2 0 010 4.4H12a3 3 0 01-2.8-1.5"/></svg>' : '+ $') + '</button>' +
-        '<button onclick="openDomainManager(\'' + r.id + '\',\'' + esc(r.account_name) + '\',\'' + esc(r.domain||'') + '\',' + JSON.stringify(r.additional_domains||[]) + ')" style="background:none;border:none;color:' + (extraDomains ? 'var(--green)' : 'var(--text3)') + ';cursor:pointer;font-size:11px;padding:0" title="Manage email domains for signal matching"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM3.2 9.5h17.6M3.2 14.5h17.6M12 3a14 14 0 000 18 14 14 0 000-18z"/></svg>' + (extraDomains ? '<sup style=\'font-size:11px\'>+'+extraDomains+'</sup>' : '') + '</button>' +
+        '<button onclick="openDealValueForm(\'' + r.id + '\',\'' + esc(r.account_name) + '\')" style="background:none;border:none;color:' + (hasValue ? 'var(--text3)' : 'var(--amber)') + ';cursor:pointer;font-size:11px;padding:0" title="' + (hasValue ? 'Edit deal value' : 'Add deal value') + '">' + (hasValue ? '' : '+ $') + '</button>' +
+        '<button onclick="openDomainManager(\'' + r.id + '\',\'' + esc(r.account_name) + '\',\'' + esc(r.domain||'') + '\',' + JSON.stringify(r.additional_domains||[]) + ')" style="background:none;border:none;color:' + (extraDomains ? 'var(--green)' : 'var(--text3)') + ';cursor:pointer;font-size:11px;padding:0" title="Manage email domains for signal matching">' + (extraDomains ? '<sup style=\'font-size:11px\'>+'+extraDomains+'</sup>' : '') + '</button>' +
         (r.sdr_user_id && r.sdr_user_id === currentUser.id && r.user_id !== currentUser.id
           ? '<span style="font-size:11px;font-weight:700;color:var(--gold);background:rgba(160,117,42,0.12);border-radius:2px;padding:1px 5px" title="You are the SDR on this account">SDR</span>' : '') +
         (_canAssignTeam
-          ? '<button onclick="openTeamAssign(\'' + r.id + '\',\'' + esc(r.account_name) + '\',\'' + (r.user_id||'') + '\',\'' + (r.sdr_user_id||'') + '\')" style="background:none;border:none;color:' + (r.sdr_user_id ? 'var(--green)' : 'var(--text3)') + ';cursor:pointer;font-size:11px;padding:0" title="Assign AE / SDR"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM2.5 20v-1.5A4.5 4.5 0 017 14h4a4.5 4.5 0 014.5 4.5V20M16 4.3a3.5 3.5 0 010 6.4M18 14.3a4.5 4.5 0 013.5 4.2V20"/></svg></button>' : '') +
+          ? '<button onclick="openTeamAssign(\'' + r.id + '\',\'' + esc(r.account_name) + '\',\'' + (r.user_id||'') + '\',\'' + (r.sdr_user_id||'') + '\')" style="background:none;border:none;color:' + (r.sdr_user_id ? 'var(--green)' : 'var(--text3)') + ';cursor:pointer;font-size:11px;padding:0" title="Assign AE / SDR"></button>' : '') +
         '<button onclick="removeMyAccount(\'' + r.id + '\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:0"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>' +
       '</div>';
     }).join('') + '</div>';
@@ -2171,7 +2171,7 @@ function renderIvrResults(outputId) {
     } else if (r.signal === 'attested') {
       var outcomeLabels = { no_answer:'No answer', spoke_briefly:'Spoke briefly', full_conversation:'Full conversation', meeting_booked:'Meeting booked <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 16.5a4.5 4.5 0 100-9 4.5 4.5 0 000 9zM12 13a1 1 0 100-2 1 1 0 000 2z"/></svg>', not_interested:'Not interested', requests_sent:'Requests sent', connections_accepted:'Connections accepted', messages_sent:'Messages sent', replies_received:'Replies received' };
       var outcomeLabel = outcomeLabels[r.activityOutcome] || r.activityOutcome || '';
-      intentBadge = '<div style="font-size:11px;color:var(--green);margin-top:4px;font-weight:600"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> ' + esc(outcomeLabel) + (r.completionNote ? ' — "' + esc(r.completionNote.slice(0,80)) + '"' : '') + '</div>';
+      intentBadge = '<div style="font-size:11px;color:var(--green);margin-top:4px;font-weight:600">' + esc(outcomeLabel) + (r.completionNote ? ' — "' + esc(r.completionNote.slice(0,80)) + '"' : '') + '</div>';
     } else if (r.signal === 'task_done') {
       intentBadge = '<div style="font-size:11px;color:var(--blue);margin-top:3px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Marked done — add outcome via "Log outcome" for stronger verification</div>';
     } else if (r.intent === 'linkedin') {
@@ -2460,7 +2460,7 @@ async function runSamIntelligence(repId, repEmail, resultElId) {
     });
     html += '</div>';
   } else if (intelData && intelData.reconnectNeeded) {
-    html += '<div style="font-size:12px;color:var(--coral);margin-bottom:8px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> '+esc(intelData.error||'Gmail connection expired')+'</div>';
+    html += '<div style="font-size:12px;color:var(--coral);margin-bottom:8px">'+esc(intelData.error||'Gmail connection expired')+'</div>';
   }
 
   // ── Email/Gmail signals (from get_rep_signals) ──
@@ -2566,7 +2566,7 @@ function _renderSampaignAnalyticsBlock(d, opts) {
 
   html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:12px 14px;margin-bottom:10px">' +
     '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">' +
-      esc(opts.title||'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> SAMpaign Analytics') +
+      esc(opts.title||'SAMpaign Analytics') +
       (d.synced_at ? '<span style="font-weight:400;margin-left:8px">Last sync: '+new Date(d.synced_at).toLocaleDateString()+'</span>' : '') +
     '</div>' +
     '<div style="display:grid;grid-template-columns:repeat('+tiles.length+',1fr);gap:8px">' +
@@ -2626,7 +2626,7 @@ function _renderSampaignAnalyticsBlock(d, opts) {
               _sampaignLinkedInIcon(h.linkedin_url, h.prospect_name || h.prospect_email) +
             '</div>' +
             '<div style="font-size:11px;color:var(--text3)">'+(h.prospect_title?esc(h.prospect_title)+' · ':'')+(h.prospect_company||'')+(h.account_name&&h.account_name!==h.prospect_company?' · matched: <strong>'+esc(h.account_name)+'</strong>':'')+'</div>' +
-            '<div style="font-size:11px;color:var(--text3);margin-top:1px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> '+esc(h.campaign_name||'')+(h.opens?' · '+h.opens+' opens':'')+'</div>' +
+            '<div style="font-size:11px;color:var(--text3);margin-top:1px">'+esc(h.campaign_name||'')+(h.opens?' · '+h.opens+' opens':'')+'</div>' +
           '</div>' +
           '<div style="text-align:right;flex-shrink:0">' +
             '<span style="font-size:11px;font-weight:700;color:var(--green);background:rgba(74,140,92,0.12);border-radius:2px;padding:3px 8px">↩ Replied</span>' +
@@ -2728,7 +2728,7 @@ function _renderSampaignAnalyticsBlock(d, opts) {
           return '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-top:1px solid rgba(212,90,90,0.12)">' +
             '<div>' +
               '<div style="font-size:12px;font-weight:600;color:var(--text)">'+esc(c.name||c.email||'Unknown')+'</div>' +
-              '<div style="font-size:11px;color:var(--text3)">'+esc(c.company||c.account_name||'')+(c.campaign_name?' · <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> '+esc(c.campaign_name):'')+'</div>' +
+              '<div style="font-size:11px;color:var(--text3)">'+esc(c.company||c.account_name||'')+(c.campaign_name?' · '+esc(c.campaign_name):'')+'</div>' +
             '</div>' +
             '<span style="font-size:11px;font-weight:700;color:var(--coral);background:rgba(212,90,90,0.12);border-radius:2px;padding:3px 8px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5a7.5 7.5 0 00-4 13.9V20h8v-2.6A7.5 7.5 0 0012 3.5zM9.5 12a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM14.5 12a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg> dead</span>' +
           '</div>';
@@ -2756,7 +2756,7 @@ function _renderSampaignAnalyticsBlock(d, opts) {
               '<div style="width:'+Math.round(c.reply_rate/Math.max(c.open_rate||1,1)*bar)+'%;background:var(--green)"></div>' +
               '<div style="width:'+Math.round((1-c.reply_rate/Math.max(c.open_rate||1,1))*bar)+'%;background:var(--amber)"></div>' +
             '</div>' +
-            (c.hot_accounts&&c.hot_accounts.length?'<div style="font-size:11px;color:var(--green);margin-top:3px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5s5.5 4.3 5.5 9a5.5 5.5 0 01-11 0c0-2 1-3.4 1-3.4s.6 1.6 1.8 1.6c1.6 0 1.4-3.4 2.7-7.2z"/></svg> Replies from: '+esc(c.hot_accounts.join(', '))+'</div>':'') +
+            (c.hot_accounts&&c.hot_accounts.length?'<div style="font-size:11px;color:var(--green);margin-top:3px">Replies from: '+esc(c.hot_accounts.join(', '))+'</div>':'') +
           '</div>';
         }).join('') +
       '</div>';
@@ -2789,13 +2789,13 @@ async function loadSequencingStats() {
     if (toolD.ok && toolD.org_summary && toolD.org_summary.total_prospects > 0) {
       html += _renderSampaignAnalyticsBlock(toolD, { title: '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> Tool-synced (SmartReach) · last 90 days' });
     } else if (!toolD.ok) {
-      html += '<div style="font-size:11px;color:var(--coral);margin-bottom:10px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> Tool-synced: ' + esc(toolD.error||'Failed to load') + '</div>';
+      html += '<div style="font-size:11px;color:var(--coral);margin-bottom:10px">Tool-synced: ' + esc(toolD.error||'Failed to load') + '</div>';
     }
 
     if (manualD.ok && manualD.org_summary && manualD.org_summary.total_prospects > 0) {
       html += _renderSampaignAnalyticsBlock(manualD, { title: '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.5h6v3H9zM7 5H5.5v15h13V5H17"/></svg> My SAMpaigns (manual)' });
     } else if (!manualD.ok) {
-      html += '<div style="font-size:11px;color:var(--coral)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> Manual: ' + esc(manualD.error||'Failed to load') + '</div>';
+      html += '<div style="font-size:11px;color:var(--coral)">Manual: ' + esc(manualD.error||'Failed to load') + '</div>';
     }
 
     out.innerHTML = html || '<div style="font-size:12px;color:var(--text3)">No SAMpaign data yet — sync a sequencing tool or upload contacts to a manual SAMpaign above.</div>';
@@ -2873,7 +2873,7 @@ async function loadSamBrief(force) {
         try {
           var c = JSON.parse(cached);
           out.innerHTML = renderBriefHtml(c.brief, c.brief_structured) +
-            '<div style="font-size:11px;color:var(--amber);margin-top:8px;padding:4px 8px;background:rgba(160,117,42,0.1);border-radius:2px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> Gemini quota reached — showing brief from ' + esc(c.date||'earlier') + '</div>';
+            '<div style="font-size:11px;color:var(--amber);margin-top:8px;padding:4px 8px;background:rgba(160,117,42,0.1);border-radius:2px">Gemini quota reached — showing brief from ' + esc(c.date||'earlier') + '</div>';
           return;
         } catch(e2) {}
       }
@@ -2885,7 +2885,7 @@ async function loadSamBrief(force) {
     _briefLoadedDate = todayKey2;
     if (!d.cached) { try { localStorage.setItem(_BRIEF_CACHE_KEY, JSON.stringify({ brief: d.brief, brief_structured: d.brief_structured, date: todayKey2 })); } catch(e) {} }
     out.innerHTML = renderBriefHtml(d.brief, d.brief_structured) +
-      (d.cached ? '<div style="font-size:11px;color:var(--amber);margin-top:8px;padding:4px 8px;background:rgba(160,117,42,0.1);border-radius:2px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> Gemini quota reached — showing last brief from ' + esc(d.cached_date||'earlier') + '</div>' : '');
+      (d.cached ? '<div style="font-size:11px;color:var(--amber);margin-top:8px;padding:4px 8px;background:rgba(160,117,42,0.1);border-radius:2px">Gemini quota reached — showing last brief from ' + esc(d.cached_date||'earlier') + '</div>' : '');
   } catch(e) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: '+esc(e.message)+'</div>'; }
 }
 
@@ -2943,9 +2943,9 @@ function renderBriefHtml(brief, brief_structured) {
       });
       html += '</div>';
     }
-    if (obj.calendar_prep && obj.calendar_prep !== 'null') html += '<div style="margin-bottom:10px"><div style="font-size:11px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4"/></svg> Calendar prep</div><div style="font-size:12px;color:var(--text2);line-height:1.5">' + esc(obj.calendar_prep) + '</div></div>';
-    if (obj.coaching_signal) html += '<div style="margin-bottom:10px"><div style="font-size:11px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> Coaching</div><div style="font-size:12px;color:var(--text2);line-height:1.5">' + esc(obj.coaching_signal) + '</div></div>';
-    if (obj.priority_before_noon) html += '<div style="padding:8px 12px;background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);border-radius:2px"><div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:3px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 16.5a4.5 4.5 0 100-9 4.5 4.5 0 000 9zM12 13a1 1 0 100-2 1 1 0 000 2z"/></svg> Priority before noon</div><div style="font-size:12px;font-weight:600;color:var(--text)">' + esc(obj.priority_before_noon) + '</div></div>';
+    if (obj.calendar_prep && obj.calendar_prep !== 'null') html += '<div style="margin-bottom:10px"><div style="font-size:11px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px">Calendar prep</div><div style="font-size:12px;color:var(--text2);line-height:1.5">' + esc(obj.calendar_prep) + '</div></div>';
+    if (obj.coaching_signal) html += '<div style="margin-bottom:10px"><div style="font-size:11px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px">Coaching</div><div style="font-size:12px;color:var(--text2);line-height:1.5">' + esc(obj.coaching_signal) + '</div></div>';
+    if (obj.priority_before_noon) html += '<div style="padding:8px 12px;background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);border-radius:2px"><div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:3px">Priority before noon</div><div style="font-size:12px;font-weight:600;color:var(--text)">' + esc(obj.priority_before_noon) + '</div></div>';
     return html;
   }
   // Never dump raw JSON at the user. If it still looks like JSON we could not
@@ -3169,7 +3169,7 @@ async function pushHabitToCalendar(i) {
     h.pushed_to_calendar = true;
     fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
       body: JSON.stringify({ action:'save_habits', habits:_userHabits }) }).catch(function(){});
-    showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4"/></svg> Recurring event created — first on ' + (d.first_occurrence||'next matching day'));
+    showToast('Recurring event created — first on ' + (d.first_occurrence||'next matching day'));
     openHabitEditor();
   } catch(e) { showToast('Error: ' + e.message); }
 }
@@ -3286,7 +3286,7 @@ async function openNotetakerConnect() {
   var connList = existingConns.map(function(c) {
     var provIcons = { fireflies:'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5s5.5 4.3 5.5 9a5.5 5.5 0 01-11 0c0-2 1-3.4 1-3.4s.6 1.6 1.8 1.6c1.6 0 1.4-3.4 2.7-7.2z"/></svg>', read_ai:'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12zM12 15a3 3 0 100-6 3 3 0 000 6z"/></svg>', fathom:'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg>', otter:'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg>', grain:'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg>', gong:'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 16.5a4.5 4.5 0 100-9 4.5 4.5 0 000 9zM12 13a1 1 0 100-2 1 1 0 000 2z"/></svg>' };
     return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--surface2);border-radius:2px;margin-bottom:6px">' +
-      '<div><span style="font-size:14px">'+(provIcons[c.provider]||'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.5v5M15 3.5v5M6.5 8.5h11v3a5.5 5.5 0 01-11 0zM12 17v4"/></svg>')+'</span> <strong style="font-size:13px">'+esc(c.provider)+'</strong>'+(c.provider_email?' <span style="font-size:11px;color:var(--text3)">'+esc(c.provider_email)+'</span>':'')+'</div>' +
+      '<div><span style="font-size:14px">'+(provIcons[c.provider]||'')+'</span> <strong style="font-size:13px">'+esc(c.provider)+'</strong>'+(c.provider_email?' <span style="font-size:11px;color:var(--text3)">'+esc(c.provider_email)+'</span>':'')+'</div>' +
       '<button onclick="disconnectNotetaker(\''+esc(c.provider)+'\')" style="background:none;border:1px solid var(--border);border-radius:2px;padding:4px 10px;font-size:11px;color:var(--coral);cursor:pointer;font-family:var(--sans)">Disconnect</button>' +
     '</div>';
   }).join('');
@@ -3345,7 +3345,7 @@ async function connectNotetaker(provider) {
   try {
     await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'save_user_connection', provider, api_key:apiKey, provider_email:email||null}) });
     document.getElementById('notetaker-connect-modal')?.remove();
-    showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> '+provider+' connected — click "Sync calls" to pull transcripts');
+    showToast(''+provider+' connected — click "Sync calls" to pull transcripts');
   } catch(e) { alert('Error: '+e.message); }
 }
 
@@ -3366,9 +3366,9 @@ async function syncNotetaker() {
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'sync_notetaker'}) });
     var d = await r.json();
-    if (!d.ok) { if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> '+esc(d.error||'Sync failed')+'</div>'; return; }
+    if (!d.ok) { if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral)">'+esc(d.error||'Sync failed')+'</div>'; return; }
     var html = '<div style="background:var(--surface2);border-radius:2px;padding:10px 12px;margin-top:6px">' +
-      '<div style="font-size:11px;font-weight:600;color:var(--gold);margin-bottom:6px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5a2.8 2.8 0 00-2.8 2.8v5.4a2.8 2.8 0 005.6 0V6.3A2.8 2.8 0 0012 3.5zM5.5 11a6.5 6.5 0 0013 0M12 17.5V21"/></svg> '+esc(d.provider)+' synced · '+d.transcripts_analysed+'/'+d.transcripts_found+' transcripts analysed via Gemini</div>' +
+      '<div style="font-size:11px;font-weight:600;color:var(--gold);margin-bottom:6px">'+esc(d.provider)+' synced · '+d.transcripts_analysed+'/'+d.transcripts_found+' transcripts analysed via Gemini</div>' +
       '<div style="font-size:11px;color:var(--text3)">Full transcript → exact quotes, budget signals, action items, signal score updates. Signals visible in Intelligence tab.</div>' +
       (d.errors&&d.errors.length?'<div style="font-size:11px;color:var(--amber);margin-top:4px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> '+d.errors.length+' partial errors</div>':'') +
     '</div>';
@@ -3411,7 +3411,7 @@ async function syncSequencing() {
     var d = await r.json();
 
     if (!d.ok) {
-      if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral);padding:6px 0"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> ' + esc(d.error || 'Sync failed') + '</div>';
+      if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral);padding:6px 0">' + esc(d.error || 'Sync failed') + '</div>';
       return;
     }
 
@@ -3722,7 +3722,7 @@ async function autoCompleteTasks(silent) {
         });
         if (ev) {
           task.done = true; task.autoCompleted = true; task.verifiedVia = 'meeting_transcript'; count++;
-          autoLog.push('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5a2.8 2.8 0 00-2.8 2.8v5.4a2.8 2.8 0 005.6 0V6.3A2.8 2.8 0 0012 3.5zM5.5 11a6.5 6.5 0 0013 0M12 17.5V21"/></svg> ' + esc(task.text.slice(0,50)) + ' → transcript "' + esc((ev.title||'').slice(0,40)) + '"');
+          autoLog.push('' + esc(task.text.slice(0,50)) + ' → transcript "' + esc((ev.title||'').slice(0,40)) + '"');
           return;
         }
         // Evidence 1b: notetaker recap email in the inbox (today only, distinctive
@@ -3736,7 +3736,7 @@ async function autoCompleteTasks(silent) {
         if (note) {
           task.done = true; task.autoCompleted = true; task.verifiedVia = 'notetaker_email';
           task.verifiedSource = note.provider || 'notetaker'; count++;
-          autoLog.push('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5a2.8 2.8 0 00-2.8 2.8v5.4a2.8 2.8 0 005.6 0V6.3A2.8 2.8 0 0012 3.5zM5.5 11a6.5 6.5 0 0013 0M12 17.5V21"/></svg> ' + esc(task.text.slice(0,50)) + ' → meeting notes "' + esc((note.title||'').slice(0,40)) + '"');
+          autoLog.push('' + esc(task.text.slice(0,50)) + ' → meeting notes "' + esc((note.title||'').slice(0,40)) + '"');
           return;
         }
         // Evidence 2: Post-Meeting-FollowUp-Sent — rep emailed an external
@@ -3745,7 +3745,7 @@ async function autoCompleteTasks(silent) {
         if (calEv && calEv.ended && calEv.followup_sent &&
             _matchGatesOk(task.text, ((calEv.title||'') + ' ' + (calEv.external_attendees||[]).join(' ') + ' ' + (calEv.followup_subject||'')).toLowerCase())) {
           task.done = true; task.autoCompleted = true; task.verifiedVia = 'post_meeting_followup'; count++;
-          autoLog.push('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4"/></svg> ' + esc(task.text.slice(0,50)) + ' → Post-Meeting-FollowUp-Sent' + (calEv.followup_subject ? ' "' + esc(calEv.followup_subject.slice(0,35)) + '"' : ''));
+          autoLog.push('' + esc(task.text.slice(0,50)) + ' → Post-Meeting-FollowUp-Sent' + (calEv.followup_subject ? ' "' + esc(calEv.followup_subject.slice(0,35)) + '"' : ''));
         }
       });
     }
@@ -3770,7 +3770,7 @@ async function autoCompleteTasks(silent) {
             var oooHit = sentEmails.find(function(e) { return ((e.to||'')+' '+(e.subject||'')).toLowerCase().includes(task.oooContactEmail); });
             if (oooHit) {
               task.done = true; task.autoCompleted = true; task.verifiedVia = 'ooo_reengage'; count++;
-              autoLog.push('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> ' + esc(task.text.slice(0,50)) + ' → sent to ' + esc(task.oooContactEmail));
+              autoLog.push('' + esc(task.text.slice(0,50)) + ' → sent to ' + esc(task.oooContactEmail));
             }
             return; // never fall through to fuzzy word matching for OOO tasks
           }
@@ -3790,7 +3790,7 @@ async function autoCompleteTasks(silent) {
             task.done = true; task.autoCompleted = true; task.verifiedVia = 'gmail_sent';
             if (required > 1) task.verifiedCount = matches.length + '/' + required;
             delete task.sendProgress; count++;
-            autoLog.push('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> '+esc(task.text.slice(0,50))+(required>1?(' → '+matches.length+'/'+required+' sent'):(' → "'+esc((matches[0].subject||'').slice(0,40))+'"')));
+            autoLog.push(''+esc(task.text.slice(0,50))+(required>1?(' → '+matches.length+'/'+required+' sent'):(' → "'+esc((matches[0].subject||'').slice(0,40))+'"')));
           } else if (matches.length > 0 && required > 1) {
             // Partial: show progress but keep the task open until the count is met.
             task.sendProgress = matches.length + '/' + required;
@@ -3804,7 +3804,7 @@ async function autoCompleteTasks(silent) {
       save(today2); render();
     }
     if (count > 0) {
-      showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Auto-completed ' + count + ' task' + (count!==1?'s':'') + (autoLog.length ? ' — ' + autoLog[0].replace(/<[^>]+>/g,'').slice(0,40) : ''));
+      showToast('Auto-completed ' + count + ' task' + (count!==1?'s':'') + (autoLog.length ? ' — ' + autoLog[0].replace(/<[^>]+>/g,'').slice(0,40) : ''));
     } else if (!silent) {
       showToast('No new evidence found for open tasks');
     }
@@ -4054,7 +4054,7 @@ async function runCoverageCheck(repId, repEmail, resultElId) {
       else if (signal === '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5s6 6.4 6 10.2a6 6 0 11-12 0C6 9.9 12 3.5 12 3.5z"/></svg>') accountHint = 'No engagement — try a different channel';
       else if (signal === '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.5h6v3H9zM7 5H5.5v15h13V5H17"/></svg>') accountHint = 'Unverified — sync SmartReach for accuracy';
 
-      var campaignTag = g.campaigns ? '<div style="font-size:11px;color:var(--text3);margin-top:1px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> '+esc(g.campaigns.slice(0,45))+'</div>' : '';
+      var campaignTag = g.campaigns ? '<div style="font-size:11px;color:var(--text3);margin-top:1px">'+esc(g.campaigns.slice(0,45))+'</div>' : '';
 
       // Show individual task lines as sub-bullets so managers see detail like "16 SE Asia + 10 France"
       var taskLines = (g.taskTexts || []).slice(0,4).map(function(t) {
@@ -4174,7 +4174,7 @@ async function getCoverageCoaching(grid, outputId, repEmail) {
       { key: 'FORECAST',             color: 'var(--blue)',  icon: '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg>' }
     ];
 
-    var rendered = '<div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> Coaching — '+esc(repEmail?repEmail.split('@')[0]:'you')+'</div>';
+    var rendered = '<div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Coaching — '+esc(repEmail?repEmail.split('@')[0]:'you')+'</div>';
 
     // Also render quick stats row
     rendered += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border)">' +
@@ -4205,7 +4205,7 @@ async function getCoverageCoaching(grid, outputId, repEmail) {
 
     coachEl.innerHTML = rendered;
   } catch(e) {
-    coachEl.innerHTML = '<div style="font-size:11px;color:var(--gold);font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> Coaching</div><div style="font-size:12px;color:var(--text3)">Coaching unavailable: '+esc(e.message)+'</div>';
+    coachEl.innerHTML = '<div style="font-size:11px;color:var(--gold);font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Coaching</div><div style="font-size:12px;color:var(--text3)">Coaching unavailable: '+esc(e.message)+'</div>';
   }
 }
 
@@ -4308,7 +4308,7 @@ async function submitAccountsImport() {
     var d = await r.json();
     if (!d.ok) { showToast(d.error || 'Import failed'); if (btn) { btn.textContent = 'Import accounts'; btn.disabled = false; } return; }
     document.getElementById('acct-import-modal')?.remove();
-    var msg = '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Imported ' + d.created + ' account' + (d.created!==1?'s':'') + (d.skipped ? ' · ' + d.skipped + ' already existed' : '');
+    var msg = 'Imported ' + d.created + ' account' + (d.created!==1?'s':'') + (d.skipped ? ' · ' + d.skipped + ' already existed' : '');
     if (d.unmapped_owner_emails && d.unmapped_owner_emails.length) msg += ' · ' + d.unmapped_owner_emails.length + ' owner email(s) not found — assigned to you';
     showToast(msg);
     if (typeof loadMyAccounts === 'function') loadMyAccounts();
@@ -4384,13 +4384,13 @@ async function renderTeam() {
         '<div class="member-detail" id="mdet-' + idx + '">' + renderMemberDetail(d, m.user_id, m.email) + '</div>' +
       '</div>';
     }).join('');
-  } catch(e) { tl.innerHTML = '<div class="empty"><div class="empty-icon"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg></div>Error loading team: ' + esc(e.message) + '</div>'; }
+  } catch(e) { tl.innerHTML = '<div class="empty"><div class="empty-icon"></div>Error loading team: ' + esc(e.message) + '</div>'; }
 }
 function renderMemberDetail(d, memberId, memberEmail) {
   const canDelegate = ['manager','super_admin','admin'].includes(profile?.role);
   const taskSection = '<div class="det-sec"><div class="det-lbl">Tasks</div>' + ((d.tasks||[]).length ? (d.tasks||[]).map(it => {
     const isPri = it.priority || it.text?.startsWith('*'); const displayTxt = it.text?.startsWith('*') ? it.text.slice(1).trim() : (it.text||'');
-    return '<div class="det-item ' + (it.done?'done-item':'') + '"><span class="di-dot" style="background:' + (isPri?'var(--coral)':'var(--gold)') + '"></span><span>' + esc(displayTxt) + '</span>' + (it.completedAt?'<span style="font-size:11px;color:var(--text3);margin-left:6px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> '+it.completedAt+'</span>':'') + '</div>';
+    return '<div class="det-item ' + (it.done?'done-item':'') + '"><span class="di-dot" style="background:' + (isPri?'var(--coral)':'var(--gold)') + '"></span><span>' + esc(displayTxt) + '</span>' + (it.completedAt?'<span style="font-size:11px;color:var(--text3);margin-left:6px">'+it.completedAt+'</span>':'') + '</div>';
   }).join('') : '<div class="m-empty">None logged</div>') + '</div>';
   const issueSection = '<div class="det-sec"><div class="det-lbl">Issues</div>' + ((d.issues||[]).length ? (d.issues||[]).map(it => '<div class="det-item"><span class="di-dot" style="background:var(--coral)"></span>' + esc(it.text) + '</div>').join('') : '<div class="m-empty">None logged</div>') + '</div>';
   const winSection = '<div class="det-sec"><div class="det-lbl">Wins</div>' + ((d.wins||[]).length ? (d.wins||[]).map(it => {
@@ -4399,7 +4399,7 @@ function renderMemberDetail(d, memberId, memberEmail) {
     // completionNote may be on the win directly (new saves) or on the matching task (pre-fix saves)
     const matchingTask = (d.tasks||[]).find(function(t){ return t.text===it.text && t.completionNote; });
     const noteText = it.completionNote || (matchingTask && matchingTask.completionNote) || '';
-    const note = noteText ? '<div style="font-size:11px;color:var(--text2);background:var(--surface2);border-radius:2px;padding:3px 8px;margin-top:4px;font-style:italic"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5z"/></svg> '+esc(noteText)+'</div>' : '';
+    const note = noteText ? '<div style="font-size:11px;color:var(--text2);background:var(--surface2);border-radius:2px;padding:3px 8px;margin-top:4px;font-style:italic">'+esc(noteText)+'</div>' : '';
     return '<div class="det-item"><span class="di-dot" style="background:var(--green)"></span><div style="flex:1"><span>'+esc(displayTxt)+'</span>'+ts+note+'</div></div>';
   }).join('') : '<div class="m-empty">None logged</div>') + '</div>';
   const delegateSection = canDelegate ? '<div class="det-sec"><div class="det-lbl">Delegate a task</div><div style="display:flex;gap:8px;margin-top:6px"><input class="setup-input" style="margin-bottom:0;font-size:12px;padding:7px 10px" id="delegate-input-' + memberId + '" placeholder="Task to delegate (min 25 chars)…" maxlength="300"/><button class="setup-btn" style="padding:7px 14px;font-size:12px;white-space:nowrap" onclick="delegateTask(\'' + memberId + '\',\'' + memberEmail + '\')">Send ↗</button></div></div>' : '';
@@ -4418,7 +4418,7 @@ async function runSamCheck(memberId, memberEmail) {
       const sent = data.threads||[]; const inbox = data.inboxThreads||[]; const total = data.totalFound||0;
       let html = '<div style="font-size:11px;color:var(--green);margin-bottom:8px">Gmail connected</div>';
       html += '<div style="font-size:11px;color:var(--text3);margin-bottom:8px">'+total+' sent emails (30 days) · '+inbox.length+' replies</div>';
-      if (inbox.length>0) { html += '<div style="border-left:3px solid var(--green);padding:6px 10px;background:rgba(74,140,92,0.08);border-radius:0 6px 6px 0;margin-bottom:6px"><div style="font-size:12px;font-weight:500;color:var(--green)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5s5.5 4.3 5.5 9a5.5 5.5 0 01-11 0c0-2 1-3.4 1-3.4s.6 1.6 1.8 1.6c1.6 0 1.4-3.4 2.7-7.2z"/></svg> '+inbox.length+' reply(ies) from prospect</div>'+inbox.slice(0,2).map(function(t){return '<div style="font-size:11px;color:var(--text2);margin-top:4px">'+esc(t.subject||'')+'</div>';}).join('')+'</div>'; }
+      if (inbox.length>0) { html += '<div style="border-left:3px solid var(--green);padding:6px 10px;background:rgba(74,140,92,0.08);border-radius:0 6px 6px 0;margin-bottom:6px"><div style="font-size:12px;font-weight:500;color:var(--green)">'+inbox.length+' reply(ies) from prospect</div>'+inbox.slice(0,2).map(function(t){return '<div style="font-size:11px;color:var(--text2);margin-top:4px">'+esc(t.subject||'')+'</div>';}).join('')+'</div>'; }
       if (sent.length>0) { const last = sent[0]; html += '<div style="font-size:11px;color:var(--text3)">Last sent: <span style="color:var(--text2)">'+esc(last.subject||'')+'</span> · '+esc(last.date||'')+'</div>'; }
       resultEl.innerHTML = html;
     }
@@ -4630,8 +4630,8 @@ async function loadExecDashboard() {
     html+='</div>';
     if (atRisk.length||noActivity.length||totalIssues>0) {
       html+='<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-bottom:12px"><div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Priorities & Risks</div>';
-      if (atRisk.length) { html+='<div style="border-left:3px solid var(--coral);padding:8px 12px;background:var(--coral-lt);border-radius:0 6px 6px 0;margin-bottom:8px"><div style="font-size:12px;font-weight:500;color:var(--coral);margin-bottom:4px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> Low score ('+atRisk.length+')</div>'+atRisk.map(function(r){return '<div style="font-size:12px;color:var(--text2)">'+esc(r.email.split('@')[0])+' — score '+r.score+' · '+r.pending+' tasks pending</div>';}).join('')+'</div>'; }
-      if (noActivity.length) { html+='<div style="border-left:3px solid var(--amber);padding:8px 12px;background:var(--amber-lt);border-radius:0 6px 6px 0;margin-bottom:8px"><div style="font-size:12px;font-weight:500;color:var(--amber)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> No tasks logged ('+noActivity.length+')</div>'+noActivity.map(function(r){return '<div style="font-size:12px;color:var(--text2)">'+esc(r.email.split('@')[0])+'</div>';}).join('')+'</div>'; }
+      if (atRisk.length) { html+='<div style="border-left:3px solid var(--coral);padding:8px 12px;background:var(--coral-lt);border-radius:0 6px 6px 0;margin-bottom:8px"><div style="font-size:12px;font-weight:500;color:var(--coral);margin-bottom:4px">Low score ('+atRisk.length+')</div>'+atRisk.map(function(r){return '<div style="font-size:12px;color:var(--text2)">'+esc(r.email.split('@')[0])+' — score '+r.score+' · '+r.pending+' tasks pending</div>';}).join('')+'</div>'; }
+      if (noActivity.length) { html+='<div style="border-left:3px solid var(--amber);padding:8px 12px;background:var(--amber-lt);border-radius:0 6px 6px 0;margin-bottom:8px"><div style="font-size:12px;font-weight:500;color:var(--amber)">No tasks logged ('+noActivity.length+')</div>'+noActivity.map(function(r){return '<div style="font-size:12px;color:var(--text2)">'+esc(r.email.split('@')[0])+'</div>';}).join('')+'</div>'; }
       html+='</div>';
     }
     html+='<button onclick="loadExecDashboard()" style="font-size:11px;color:var(--gold);background:none;border:none;cursor:pointer;font-family:var(--sans);padding:0">↻ Refresh</button>';
@@ -4650,7 +4650,7 @@ async function loadExecDashboard() {
           '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">' +
             '<div style="flex:1">' +
               '<div style="font-size:13px;color:var(--text);font-weight:500">'+esc(displayText)+'</div>' +
-              (note ? '<div style="font-size:12px;color:var(--text2);margin-top:4px;font-style:italic;background:var(--surface2);border-radius:2px;padding:4px 8px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5z"/></svg> '+esc(note)+'</div>' : '') +
+              (note ? '<div style="font-size:12px;color:var(--text2);margin-top:4px;font-style:italic;background:var(--surface2);border-radius:2px;padding:4px 8px">'+esc(note)+'</div>' : '') +
             '</div>' +
             '<div style="text-align:right;flex-shrink:0">' +
               '<div style="font-size:11px;color:var(--green);font-weight:600">'+esc(repName)+'</div>' +
@@ -4694,7 +4694,7 @@ function _feedTimeAgo(iso) {
 function _renderFeedEntries(entries) {
   if (!entries.length) return '<div style="font-size:12px;color:var(--text3);padding:8px 0">Nothing yet — wins and milestones will show up here as they happen.</div>';
   return entries.map(function(f) {
-    var icon = FEED_EVENT_ICON[f.event_type] || '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg>';
+    var icon = FEED_EVENT_ICON[f.event_type] || '';
     var reactionChips = FEED_EMOJIS.map(function(e) {
       var count = (f.reactions && f.reactions[e]) || 0;
       var mine = f.my_reaction === e;
@@ -4898,7 +4898,7 @@ async function loadRepAccounts() {
   try {
     const rows = await sbGet('org_accounts?user_id=eq.' + repId + '&org_id=eq.' + profile.org_id + '&select=id,account_name,domain&order=account_name');
     if (!rows || !rows.length) { list.innerHTML = '<div style="font-size:12px;color:var(--text3);font-style:italic">No accounts assigned yet</div>'; return; }
-    list.innerHTML = rows.map(r => '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--surface2);border-radius:2px;margin-bottom:5px"><div><div style="font-size:13px;color:var(--text)">' + esc(r.account_name) + '</div>' + (r.domain?'<div style="font-size:11px;color:var(--text3)">'+esc(r.domain)+'</div>':'') + '</div><button onclick="removeRepAccount(\''+r.id+'\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>').join('');
+    list.innerHTML = rows.map(r => '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--surface2);border-radius:2px;margin-bottom:5px"><div><div style="font-size:13px;color:var(--text)">' + esc(r.account_name) + '</div>' + (r.domain?'<div style="font-size:11px;color:var(--text3)">'+esc(r.domain)+'</div>':'') + '</div><button onclick="removeRepAccount(\''+r.id+'\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px"></button></div>').join('');
   } catch(e) { list.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>'; }
 }
 var _accountNameTimer = null;
@@ -5016,7 +5016,7 @@ async function saveSupabase() {
   if (!url || !key) { showSS('Enter both URL and anon key.', false); return; }
   SB_URL = url; SB_KEY = key; localStorage.setItem('dt-sb-url', url); localStorage.setItem('dt-sb-key', key);
   EDGE_FN_URL = SB_URL + '/functions/v1/sam-gmail-signals'; // keep in sync with whichever project is now configured
-  try { await fetch(url + '/rest/v1/daytrack?limit=1', { headers: { 'apikey': key, 'Authorization': 'Bearer ' + key } }); showSS('Connected! Syncing…', true); renderSettings(); await syncDown(); runCarryOver(); render(); showSS('All synced <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg>', true); }
+  try { await fetch(url + '/rest/v1/daytrack?limit=1', { headers: { 'apikey': key, 'Authorization': 'Bearer ' + key } }); showSS('Connected! Syncing…', true); renderSettings(); await syncDown(); runCarryOver(); render(); showSS('All synced', true); }
   catch(e) { showSS('Could not connect: ' + e.message, false); }
 }
 function showSS(msg, ok) { const el = document.getElementById('syncStatus'); el.textContent = msg; el.className = 'sstatus ' + (ok?'ok':'err'); }
@@ -5027,7 +5027,7 @@ function setReviewPeriod(period) {
   reviewPeriod = period;
   document.querySelectorAll('.rtab').forEach(t => t.classList.remove('active'));
   document.getElementById('rtab-' + period).classList.add('active');
-  const labels = { daily: '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg> Daily review', weekly: '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg> Weekly review', monthly: '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg> Monthly review' };
+  const labels = { daily: 'Daily review', weekly: 'Weekly review', monthly: 'Monthly review' };
   document.getElementById('reviewLabel').textContent = labels[period];
   document.getElementById('aiBody').textContent = 'Hit Refresh for Claude\'s ' + period + ' review.';
   document.getElementById('aiHints').style.display = 'none';
@@ -5145,7 +5145,7 @@ function setAppearanceAuto(on) {
 function setAppearanceScale(v) {
   localStorage.setItem('dt-font-scale', String(v));
   applyAppearance();
-  showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Interface size updated');
+  showToast('Interface size updated');
 }
 
 // Miniature of the app, so the choice is shown rather than described.
@@ -5290,7 +5290,7 @@ function buildTasksText() {
   tasks.forEach(function(t) {
     if (!t.text) return;
     const displayText = t.text.startsWith('*') ? t.text.slice(1).trim() : t.text;
-    const done = t.done ? '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> ' : '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5h7.5L19 9v11.5H6zM13.5 3.5V9H19"/></svg> ';
+    const done = t.done ? '' : '';
     const priority = (t.priority || t.text.startsWith('*')) ? '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.8l2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 10l5.9-.8z"/></svg> ' : '';
     text += sno + '. ' + done + priority + displayText + '\n';
     sno++;
@@ -5385,7 +5385,7 @@ function renderTemplateList() {
   const templates = getTemplates(); const list = document.getElementById('tmplList'); const count = document.getElementById('tmplCount');
   count.textContent = templates.length ? `(${templates.length})` : '';
   if (!templates.length) { list.innerHTML = '<div style="font-size:13px;color:var(--text3);font-style:italic;padding:8px 0">No template tasks yet. Add some above.</div>'; return; }
-  list.innerHTML = templates.map((t, i) => `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface2);border-radius:2px;margin-bottom:6px"><input type="checkbox" id="tmpl-chk-${i}" checked style="accent-color:var(--gold);width:16px;height:16px;flex-shrink:0"><input type="text" value="${esc(t)}" id="tmpl-txt-${i}" style="flex:1;background:transparent;border:none;outline:none;color:var(--text);font-family:var(--font);font-size:13px" onchange="updateTemplateTask(${i}, this.value)"/><button onclick="deleteTemplateTask(${i})" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;flex-shrink:0"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>`).join('');
+  list.innerHTML = templates.map((t, i) => `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface2);border-radius:2px;margin-bottom:6px"><input type="checkbox" id="tmpl-chk-${i}" checked style="accent-color:var(--gold);width:16px;height:16px;flex-shrink:0"><input type="text" value="${esc(t)}" id="tmpl-txt-${i}" style="flex:1;background:transparent;border:none;outline:none;color:var(--text);font-family:var(--font);font-size:13px" onchange="updateTemplateTask(${i}, this.value)"/><button onclick="deleteTemplateTask(${i})" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;flex-shrink:0"></button></div>`).join('');
 }
 function addTemplateTask() { const inp = document.getElementById('tmplInput'); const text = inp.value.trim(); const hint = document.getElementById('tmplHint'); if (text.length < 25) { hint.style.display='block'; inp.focus(); return; } hint.style.display='none'; const templates = getTemplates(); templates.push(text); saveTemplates(templates); inp.value = ''; renderTemplateList(); }
 function updateTemplateTask(i, newVal) { const templates = getTemplates(); if (newVal.trim().length >= 25) templates[i] = newVal.trim(); saveTemplates(templates); }
@@ -5408,7 +5408,7 @@ document.addEventListener('click', e => { const modal = document.getElementById(
 function updateSectionPillCounts() {
   const d = dayData(viewDate);
   const counts = { tasks:d.tasks?.length||0, issues:d.issues?.length||0, wins:d.wins?.length||0, misses:d.misses?.length||0 };
-  const labels = { tasks:'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg> Tasks', issues:'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> Issues', wins:'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.8l2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 10l5.9-.8z"/></svg> Wins', misses:'○ Misses' };
+  const labels = { tasks:'Tasks', issues:'Issues', wins:'Wins', misses:'○ Misses' };
   Object.keys(counts).forEach(k => { const btn = document.getElementById('tsb-'+k); if (btn) btn.textContent = labels[k]+(counts[k]?(' ('+counts[k]+')'):''); });
 }
 function saveMissComment(dayKey, idx, comment) { const d = dayData(dayKey); if (!d.misses[idx]) return; d.misses[idx].comment = comment.trim(); save(dayKey); renderToday(); }
@@ -5451,7 +5451,7 @@ function confirmCarryForward(){
   if(_cfTaskKey&&_cfTaskIdx!==null){const task=dayData(viewDate)[_cfTaskKey]?.[_cfTaskIdx];if(task){task.carriedTo=targetDate;task.carryReason=reason||null;}save(viewDate);}
   runCarryOver();render();closeCarryForward();
   const targetLabel=new Date(targetDate+'T12:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
-  showCFToast('Carried forward to '+targetLabel+' <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg>');
+  showCFToast('Carried forward to '+targetLabel+' ');
 }
 // ── showToast — global toast notification ─────────────────────────────────────
 function showToast(msg) {
@@ -5795,7 +5795,7 @@ async function runDealHealth() {
       body:JSON.stringify({action:'compute_deal_health'}) });
     var d = await r.json();
     if (d.ok) {
-      showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Health scored ' + d.dealsScored + ' deals');
+      showToast('Health scored ' + d.dealsScored + ' deals');
       // Reload pipeline to show updated health scores
       if (typeof loadPipeline === 'function') loadPipeline();
     }
@@ -5818,7 +5818,7 @@ async function runCoachingAlerts() {
       body:JSON.stringify({action:'generate_coaching_alerts'}) });
     var d = await r.json();
     if (d.ok) {
-      showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> ' + d.alertsGenerated + ' new alerts from ' + d.dealsChecked + ' deals');
+      showToast('' + d.alertsGenerated + ' new alerts from ' + d.dealsChecked + ' deals');
       loadCoachingAlerts();
     }
   } catch(e) { showToast('Error: ' + e.message); }
@@ -5830,7 +5830,7 @@ async function refreshStakeholderSignals(accountId) {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
       body:JSON.stringify({action:'refresh_stakeholder_signals', account_id: accountId}) });
     var d = await r.json();
-    if (d.ok) showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Refreshed ' + d.refreshed + ' of ' + d.total + ' contacts');
+    if (d.ok) showToast('Refreshed ' + d.refreshed + ' of ' + d.total + ' contacts');
     return d;
   } catch(e) { showToast('Error: ' + e.message); return null; }
 }
@@ -5841,7 +5841,7 @@ async function inferMeddpiccFromTranscripts(accountId) {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
       body:JSON.stringify({action:'infer_meddpicc_from_transcripts', account_id:accountId}) });
     var d = await r.json();
-    if (d.ok) showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Inferred ' + d.inferred + ' MEDDPICC fields from transcripts');
+    if (d.ok) showToast('Inferred ' + d.inferred + ' MEDDPICC fields from transcripts');
     else showToast(d.message || d.error || 'No signals found');
     return d;
   } catch(e) { showToast('Error: ' + e.message); return null; }
@@ -5897,8 +5897,8 @@ async function _renderSignalsPane(deal, forceRefresh, _retried) {
       var isFreshShare = cachedAtMs && (Date.now() - cachedAtMs) < 24*3600*1000;
       var cachedLbl = d.cached_at ? new Date(d.cached_at).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : 'earlier';
       html += isFreshShare
-        ? '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;color:var(--text3);margin-bottom:10px;padding:4px 8px;background:var(--surface2);border-radius:2px"><span><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6.5h6l2 2.5h9v11h-17z"/></svg> Shared team fetch from ' + esc(cachedLbl) + ', saved AI quota</span><button onclick="_renderSignalsPane(_currentDealDetail.deal, true)" style="background:none;border:none;color:var(--gold);cursor:pointer;font-size:11px;font-family:var(--sans);padding:0;flex-shrink:0">↻ Refresh live</button></div>'
-        : '<div style="font-size:11px;color:var(--amber);margin-bottom:10px;padding:4px 8px;background:rgba(160,117,42,0.1);border-radius:2px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> Live refresh unavailable (AI quota): showing signals from ' + esc(cachedLbl) + '</div>';
+        ? '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;color:var(--text3);margin-bottom:10px;padding:4px 8px;background:var(--surface2);border-radius:2px"><span>Shared team fetch from ' + esc(cachedLbl) + ', saved AI quota</span><button onclick="_renderSignalsPane(_currentDealDetail.deal, true)" style="background:none;border:none;color:var(--gold);cursor:pointer;font-size:11px;font-family:var(--sans);padding:0;flex-shrink:0">↻ Refresh live</button></div>'
+        : '<div style="font-size:11px;color:var(--amber);margin-bottom:10px;padding:4px 8px;background:rgba(160,117,42,0.1);border-radius:2px">Live refresh unavailable (AI quota): showing signals from ' + esc(cachedLbl) + '</div>';
     }
 
     function renderSignalCards(signals) {
@@ -5915,7 +5915,7 @@ async function _renderSignalsPane(deal, forceRefresh, _retried) {
         h += '<span style="font-size:11px;padding:2px 6px;border-radius:2px;background:'+col+'22;color:'+col+';flex-shrink:0">'+esc(s.signal||'')+'</span>';
         h += '</div>';
         if (s.detail) h += '<div style="font-size:11px;color:var(--text2);line-height:1.5;margin-bottom:3px">'+esc(s.detail)+'</div>';
-        if (s.why_it_matters) h += '<div style="font-size:11px;color:var(--amber);font-style:italic"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 11v5.5M12 7.8v.4"/></svg> '+esc(s.why_it_matters)+'</div>';
+        if (s.why_it_matters) h += '<div style="font-size:11px;color:var(--amber);font-style:italic">'+esc(s.why_it_matters)+'</div>';
         h += '</div>';
       });
       return h;
@@ -6035,7 +6035,7 @@ function _buildDealOverviewHTML(deal) {
   if (deal.originated_by_name) {
     html += '<span style="font-size:12px;font-weight:500;color:var(--text)">'+esc(deal.originated_by_name)+'</span>';
     if (deal.converted_from_sequence) html += '<span style="font-size:11px;color:var(--text3)"> · via '+esc(deal.converted_from_sequence)+'</span>';
-    html += '<button onclick="clearDealAttribution(\''+esc(deal.id)+'\')" style="margin-left:auto;font-size:11px;background:none;border:none;color:var(--text3);cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>';
+    html += '<button onclick="clearDealAttribution(\''+esc(deal.id)+'\')" style="margin-left:auto;font-size:11px;background:none;border:none;color:var(--text3);cursor:pointer"></button>';
   } else {
     html += '<button onclick="showAttributionPicker(\''+esc(deal.id)+'\')" style="font-size:11px;padding:2px 10px;border-radius:2px;background:none;border:1px dashed var(--border2);color:var(--text3);font-family:var(--sans);cursor:pointer">+ Tag SDR origin</button>';
   }
@@ -6110,7 +6110,7 @@ async function openStakeholderInsight(stakeholderId, name, opts) {
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:99999;display:flex;align-items:flex-end;justify-content:center';
   modal.innerHTML = '<div style="background:var(--bg);border-radius:3px 16px 0 0;width:100%;max-width:480px;padding:20px;max-height:85vh;overflow-y:auto" onclick="event.stopPropagation()">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
-      '<div style="font-size:14px;font-weight:700;color:var(--text)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM15.5 8.5l-2 5-5 2 2-5z"/></svg> ' + esc(name) + '</div>' +
+      '<div style="font-size:14px;font-weight:700;color:var(--text)">' + esc(name) + '</div>' +
       '<button onclick="document.getElementById(\'stk-insight-modal\').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>' +
     '</div>' +
     '<div style="margin-bottom:12px">' + _samoraIntelLabel('Read from their own messages, receipts on tap') + '</div>' +
@@ -6156,18 +6156,18 @@ async function openStakeholderInsight(stakeholderId, name, opts) {
     if (d.meddpicc_flags && d.meddpicc_flags.length) {
       h += '<div style="font-size:11px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.06em;margin:10px 0 6px">Deal gaps this person can close</div>';
       d.meddpicc_flags.forEach(function(f) {
-        h += '<div style="display:flex;gap:7px;padding:5px 0;font-size:12px;color:var(--text2)"><span style="color:var(--amber);flex-shrink:0"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 21V3.5M5.5 4.5h12l-2.5 4 2.5 4h-12"/></svg></span><span>' + esc(f) + '</span></div>';
+        h += '<div style="display:flex;gap:7px;padding:5px 0;font-size:12px;color:var(--text2)"><span style="color:var(--amber);flex-shrink:0"></span><span>' + esc(f) + '</span></div>';
       });
     }
     if (d.web && d.web.bullets && d.web.bullets.length) {
       h += '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:10px 0 6px">Public footprint</div>';
-      d.web.bullets.forEach(function(b) { h += '<div style="display:flex;gap:7px;padding:4px 0;font-size:12px;color:var(--text2)"><span style="flex-shrink:0"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15zM16 16l5 5"/></svg></span><span>' + esc(b) + '</span></div>'; });
+      d.web.bullets.forEach(function(b) { h += '<div style="display:flex;gap:7px;padding:4px 0;font-size:12px;color:var(--text2)"><span style="flex-shrink:0"></span><span>' + esc(b) + '</span></div>'; });
       h += '<div style="font-size:11px;color:var(--amber);margin-top:4px">' + esc(d.web.label||'') + '</div>';
     } else if (!d.web) {
-      h += '<button onclick="openStakeholderInsight(\'' + esc(stakeholderId) + '\',\'' + esc(name) + '\',{web:true})" style="width:100%;margin-top:12px;padding:8px;border-radius:2px;background:none;border:1px dashed var(--border2);color:var(--text3);font-family:var(--sans);font-size:11px;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15zM16 16l5 5"/></svg> Check public footprint (uses AI: one search, shared with team)</button>';
+      h += '<button onclick="openStakeholderInsight(\'' + esc(stakeholderId) + '\',\'' + esc(name) + '\',{web:true})" style="width:100%;margin-top:12px;padding:8px;border-radius:2px;background:none;border:1px dashed var(--border2);color:var(--text3);font-family:var(--sans);font-size:11px;cursor:pointer">Check public footprint (uses AI: one search, shared with team)</button>';
     }
     h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:8px;border-top:1px solid var(--border)">' +
-      '<span style="font-size:11px;color:var(--text3)">' + (d.cached ? '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6.5h6l2 2.5h9v11h-17z"/></svg> Shared team read from ' + esc((d.computed_at||'').slice(0,10)) : 'Computed just now') + '</span>' +
+      '<span style="font-size:11px;color:var(--text3)">' + (d.cached ? 'Shared team read from ' + esc((d.computed_at||'').slice(0,10)) : 'Computed just now') + '</span>' +
       '<span onclick="openStakeholderInsight(\'' + esc(stakeholderId) + '\',\'' + esc(name) + '\',{refresh:true})" style="font-size:11px;color:var(--gold);cursor:pointer">↻ Recompute</span>' +
     '</div>';
     body.innerHTML = h;
@@ -6190,7 +6190,7 @@ async function openSampaignContactInsight(contactId, name, opts) {
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:99999;display:flex;align-items:flex-end;justify-content:center';
   modal.innerHTML = '<div style="background:var(--bg);border-radius:3px 16px 0 0;width:100%;max-width:480px;padding:20px;max-height:85vh;overflow-y:auto" onclick="event.stopPropagation()">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
-      '<div style="font-size:14px;font-weight:700;color:var(--text)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM15.5 8.5l-2 5-5 2 2-5z"/></svg> ' + esc(name) + '</div>' +
+      '<div style="font-size:14px;font-weight:700;color:var(--text)">' + esc(name) + '</div>' +
       '<button onclick="document.getElementById(\'spc-insight-modal\').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>' +
     '</div>' +
     '<div style="margin-bottom:12px">' + _samoraIntelLabel('Read from their own messages, receipts on tap') + '</div>' +
@@ -6236,21 +6236,21 @@ async function openSampaignContactInsight(contactId, name, opts) {
     if (d.account_flags && d.account_flags.length) {
       h += '<div style="font-size:11px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.06em;margin:10px 0 6px">Account context</div>';
       d.account_flags.forEach(function(f) {
-        h += '<div style="display:flex;gap:7px;padding:5px 0;font-size:12px;color:var(--text2)"><span style="color:var(--amber);flex-shrink:0"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 21V3.5M5.5 4.5h12l-2.5 4 2.5 4h-12"/></svg></span><span>' + esc(f) + '</span></div>';
+        h += '<div style="display:flex;gap:7px;padding:5px 0;font-size:12px;color:var(--text2)"><span style="color:var(--amber);flex-shrink:0"></span><span>' + esc(f) + '</span></div>';
       });
     }
     if (d.web && d.web.bullets && d.web.bullets.length) {
       h += '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:10px 0 6px">Public footprint</div>';
-      d.web.bullets.forEach(function(b) { h += '<div style="display:flex;gap:7px;padding:4px 0;font-size:12px;color:var(--text2)"><span style="flex-shrink:0"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15zM16 16l5 5"/></svg></span><span>' + esc(b) + '</span></div>'; });
+      d.web.bullets.forEach(function(b) { h += '<div style="display:flex;gap:7px;padding:4px 0;font-size:12px;color:var(--text2)"><span style="flex-shrink:0"></span><span>' + esc(b) + '</span></div>'; });
       h += '<div style="font-size:11px;color:var(--amber);margin-top:4px">' + esc(d.web.label||'') + '</div>';
     } else if (!d.web) {
-      h += '<button onclick="openSampaignContactInsight(\'' + esc(contactId) + '\',\'' + esc(name) + '\',{web:true})" style="width:100%;margin-top:12px;padding:8px;border-radius:2px;background:none;border:1px dashed var(--border2);color:var(--text3);font-family:var(--sans);font-size:11px;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15zM16 16l5 5"/></svg> Check public footprint (uses AI: one search, shared with team)</button>';
+      h += '<button onclick="openSampaignContactInsight(\'' + esc(contactId) + '\',\'' + esc(name) + '\',{web:true})" style="width:100%;margin-top:12px;padding:8px;border-radius:2px;background:none;border:1px dashed var(--border2);color:var(--text3);font-family:var(--sans);font-size:11px;cursor:pointer">Check public footprint (uses AI: one search, shared with team)</button>';
     }
     if ((d.tips && d.tips.length) || (d.web && d.web.bullets && d.web.bullets.length)) {
-      h += '<button id="spc-copy-btn" onclick="_copySampaignInsight(\'' + esc(contactId) + '\')" style="width:100%;margin-top:10px;padding:8px;border-radius:2px;background:rgba(74,158,255,0.08);border:1px solid rgba(74,158,255,0.3);color:var(--blue);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.5h6v3H9zM7 5H5.5v15h13V5H17"/></svg> Copy for email draft</button>';
+      h += '<button id="spc-copy-btn" onclick="_copySampaignInsight(\'' + esc(contactId) + '\')" style="width:100%;margin-top:10px;padding:8px;border-radius:2px;background:rgba(74,158,255,0.08);border:1px solid rgba(74,158,255,0.3);color:var(--blue);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Copy for email draft</button>';
     }
     h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:8px;border-top:1px solid var(--border)">' +
-      '<span style="font-size:11px;color:var(--text3)">' + (d.cached ? '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6.5h6l2 2.5h9v11h-17z"/></svg> Shared team read from ' + esc((d.computed_at||'').slice(0,10)) : 'Computed just now') + '</span>' +
+      '<span style="font-size:11px;color:var(--text3)">' + (d.cached ? 'Shared team read from ' + esc((d.computed_at||'').slice(0,10)) : 'Computed just now') + '</span>' +
       '<span onclick="openSampaignContactInsight(\'' + esc(contactId) + '\',\'' + esc(name) + '\',{refresh:true})" style="font-size:11px;color:var(--gold);cursor:pointer">↻ Recompute</span>' +
     '</div>';
     body.innerHTML = h;
@@ -6272,7 +6272,7 @@ function _copySampaignInsight(contactId) {
   if (d.tips && d.tips.length) { lines.push(''); lines.push('When writing to ' + d.name + ':'); d.tips.forEach(function(t){ lines.push('- ' + t); }); }
   if (d.web && d.web.length) { lines.push(''); lines.push('Public footprint:'); d.web.forEach(function(b){ lines.push('- ' + b); }); }
   var text = lines.join('\n');
-  navigator.clipboard.writeText(text).then(function(){ showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Copied, paste into your draft'); }).catch(function(){ showToast('Could not copy, select the text manually'); });
+  navigator.clipboard.writeText(text).then(function(){ showToast('Copied, paste into your draft'); }).catch(function(){ showToast('Could not copy, select the text manually'); });
 }
 
 var _stkTab = 'active';
@@ -6304,7 +6304,7 @@ function _stkRowHtml(s) {
   html += roleHtml + deptChip;
   html += '</div>';
   var titleStr = s.title ? esc(s.title) : '<span style="color:var(--border2);font-style:italic">No title</span>';
-  var locStr = s.location ? ' &nbsp;·&nbsp; <span><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 21V3.5M5.5 4.5h12l-2.5 4 2.5 4h-12"/></svg> ' + esc(s.location) + '</span>' : '';
+  var locStr = s.location ? ' &nbsp;·&nbsp; <span>' + esc(s.location) + '</span>' : '';
   html += '<div style="font-size:11px;color:var(--text3);margin-bottom:4px">' + titleStr + locStr + '</div>';
   html += '<div style="display:flex;gap:8px;flex-wrap:wrap">';
   html += '<span style="font-size:11px;color:' + recencyColor + '"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> ' + recencyStr + '</span>';
@@ -6362,7 +6362,7 @@ function _renderStakeholdersPane(stakeholders, deal) {
   } else {
     html += '<button onclick="scoutStakeholders(\'' + esc(dealId) + '\')" id="scoutBtn" style="width:100%;margin-top:12px;padding:10px;border-radius:2px;background:rgba(160,117,42,0.08);border:1px solid rgba(160,117,42,0.4);color:var(--gold);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">' + _samoraIntelLabel('Scout stakeholders for this account') + '</button>';
     html += '<div id="scoutStatus" style="font-size:11px;color:var(--text3);margin-top:6px"></div>';
-    html += '<div onclick="openScoutProfile(\'' + esc(dealId) + '\')" style="font-size:11px;color:var(--text3);text-align:center;margin-top:8px;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 16.5a4.5 4.5 0 100-9 4.5 4.5 0 000 9zM12 13a1 1 0 100-2 1 1 0 000 2z"/></svg> Who to hunt (job titles &amp; targets)</div>';
+    html += '<div onclick="openScoutProfile(\'' + esc(dealId) + '\')" style="font-size:11px;color:var(--text3);text-align:center;margin-top:8px;cursor:pointer">Who to hunt (job titles &amp; targets)</div>';
   }
   body.innerHTML = html;
 }
@@ -6385,7 +6385,7 @@ async function syncActiveStakeholders(dealId) {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({ action:'sync_active_stakeholders', account_id:dealId, days:90 }) });
     var d = await r.json();
     if (!d.ok) { if (st){st.textContent='↻ Sync recent contacts from Gmail & calendar';st.disabled=false;} showToast(d.error || 'Sync unavailable'); return; }
-    showToast(d.discovered ? '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> ' + d.discovered + ' contact' + (d.discovered!==1?'s':'') + ' synced' : 'No new recent contacts found');
+    showToast(d.discovered ? '' + d.discovered + ' contact' + (d.discovered!==1?'s':'') + ' synced' : 'No new recent contacts found');
     _stkTab = 'active';
     _reloadStakeholders(dealId);
   } catch(e) { if (st){st.textContent='↻ Sync recent contacts from Gmail & calendar';st.disabled=false;} showToast('Error: ' + e.message); }
@@ -6400,7 +6400,7 @@ async function scoutStakeholders(dealId) {
     if (btn) btn.disabled = false;
     if (!d.ok) { if (st) st.innerHTML = '<span style="color:var(--coral)">' + esc(d.error || 'Scout unavailable') + '</span>'; return; }
     if (!d.scouted) { if (st) st.innerHTML = '<span style="color:var(--text3)">' + esc(d.error || 'No new prospects found for this profile.') + '</span>'; return; }
-    showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> ' + d.scouted + ' prospect' + (d.scouted!==1?'s':'') + ' scouted via ' + (d.provider||'enrichment'));
+    showToast('' + d.scouted + ' prospect' + (d.scouted!==1?'s':'') + ' scouted via ' + (d.provider||'enrichment'));
     _stkTab = 'prospective';
     _reloadStakeholders(dealId);
   } catch(e) { if (btn) btn.disabled = false; if (st) st.innerHTML = '<span style="color:var(--coral)">Error: ' + esc(e.message) + '</span>'; }
@@ -6461,7 +6461,7 @@ async function saveScoutProfile() {
     if (perAccount && _scoutAcctId) {
       await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
         body:JSON.stringify({ action:'save_org_setting', key:'scout_profile_'+_scoutAcctId, value: JSON.stringify(profile) }) });
-      showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Custom targets saved for this account');
+      showToast('Custom targets saved for this account');
     } else {
       // Saving the org default. If a per-account override existed, clear it so
       // this account follows the default again.
@@ -6470,7 +6470,7 @@ async function saveScoutProfile() {
       if (_scoutAcctId) jobs.push(fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
         body:JSON.stringify({ action:'save_org_setting', key:'scout_profile_'+_scoutAcctId, value: JSON.stringify({}) }) }));
       await Promise.all(jobs);
-      showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Org default targets saved');
+      showToast('Org default targets saved');
     }
     document.getElementById('scout-profile-modal')?.remove();
   } catch(e) { showToast('Error: ' + e.message); }
@@ -6774,14 +6774,14 @@ async function loadMeetingPrep() {
       // Last email
       if (m.last_email) {
         html += '<div style="font-size:11px;color:var(--text3);border-top:1px solid var(--border);margin-top:6px;padding-top:5px">';
-        html += '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> Last: <em>' + esc(m.last_email.subject||'') + '</em>';
+        html += 'Last: <em>' + esc(m.last_email.subject||'') + '</em>';
         if (m.last_email.snippet) html += ' — ' + esc(m.last_email.snippet.slice(0,80)) + '…';
         html += '</div>';
       }
 
       // Last transcript action items
       if (m.last_transcript && m.last_transcript.action_items) {
-        html += '<div style="font-size:11px;color:var(--text3);margin-top:4px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.5h6v3H9zM7 5H5.5v15h13V5H17"/></svg> Open items: ' + esc(m.last_transcript.action_items.slice(0,100)) + '</div>';
+        html += '<div style="font-size:11px;color:var(--text3);margin-top:4px">Open items: ' + esc(m.last_transcript.action_items.slice(0,100)) + '</div>';
       }
 
       html += '</div>';
@@ -7119,7 +7119,7 @@ async function _runEnrich(accountId, accountName) {
     var d = await r.json();
     var panel = document.getElementById('enrichConfirmPanel');
     if (d.ok && !d.cached) {
-      showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Found ' + d.count + ' contacts' + (d.enriched ? ' · ' + d.enriched + ' enriched' : ''));
+      showToast('Found ' + d.count + ' contacts' + (d.enriched ? ' · ' + d.enriched + ' enriched' : ''));
       if (panel) panel.remove();
       var sRes = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
         body:JSON.stringify({action:'get_stakeholders', account_id:accountId}) });
@@ -7132,7 +7132,7 @@ async function _runEnrich(accountId, accountName) {
         body:JSON.stringify({action:'enrich_account', account_id:accountId, account_name:accountName, domain, refresh:true}) });
       var d2 = await r2.json();
       if (panel) panel.remove();
-      showToast(d2.ok ? '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Refreshed ' + d2.count + ' contacts' : 'Refresh failed');
+      showToast(d2.ok ? 'Refreshed ' + d2.count + ' contacts' : 'Refresh failed');
       var sRes2 = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
         body:JSON.stringify({action:'get_stakeholders', account_id:accountId}) });
       if (_currentDealDetail) _currentDealDetail.stakeholders = (await sRes2.json()).stakeholders||[];
@@ -8373,8 +8373,8 @@ async function submitSampaignSchedule(campaignId) {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
       body: JSON.stringify({ action:'save_sampaign_drafts', campaign_id: campaignId, drafts: drafts, generated_by: 'template', personalised: false, launch: launch }) });
     var d = await r.json();
-    if (!d.ok) { showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> ' + (d.error || 'Could not prepare')); return; }
-    showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Prepared ' + d.saved + ', now pick the schedule');
+    if (!d.ok) { showToast('' + (d.error || 'Could not prepare')); return; }
+    showToast('Prepared ' + d.saved + ', now pick the schedule');
     window._sampLaunch = launch;
     loadSampaignSendQueue(campaignId);
     // Straight into the same dry-run preview, seeded with the time chosen
@@ -8461,8 +8461,8 @@ async function saveSampaignDraftEdit(campaignId, sendId) {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
       body: JSON.stringify({ action:'update_sampaign_scheduled_send', send_id: sendId, subject: subject, body: body }) });
     var d = await r.json();
-    if (!d.ok) { showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> ' + (d.error||'Could not save')); return; }
-    showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> ' + (d.note || 'Updated'));
+    if (!d.ok) { showToast('' + (d.error||'Could not save')); return; }
+    showToast('' + (d.note || 'Updated'));
     loadSampaignSendQueue(campaignId);
   } catch(e) { showToast('Error: '+e.message); }
 }
@@ -8474,7 +8474,7 @@ async function planSampaignDrafts(campaignId, startAt, launch) {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
       body: JSON.stringify({ action:'schedule_sampaign_drafts', campaign_id: campaignId, start_at: startAt || null, launch: launch || window._sampLaunch || 1, dry_run: true }) });
     var d = await r.json();
-    if (!d.ok) { showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> ' + (d.error||'Could not plan')); return; }
+    if (!d.ok) { showToast('' + (d.error||'Could not plan')); return; }
     var days = Object.keys(d.per_day||{}).sort();
     var lines = days.map(function(k){ return k + ': ' + d.per_day[k]; }).join('\n');
     var first = d.first_send ? new Date(d.first_send).toLocaleString('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '—';
@@ -8491,8 +8491,8 @@ async function planSampaignDrafts(campaignId, startAt, launch) {
     var r2 = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
       body: JSON.stringify({ action:'schedule_sampaign_drafts', campaign_id: campaignId, start_at: startAt || null, launch: launch || window._sampLaunch || 1 }) });
     var d2 = await r2.json();
-    if (!d2.ok) { showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> ' + (d2.error||'Could not schedule')); return; }
-    showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Scheduled ' + d2.scheduled + ' over ' + d2.days + ' day' + (d2.days!==1?'s':''));
+    if (!d2.ok) { showToast('' + (d2.error||'Could not schedule')); return; }
+    showToast('Scheduled ' + d2.scheduled + ' over ' + d2.days + ' day' + (d2.days!==1?'s':''));
     loadSampaignSendQueue(campaignId);
   } catch(e) { showToast('Error: '+e.message); }
 }
@@ -8654,7 +8654,7 @@ async function loadSampaignSendQueue(campaignId) {
                   '</span>' +
                   '<span style="font-size:11px;color:var(--text3);white-space:nowrap;flex-shrink:0">'+(isNaN(when.getTime())?'':when.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}))+'</span>' +
                   '<span style="font-size:11px;font-weight:700;color:'+mm.color+';background:rgba(128,128,128,0.10);border-radius:2px;padding:2px 7px;white-space:nowrap;flex-shrink:0">'+mm.label+'</span>' +
-                  (editable ? '<span onclick="event.stopPropagation();cancelSampaignSends(\''+esc(campaignId)+'\',\''+esc(x.id)+'\')" style="cursor:pointer;color:var(--text3);font-size:13px;flex-shrink:0;padding:0 2px" title="Cancel this one"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span>' : '') +
+                  (editable ? '<span onclick="event.stopPropagation();cancelSampaignSends(\''+esc(campaignId)+'\',\''+esc(x.id)+'\')" style="cursor:pointer;color:var(--text3);font-size:13px;flex-shrink:0;padding:0 2px" title="Cancel this one"></span>' : '') +
                   '<span id="chev_'+esc(x.id)+'" style="font-size:11px;color:var(--text3);flex-shrink:0;transition:transform .15s">▾</span>' +
                 '</div>' +
                 '<div id="draft_'+esc(x.id)+'" style="display:none;padding:2px 10px 12px 46px">' +
@@ -8692,14 +8692,14 @@ async function cancelSampaignSends(campaignId, sendId, confirmMsg) {
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body: JSON.stringify(payload) });
     var d = await r.json();
-    if (!d.ok) { showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> ' + (d.error||'Could not cancel')); return; }
+    if (!d.ok) { showToast('' + (d.error||'Could not cancel')); return; }
     // Drafts are deleted, queued sends are cancelled — report whichever
     // actually happened rather than always saying "cancelled 0", which is
     // what the old version did for drafts.
     var parts = [];
     if (d.discarded) parts.push(d.discarded + ' draft' + (d.discarded!==1?'s':'') + ' discarded');
     if (d.cancelled) parts.push(d.cancelled + ' queued cancelled');
-    showToast(parts.length ? '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> ' + parts.join(', ') : 'Nothing to remove');
+    showToast(parts.length ? '' + parts.join(', ') : 'Nothing to remove');
     loadSampaignSendQueue(campaignId);
   } catch(e) { showToast('Error: ' + e.message); }
 }
@@ -8862,7 +8862,7 @@ async function runDetectiveSam() {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
       body: JSON.stringify(Object.assign({ action:'detective_sam_lookup' }, q)) });
     var d = await r.json();
-    if (!d.ok) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> '+esc(d.error||'Search failed')+'</div>'; return; }
+    if (!d.ok) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">'+esc(d.error||'Search failed')+'</div>'; return; }
     window._dsResult = d;
     out.innerHTML = _renderDetectiveSamResult(d);
   } catch(e) {
@@ -8885,7 +8885,7 @@ function _renderDetectiveSamResult(d) {
         '<div style="min-width:0">' +
           '<div style="font-size:16px;font-weight:700;color:var(--text)">'+esc(p.name||'Unknown')+'</div>' +
           (p.title ? '<div style="font-size:12px;color:var(--text2);margin-top:2px">'+esc(p.title)+(p.current_org?' · '+esc(p.current_org):'')+'</div>' : (p.current_org?'<div style="font-size:12px;color:var(--text2);margin-top:2px">'+esc(p.current_org)+'</div>':'')) +
-          (p.location ? '<div style="font-size:11px;color:var(--text3);margin-top:2px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 21V3.5M5.5 4.5h12l-2.5 4 2.5 4h-12"/></svg> '+esc(p.location)+'</div>' : '') +
+          (p.location ? '<div style="font-size:11px;color:var(--text3);margin-top:2px">'+esc(p.location)+'</div>' : '') +
         '</div>' +
         (p.linkedin_url ? '<a href="'+esc(p.linkedin_url)+'" target="_blank" style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#fff;background:#0A66C2;border-radius:2px;padding:6px 10px;text-decoration:none;flex-shrink:0">in LinkedIn</a>' : '') +
       '</div>';
@@ -8895,7 +8895,7 @@ function _renderDetectiveSamResult(d) {
         d.emails.map(function(e){
           return '<div style="display:flex;align-items:center;gap:7px;padding:4px 0;flex-wrap:wrap">' +
             '<span style="font-size:12px;color:var(--text);font-weight:600">'+esc(e.value)+'</span>' + _dsSrcChip(e.source, e.note) +
-            '<span onclick="navigator.clipboard?.writeText(\''+esc(e.value)+'\');showToast(\'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Copied\')" style="cursor:pointer;font-size:11px;color:var(--text3);margin-left:auto">copy</span>' +
+            '<span onclick="navigator.clipboard?.writeText(\''+esc(e.value)+'\');showToast(\'Copied\')" style="cursor:pointer;font-size:11px;color:var(--text3);margin-left:auto">copy</span>' +
           '</div>';
         }).join('') + '</div>';
     }
@@ -8904,7 +8904,7 @@ function _renderDetectiveSamResult(d) {
         d.phones.map(function(e){
           return '<div style="display:flex;align-items:center;gap:7px;padding:4px 0;flex-wrap:wrap">' +
             '<span style="font-size:12px;color:var(--text);font-weight:600">'+esc(e.value)+'</span>' + _dsSrcChip(e.source, e.note) +
-            '<span onclick="navigator.clipboard?.writeText(\''+esc(e.value)+'\');showToast(\'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Copied\')" style="cursor:pointer;font-size:11px;color:var(--text3);margin-left:auto">copy</span>' +
+            '<span onclick="navigator.clipboard?.writeText(\''+esc(e.value)+'\');showToast(\'Copied\')" style="cursor:pointer;font-size:11px;color:var(--text3);margin-left:auto">copy</span>' +
           '</div>';
         }).join('') + '</div>';
     }
@@ -8995,7 +8995,7 @@ async function dsAddToSampaign() {
       body: JSON.stringify({ action:'upload_sampaign_contacts', campaign_id: cid, contacts: [contact] }) });
     var j = await r.json();
     if (!j.ok) { showToast('Error: '+(j.error||'Could not add')); return; }
-    showToast(j.added ? '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Added to SAMpaign' : 'Already in that SAMpaign');
+    showToast(j.added ? 'Added to SAMpaign' : 'Already in that SAMpaign');
   } catch(e) { showToast('Error: '+e.message); }
 }
 
@@ -9032,7 +9032,7 @@ async function dsSaveStakeholder(accountId, accountName) {
         title: p.title, linkedin_url: p.linkedin_url, seniority: p.seniority, department: p.department }) });
     var j = await r.json();
     if (!j.ok) { showToast('Error: '+(j.error||'Could not save')); return; }
-    showToast(j.added ? '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Added to '+accountName+' as prospective' : (j.note||'Already a stakeholder'));
+    showToast(j.added ? 'Added to '+accountName+' as prospective' : (j.note||'Already a stakeholder'));
   } catch(e) { showToast('Error: '+e.message); }
 }
 
@@ -9180,7 +9180,7 @@ function _fupRender(scope) {
         '<span onclick="_fupToggleCal(\''+esc(scope)+'\','+i+')" style="flex:1;font-size:12px;font-weight:600;color:'+(wknd?'var(--coral)':'var(--text)')+';cursor:pointer">' +
           '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4"/></svg> '+_fupPretty(k)+(wknd?' <span style="font-size:11px;font-weight:600">· weekend</span>':'') +
         '</span>' +
-        '<span onclick="_fupRemove(\''+esc(scope)+'\','+i+')" style="cursor:pointer;color:var(--text3);font-size:13px;padding:0 2px" title="Remove this follow-up"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span>' +
+        '<span onclick="_fupRemove(\''+esc(scope)+'\','+i+')" style="cursor:pointer;color:var(--text3);font-size:13px;padding:0 2px" title="Remove this follow-up"></span>' +
       '</div>' +
       (open ? _fupCalendarHtml(scope, i) : '') +
     '</div>';
@@ -9349,7 +9349,7 @@ async function createSampaign() {
       body: JSON.stringify({ action:'create_sampaign', account_name: accountName, domain: domain, region: region, campaign_goal: campaignGoal, focus: (document.getElementById('sampaignFocus')?.value||'').trim() || null, followup_dates: followup_dates, alerts_enabled: alerts_enabled }) });
     var d = await r.json();
     if (!d.ok) { showToast('Error: '+(d.error||'Could not create SAMpaign')); return; }
-    showToast(d.account_linked ? '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> SAMpaign linked to existing account' : '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> SAMpaign + account created');
+    showToast(d.account_linked ? 'SAMpaign linked to existing account' : 'SAMpaign + account created');
     // Put the follow-ups on the owner's own task list for those days.
     if (d.campaign?.id) await _syncSampaignFupTasks(d.campaign.id, accountName, [], followup_dates);
     document.getElementById('sampaignName').value = '';
@@ -9370,7 +9370,7 @@ async function createSampaign() {
         var ar = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
           body: JSON.stringify({ action:'upload_sampaign_contacts', campaign_id: d.campaign.id, contacts: typedContacts }) });
         var ad = await ar.json();
-        if (ad.ok) showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Added ' + (ad.added||0) + ' contact' + ((ad.added||0)!==1?'s':'') + (ad.need_email ? ' · ' + ad.need_email + ' need an email lookup' : ''));
+        if (ad.ok) showToast('Added ' + (ad.added||0) + ' contact' + ((ad.added||0)!==1?'s':'') + (ad.need_email ? ' · ' + ad.need_email + ' need an email lookup' : ''));
       } catch(e) { showToast('Campaign created, but adding people failed: '+e.message); }
       window._sampAddRows['new'] = null;
       var addBox = document.getElementById('sampaignAddRows_new'); if (addBox) addBox.innerHTML = '';
@@ -9450,8 +9450,8 @@ async function loadSampaignCampaigns() {
                 : '<span style="font-size:11px;color:var(--text3)">not sent yet</span>') +
             '</div>' +
             '<div style="display:flex;align-items:center;gap:3px;flex-shrink:0">' +
-              (isOwner ? '<button onclick="event.stopPropagation();toggleEditSampaignForm(\''+esc(c.id)+'\')" title="Edit SAMpaign" style="background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;padding:3px 5px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 00-3-3L5 17v3z"/></svg></button>' : '') +
-              (isOwner ? '<button onclick="event.stopPropagation();deleteSampaignCampaign(\''+esc(c.id)+'\',\''+esc(c.name)+'\')" title="Delete SAMpaign" style="background:none;border:none;color:var(--coral);font-size:13px;cursor:pointer;padding:3px 5px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 6.5h15M9 6.5V4h6v2.5M6.5 6.5V20h11V6.5M10 10v6M14 10v6"/></svg></button>' : '') +
+              (isOwner ? '<button onclick="event.stopPropagation();toggleEditSampaignForm(\''+esc(c.id)+'\')" title="Edit SAMpaign" style="background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;padding:3px 5px"></button>' : '') +
+              (isOwner ? '<button onclick="event.stopPropagation();deleteSampaignCampaign(\''+esc(c.id)+'\',\''+esc(c.name)+'\')" title="Delete SAMpaign" style="background:none;border:none;color:var(--coral);font-size:13px;cursor:pointer;padding:3px 5px"></button>' : '') +
               '<span title="Open" style="font-size:12px;color:var(--gold)">⤢</span>' +
             '</div>' +
           '</div>' +
@@ -9517,7 +9517,7 @@ async function saveSampaignEdit(campaignId) {
     var d = await r.json();
     if (!d.ok) { showToast('Error: '+(d.error||'Could not update SAMpaign')); return; }
     var moved = await _syncSampaignFupTasks(campaignId, name || cachedC.name, oldDates, followup_dates);
-    showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> SAMpaign updated' + (moved ? ' · ' + moved + ' task' + (moved!==1?'s':'') + ' rescheduled' : ''));
+    showToast('SAMpaign updated' + (moved ? ' · ' + moved + ' task' + (moved!==1?'s':'') + ' rescheduled' : ''));
     loadSampaignCampaigns();
   } catch(e) { showToast('Error: '+e.message); }
 }
@@ -9532,7 +9532,7 @@ async function deleteSampaignCampaign(campaignId, name) {
       body: JSON.stringify({ action:'archive_sampaign', campaign_id: campaignId }) });
     var d = await r.json();
     if (!d.ok) { showToast('Error: '+(d.error||'Could not delete SAMpaign')); return; }
-    showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> SAMpaign deleted');
+    showToast('SAMpaign deleted');
     loadSampaignCampaigns();
   } catch(e) { showToast('Error: '+e.message); }
 }
@@ -9834,7 +9834,7 @@ async function _loadSampaignDetailPerf(campaignId, c) {
       if (d.ok && d.org_summary && d.org_summary.total_prospects > 0) {
         perfBox.innerHTML = _sampGoalBlock(campaignId) + _sampMetricStrip(d, campaignId) + _sampHotSignals(d);
       } else if (!d.ok) {
-        perfBox.innerHTML = '<div style="font-size:11px;color:var(--coral)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> '+esc(d.error||'Could not load performance')+'</div>';
+        perfBox.innerHTML = '<div style="font-size:11px;color:var(--coral)">'+esc(d.error||'Could not load performance')+'</div>';
       } else {
         // Goal shows here too. A brand-new campaign is exactly when someone
         // is about to write copy against it, so hiding it on the empty state
@@ -9982,16 +9982,16 @@ async function syncSampaignCampaign(campaignId) {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body: JSON.stringify({ action:'sync_sampaigns', campaign_id: campaignId }) });
     var d = await r.json();
     if (!d.ok) {
-      showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> ' + (d.error || 'Sync failed'));
+      showToast('' + (d.error || 'Sync failed'));
     } else {
       var summary = _sampaignSyncSummary(d);
-      showToast(summary ? '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Synced: ' + summary : '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> ' + (d.note || 'Inbox scanned, nothing new.'));
+      showToast(summary ? 'Synced: ' + summary : '' + (d.note || 'Inbox scanned, nothing new.'));
       var c = (window._sampaignCampaignsCache || {})[campaignId] || {};
       _loadSampaignDetailPerf(campaignId, c);
       _loadSampaignContactsInto(campaignId);
     }
   } catch(e) {
-    showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> Sync error: ' + e.message);
+    showToast('Sync error: ' + e.message);
   } finally {
     if (btn) { btn.disabled = false; btn.style.opacity = '1'; btn.textContent = 'Sync inbox'; }
   }
@@ -10015,7 +10015,7 @@ async function syncSampaignsQuiet() {
     if (!d.ok) return;
     var summary = _sampaignSyncSummary(d);
     if (!summary) return;
-    showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> SAMpaign sync: ' + summary);
+    showToast('SAMpaign sync: ' + summary);
     // Refresh whatever's on screen, if anything.
     var overlay = document.getElementById('sampaign-detail-overlay');
     if (overlay) {
@@ -10095,7 +10095,7 @@ function _renderSampaignContacts(campaignId) {
     html = '<div style="display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border2);margin-bottom:8px;padding-bottom:6px">' +
       '<span style="font-size:11px;font-weight:600;color:var(--text)">'+esc(_sampaignStatusLabel(statusFilter))+'</span>' +
       '<span style="font-size:11px;color:var(--text3)">'+contacts.length+' contact'+(contacts.length!==1?'s':'')+'</span>' +
-      '<span onclick="setSampaignStatusFilter(\''+esc(campaignId)+'\',null)" style="margin-left:auto;font-size:11px;color:var(--gold);cursor:pointer;text-decoration:underline dotted"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg> clear filter</span>' +
+      '<span onclick="setSampaignStatusFilter(\''+esc(campaignId)+'\',null)" style="margin-left:auto;font-size:11px;color:var(--gold);cursor:pointer;text-decoration:underline dotted">clear filter</span>' +
     '</div>';
   } else {
     html = '<div style="display:flex;gap:2px;border-bottom:1px solid var(--border2);margin-bottom:8px">' +
@@ -10105,14 +10105,14 @@ function _renderSampaignContacts(campaignId) {
 
   html += '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">' +
     '<label style="font-size:11px;color:var(--gold);padding:5px 10px;border-radius:2px;background:rgba(160,117,42,0.1);border:1px solid rgba(160,117,42,0.25);cursor:pointer">⇪ Upload CSV<input type="file" accept=".csv,text/csv" style="display:none" onchange="handleSampaignCsv(\''+esc(campaignId)+'\',this.files[0]);this.value=\'\'"/></label>' +
-    '<button onclick="scoutSampaignContacts(\''+esc(campaignId)+'\')" style="font-size:11px;color:var(--gold);padding:5px 10px;border-radius:2px;background:rgba(160,117,42,0.1);border:1px solid rgba(160,117,42,0.25);cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15zM16 16l5 5"/></svg> Scout more contacts</button>' +
-    '<span onclick="openSampaignScoutProfile(\''+esc(campaignId)+'\')" style="font-size:11px;color:var(--text3);cursor:pointer;text-decoration:underline dotted"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 16.5a4.5 4.5 0 100-9 4.5 4.5 0 000 9zM12 13a1 1 0 100-2 1 1 0 000 2z"/></svg> Who to hunt</span>' +
+    '<button onclick="scoutSampaignContacts(\''+esc(campaignId)+'\')" style="font-size:11px;color:var(--gold);padding:5px 10px;border-radius:2px;background:rgba(160,117,42,0.1);border:1px solid rgba(160,117,42,0.25);cursor:pointer">Scout more contacts</button>' +
+    '<span onclick="openSampaignScoutProfile(\''+esc(campaignId)+'\')" style="font-size:11px;color:var(--text3);cursor:pointer;text-decoration:underline dotted">Who to hunt</span>' +
     '<button onclick="addSampaignContactRows(\''+esc(campaignId)+'\')" style="font-size:11px;color:var(--green);padding:5px 10px;border-radius:2px;background:rgba(74,140,92,0.1);border:1px solid rgba(74,140,92,0.3);cursor:pointer">＋ Add people</button>' +
     // Always rendered, never conditional on unenriched>0. It used to vanish
     // entirely once every contact had been enriched, which reads as "the
     // button is broken" rather than "there is nothing to do" — and left no
     // way to re-run enrichment after adding people or rotating a provider.
-    '<button onclick="enrichSampaignContacts(\''+esc(campaignId)+'\')" style="font-size:11px;color:var(--blue);padding:5px 10px;border-radius:2px;background:rgba(74,158,255,0.1);border:1px solid rgba(74,158,255,0.25);cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg> Enrich'+(unenriched?' '+unenriched+' contact'+(unenriched!==1?'s':''):'')+'</button>' +
+    '<button onclick="enrichSampaignContacts(\''+esc(campaignId)+'\')" style="font-size:11px;color:var(--blue);padding:5px 10px;border-radius:2px;background:rgba(74,158,255,0.1);border:1px solid rgba(74,158,255,0.25);cursor:pointer">Enrich'+(unenriched?' '+unenriched+' contact'+(unenriched!==1?'s':''):'')+'</button>' +
     '<span style="font-size:11px;color:var(--text3)">Columns: name, email, phone, company, title (header names flexible)</span>' +
     '</div>' +
     '<div id="sampaignAddRows_'+esc(campaignId)+'"></div>';
@@ -10131,7 +10131,7 @@ function _renderSampaignContacts(campaignId) {
         collisionLine = '<div style="font-size:11px;margin-top:2px;color:'+(c.collision.is_same_user?'var(--green)':'var(--amber)')+'">' +
           (c.collision.is_same_user
             ? '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Your own tracked account'
-            : '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> Active deal: <strong>'+esc(c.collision.account_name)+'</strong>'+(c.collision.deal_value?' '+esc(c.collision.deal_value):'')+' · AE: '+esc(c.collision.ae)+' — coordinate before outreach') +
+            : 'Active deal: <strong>'+esc(c.collision.account_name)+'</strong>'+(c.collision.deal_value?' '+esc(c.collision.deal_value):'')+' · AE: '+esc(c.collision.ae)+' — coordinate before outreach') +
         '</div>';
       }
       // Promote to stakeholder — only once the contact has actually replied
@@ -10169,7 +10169,7 @@ function _renderSampaignContacts(campaignId) {
       // dependency), so it's there for contacts who haven't been emailed yet.
       // This is the field the earlier click-through insight modal couldn't
       // give prospects, since they have no message history to read.
-      var noteLine = c.outreach_note ? '<div style="font-size:11px;color:var(--gold);margin-top:3px;display:flex;gap:5px;align-items:flex-start;background:rgba(160,117,42,0.06);border-radius:2px;padding:4px 7px"><span style="flex-shrink:0"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg></span><span>'+esc(c.outreach_note)+'</span></div>' : '';
+      var noteLine = c.outreach_note ? '<div style="font-size:11px;color:var(--gold);margin-top:3px;display:flex;gap:5px;align-items:flex-start;background:rgba(160,117,42,0.06);border-radius:2px;padding:4px 7px"><span style="flex-shrink:0"></span><span>'+esc(c.outreach_note)+'</span></div>' : '';
       var intelBtn = _samoraIntelBtn('openSampaignContactInsight(\''+esc(c.id)+'\',\''+esc(c.name||c.email||'')+'\')', true);
       // Editor is collapsed by default — most rows do not need it open, and
       // 54 always-visible textareas would bury the roster.
@@ -10197,7 +10197,7 @@ function _renderSampaignContacts(campaignId) {
         '</div>' + titleLine + '</div>' +
         '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">' + intelBtn +
         '<select onchange="setSampaignContactStatus(\''+esc(c.id)+'\',this.value,\''+esc(campaignId)+'\')" style="font-size:11px;font-weight:600;color:'+meta.color+';background:var(--bg);border:1px solid var(--border);border-radius:2px;padding:3px 6px">'+opts+'</select>' +
-        '<span onclick="removeSampaignContact(\''+esc(c.id)+'\',\''+esc(campaignId)+'\',\''+esc(c.name||c.email||'')+'\')" style="cursor:pointer;color:var(--text3);font-size:13px;padding:0 2px" title="Remove from SAMpaign"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span>' +
+        '<span onclick="removeSampaignContact(\''+esc(c.id)+'\',\''+esc(campaignId)+'\',\''+esc(c.name||c.email||'')+'\')" style="cursor:pointer;color:var(--text3);font-size:13px;padding:0 2px" title="Remove from SAMpaign"></span>' +
         '</div></div>' + noteEditor + noteLine + collisionLine + promoteBtn +
       '</div>';
     }).join('');
@@ -10246,7 +10246,7 @@ async function _uploadSampaignCsvFile(campaignId, file) {
       body: JSON.stringify({ action:'upload_sampaign_contacts', campaign_id: campaignId, contacts: contacts }) });
     var d = await res.json();
     if (!d.ok) { showToast('Error: '+(d.error||'Upload failed')); return; }
-    showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Added '+d.added+(d.skipped?' · skipped '+d.skipped+' duplicate/invalid':''));
+    showToast('Added '+d.added+(d.skipped?' · skipped '+d.skipped+' duplicate/invalid':''));
     // Power up the bare CSV row with real title/seniority/LinkedIn since the
     // email is already in hand — same enrichment keys as stakeholder scout,
     // just a by-email lookup instead of a by-domain search. Best-effort: a
@@ -10257,7 +10257,7 @@ async function _uploadSampaignCsvFile(campaignId, file) {
         var er = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
           body: JSON.stringify({ action:'enrich_sampaign_contacts', campaign_id: campaignId }) });
         var ed = await er.json();
-        if (ed.ok && ed.checked > 0) showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg> Checked '+ed.checked+', matched '+ed.enriched+' via '+(ed.provider||'—')+(ed.linkedin_found!==undefined?', '+ed.linkedin_found+' with LinkedIn':''));
+        if (ed.ok && ed.checked > 0) showToast('Checked '+ed.checked+', matched '+ed.enriched+' via '+(ed.provider||'—')+(ed.linkedin_found!==undefined?', '+ed.linkedin_found+' with LinkedIn':''));
       } catch(e) { /* enrichment is best-effort, upload already succeeded */ }
     }
   } catch(e) { showToast('CSV error: '+e.message); }
@@ -10267,13 +10267,13 @@ async function _uploadSampaignCsvFile(campaignId, file) {
 // Stakeholders tab, just pointed at this campaign's contact list instead.
 async function scoutSampaignContacts(campaignId) {
   try {
-    showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15zM16 16l5 5"/></svg> Scouting more contacts…');
+    showToast('Scouting more contacts…');
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
       body: JSON.stringify({ action:'scout_sampaign_contacts', campaign_id: campaignId }) });
     var d = await r.json();
     if (!d.ok) { showToast('Error: '+(d.error||'Scout unavailable')); return; }
     if (!d.scouted) { showToast(d.error || 'No new prospects found for this profile.'); return; }
-    showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> '+d.scouted+' prospect'+(d.scouted!==1?'s':'')+' scouted via '+(d.provider||'enrichment'));
+    showToast(''+d.scouted+' prospect'+(d.scouted!==1?'s':'')+' scouted via '+(d.provider||'enrichment'));
     var r2 = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body: JSON.stringify({ action:'list_sampaign_contacts', campaign_id: campaignId }) });
     var d2 = await r2.json();
     if (d2.ok) { window._sampaignContactsCache[campaignId] = d2.contacts || []; _sampaignContactTab = 'prospective'; _renderSampaignContacts(campaignId); }
@@ -10350,7 +10350,7 @@ function _renderSampAddRows(campaignId, focusLast) {
       '<div style="display:flex;gap:4px;align-items:center">' +
         f(i,'name','Name',false,r.name) + f(i,'email','Email',false,r.email) +
         f(i,'company','Company',false,r.company) + f(i,'title','Title',false,r.title) +
-        '<span onclick="_sampRemoveAddRow(\''+esc(campaignId)+'\','+i+')" style="cursor:pointer;color:var(--text3);font-size:13px;padding:0 3px;flex-shrink:0" title="Remove this row"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span>' +
+        '<span onclick="_sampRemoveAddRow(\''+esc(campaignId)+'\','+i+')" style="cursor:pointer;color:var(--text3);font-size:13px;padding:0 3px;flex-shrink:0" title="Remove this row"></span>' +
       '</div>' +
       (noEmail ? '<div style="font-size:11px;color:var(--gold);margin-top:2px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15zM16 16l5 5"/></svg> No email — Enrich will try to find it from the account domain</div>' : '') +
     '</div>';
@@ -10387,7 +10387,7 @@ async function submitSampaignContactRows(campaignId) {
       body: JSON.stringify({ action:'upload_sampaign_contacts', campaign_id: campaignId, contacts: contacts }) });
     var d = await res.json();
     if (!d.ok) { showToast('Error: '+(d.error||'Could not add contacts')); return; }
-    showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Added ' + (d.added||0) + (d.need_email ? ' · ' + d.need_email + ' need an email lookup' : '') + (d.skipped ? ' · ' + d.skipped + ' skipped (already in this SAMpaign)' : ''));
+    showToast('Added ' + (d.added||0) + (d.need_email ? ' · ' + d.need_email + ' need an email lookup' : '') + (d.skipped ? ' · ' + d.skipped + ' skipped (already in this SAMpaign)' : ''));
     window._sampAddRows[campaignId] = null;
     var box = document.getElementById('sampaignAddRows_'+campaignId); if (box) box.innerHTML = '';
     await _loadSampaignContactsInto(campaignId);
@@ -10434,8 +10434,8 @@ async function saveLinkedInNote(contactId, campaignId) {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
       body: JSON.stringify({ action:'save_sampaign_linkedin_notes', campaign_id: campaignId, generated_by: 'manual', notes: [{ contact_id: contactId, note: note }] }) });
     var d = await r.json();
-    if (!d.ok || !d.saved) { showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> ' + (d.note || d.error || 'Could not save')); return; }
-    showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Note saved');
+    if (!d.ok || !d.saved) { showToast('' + (d.note || d.error || 'Could not save')); return; }
+    showToast('Note saved');
     _loadSampaignContactsInto(campaignId);
   } catch(e) { showToast('Error: ' + e.message); }
 }
@@ -10451,7 +10451,7 @@ function _copyLinkedInNote(contactId) {
   if (!found || !found.linkedin_note) return;
   try {
     navigator.clipboard.writeText(found.linkedin_note);
-    showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Note copied — paste it into the invite');
+    showToast('Note copied — paste it into the invite');
   } catch(e) {
     // Clipboard can be blocked by permissions or a non-secure context, and
     // failing silently would leave the rep pasting whatever was there before.
@@ -10473,7 +10473,7 @@ async function removeSampaignContact(contactId, campaignId, label) {
       body: JSON.stringify({ action:'remove_sampaign_contacts', campaign_id: campaignId, contact_ids: [contactId] }) });
     var d = await r.json();
     if (!d.ok) { showToast('Error: '+(d.error||'Could not remove')); return; }
-    showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Removed from SAMpaign');
+    showToast('Removed from SAMpaign');
     await _loadSampaignContactsInto(campaignId);
     var c = (window._sampaignCampaignsCache || {})[campaignId] || {};
     _loadSampaignDetailPerf(campaignId, c);
@@ -10539,14 +10539,14 @@ async function saveSampaignScoutProfile() {
     if (perCampaign && _sampScoutCampaignId) {
       await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
         body:JSON.stringify({ action:'save_org_setting', key:'scout_profile_sampaign_'+_sampScoutCampaignId, value: JSON.stringify(profile) }) });
-      showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Custom targets saved for this SAMpaign');
+      showToast('Custom targets saved for this SAMpaign');
     } else {
       var jobs = [ fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
         body:JSON.stringify({ action:'save_org_setting', key:'stakeholder_scout_profile', value: JSON.stringify(profile) }) }) ];
       if (_sampScoutCampaignId) jobs.push(fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
         body:JSON.stringify({ action:'save_org_setting', key:'scout_profile_sampaign_'+_sampScoutCampaignId, value: JSON.stringify({}) }) }));
       await Promise.all(jobs);
-      showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Org default targets saved');
+      showToast('Org default targets saved');
     }
     document.getElementById('samp-scout-profile-modal')?.remove();
   } catch(e) { showToast('Error: ' + e.message); }
@@ -10554,7 +10554,7 @@ async function saveSampaignScoutProfile() {
 
 async function enrichSampaignContacts(campaignId) {
   try {
-    showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg> Enriching contacts…');
+    showToast('Enriching contacts…');
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
       body: JSON.stringify({ action:'enrich_sampaign_contacts', campaign_id: campaignId }) });
     var d = await r.json();
@@ -10563,7 +10563,7 @@ async function enrichSampaignContacts(campaignId) {
     // whether the provider is genuinely working (checked>0) vs just missing
     // LinkedIn for these specific people (linkedin_found low/0, has a note
     // explaining it's a coverage limit, not a bug).
-    var msg = '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg> Checked '+d.checked+', matched '+d.enriched+' via '+(d.provider||'—')+(d.linkedin_found!==undefined?', '+d.linkedin_found+' with LinkedIn':'');
+    var msg = 'Checked '+d.checked+', matched '+d.enriched+' via '+(d.provider||'—')+(d.linkedin_found!==undefined?', '+d.linkedin_found+' with LinkedIn':'');
     if (d.note) msg += ' — '+d.note;
     showToast(msg);
     var r2 = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body: JSON.stringify({ action:'list_sampaign_contacts', campaign_id: campaignId }) });
@@ -10591,7 +10591,7 @@ async function promoteSampaignContact(contactId, campaignId) {
       body: JSON.stringify({ action:'promote_sampaign_contact_to_stakeholder', contact_id: contactId }) });
     var d = await r.json();
     if (!d.ok) { showToast('Error: '+(d.error||'Could not promote')); return; }
-    showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Added to stakeholders on '+(d.account_name||'the account'));
+    showToast('Added to stakeholders on '+(d.account_name||'the account'));
   } catch(e) { showToast('Error: '+e.message); }
 }
 
@@ -10628,7 +10628,7 @@ async function createSdrLead() {
     if (!r.ok) throw new Error(await r.text());
     var rows = await r.json();
     var created = Array.isArray(rows) ? rows[0] : rows;
-    showToast('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Lead created');
+    showToast('Lead created');
     await loadSdrPlayground();
     if (created && created.id) { window._sdrDeals[created.id] = { id:created.id, account:name, deal_value_usd:0, stage:'prospective', region:region||'' }; openSdrScout(created.id, name); }
   } catch(e) { if ((e.message||'').match(/duplicate|unique/)) showToast(name+' already exists'); else showToast('Error: '+e.message); }
@@ -10830,7 +10830,7 @@ function renderPipelineDeals(data) {
           (d.hint_context ? '<div style="font-size:11px;color:var(--text3);font-style:italic">"' + esc(d.hint_context.slice(0, 100)) + '"</div>' : '') +
           '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:2px">' +
             (localValue ? '<span style="font-size:11px;color:var(--text2)">Local: ' + localValue + '</span>' : '') +
-            '<span class="edit-close-date-btn" data-opp-id="'+esc(d.id||'')+'" data-account="'+esc(d.account||'')+'" data-close="'+esc(d.expected_close||'')+'" style="font-size:11px;color:'+(d.expected_close?'var(--gold)':'var(--text3)')+';cursor:pointer;'+(d.expected_close?'font-weight:600':'')+'">'+( d.expected_close?'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 00-3-3L5 17v3z"/></svg> '+d.expected_close:'+ Set close date')+'</span>' +
+            '<span class="edit-close-date-btn" data-opp-id="'+esc(d.id||'')+'" data-account="'+esc(d.account||'')+'" data-close="'+esc(d.expected_close||'')+'" style="font-size:11px;color:'+(d.expected_close?'var(--gold)':'var(--text3)')+';cursor:pointer;'+(d.expected_close?'font-weight:600':'')+'">'+( d.expected_close?''+d.expected_close:'+ Set close date')+'</span>' +
             (d.licenses_units ? '<span style="font-size:11px;color:var(--text3)">' + d.licenses_units + ' units</span>' : '') +
             (d.icp_score != null ? '<span style="font-size:11px;font-weight:600;padding:1px 6px;border-radius:2px;background:' + (d.icp_score>=70?'rgba(74,140,92,.15)':d.icp_score>=40?'rgba(160,117,42,.15)':'rgba(136,135,128,.15)') + ';color:' + (d.icp_score>=70?'var(--green)':d.icp_score>=40?'var(--gold)':'var(--text3)') + '" title="ICP fit: ' + esc(d.icp_notes||'') + '">ICP ' + d.icp_score + '</span>' : '') +
           '</div>' +
@@ -10840,7 +10840,7 @@ function renderPipelineDeals(data) {
           '<div style="font-size:11px;color:var(--text3)">USD</div>' +
           '<div style="margin-top:4px;font-size:11px;color:var(--text3)">' + prob + '% → ' + fmtUsd(d.weighted_value_usd) + '</div>' +
           '<div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">' +
-            '<button onclick="' + (d.tier==='verified' ? 'openDealValueForm(\''+d.id+'\',\''+esc(d.account)+'\')' : d.tier==='partial' ? 'boostSignals(\''+d.id+'\',\''+esc(d.account)+'\')' : 'openDealValueForm(\''+d.id+'\',\''+esc(d.account)+'\')') + '" style="font-size:11px;padding:3px 10px;border-radius:2px;border:1px solid ' + (d.tier==='verified'?'var(--border2)':d.tier==='partial'?'var(--amber)':'var(--green)') + ';background:transparent;color:' + (d.tier==='verified'?'var(--text3)':d.tier==='partial'?'var(--amber)':'var(--green)') + ';cursor:pointer">' + (d.tier==='verified'?'Edit':d.tier==='partial'?'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> Boost':'Confirm') + '</button>' +
+            '<button onclick="' + (d.tier==='verified' ? 'openDealValueForm(\''+d.id+'\',\''+esc(d.account)+'\')' : d.tier==='partial' ? 'boostSignals(\''+d.id+'\',\''+esc(d.account)+'\')' : 'openDealValueForm(\''+d.id+'\',\''+esc(d.account)+'\')') + '" style="font-size:11px;padding:3px 10px;border-radius:2px;border:1px solid ' + (d.tier==='verified'?'var(--border2)':d.tier==='partial'?'var(--amber)':'var(--green)') + ';background:transparent;color:' + (d.tier==='verified'?'var(--text3)':d.tier==='partial'?'var(--amber)':'var(--green)') + ';cursor:pointer">' + (d.tier==='verified'?'Edit':d.tier==='partial'?'Boost':'Confirm') + '</button>' +
             '<button onclick="openAccountTimeline(\''+esc(d.id)+'\',\''+esc(d.account)+'\')" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:3px 10px;border-radius:2px;border:1px solid rgba(160,117,42,0.4);background:rgba(160,117,42,0.08);color:var(--gold);font-weight:600;cursor:pointer"><img src="icons/icon-48.png" alt="" style="width:12px;height:12px;border-radius:50%"/>Timeline</button>' +
             '<button onclick="openCloseDeal(\''+esc(d.id)+'\',\''+esc(d.account)+'\')" style="font-size:11px;padding:3px 10px;border-radius:2px;border:1px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer">Close deal</button>' +
           '</div>' +
@@ -10981,7 +10981,7 @@ async function confirmCloseDeal(opportunityId) {
       body: JSON.stringify({ action:'close_opportunity', opportunity_id:opportunityId, status:_cdStatus, close_reason:reason||null, actual_value_usd:actualValue?parseFloat(actualValue):null })
     });
     document.getElementById('close-deal-modal')?.remove();
-    showToast(_cdStatus === 'won' ? '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4h10v5a5 5 0 01-10 0zM7 6H4v1.5A3.5 3.5 0 007.5 11M17 6h3v1.5a3.5 3.5 0 01-3.5 3.5M9.5 20h5M12 14v6"/></svg> Deal marked Won' : '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg> Deal marked Lost');
+    showToast(_cdStatus === 'won' ? 'Deal marked Won' : 'Deal marked Lost');
     if (typeof loadPipeline === 'function') loadPipeline();
   } catch(e) { alert('Error: ' + e.message); }
 }
@@ -11629,7 +11629,7 @@ function boostSignals(accountId, accountName) {
   switchTab('signals');
   setTimeout(function() {
     var out = document.getElementById('samLocalIntelOutput');
-    if (out) out.innerHTML = '<div style="font-size:12px;color:var(--amber);padding:8px 0"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> Run "Scan channels" to generate signals for <strong>' + esc(accountName) + '</strong> and move it to verified pipeline.</div>';
+    if (out) out.innerHTML = '<div style="font-size:12px;color:var(--amber);padding:8px 0">Run "Scan channels" to generate signals for <strong>' + esc(accountName) + '</strong> and move it to verified pipeline.</div>';
     var section = document.getElementById('samLocalIntelSection');
     if (section) section.style.display = 'block';
   }, 300);
