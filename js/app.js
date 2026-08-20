@@ -5028,7 +5028,7 @@ function setReviewPeriod(period) {
   document.querySelectorAll('.rtab').forEach(t => t.classList.remove('active'));
   document.getElementById('rtab-' + period).classList.add('active');
   const labels = { daily: '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg> Daily review', weekly: '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg> Weekly review', monthly: '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg> Monthly review' };
-  document.getElementById('reviewLabel').textContent = labels[period];
+  document.getElementById('reviewLabel').innerHTML = labels[period];
   document.getElementById('aiBody').textContent = 'Hit Refresh for Claude\'s ' + period + ' review.';
   document.getElementById('aiHints').style.display = 'none';
 }
@@ -5409,7 +5409,7 @@ function updateSectionPillCounts() {
   const d = dayData(viewDate);
   const counts = { tasks:d.tasks?.length||0, issues:d.issues?.length||0, wins:d.wins?.length||0, misses:d.misses?.length||0 };
   const labels = { tasks:'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg> Tasks', issues:'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> Issues', wins:'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.8l2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 10l5.9-.8z"/></svg> Wins', misses:'○ Misses' };
-  Object.keys(counts).forEach(k => { const btn = document.getElementById('tsb-'+k); if (btn) btn.textContent = labels[k]+(counts[k]?(' ('+counts[k]+')'):''); });
+  Object.keys(counts).forEach(k => { const btn = document.getElementById('tsb-'+k); if (btn) btn.innerHTML = labels[k]+(counts[k]?(' ('+counts[k]+')'):''); });
 }
 function saveMissComment(dayKey, idx, comment) { const d = dayData(dayKey); if (!d.misses[idx]) return; d.misses[idx].comment = comment.trim(); save(dayKey); renderToday(); }
 function isAnonymous() { const toggle = document.getElementById('anonToggle'); return toggle ? toggle.checked : false; }
