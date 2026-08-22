@@ -327,6 +327,59 @@ function _applyRoleChrome() {
   const navIntelBtn = document.getElementById('nav-intel');
   if (navIntelBtn) navIntelBtn.style.display = seniorRole ? '' : 'none';
 }
+// ── Today metric strip ────────────────────────────────────────────────────
+// Each metric is written by whichever loader already owns that data, rather
+// than the strip fetching everything itself. Open tasks are local so they
+// paint immediately; alerts arrive with loadCoachingAlerts, pipeline and
+// coverage with the pipeline summary, team wins with the feed. Nothing here
+// adds a blocking call to the Today load, which was already the complaint.
+function _setMetric(id, main, suffixHtml, positive) {
+  var el = document.getElementById(id); if (!el) return;
+  el.innerHTML = String(main) + (suffixHtml || '');
+  el.classList.toggle('pos', !!positive);
+}
+
+function renderTodayMetrics() {
+  var d = dayData(viewDate);
+  var open = (d.tasks || []).filter(function(t){ return !t.done && !t.carriedTo; }).length;
+  _setMetric('mOpenTasks', open);
+}
+
+// Compact money. 1.28Cr and 18L read faster than 12,800,000 to an Indian
+// sales team, and the unit rides small so the figure stays dominant.
+function _fmtMoneyShort(v) {
+  if (v == null || isNaN(v)) return null;
+  var n = Number(v);
+  if (n >= 10000000) return { n: (n/10000000).toFixed(2).replace(/\.00$/,''), u: 'Cr' };
+  if (n >= 100000)   return { n: (n/100000).toFixed(1).replace(/\.0$/,''),    u: 'L'  };
+  if (n >= 1000)     return { n: Math.round(n/1000),                          u: 'K'  };
+  return { n: Math.round(n), u: '' };
+}
+
+// Pulled once per Today load and cached, because the pipeline summary is the
+// only figure here that needs a round trip of its own.
+var _metricsPipelineCache = null;
+async function loadTodayPipelineMetrics() {
+  if (!SB_URL || !currentUser?.token) return;
+  if (_metricsPipelineCache) return;
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body:JSON.stringify({ action:'get_pipeline' }) });
+    var d = await r.json();
+    _metricsPipelineCache = d;
+    var s = (d && d.summary) || {};
+    var m = _fmtMoneyShort(s.verified_value_usd);
+    if (m) _setMetric('mVerified', m.n, m.u ? '<span class="unit">'+m.u+'</span>' : '');
+    // Coverage: share of pipeline value that is actually verified. Same
+    // number the pipeline tab shows, not a second definition of the word.
+    if (s.total_value_usd > 0) {
+      var pct = Math.round((s.verified_value_usd / s.total_value_usd) * 100);
+      _setMetric('mCoverage', pct, '<span class="unit">%</span>', pct >= 60);
+    }
+  } catch (_e) { /* strip keeps its dash rather than showing a wrong number */ }
+}
+
 // ── Splash control ────────────────────────────────────────────────────────
 // Minimum 5s, then it stays as long as the load takes. Two full sweeps of the
 // trace is the brand moment; the data being ready sooner does not cut it short.
@@ -849,6 +902,7 @@ function renderToday() {
   });
   const addBox = document.getElementById('today-add-box'); if (addBox) addBox.style.display = todayActiveSection === 'misses' ? 'none' : '';
   updateSectionPillCounts();
+  renderTodayMetrics();
   initSortable();
   const d2 = dayData(viewDate);
   renderProductivityBanner(d2.tasks||[]);
@@ -858,6 +912,11 @@ function renderToday() {
     _coachingAlertsLoaded = true;
     loadCoachingAlerts();
     loadMeetingPrep();
+    // Metric strip sources. Fired in parallel and never awaited, so a slow
+    // one leaves its own metric as a dash instead of holding up the others
+    // or the render. The strip is glanceable, not load bearing.
+    loadTodayPipelineMetrics();
+    try { loadTeamFeed('teamFeedWidget', 30); } catch (_e) {}
     // Auto-generate fresh alerts silently on first Today tab load
     fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
       body:JSON.stringify({action:'generate_coaching_alerts'}) }).then(function(r){return r.json();}).then(function(d){
@@ -4852,6 +4911,9 @@ async function loadTeamFeed(targetElId, limit) {
       body:JSON.stringify({ action:'list_team_feed', limit: limit || 30 }) });
     var d = await r.json();
     window._teamFeedTarget = targetElId;
+    // Team wins metric. Counted from the same payload the widget renders, so
+    // the number and the list can never disagree.
+    try { if (d.ok && Array.isArray(d.feed)) _setMetric('mTeamWins', d.feed.length); } catch(_e) {}
     el.innerHTML = (d.ok && d.feed) ? _renderFeedEntries(d.feed) : '<div style="font-size:12px;color:var(--coral)">Could not load feed.</div>';
   } catch(e) { el.innerHTML = '<div style="font-size:12px;color:var(--coral)">Could not load feed.</div>'; }
 }
@@ -5861,6 +5923,12 @@ async function loadCoachingAlerts() {
       body:JSON.stringify({action:'get_coaching_alerts', role: profile?.role||'member'}) });
     var d = await r.json();
     var alerts = d.alerts || [];
+    // Feed the Today metric strip from data this loader already has,
+    // rather than fetching alerts twice.
+    try {
+      var _hi = alerts.filter(function(a){ return a.severity === 'high'; }).length;
+      _setMetric('mAlerts', alerts.length, _hi ? ' <span class="hi">' + _hi + ' high</span>' : '');
+    } catch(_e) {}
     if (!alerts.length) {
       panel.innerHTML = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="font-size:11px;color:var(--text3)">No active alerts</span><button onclick="runCoachingAlerts()" style="font-size:11px;padding:2px 8px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);cursor:pointer">↻ Check now</button></div>';
       return;
