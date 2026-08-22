@@ -242,7 +242,11 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .sso-or::before,.sso-or::after{content:'';flex:1;height:1px;background:var(--border)}
 
 @media(min-width:900px){
-  #authScreen{display:flex}
+  /* .active is REQUIRED here. Without it this id selector (specificity 100)
+     beats .screen.active (20) and .screen (10), so the auth screen renders
+     permanently: you sign in, the app mounts behind it, and the login card
+     just sits on top with its button stuck on "Please wait...". */
+  #authScreen.active{display:flex}
   .auth-aside{display:flex;flex-direction:column;justify-content:space-between;
     flex:0 0 46%;max-width:620px;padding:40px 44px;
     background:var(--surface2);border-right:1px solid var(--border)}
