@@ -218,10 +218,44 @@ body.dark-mode{color-scheme:dark}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:16px;line-height:1.6;overscroll-behavior:none}
 .screen{display:none;min-height:100vh}
 .screen.active{display:flex}
-#authScreen{align-items:center;justify-content:center;padding:24px;background:var(--bg);position:relative;z-index:1}
-.auth-card{background:var(--surface);border:1px solid var(--border2);border-radius:3px;padding:32px 28px;width:100%;max-width:440px;position:relative;z-index:10}
-.auth-logo{font-family:var(--font);font-size:34px;margin-bottom:6px}
-.auth-sub{font-size:14px;color:var(--text2);margin-bottom:28px}
+/* ── Auth: two panes on desktop, form only on mobile ─────────────────────
+   The left pane carries the brand and the claim; the right carries the form.
+   On a phone the aside is hidden outright rather than stacked above, because
+   nobody should scroll past marketing to reach a password field. */
+#authScreen{align-items:stretch;justify-content:center;padding:0;background:var(--bg);position:relative;z-index:1}
+.auth-aside{display:none}
+.auth-card{background:var(--bg);border:none;border-radius:0;padding:32px 24px;width:100%;max-width:440px;margin:auto;position:relative;z-index:10}
+.auth-logo{font-family:var(--font);font-size:22px;font-weight:var(--w-medium);margin-bottom:6px}
+.auth-sub{font-size:13px;color:var(--text2);margin-bottom:22px;line-height:1.5}
+
+/* Provider buttons. Deliberately above the password fields and visually
+   heavier than them: signing in with the mailbox provider also CONNECTS the
+   mailbox, so it is the path we want people to take. */
+.sso-btn{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;
+  padding:11px 14px;margin-bottom:9px;border:1px solid var(--border-strong,var(--border2));
+  border-radius:var(--r-sm);background:var(--surface);color:var(--text);
+  font-family:var(--font);font-size:13px;font-weight:var(--w-medium);cursor:pointer;
+  transition:border-color var(--dur-fast) var(--ease),background var(--dur-fast) var(--ease)}
+.sso-btn:hover{border-color:var(--gold);background:var(--surface2)}
+.sso-btn svg{flex-shrink:0}
+.sso-or{display:flex;align-items:center;gap:10px;margin:18px 0 16px;color:var(--text3);font-size:11px}
+.sso-or::before,.sso-or::after{content:'';flex:1;height:1px;background:var(--border)}
+
+@media(min-width:900px){
+  #authScreen{display:flex}
+  .auth-aside{display:flex;flex-direction:column;justify-content:space-between;
+    flex:0 0 46%;max-width:620px;padding:40px 44px;
+    background:var(--surface2);border-right:1px solid var(--border)}
+  .auth-aside-brand{display:flex;align-items:center;gap:9px;font-size:15px;font-weight:var(--w-medium);color:var(--text)}
+  .auth-aside-mark{font-size:18px;font-weight:var(--w-semibold);color:var(--gold);line-height:1}
+  .auth-aside-body{max-width:460px}
+  .auth-quote{font-size:26px;line-height:1.35;font-weight:var(--w-regular);color:var(--text);margin-bottom:26px;letter-spacing:-0.01em}
+  .auth-points{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:11px}
+  .auth-points li{font-size:13px;color:var(--text2);padding-left:18px;position:relative;line-height:1.5}
+  .auth-points li::before{content:'';position:absolute;left:0;top:8px;width:6px;height:6px;border-radius:var(--r-round);background:var(--gold)}
+  .auth-aside-foot{font-size:11px;color:var(--text3)}
+  .auth-card{padding:40px;max-width:460px}
+}
 .auth-tabs{display:flex;gap:6px;margin-bottom:18px}
 .auth-tab{flex:1;padding:8px;border-radius:var(--radius-sm);border:1px solid var(--border);background:transparent;color:var(--text2);font-family:var(--font);font-size:13px;cursor:pointer;transition:all 0.2s;position:relative;z-index:10;pointer-events:all}
 .auth-tab.active{background:var(--surface2);border-color:var(--gold);color:var(--text)}
@@ -657,13 +691,23 @@ body.light-mode .item.delegated-win{background:rgba(var(--c-accent-rgb),0.1) !im
   /* Main pane sits beside the rail and is fluid, not centred. The old
      max-width:1440 with auto margins is what produced symmetrical dead
      space; here the rail anchors the left edge and content fills the rest. */
-  .app{margin-left:216px;max-width:none;padding:24px 28px 48px}
+  /* width:auto and margin-right:0 are load-bearing, not tidying. The base
+     rule sets width:100% and margin:0 auto. Adding margin-left:216px on top
+     of a 100%-wide box makes it 216px WIDER than the viewport, which is what
+     pushed every tab off the right edge and forced horizontal scrolling.
+     A margin is outside the width, so the width has to give way instead. */
+  .app{margin-left:216px;margin-right:0;width:auto;max-width:none;padding:24px 28px 48px}
 }
 /* Very wide screens: stop the measure growing indefinitely, but anchor left
    rather than centring, so the layout stays attached to the rail. */
 @media(min-width:1800px){
-  .app{max-width:1560px;margin-left:216px;margin-right:auto}
+  .app{max-width:1560px;margin-left:216px;margin-right:auto;width:auto}
 }
+/* Belt and braces: nothing should ever produce a horizontal scrollbar. If a
+   wide table or a long unbroken string does, it must scroll inside its own
+   container, not move the whole page. */
+html,body{overflow-x:hidden}
+.app{min-width:0}
 /* The SAM chat bar and its launcher were offset upward to clear the bottom
    tab bar. With the rail on the left there is no bottom bar to clear, so
    they sit at the bottom of the content pane and start after the rail. */
@@ -705,9 +749,39 @@ body.light-mode .item.delegated-win{background:rgba(var(--c-accent-rgb),0.1) !im
 
 <!-- ════ AUTH SCREEN ════ -->
 <div id="authScreen" class="screen active">
+  <!-- Left pane: brand and proof. Hidden below 900px, where a phone should
+       show the form immediately rather than make you scroll past marketing. -->
+  <div class="auth-aside">
+    <div class="auth-aside-brand"><span class="auth-aside-mark">S</span> SamoraTrack</div>
+    <div class="auth-aside-body">
+      <div class="auth-quote">Pipeline you can actually trust, because every number shows where it came from.</div>
+      <ul class="auth-points">
+        <li>Verified pipeline, not self-reported pipeline</li>
+        <li>Stakeholders proven by real conversations</li>
+        <li>Alerts early enough to act on</li>
+      </ul>
+    </div>
+    <div class="auth-aside-foot">A Samora Intelligence tool</div>
+  </div>
+
   <div class="auth-card">
-    <div class="auth-logo">SamoraTrack</div>
-    <div class="auth-sub">A Samora Intelligence Tool</div>
+    <div class="auth-logo">Sign in to SamoraTrack</div>
+    <div class="auth-sub">Connect the mailbox you sell from and Samora starts reading signals straight away.</div>
+
+    <!-- Signing in with the mailbox provider does double duty: it authenticates
+         AND connects the mailbox, removing the second "now connect Gmail" step
+         that everyone forgets to do. -->
+    <button class="sso-btn" onclick="ssoSignIn('google')">
+      <svg width="17" height="17" viewBox="0 0 48 48" aria-hidden="true"><path fill="#4285F4" d="M45.1 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h11.8c-.5 2.7-2 5-4.4 6.6v5.5h7.1c4.1-3.8 6.6-9.4 6.6-16.1z"/><path fill="#34A853" d="M24 46c5.9 0 10.9-2 14.5-5.4l-7.1-5.5c-2 1.3-4.5 2.1-7.4 2.1-5.7 0-10.6-3.9-12.3-9.1H4.3v5.7C7.9 41.1 15.4 46 24 46z"/><path fill="#FBBC05" d="M11.7 28.1c-.4-1.3-.7-2.7-.7-4.1s.2-2.8.7-4.1v-5.7H4.3C2.8 17.1 2 20.4 2 24s.8 6.9 2.3 9.8l7.4-5.7z"/><path fill="#EA4335" d="M24 10.8c3.2 0 6.1 1.1 8.4 3.3l6.3-6.3C34.9 4.2 29.9 2 24 2 15.4 2 7.9 6.9 4.3 14.2l7.4 5.7c1.7-5.2 6.6-9.1 12.3-9.1z"/></svg>
+      Continue with Google
+    </button>
+    <button class="sso-btn" onclick="ssoSignIn('microsoft')">
+      <svg width="16" height="16" viewBox="0 0 23 23" aria-hidden="true"><path fill="#F25022" d="M1 1h10v10H1z"/><path fill="#7FBA00" d="M12 1h10v10H12z"/><path fill="#00A4EF" d="M1 12h10v10H1z"/><path fill="#FFB900" d="M12 12h10v10H12z"/></svg>
+      Continue with Microsoft
+    </button>
+
+    <div class="sso-or"><span>or use a password</span></div>
+
     <div class="auth-tabs">
       <button class="auth-tab active" onclick="setMode('login')">Sign in</button>
       <button class="auth-tab" onclick="setMode('signup')">Create account</button> </div>
