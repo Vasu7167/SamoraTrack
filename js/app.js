@@ -327,7 +327,41 @@ function _applyRoleChrome() {
   const navIntelBtn = document.getElementById('nav-intel');
   if (navIntelBtn) navIntelBtn.style.display = seniorRole ? '' : 'none';
 }
+// ── Splash control ────────────────────────────────────────────────────────
+// A floor and a ceiling rather than a fixed wait. MIN_MS covers one full draw
+// so the mark never flashes half-finished on a fast connection; MAX_MS stops
+// a stalled request holding the screen hostage. Anything in between clears as
+// soon as the data is actually in, because padding a fast load is just making
+// people wait for a logo.
+var _splashMin = 2400, _splashMax = 5000, _splashShownAt = 0, _splashDone = false, _splashTimer = null;
+
+function showSplash(note) {
+  var el = document.getElementById('splashScreen'); if (!el) return;
+  _splashShownAt = Date.now(); _splashDone = false;
+  el.classList.remove('out'); el.classList.add('on');
+  if (note) { var n = document.getElementById('splashNote'); if (n) n.textContent = note; }
+  // Hard ceiling, so a hung request can never strand the user on the logo.
+  clearTimeout(_splashTimer);
+  _splashTimer = setTimeout(function(){ hideSplash(true); }, _splashMax);
+}
+
+function hideSplash(force) {
+  if (_splashDone) return;
+  var el = document.getElementById('splashScreen'); if (!el) return;
+  var waited = Date.now() - _splashShownAt;
+  if (!force && waited < _splashMin) {
+    // Data beat the animation. Let the draw finish rather than cutting it.
+    clearTimeout(_splashTimer);
+    _splashTimer = setTimeout(function(){ hideSplash(true); }, _splashMin - waited);
+    return;
+  }
+  _splashDone = true; clearTimeout(_splashTimer);
+  el.classList.add('out');
+  setTimeout(function(){ el.classList.remove('on'); }, 450);
+}
+
 function launchApp() {
+  showSplash('Reading your pipeline…');
   document.getElementById('authScreen').classList.remove('active');
   document.getElementById('appScreen').classList.add('active');
   const role = profile?.role || 'member';
@@ -360,14 +394,18 @@ function launchApp() {
     refreshYouTabConnections();
   }, 1500);
   setTimeout(initSortable, 200);
+  // Local-only build has nothing to fetch, so the splash is purely the draw.
+  if (!(SB_URL && SB_KEY)) hideSplash();
   if (SB_URL && SB_KEY) {
     syncDown().then(() => {
       runCarryOver(); _lastCalDate = null; render(); renderCalStrip();
       reconcileCalendarTasks();   // auto-carry tasks whose meetings moved/cancelled
       var badge = document.getElementById('global-sync-badge');
       if (badge) { badge.style.opacity = '0'; setTimeout(function(){ badge.remove(); }, 400); }
+      hideSplash();   // real data is in and rendered
     }).catch(function() {
       // syncDown failed — still hide the badge and keep local data visible
+      hideSplash(true);   // do not hold the logo open on a failed sync
       var badge = document.getElementById('global-sync-badge');
  if (badge) { badge.textContent = 'Offline — showing local data'; setTimeout(function(){ badge.style.opacity='0'; setTimeout(function(){badge.remove();},400); }, 2000); }
     });
@@ -647,6 +685,13 @@ function switchTab(tab) {
   const navId = navMap[tab] || tab;
   const navBtn = document.getElementById('nav-' + navId);
   if (navBtn) navBtn.classList.add('active');
+  // The greeting, date navigator, progress bar and calendar strip live in
+  // .app rather than inside the Today panel, so they used to render on every
+  // tab. They are Today's furniture: a date picker means nothing on Intel,
+  // and it was also squeezing those panels' layout. Marking the active tab on
+  // <body> lets CSS scope them without moving the markup, which other code
+  // reads by id.
+  document.body.setAttribute('data-tab', actualPanel);
   if (['tasks','issues','wins','misses'].includes(tab)) { if (tab !== 'misses') setTodaySection(tab); renderToday(); }
   if (tab === 'today') { setTodaySection('tasks'); renderToday(); }
   if (tab === 'settings') { renderSettings(); if (currentUser?.token) { loadHealthWeights(); loadNotificationRules(); } }
