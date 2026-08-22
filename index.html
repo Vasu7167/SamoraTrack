@@ -258,6 +258,17 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
   .header{padding:14px 0 12px}
   .greeting{font-size:17px}
 }
+/* The header and the date strip sit OUTSIDE the two-column grid, so left
+   unchecked they run the full 1440 while the content below is split. That is
+   what made the page look skewed: a full-width progress bar reading "1 of 2
+   done" across 2000px, and a date strip stranded beside a void.
+   Both are now capped to the same width as the main column (1.7 of 2.7 tracks,
+   less half the 32px gutter) so the page has one consistent left edge and one
+   consistent right edge at every height. */
+@media(min-width:1100px){
+  .header,.cal-strip,.progress-row{max-width:calc(62.96% - 16px)}
+  .cal-strip{margin-bottom:18px}
+}
 .meta-row{display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap}
 .user-email{font-size:13px;color:var(--text2)}
 .role-pill{font-size:11px;font-weight:500;border-radius:3px;padding:3px 10px}
@@ -415,21 +426,21 @@ body.light-mode .item.delegated-win{background:rgba(var(--c-accent-rgb),0.1) !im
 .today-section-btn .ico{width:15px;height:15px}
 .today-section-btn.active .ico{color:var(--gold)}
 
-/* Desktop: two columns. The right rail carries the things you glance at
-   (alerts, team wins, meeting prep); the left carries the thing you act on.
-   Done with grid placement rather than new wrapper divs so no JS that walks
-   this DOM has to change. */
+/* Desktop: two columns, each its own flow.
+   The first attempt placed rail items into a grid by row number. That fails
+   in a way worth recording: a CSS grid row spans BOTH columns, so a tall
+   alerts panel in column 2 stretched the matching left-hand row to the same
+   height, opening large empty gaps down the task list. Independent column
+   flow needs independent containers, so .today-main and .today-rail are real
+   elements rather than grid placement. */
+.today-main{min-width:0}
+.today-rail{min-width:0}
+.today-rail > *:empty{display:none}
 @media(min-width:1100px){
-  #panel-today.active{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);column-gap:28px;align-items:start}
-  #panel-today > *{grid-column:1}
-  #panel-today > #coachingAlertsPanel,
-  #panel-today > #teamWinsCard,
-  #panel-today > #meetingPrepSection{grid-column:2;grid-row:auto}
-  /* Pull the rail items up so they start level with the task list rather
-     than inheriting the flow position they had when stacked. */
-  #panel-today > #coachingAlertsPanel{grid-row:1}
-  #panel-today > #teamWinsCard{grid-row:2}
-  #panel-today > #meetingPrepSection{grid-row:3}
+  #panel-today.active{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);column-gap:32px;align-items:start}
+  /* The rail tracks the page rather than scrolling away, since alerts are
+     reference material you read while working the list beside them. */
+  .today-rail{position:sticky;top:60px}
 }
 
 /* Superseded by the tab-strip rules above. Kept only so the old boxed look
@@ -705,13 +716,14 @@ body.light-mode .item.delegated-win{background:rgba(var(--c-accent-rgb),0.1) !im
 
   <!-- ── TODAY ── -->
   <div class="panel active" id="panel-today">
+      <!-- Left: the things you act on. Right rail: the things you glance at.
+           Two real containers, not grid placement. CSS grid shares rows across
+           columns, so assigning grid-row to the rail items stretched every
+           left-hand item down to match the taller right-hand row, which is what
+           produced the large vertical gaps. Independent column flow needs
+           independent formatting contexts. -->
+    <div class="today-main">
     <div id="productivityBanner" style="margin-bottom:12px"></div>
-    <div id="coachingAlertsPanel" style="margin-bottom:12px"></div>
-    <div style="margin-bottom:12px" id="teamWinsCard">
-      <button onclick="toggleTeamFeedWidget()" style="width:100%;text-align:left;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;font-family:var(--sans);font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:space-between">
-        <span><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> Team wins</span><span id="teamFeedWidgetChev" style="color:var(--text3)">›</span> </button>
-      <div id="teamFeedWidgetBody" style="display:none;background:var(--surface);border:1px solid var(--border);border-top:none;border-radius:0 0 var(--radius) var(--radius);padding:10px 14px">
-        <div id="teamFeedWidget">Loading…</div> </div> </div>
     <div id="nudgeBanner" style="display:none;background:rgba(var(--c-accent-rgb),0.08);border:1px solid rgba(var(--c-accent-rgb),0.25);border-radius:var(--radius);padding:10px 14px;margin-bottom:12px"><div style="display:flex;align-items:center;justify-content:space-between"><div id="nudgeText" style="font-size:12px;color:var(--text2)"></div><button onclick="this.parentElement.parentElement.style.display='none'" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:0 0 0 8px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div></div>
     <div style="display:flex;gap:8px;margin-bottom:12px">
       <button class="today-section-btn active" id="tsb-tasks" onclick="setTodaySection('tasks')"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg> Tasks</button>
@@ -759,7 +771,17 @@ body.light-mode .item.delegated-win{background:rgba(var(--c-accent-rgb),0.1) !im
     <div id="today-misses-section" class="today-section" style="display:none">
       <div class="today-sec-header"><span class="today-sec-title">○ Misses</span></div>
       <div class="items" id="today-list-misses"></div> </div>
-    <div id="meetingPrepSection" style="display:none;margin-top:12px"></div> </div>
+    </div>
+    <div class="today-rail">
+    <div id="coachingAlertsPanel" style="margin-bottom:12px"></div>
+    <div style="margin-bottom:12px" id="teamWinsCard">
+      <button onclick="toggleTeamFeedWidget()" style="width:100%;text-align:left;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;font-family:var(--sans);font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:space-between">
+        <span><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> Team wins</span><span id="teamFeedWidgetChev" style="color:var(--text3)">›</span> </button>
+      <div id="teamFeedWidgetBody" style="display:none;background:var(--surface);border:1px solid var(--border);border-top:none;border-radius:0 0 var(--radius) var(--radius);padding:10px 14px">
+        <div id="teamFeedWidget">Loading…</div> </div> </div>
+    <div id="meetingPrepSection" style="display:none;margin-top:12px"></div>
+    </div>
+  </div>
 
   <!-- ── Tasks ── -->
   <div class="panel" id="panel-tasks">
