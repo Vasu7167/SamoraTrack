@@ -51,45 +51,67 @@
   --sand-30:#C8BCA9;--sand-40:#A99D88;--sand-50:#8A7F6B;--sand-60:#6D624F;
   --sand-70:#504635;--sand-80:#382F1F;--sand-90:#261E10;--sand-95:#171005;
 }
+/* ── Theme roles, v2. White canvas, neutral dark, pristine gold. ──────────
+   The previous values used the brand sand ramp as UI chrome (#F6F0E7 canvas,
+   #C8BCA9 lines). That is what read as beige and dated. Paper is now white
+   and the greys are neutral, so the data is the only coloured thing on
+   screen.
+
+   GOLD IS NEVER SMALL TEXT. It is a 2px underline, a button fill and the
+   mark, nothing else. Gold dark enough to pass contrast as 12px text is
+   necessarily mustard (that is what --c-accent-solid #926B14 was working
+   around). Treating it as a surface and a line sidesteps the problem and
+   reads more expensive. --c-accent-text is kept for the few places that
+   still need a gold word, and is deliberately the dullest value here.
+
+   Status colours are muted on purpose so gold stays the brightest thing on
+   screen. If risk red shouts louder than the accent, the accent stops
+   meaning anything. */
 :root,[data-theme="light"]{
-  --c-canvas:#F6F0E7;--c-surface:#FDFAF4;--c-surface-2:#F0E8DA;--c-surface-3:#E0D6C5;
-  --c-line:#C8BCA9;--c-line-strong:#A99D88;
-  --c-text:#171005;--c-text-2:#504635;--c-text-3:#6D624F;
-  --c-accent:#B8860B;--c-accent-text:#886100;--c-accent-solid:#926B14;--c-on-accent:#FDFAF4;
-  --c-focus:#AB8230;
-  --c-verified:#656D3C;--c-verified-wash:rgba(101,109,60,0.1);
-  --c-partial:#886209;--c-partial-wash:rgba(136,98,9,0.1);
-  --c-risk:#A94D2B;--c-risk-wash:rgba(169,77,43,0.1);
-  --c-info:#456E81;--c-info-wash:rgba(69,110,129,0.1);
-  --shadow-1:0 1px 2px rgba(23,16,5,0.06),0 1px 1px rgba(23,16,5,0.04);
-  --shadow-2:0 6px 20px rgba(23,16,5,0.1),0 2px 6px rgba(23,16,5,0.06);
+  --c-canvas:#FFFFFF;--c-surface:#FCFCFB;--c-surface-2:#F4F4F2;--c-surface-3:#E9E9E6;
+  --c-line:#E3E3E0;--c-line-strong:#C9C9C4;
+  --c-text:#1A1A18;--c-text-2:#6E6E68;--c-text-3:#777771;
+  /* --c-accent is the display gold, used for FILLS only, where the dark
+     --c-on-accent sits on top of it (7.9:1). It measures 2.10:1 against
+     white, so it can never be a line or a glyph on the canvas.
+     --c-accent-line is the same hue dropped to the darkest point that
+     still clears WCAG 1.4.11 non-text contrast (3.06:1) without going
+     mustard, and is what the active tab rule uses. Solved, not picked. */
+  --c-accent:#D4AF37;--c-accent-text:#8A6A08;--c-accent-solid:#D4AF37;--c-on-accent:#2B1B08;--c-accent-rgb:212,175,55;--c-accent-line:#B09026;
+  --c-focus:#B8912A;
+  --c-verified:#3B6D11;--c-verified-wash:rgba(59,109,17,0.08);
+  --c-partial:#8A6A08;--c-partial-wash:rgba(138,106,8,0.08);
+  --c-risk:#A32D2D;--c-risk-wash:rgba(163,45,45,0.08);
+  --c-info:#185FA5;--c-info-wash:rgba(24,95,165,0.08);
+  --shadow-1:0 1px 2px rgba(0,0,0,0.05),0 1px 1px rgba(0,0,0,0.03);
+  --shadow-2:0 6px 20px rgba(0,0,0,0.08),0 2px 6px rgba(0,0,0,0.05);
 }
 [data-theme="dark"]{
-  --c-canvas:#171005;--c-surface:#261E10;--c-surface-2:#382F1F;--c-surface-3:#504635;
-  --c-line:#504635;--c-line-strong:#6D624F;
-  --c-text:#F6F0E7;--c-text-2:#C8BCA9;--c-text-3:#A99D88;
-  --c-accent:#E8B84B;--c-accent-text:#DEB771;--c-accent-solid:#E8B84B;--c-on-accent:#171005;
-  --c-focus:#DEB771;
-  --c-verified:#8E9864;--c-verified-wash:rgba(142,152,100,0.1);
-  --c-partial:#B58D41;--c-partial-wash:rgba(181,141,65,0.1);
-  --c-risk:#D97956;--c-risk-wash:rgba(217,121,86,0.1);
-  --c-info:#6D99AC;--c-info-wash:rgba(109,153,172,0.1);
-  --shadow-1:0 1px 2px rgba(0,0,0,0.4),0 1px 1px rgba(0,0,0,0.3);
-  --shadow-2:0 6px 20px rgba(0,0,0,0.45),0 2px 6px rgba(0,0,0,0.35);
+  --c-canvas:#15161A;--c-surface:#1A1B20;--c-surface-2:#212329;--c-surface-3:#2A2C32;
+  --c-line:#2A2C32;--c-line-strong:#3C3F47;
+  --c-text:#F2F1EC;--c-text-2:#8B8D95;--c-text-3:#6C6E76;
+  --c-accent:#E8C55A;--c-accent-text:#E8C55A;--c-accent-solid:#E8C55A;--c-on-accent:#241C05;--c-accent-rgb:232,197,90;--c-accent-line:#E8C55A;
+  --c-focus:#E8C55A;
+  --c-verified:#8FBF63;--c-verified-wash:rgba(143,191,99,0.1);
+  --c-partial:#D8B45F;--c-partial-wash:rgba(216,180,95,0.1);
+  --c-risk:#E88A7D;--c-risk-wash:rgba(232,138,125,0.1);
+  --c-info:#7FB0E0;--c-info-wash:rgba(127,176,224,0.1);
+  --shadow-1:0 1px 2px rgba(0,0,0,0.5),0 1px 1px rgba(0,0,0,0.4);
+  --shadow-2:0 6px 20px rgba(0,0,0,0.55),0 2px 6px rgba(0,0,0,0.4);
 }
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
-  --c-canvas:#171005;--c-surface:#261E10;--c-surface-2:#382F1F;--c-surface-3:#504635;
-  --c-line:#504635;--c-line-strong:#6D624F;
-  --c-text:#F6F0E7;--c-text-2:#C8BCA9;--c-text-3:#A99D88;
-  --c-accent:#E8B84B;--c-accent-text:#DEB771;--c-accent-solid:#E8B84B;--c-on-accent:#171005;
-  --c-focus:#DEB771;
-  --c-verified:#8E9864;--c-verified-wash:rgba(142,152,100,0.1);
-  --c-partial:#B58D41;--c-partial-wash:rgba(181,141,65,0.1);
-  --c-risk:#D97956;--c-risk-wash:rgba(217,121,86,0.1);
-  --c-info:#6D99AC;--c-info-wash:rgba(109,153,172,0.1);
-  --shadow-1:0 1px 2px rgba(0,0,0,0.4),0 1px 1px rgba(0,0,0,0.3);
-  --shadow-2:0 6px 20px rgba(0,0,0,0.45),0 2px 6px rgba(0,0,0,0.35);
+  --c-canvas:#15161A;--c-surface:#1A1B20;--c-surface-2:#212329;--c-surface-3:#2A2C32;
+  --c-line:#2A2C32;--c-line-strong:#3C3F47;
+  --c-text:#F2F1EC;--c-text-2:#8B8D95;--c-text-3:#6C6E76;
+  --c-accent:#E8C55A;--c-accent-text:#E8C55A;--c-accent-solid:#E8C55A;--c-on-accent:#241C05;--c-accent-rgb:232,197,90;--c-accent-line:#E8C55A;
+  --c-focus:#E8C55A;
+  --c-verified:#8FBF63;--c-verified-wash:rgba(143,191,99,0.1);
+  --c-partial:#D8B45F;--c-partial-wash:rgba(216,180,95,0.1);
+  --c-risk:#E88A7D;--c-risk-wash:rgba(232,138,125,0.1);
+  --c-info:#7FB0E0;--c-info-wash:rgba(127,176,224,0.1);
+  --shadow-1:0 1px 2px rgba(0,0,0,0.5),0 1px 1px rgba(0,0,0,0.4);
+  --shadow-2:0 6px 20px rgba(0,0,0,0.55),0 2px 6px rgba(0,0,0,0.4);
   }
 }
 /* ---------------------------------------------------------------------------
@@ -110,6 +132,7 @@
   --text2:var(--c-text-2);
   --text3:var(--c-text-3);
   --gold:var(--c-accent);
+  --gold-line:var(--c-accent-line);
   --gold-lt:var(--c-accent-text);
   --gold-pl:var(--c-accent);
   --green:var(--c-verified);
@@ -216,10 +239,25 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .divider{display:flex;align-items:center;gap:10px;margin:14px 0;color:var(--text3);font-size:12px}
 .divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--border)}
 #appScreen{flex-direction:column;background:var(--bg);min-height:100vh}
-.app{max-width:780px;margin:0 auto;padding:0 24px 100px;width:100%;flex:1}
-.header{padding:52px 0 22px;border-bottom:1px solid var(--border);margin-bottom:24px}
-.header-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
-.greeting{font-family:var(--font);font-size:clamp(28px,5vw,42px);font-weight:400;line-height:1.15}
+/* The old max-width:780px is what left ~70% of a desktop screen empty. The
+   cap is now generous rather than absent: unbounded full width makes 13px
+   text unreadable across 2500px, so 1440 is the ceiling and the layout
+   inside it uses columns to fill the space rather than one narrow river.
+   Top padding on desktop clears the now-fixed top nav. */
+.app{max-width:1440px;margin:0 auto;padding:0 16px 96px;width:100%;flex:1}
+@media(min-width:900px){
+  .app{padding:60px 28px 40px}
+}
+/* The greeting was clamp(28px,5vw,42px) with 52px of padding above it: over
+   170px of screen spent on a word that carries no information. It is now a
+   normal line of text and the space goes to the data. */
+.header{padding:20px 0 14px;border-bottom:1px solid var(--border);margin-bottom:18px}
+.header-top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.greeting{font-family:var(--font);font-size:18px;font-weight:var(--w-medium);line-height:1.3}
+@media(min-width:900px){
+  .header{padding:14px 0 12px}
+  .greeting{font-size:17px}
+}
 .meta-row{display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap}
 .user-email{font-size:13px;color:var(--text2)}
 .role-pill{font-size:11px;font-weight:500;border-radius:3px;padding:3px 10px}
@@ -329,10 +367,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .item.priority-task{background:rgba(192,82,63,0.18) !important;border-color:rgba(192,82,63,0.5) !important;border-left:3px solid var(--coral) !important}
 .item.priority-task .item-text{color:var(--text)}
 .priority-badge{font-size:11px;font-weight:700;background:var(--coral);color:#FAF8F4;border-radius:2px;padding:2px 8px;margin-left:6px;letter-spacing:0.04em;text-transform:uppercase;vertical-align:middle}
-.delegated-badge{font-size:11px;font-weight:700;background:rgba(160,117,42,0.3);color:var(--gold);border:1.5px solid var(--gold);border-radius:2px;padding:2px 8px;margin-left:6px;letter-spacing:0.04em;vertical-align:middle}
-.item.delegated-win{background:rgba(160,117,42,0.15) !important;border-color:rgba(160,117,42,0.45) !important;border-left:3px solid var(--gold) !important}
+.delegated-badge{font-size:11px;font-weight:700;background:rgba(var(--c-accent-rgb),0.3);color:var(--gold);border:1.5px solid var(--gold);border-radius:2px;padding:2px 8px;margin-left:6px;letter-spacing:0.04em;vertical-align:middle}
+.item.delegated-win{background:rgba(var(--c-accent-rgb),0.15) !important;border-color:rgba(var(--c-accent-rgb),0.45) !important;border-left:3px solid var(--gold) !important}
 body.light-mode .item.priority-task{background:rgba(192,82,63,0.12) !important}
-body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
+body.light-mode .item.delegated-win{background:rgba(var(--c-accent-rgb),0.1) !important}
 .item.miss-item{border-left:2px solid var(--miss)}
 .miss-comment-row{display:flex;align-items:center;gap:6px;margin-top:6px}
 .miss-comment-input{flex:1;font-size:11px;color:var(--text2);background:var(--surface2);border:1px solid var(--border);border-radius:2px;padding:5px 9px;font-family:var(--font);outline:none;transition:border-color 0.2s}
@@ -341,9 +379,9 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 .miss-comment-badge{font-size:11px;color:var(--green);flex-shrink:0;font-weight:600}
 .miss-actions{display:flex;gap:6px;margin-top:6px}
 .miss-carry-btn{background:none;border:1px solid var(--border);border-radius:2px;padding:4px 10px;font-size:11px;color:var(--gold);cursor:pointer;font-family:var(--font);transition:all .2s}
-.miss-carry-btn:hover{background:rgba(160,117,42,0.1);border-color:var(--gold)}
-.icarry{display:inline-flex;align-items:center;gap:4px;background:rgba(160,117,42,0.12);border:1px solid rgba(160,117,42,0.3);border-radius:2px;cursor:pointer;color:var(--gold);font-size:11px;padding:3px 8px;margin-top:5px;font-family:var(--font);font-weight:500}
-.icarry:active{background:rgba(160,117,42,0.25)}
+.miss-carry-btn:hover{background:rgba(var(--c-accent-rgb),0.1);border-color:var(--gold)}
+.icarry{display:inline-flex;align-items:center;gap:4px;background:rgba(var(--c-accent-rgb),0.12);border:1px solid rgba(var(--c-accent-rgb),0.3);border-radius:2px;cursor:pointer;color:var(--gold);font-size:11px;padding:3px 8px;margin-top:5px;font-family:var(--font);font-weight:500}
+.icarry:active{background:rgba(var(--c-accent-rgb),0.25)}
 .det-miss-comment{font-size:11px;color:var(--text2);background:var(--surface2);border-radius:2px;padding:3px 8px;margin-left:14px;font-style:italic}
 .chk{width:22px;height:22px;border-radius:2px;border:1.5px solid var(--border2);cursor:pointer;flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center;transition:all 0.15s}
 .chk.on{background:var(--gold);border-color:var(--gold)}
@@ -367,8 +405,37 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 .slbl{font-size:12px;color:var(--text2);margin-top:5px}
 .snum.purple{color:var(--gold)}.snum.green{color:var(--green)}.snum.coral{color:var(--coral)}.snum.miss{color:var(--miss)}
 .ai-card{background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);overflow:hidden;margin-bottom:14px}
-.today-section-btn{flex:1;padding:8px;border-radius:var(--radius-sm);border:1px solid var(--border);background:transparent;color:var(--text3);font-family:var(--font);font-size:13px;cursor:pointer;transition:all 0.2s;font-weight:500}
-.today-section-btn.active{border-color:var(--gold);color:var(--gold);background:rgba(160,117,42,0.08)}
+/* Section switcher: underline tabs, not four bordered boxes. Four outlined
+   buttons in a row read as a form control; a tab strip reads as navigation,
+   which is what this is. Gold is the rule under the active tab, never the
+   label, for the contrast reason noted at the theme block. */
+.today-section-btn{flex:0 0 auto;padding:7px 2px;margin-right:18px;border:none;border-bottom:2px solid transparent;border-radius:0;background:transparent;color:var(--text3);font-size:13px;font-family:var(--font);cursor:pointer;display:inline-flex;align-items:center;gap:6px;min-height:40px;transition:color var(--dur-fast) var(--ease)}
+.today-section-btn:hover{color:var(--text2)}
+.today-section-btn.active{border-bottom-color:var(--gold-line);color:var(--text);font-weight:var(--w-medium);background:transparent}
+.today-section-btn .ico{width:15px;height:15px}
+.today-section-btn.active .ico{color:var(--gold)}
+
+/* Desktop: two columns. The right rail carries the things you glance at
+   (alerts, team wins, meeting prep); the left carries the thing you act on.
+   Done with grid placement rather than new wrapper divs so no JS that walks
+   this DOM has to change. */
+@media(min-width:1100px){
+  #panel-today.active{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);column-gap:28px;align-items:start}
+  #panel-today > *{grid-column:1}
+  #panel-today > #coachingAlertsPanel,
+  #panel-today > #teamWinsCard,
+  #panel-today > #meetingPrepSection{grid-column:2;grid-row:auto}
+  /* Pull the rail items up so they start level with the task list rather
+     than inheriting the flow position they had when stacked. */
+  #panel-today > #coachingAlertsPanel{grid-row:1}
+  #panel-today > #teamWinsCard{grid-row:2}
+  #panel-today > #meetingPrepSection{grid-row:3}
+}
+
+/* Superseded by the tab-strip rules above. Kept only so the old boxed look
+   can be restored by renaming if this direction is rejected. The old
+   .active rule that lived here was removed rather than renamed: it came
+   later in the cascade and silently overrode the new underline state. */
 .today-section{margin-bottom:8px}
 .today-sec-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 8px;border-bottom:1px solid var(--border);margin-bottom:8px}
 .today-sec-title{font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em}
@@ -406,10 +473,10 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 .sam-chat-btn{width:44px;height:44px;border-radius:50%;background:var(--gold);border:none;color:#18160F;font-size:20px;cursor:pointer;flex-shrink:0;transition:opacity 0.2s;display:flex;align-items:center;justify-content:center}
 .sam-chat-btn:hover{opacity:0.85}
 .sam-period-btn{font-size:11px;padding:4px 10px;border-radius:3px;border:1px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer;font-family:var(--sans);transition:all 0.2s}
-.sam-period-btn.active{border-color:var(--gold);color:var(--gold);background:rgba(160,117,42,0.08)}
+.sam-period-btn.active{border-color:var(--gold);color:var(--gold);background:rgba(var(--c-accent-rgb),0.08)}
 .sam-chat-response{background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:16px;font-size:14px;color:var(--text2);line-height:1.7;margin-bottom:80px}
 .you-profile-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;display:flex;align-items:center;gap:16px;margin-bottom:20px}
-.you-avatar{width:52px;height:52px;border-radius:50%;background:rgba(160,117,42,0.2);border:2px solid var(--gold);display:flex;align-items:center;justify-content:center;font-family:var(--font);font-size:20px;color:var(--gold-lt);flex-shrink:0}
+.you-avatar{width:52px;height:52px;border-radius:50%;background:rgba(var(--c-accent-rgb),0.2);border:2px solid var(--gold);display:flex;align-items:center;justify-content:center;font-family:var(--font);font-size:20px;color:var(--gold-lt);flex-shrink:0}
 .you-email{font-size:14px;font-weight:500;color:var(--text)}
 .you-section-title{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;font-weight:600;margin-bottom:8px}
 .you-menu{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
@@ -424,7 +491,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 .signal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
 .signal-type{font-size:11px;font-weight:600;border-radius:2px;padding:2px 8px;letter-spacing:0.04em}
 .signal-type.call{background:rgba(110,231,183,0.15);color:var(--green)}
-.signal-type.email{background:rgba(160,117,42,0.15);color:var(--gold)}
+.signal-type.email{background:rgba(var(--c-accent-rgb),0.15);color:var(--gold)}
 .signal-type.linkedin{background:rgba(96,165,250,0.15);color:#60a5fa}
 .signal-time{font-size:11px;color:var(--text3)}
 .signal-account{font-size:14px;font-weight:600;color:var(--text);margin-bottom:5px;font-family:var(--font)}
@@ -513,15 +580,38 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 .date-input:focus{border-color:var(--gold)}
 .filter-btn{font-size:12px;background:var(--surface2);border:1px solid var(--border2);border-radius:2px;color:var(--text2);padding:6px 12px;cursor:pointer;transition:all 0.2s}
 .filter-btn:hover{border-color:var(--gold);color:var(--gold)}
-.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--surface);backdrop-filter:blur(20px);border-top:1px solid var(--border2);padding:8px 0 max(12px,env(safe-area-inset-bottom));z-index:100;box-shadow:0 -4px 24px rgba(0,0,0,0.15)}
-.nav-inner{max-width:780px;margin:0 auto;display:flex;padding:0 8px;gap:2px}
-.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;cursor:pointer;padding:6px 2px;border-radius:3px;transition:all 0.2s;position:relative}
+/* ── Navigation. Same markup, two form factors. ───────────────────────────
+   Below 900px this is a bottom tab bar, which is the correct pattern on a
+   phone and is why the app is installable as a PWA. At 900px and up it
+   becomes a top bar, because a fixed bottom tab bar on a desktop browser is
+   the single strongest "phone app in a window" signal. Nothing in the HTML
+   changes between the two. */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);padding:6px 0 max(10px,env(safe-area-inset-bottom));z-index:100}
+.nav-inner{max-width:none;margin:0;display:flex;padding:0 8px;gap:2px}
+.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:none;border:none;cursor:pointer;padding:6px 2px;min-height:44px;border-radius:var(--r-sm);transition:color var(--dur-fast) var(--ease);position:relative}
 .nav-btn:hover{background:var(--surface2)}
 .nav-btn.active .nav-icon{color:var(--gold)}
-.nav-icon{font-size:20px;line-height:1;color:var(--text3);transition:color 0.2s}
-.nav-label{font-size:11px;color:var(--text3);font-family:var(--font);letter-spacing:0.02em;transition:color 0.2s}
-.nav-btn.active .nav-label{color:var(--gold);font-weight:600}
+.nav-icon{font-size:19px;line-height:1;color:var(--text3);transition:color var(--dur-fast) var(--ease)}
+.nav-label{font-size:11px;color:var(--text3);font-family:var(--font);letter-spacing:0.02em;transition:color var(--dur-fast) var(--ease)}
+.nav-btn.active .nav-label{color:var(--gold);font-weight:var(--w-medium)}
 .nav-btn:hover .nav-icon,.nav-btn:hover .nav-label{color:var(--text2)}
+
+@media(min-width:900px){
+  .bottom-nav{top:0;bottom:auto;border-top:none;border-bottom:1px solid var(--border);padding:0}
+  .nav-inner{max-width:none;padding:0 20px;gap:4px;align-items:stretch;height:46px}
+  /* Horizontal items, label beside icon, and the active state becomes a gold
+     underline rather than gold text. Gold at 11px cannot pass contrast on
+     white without turning mustard, so on desktop the word stays near-black
+     and the rule under it carries the accent. */
+  .nav-btn{flex:0 0 auto;flex-direction:row;gap:7px;padding:0 14px;min-height:0;border-radius:0;border-bottom:2px solid transparent}
+  .nav-btn:hover{background:transparent}
+  .nav-btn:hover .nav-label{color:var(--text)}
+  .nav-btn.active{border-bottom-color:var(--gold-line)}
+  .nav-btn.active .nav-label{color:var(--text);font-weight:var(--w-medium)}
+  .nav-btn.active .nav-icon{color:var(--gold)}
+  .nav-icon{font-size:16px}
+  .nav-label{font-size:13px}
+}
 .nav-active-pill{display:none}
 .nav-btn.active::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:32px;height:2.5px;background:var(--gold);border-radius:0 0 4px 4px}
 .nav-tip{position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border2);border-radius:2px;padding:5px 9px;font-size:11px;color:var(--text2);white-space:nowrap;pointer-events:none;opacity:0;transition:opacity 0.2s;z-index:200;box-shadow:var(--shadow-2)}
@@ -617,12 +707,12 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
   <div class="panel active" id="panel-today">
     <div id="productivityBanner" style="margin-bottom:12px"></div>
     <div id="coachingAlertsPanel" style="margin-bottom:12px"></div>
-    <div style="margin-bottom:12px">
+    <div style="margin-bottom:12px" id="teamWinsCard">
       <button onclick="toggleTeamFeedWidget()" style="width:100%;text-align:left;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;font-family:var(--sans);font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:space-between">
         <span><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> Team wins</span><span id="teamFeedWidgetChev" style="color:var(--text3)">›</span> </button>
       <div id="teamFeedWidgetBody" style="display:none;background:var(--surface);border:1px solid var(--border);border-top:none;border-radius:0 0 var(--radius) var(--radius);padding:10px 14px">
         <div id="teamFeedWidget">Loading…</div> </div> </div>
-    <div id="nudgeBanner" style="display:none;background:rgba(160,117,42,0.08);border:1px solid rgba(160,117,42,0.25);border-radius:var(--radius);padding:10px 14px;margin-bottom:12px"><div style="display:flex;align-items:center;justify-content:space-between"><div id="nudgeText" style="font-size:12px;color:var(--text2)"></div><button onclick="this.parentElement.parentElement.style.display='none'" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:0 0 0 8px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div></div>
+    <div id="nudgeBanner" style="display:none;background:rgba(var(--c-accent-rgb),0.08);border:1px solid rgba(var(--c-accent-rgb),0.25);border-radius:var(--radius);padding:10px 14px;margin-bottom:12px"><div style="display:flex;align-items:center;justify-content:space-between"><div id="nudgeText" style="font-size:12px;color:var(--text2)"></div><button onclick="this.parentElement.parentElement.style.display='none'" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:0 0 0 8px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div></div>
     <div style="display:flex;gap:8px;margin-bottom:12px">
       <button class="today-section-btn active" id="tsb-tasks" onclick="setTodaySection('tasks')"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg> Tasks</button>
       <button class="today-section-btn" id="tsb-issues" onclick="setTodaySection('issues')"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> Issues</button>
@@ -793,7 +883,7 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
 
       <!-- ── SAM Brief Card ─────────────────────────────────────────────── -->
       <div id="samBriefSection" style="display:none;margin-bottom:16px">
-        <div style="background:linear-gradient(135deg,rgba(160,117,42,0.08) 0%,rgba(160,117,42,0.03) 100%);border:1px solid rgba(160,117,42,0.25);border-radius:3px;padding:16px 18px;position:relative;overflow:hidden">
+        <div style="background:linear-gradient(135deg,rgba(var(--c-accent-rgb),0.08) 0%,rgba(var(--c-accent-rgb),0.03) 100%);border:1px solid rgba(var(--c-accent-rgb),0.25);border-radius:3px;padding:16px 18px;position:relative;overflow:hidden">
           <div style="position:absolute;top:0;right:0;width:80px;height:80px;background:none;pointer-events:none"></div>
           <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
             <div>
@@ -825,8 +915,8 @@ body.light-mode .item.delegated-win{background:rgba(160,117,42,0.1) !important}
           <div style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;padding:12px 14px">
             <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">Actions</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-              <button onclick="runLocalIntelligence()" id="localIntelBtn" style="padding:9px 10px;border-radius:3px;background:rgba(160,117,42,0.08);border:1px solid rgba(160,117,42,0.2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> Scan channels</button>
-              <button onclick="syncNotetaker()" id="notetakerSyncBtn" style="padding:9px 10px;border-radius:3px;background:rgba(160,117,42,0.08);border:1px solid rgba(160,117,42,0.2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5a2.8 2.8 0 00-2.8 2.8v5.4a2.8 2.8 0 005.6 0V6.3A2.8 2.8 0 0012 3.5zM5.5 11a6.5 6.5 0 0013 0M12 17.5V21"/></svg> Sync calls</button>
+              <button onclick="runLocalIntelligence()" id="localIntelBtn" style="padding:9px 10px;border-radius:3px;background:rgba(var(--c-accent-rgb),0.08);border:1px solid rgba(var(--c-accent-rgb),0.2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> Scan channels</button>
+              <button onclick="syncNotetaker()" id="notetakerSyncBtn" style="padding:9px 10px;border-radius:3px;background:rgba(var(--c-accent-rgb),0.08);border:1px solid rgba(var(--c-accent-rgb),0.2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5a2.8 2.8 0 00-2.8 2.8v5.4a2.8 2.8 0 005.6 0V6.3A2.8 2.8 0 0012 3.5zM5.5 11a6.5 6.5 0 0013 0M12 17.5V21"/></svg> Sync calls</button>
               <button onclick="loadTimeAnalytics()" id="timeAnalyticsBtn" style="padding:9px 10px;border-radius:3px;background:rgba(58,110,168,0.08);border:1px solid rgba(58,110,168,0.2);color:var(--blue);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 7v5.2l3.2 2"/></svg> Time by account</button>
               <button onclick="computeIcpScores()" id="icp-score-btn" style="padding:9px 10px;border-radius:3px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);color:#6366f1;font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;text-align:left"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg> Score ICP fit</button>
               <!-- Hidden maintenance buttons kept for programmatic use -->
