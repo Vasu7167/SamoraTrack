@@ -122,6 +122,45 @@ function showMsg(msg, isErr) {
   el.textContent = msg;
   el.className = 'msg' + (msg ? (isErr ? ' err' : ' ok') : '');
 }
+// ── SSO sign-in ───────────────────────────────────────────────────────────
+// Signing in with the mailbox provider does two jobs at once: it authenticates
+// the user AND grants the mail scopes, so there is no separate "now connect
+// Gmail" step afterwards. That second step is the one people skip, which is
+// why a new account can sit there producing nothing.
+//
+// Uses Supabase's OAuth endpoint, so the provider must be enabled in
+// Supabase Auth first (Dashboard > Authentication > Providers) with the same
+// client id/secret already used for the Gmail connection, and the scopes
+// listed below added there. Until that is done these buttons will return a
+// provider-not-enabled error rather than silently doing nothing.
+const SSO_SCOPES = {
+  google: [
+    'https://www.googleapis.com/auth/gmail.readonly',
+    'https://www.googleapis.com/auth/gmail.send',
+    'https://www.googleapis.com/auth/calendar.readonly',
+    'email', 'profile'
+  ].join(' '),
+  // Supabase calls the Microsoft provider "azure".
+  microsoft: 'openid email profile offline_access Mail.Read Mail.Send Calendars.Read'
+};
+
+function ssoSignIn(which) {
+  if (!SB_URL || !SB_KEY) { showMsg('Sign-in is not configured in this build.', true); return; }
+  const provider = which === 'microsoft' ? 'azure' : 'google';
+  const scopes = SSO_SCOPES[which] || '';
+  // Land back on the app root. Supabase returns the session in the URL
+  // fragment, which the existing bootstrap picks up on load.
+  const redirect = window.location.origin + window.location.pathname;
+  const url = SB_URL + '/auth/v1/authorize'
+    + '?provider=' + encodeURIComponent(provider)
+    + '&redirect_to=' + encodeURIComponent(redirect)
+    + '&scopes=' + encodeURIComponent(scopes)
+    // Force a refresh token back from Google, otherwise the mail connection
+    // silently expires in an hour and cannot be renewed.
+    + (provider === 'google' ? '&access_type=offline&prompt=consent' : '');
+  window.location.href = url;
+}
+
 async function doAuth() {
   const email = document.getElementById('aEmail').value.trim();
   const pass = document.getElementById('aPass').value;
@@ -7192,6 +7231,39 @@ document.addEventListener('click',e=>{const m=document.getElementById('carryFwdM
       await syncDown(); runCarryOver(); _lastCalDate = null; render(); reconcileCalendarTasks();
     }
   });
+  // ── OAuth return ────────────────────────────────────────────────────────
+  // Supabase sends the session back in the URL FRAGMENT, not the query string,
+  // so it never reaches the server and nothing picks it up unless we look.
+  // Without this the SSO buttons complete the provider dance and then dump the
+  // user straight back on the login screen, which looks like the button is
+  // broken. Runs before the stored-session check so a fresh sign-in wins over
+  // a stale cached one.
+  try {
+    const frag = (window.location.hash || '').replace(/^#/, '');
+    if (frag && frag.indexOf('access_token=') !== -1) {
+      const q = new URLSearchParams(frag);
+      const at = q.get('access_token'), rt = q.get('refresh_token');
+      if (at) {
+        // Identify the user from the token rather than trusting the fragment.
+        const ur = await fetch(SB_URL + '/auth/v1/user', { headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + at } });
+        const u = await ur.json();
+        if (u && u.id) {
+          currentUser = { id: u.id, email: u.email, token: at, refresh_token: rt };
+          localStorage.setItem('dt-user', JSON.stringify(currentUser));
+          // The provider token is what actually reads the mailbox. Stash it so
+          // the existing Gmail/Graph plumbing can adopt it instead of asking
+          // the user to connect their mail a second time.
+          const pt = q.get('provider_token'), prt = q.get('provider_refresh_token');
+          if (pt) sessionStorage.setItem('sso_provider_token', pt);
+          if (prt) sessionStorage.setItem('sso_provider_refresh_token', prt);
+        }
+      }
+      // Strip the fragment so a refresh does not replay it and so the tokens
+      // are not left sitting in the address bar.
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+  } catch (_e) { /* fall through to the normal login screen */ }
+
   const saved = localStorage.getItem('dt-user');
   if (saved) {
     currentUser = JSON.parse(saved);
