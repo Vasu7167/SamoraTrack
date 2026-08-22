@@ -770,13 +770,37 @@ html,body{overflow-x:hidden}
   .splash-rule{animation:none;width:118px}
 }
 
+/* ── Today metric strip ───────────────────────────────────────────────────
+   Labels are quiet and small, numbers are the hero, and the row is separated
+   from the content below by a hairline rather than sitting in a card. Same
+   reasoning as the task rows: a box around a number adds nothing. */
+.metric-strip{display:flex;flex-wrap:wrap;gap:0;border-top:1px solid var(--border);
+  border-bottom:1px solid var(--border);margin-bottom:18px}
+.metric{padding:12px 26px 12px 0;margin-right:26px;border-right:1px solid var(--border);min-width:104px}
+.metric:last-child{border-right:none;margin-right:0;padding-right:0}
+.metric-lbl{font-size:11px;color:var(--text3);margin-bottom:3px;line-height:1.2}
+.metric-val{font-size:24px;line-height:1.1;color:var(--text);font-weight:var(--w-regular);
+  font-variant-numeric:tabular-nums;display:flex;align-items:baseline;gap:5px}
+/* Trailing units and qualifiers ride small next to the figure so the number
+   itself stays the thing you read. */
+.metric-val .unit{font-size:12px;color:var(--text2);font-weight:var(--w-regular)}
+.metric-val .hi{font-size:12px;color:var(--coral)}
+.metric-val.pos{color:var(--green)}
+@media(max-width:700px){
+  .metric-strip{overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none}
+  .metric-strip::-webkit-scrollbar{display:none}
+  .metric{padding-right:18px;margin-right:18px;min-width:88px}
+  .metric-val{font-size:20px}
+}
+
 /* Today's furniture, scoped to Today. The header and calendar strip sit in
    .app (outside the panels) so they rendered on every tab: a date picker on
    the Intel screen, and a capped-width header distorting the panels below it.
    data-tab is set by switchTab. Defaulting to visible when the attribute is
    absent keeps the first paint correct, since Today is the landing tab. */
 body[data-tab]:not([data-tab="today"]) .header,
-body[data-tab]:not([data-tab="today"]) .cal-strip{display:none}
+body[data-tab]:not([data-tab="today"]) .cal-strip,
+body[data-tab]:not([data-tab="today"]) .metric-strip{display:none}
 body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
 /* The SAM chat bar and its launcher were offset upward to clear the bottom
    tab bar. With the rail on the left there is no bottom bar to clear, so
@@ -928,6 +952,19 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
 
   <div class="cal-strip" id="calStrip"></div>
 
+  <!-- ── Today metrics ──────────────────────────────────────────────────
+       One glance line: what is on me, what is shouting, what is real, how
+       well covered. Values fill in as their sources land rather than the
+       strip waiting for the slowest one, so the shape is stable from the
+       first paint and only the numbers change. -->
+  <div class="metric-strip" id="todayMetrics">
+    <div class="metric"><div class="metric-lbl">Open tasks</div><div class="metric-val" id="mOpenTasks">&ndash;</div></div>
+    <div class="metric"><div class="metric-lbl">Alerts</div><div class="metric-val" id="mAlerts">&ndash;</div></div>
+    <div class="metric"><div class="metric-lbl">Verified pipeline</div><div class="metric-val" id="mVerified">&ndash;</div></div>
+    <div class="metric"><div class="metric-lbl">Coverage</div><div class="metric-val" id="mCoverage">&ndash;</div></div>
+    <div class="metric"><div class="metric-lbl">Team wins</div><div class="metric-val" id="mTeamWins">&ndash;</div></div>
+  </div>
+
   <!-- ── TODAY ── -->
   <div class="panel active" id="panel-today">
       <!-- Left: the things you act on. Right rail: the things you glance at.
@@ -987,9 +1024,6 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
       <div class="items" id="today-list-misses"></div> </div>
     </div>
     <div class="today-rail">
-    <!-- Today's meetings sit above alerts: they are time-bound and the day is
-         planned around them, whereas alerts are a backlog you triage. -->
-    <div id="meetingPrepSection" style="display:none;margin-bottom:12px"></div>
     <div id="coachingAlertsPanel" style="margin-bottom:12px"></div>
     <div style="margin-bottom:12px" id="teamWinsCard">
       <button onclick="toggleTeamFeedWidget()" style="width:100%;text-align:left;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;font-family:var(--sans);font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:space-between">
@@ -1147,6 +1181,12 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
               <div style="font-family:var(--font);font-size:14px;font-weight:600;color:var(--text)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg> SAM Brief</div>
               <div id="samBriefDate" style="font-size:11px;color:var(--text3);margin-top:1px"></div> </div>
             <button onclick="loadSamBrief(true)" id="samBriefRefreshBtn" title="Refresh brief" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;padding:2px 6px;border-radius:2px">↻</button> </div>
+          <!-- Today's meetings, moved here from the Today rail. A meeting
+               brief is preparation for a conversation, which is what this tab
+               is for; on Today it was competing with the task list. It sits
+               above the generated brief because it is fact rather than
+               inference. -->
+          <div id="meetingPrepSection" style="display:none;margin-bottom:12px"></div>
           <div id="samBriefOutput"><div style="font-size:12px;color:var(--text3)">Loading your brief…</div></div> </div> </div>
 
       <!-- Email connection status (compact, no connect buttons — those live in You tab) -->
