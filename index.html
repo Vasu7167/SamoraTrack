@@ -245,9 +245,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
    inside it uses columns to fill the space rather than one narrow river.
    Top padding on desktop clears the now-fixed top nav. */
 .app{max-width:1440px;margin:0 auto;padding:0 16px 96px;width:100%;flex:1}
-@media(min-width:900px){
-  .app{padding:60px 28px 40px}
-}
+/* Desktop padding and offset are set with the rail rules further down, since
+   they depend on the rail's width. The 60px top padding that lived here was
+   for the short-lived top-nav version and would now be dead space. */
 /* The greeting was clamp(28px,5vw,42px) with 52px of padding above it: over
    170px of screen spent on a word that carries no information. It is now a
    normal line of text and the space goes to the data. */
@@ -440,11 +440,15 @@ body.light-mode .item.delegated-win{background:rgba(var(--c-accent-rgb),0.1) !im
 .today-main{min-width:0}
 .today-rail{min-width:0}
 .today-rail > *:empty{display:none}
-@media(min-width:1100px){
+/* 1360, not 1100: the nav rail takes 216px and the pane 56px of padding, so
+   at a 1100px window the content pane is only ~830px and a two-column split
+   would give the task list ~520px. The breakpoint has to describe the PANE,
+   not the viewport, now that something else occupies the left of the screen. */
+@media(min-width:1360px){
   #panel-today.active{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);column-gap:32px;align-items:start}
   /* The rail tracks the page rather than scrolling away, since alerts are
      reference material you read while working the list beside them. */
-  .today-rail{position:sticky;top:60px}
+  .today-rail{position:sticky;top:24px}
 }
 
 /* Superseded by the tab-strip rules above. Kept only so the old boxed look
@@ -618,21 +622,54 @@ body.light-mode .item.delegated-win{background:rgba(var(--c-accent-rgb),0.1) !im
   .nav-label{font-size:10px;letter-spacing:0}
   .nav-btn{padding:6px 0}
 }
+/* Wordmark. Rail only, so hidden until the rail exists. */
+.rail-brand{display:none}
+
 @media(min-width:900px){
-  .bottom-nav{top:0;bottom:auto;border-top:none;border-bottom:1px solid var(--border);padding:0}
-  .nav-inner{max-width:none;padding:0 20px;gap:4px;align-items:stretch;height:46px}
-  /* Horizontal items, label beside icon, and the active state becomes a gold
-     underline rather than gold text. Gold at 11px cannot pass contrast on
-     white without turning mustard, so on desktop the word stays near-black
-     and the rule under it carries the accent. */
-  .nav-btn{flex:0 0 auto;flex-direction:row;gap:7px;padding:0 14px;min-height:0;border-radius:0;border-bottom:2px solid transparent}
-  .nav-btn:hover{background:transparent}
+  /* ── Three-pane shell ──────────────────────────────────────────────────
+     The nav becomes a persistent left rail rather than a top strip. This is
+     the structural fix for the empty-space problem we kept chasing with CSS:
+     a centred column in a 2000px viewport has to leave voids somewhere, but
+     a rail plus a fluid main pane fills the width by construction. The rail
+     scrolls independently of the content beside it.
+     Markup is unchanged, the element is position:fixed either way. */
+  .bottom-nav{top:0;bottom:0;left:0;right:auto;width:216px;height:100vh;
+    border-top:none;border-right:1px solid var(--border);border-bottom:none;
+    padding:14px 0;display:flex;flex-direction:column;gap:10px;overflow-y:auto}
+  .rail-brand{display:flex;align-items:center;gap:9px;padding:0 18px 4px}
+  .rail-mark{font-size:17px;font-weight:var(--w-semibold);color:var(--gold);line-height:1}
+  .rail-word{font-size:14px;font-weight:var(--w-medium);color:var(--text);letter-spacing:-0.01em}
+
+  .nav-inner{max-width:none;flex-direction:column;align-items:stretch;height:auto;padding:0 10px;gap:1px}
+  /* Left-aligned rows, icon then label. The active state is a filled row
+     rather than an underline: underlines belong to horizontal tabs, and a
+     gold wash reads correctly here without gold ever becoming small text. */
+  .nav-btn{flex:0 0 auto;flex-direction:row;justify-content:flex-start;gap:10px;
+    padding:9px 12px;min-height:38px;border-radius:var(--r-sm);border-bottom:none}
+  .nav-btn:hover{background:var(--surface2)}
   .nav-btn:hover .nav-label{color:var(--text)}
-  .nav-btn.active{border-bottom-color:var(--gold-line)}
+  .nav-btn.active{background:rgba(var(--c-accent-rgb),0.12)}
   .nav-btn.active .nav-label{color:var(--text);font-weight:var(--w-medium)}
   .nav-btn.active .nav-icon{color:var(--gold)}
-  .nav-icon{font-size:16px}
+  .nav-icon{font-size:16px;width:18px;text-align:center;flex-shrink:0}
   .nav-label{font-size:13px}
+
+  /* Main pane sits beside the rail and is fluid, not centred. The old
+     max-width:1440 with auto margins is what produced symmetrical dead
+     space; here the rail anchors the left edge and content fills the rest. */
+  .app{margin-left:216px;max-width:none;padding:24px 28px 48px}
+}
+/* Very wide screens: stop the measure growing indefinitely, but anchor left
+   rather than centring, so the layout stays attached to the rail. */
+@media(min-width:1800px){
+  .app{max-width:1560px;margin-left:216px;margin-right:auto}
+}
+/* The SAM chat bar and its launcher were offset upward to clear the bottom
+   tab bar. With the rail on the left there is no bottom bar to clear, so
+   they sit at the bottom of the content pane and start after the rail. */
+@media(min-width:900px){
+  .sam-chat-bar{left:216px;bottom:0;padding:12px 28px 14px}
+  .sam-chat-fab{bottom:24px;right:24px}
 }
 .nav-active-pill{display:none}
 .nav-btn.active::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:32px;height:2.5px;background:var(--gold);border-radius:0 0 4px 4px}
@@ -1484,6 +1521,12 @@ body.light-mode .item.delegated-win{background:rgba(var(--c-accent-rgb),0.1) !im
 </div>
 
 <div class="bottom-nav">
+  <!-- Desktop only. On mobile this element is hidden and the bar stays a
+       bottom tab strip, so the same markup serves both form factors. -->
+  <div class="rail-brand">
+    <span class="rail-mark">S</span>
+    <span class="rail-word">SamoraTrack</span>
+  </div>
   <div class="nav-inner" id="bottomNav">
     <button class="nav-btn active" onclick="switchTab('today')" id="nav-today">
       <span class="nav-icon"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg></span>
