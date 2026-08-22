@@ -718,32 +718,34 @@ html,body{overflow-x:hidden}
   background:var(--bg);opacity:1;transition:opacity 420ms var(--ease)}
 #splashScreen.on{display:flex}
 #splashScreen.out{opacity:0;pointer-events:none}
-.splash-inner{display:flex;flex-direction:column;align-items:center;gap:18px}
-.splash-svg{width:132px;height:132px;overflow:visible}
+.splash-inner{display:flex;flex-direction:column;align-items:center;width:100%;max-width:720px;padding:0 24px}
+.splash-svg{width:100%;height:auto;display:block;overflow:visible}
 
-/* The trace draws itself. 2600 comfortably exceeds the real path length, so
-   the dash fully clears the stroke without measuring it in JS. */
-.splash-trace{stroke-dasharray:2600;stroke-dashoffset:2600;animation:splashDraw 1500ms var(--ease) 180ms forwards}
-@keyframes splashDraw{to{stroke-dashoffset:0}}
+/* Monitor sweep. The ghost keeps the mark readable the whole time; the live
+   segment travels it. 2292 is the measured path length, so the dash clears
+   the stroke exactly without measuring it at runtime. */
+.splash-ghost{stroke:var(--c-accent);opacity:.18}
+.splash-live{stroke:var(--c-accent);stroke-dasharray:300 2292;animation:splashSweep 2500ms linear infinite}
+@keyframes splashSweep{from{stroke-dashoffset:2292}to{stroke-dashoffset:-300}}
 
-/* Ring scribes in behind it, slightly later, so the mark assembles rather
-   than appearing all at once. */
-.splash-ring{stroke-dasharray:1745;stroke-dashoffset:1745;transform:rotate(-90deg);transform-origin:center;
-  animation:splashDraw 1100ms var(--ease) 620ms forwards}
-
-/* Once drawn, a pulse runs the trace on a loop, so a slow load still looks
-   alive rather than frozen mid-render. */
-.splash-trace{animation:splashDraw 1500ms var(--ease) 180ms forwards, splashPulse 1600ms ease-in-out 1900ms infinite}
-@keyframes splashPulse{0%,100%{opacity:1}50%{opacity:.45}}
-
-.splash-word{font-size:16px;font-weight:var(--w-medium);color:var(--text);letter-spacing:-0.01em;
-  opacity:0;animation:splashFade 500ms var(--ease) 900ms forwards}
-.splash-note{font-size:12px;color:var(--text3);opacity:0;animation:splashFade 500ms var(--ease) 1250ms forwards}
-@keyframes splashFade{to{opacity:1}}
+/* Wordmark tracks open as it fades, subtitle rises after it, rule draws last,
+   so the eye lands trace, then name, then claim. */
+.splash-word{font-size:17px;color:var(--text);margin:26px 0 8px;opacity:0;
+  animation:splashTrack 900ms var(--ease) 550ms forwards}
+@keyframes splashTrack{from{letter-spacing:.02em;opacity:0}to{letter-spacing:.34em;opacity:1}}
+.splash-note{font-size:12.5px;color:var(--text2);opacity:0;
+  animation:splashRise 700ms var(--ease) 1150ms forwards}
+@keyframes splashRise{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
+.splash-rule{width:0;height:1px;background:var(--c-accent);opacity:.5;margin-top:14px;
+  animation:splashRule 1000ms var(--ease) 1500ms forwards}
+@keyframes splashRule{to{width:118px}}
 
 @media(prefers-reduced-motion:reduce){
-  .splash-trace,.splash-ring{animation:none;stroke-dashoffset:0}
-  .splash-word,.splash-note{animation:none;opacity:1}
+  .splash-live{animation:none;stroke-dasharray:none}
+  .splash-ghost{opacity:.3}
+  .splash-word,.splash-note{animation:none;opacity:1;letter-spacing:.34em;transform:none}
+  .splash-note{letter-spacing:normal}
+  .splash-rule{animation:none;width:118px}
 }
 
 /* Today's furniture, scoped to Today. The header and calendar strip sit in
@@ -795,26 +797,25 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
 
 <!-- ════ AUTH SCREEN ════ -->
 <!-- ── Splash ────────────────────────────────────────────────────────────
-     Shown while the first data load runs. The mark is the real badge path
-     from marketing/logo/FINAL, drawn on with stroke-dashoffset so the ECG
-     traces itself, then a repeating pulse travels the same line.
-     Timing is a floor and a ceiling, not a fixed wait: it clears as soon as
-     data is ready after one full draw (~2.4s) and gives up at 5s regardless,
-     so a fast load is not padded and a slow one is not left hanging. -->
+     The mark is the real badge path from marketing/logo/FINAL, with the S
+     scaled 14% taller and one extra point added at each end to extend the
+     ECG leads. The P wave and QRS keep their exact original geometry and are
+     only shifted vertically to stay joined to the taller S, so none of the
+     logo construction rules are broken.
+     A dim ghost of the whole trace sits under a bright segment that sweeps
+     along it, which is what a cardiac monitor actually looks like and keeps
+     the shape legible the whole time rather than materialising from nothing. -->
 <div id="splashScreen" aria-hidden="true">
   <div class="splash-inner">
-    <svg class="splash-svg" viewBox="-336.60 -336.60 673.20 673.20" role="img" aria-label="SamoraTrack">
-      <defs>
-        <linearGradient id="splashGold" gradientUnits="userSpaceOnUse" x1="-306" y1="-306" x2="306" y2="306">
-          <stop offset="0%" stop-color="#B8860B"/><stop offset="45%" stop-color="#E8B84B"/><stop offset="100%" stop-color="#C8961E"/>
-        </linearGradient>
-      </defs>
-      <circle class="splash-ring" cx="0" cy="0" r="277.5" fill="none" stroke="url(#splashGold)" stroke-width="45"/>
-      <path class="splash-trace" d="M -273.56,68.46 L -185.98,68.46 L -177.65,67.58 L -169.33,65.13 L -161.01,61.58 L -152.68,57.65 L -144.36,54.10 L -136.04,51.65 L -127.71,50.77 L -119.39,51.65 L -111.07,54.10 L -102.74,57.65 L -94.42,61.58 L -86.10,65.13 L -77.77,67.58 L -69.45,68.46 L -46.56,68.46 L -44.45,68.68 L -42.27,69.33 L -40.05,70.36 L -37.78,71.74 L -35.45,73.42 L -33.08,75.37 L -30.66,77.55 L -28.19,79.93 L -25.67,82.45 L -23.12,85.08 L -20.52,87.79 L -17.87,90.53 L -15.19,93.27 L -12.47,95.97 L -9.71,98.59 L -6.92,101.08 L -4.09,103.42 L -1.23,105.56 L 1.67,107.46 L 4.59,109.09 L 7.55,110.41 L 10.53,111.37 L 13.54,111.94 L 16.58,112.08 L 19.64,111.75 L 22.73,110.91 L 25.93,109.69 L 29.05,108.33 L 32.08,106.84 L 35.01,105.23 L 37.83,103.49 L 40.55,101.63 L 43.15,99.65 L 45.63,97.57 L 47.97,95.37 L 50.19,93.06 L 52.25,90.65 L 54.18,88.15 L 55.94,85.55 L 57.54,82.86 L 58.98,80.08 L 60.24,77.21 L 61.32,74.27 L 62.21,71.25 L 62.91,68.15 L 63.40,64.99 L 63.69,61.76 L 63.77,58.46 L 63.63,55.11 L 63.26,51.70 L 62.65,48.24 L 61.81,44.74 L 60.99,42.05 L 60.02,39.52 L 58.92,37.13 L 57.69,34.87 L 56.34,32.75 L 54.87,30.75 L 53.30,28.87 L 51.63,27.10 L 49.87,25.44 L 48.03,23.88 L 46.11,22.41 L 44.13,21.04 L 42.08,19.74 L 39.98,18.52 L 37.84,17.38 L 35.65,16.30 L 33.44,15.27 L 31.20,14.30 L 28.95,13.38 L 26.69,12.49 L 24.42,11.64 L 22.17,10.82 L 19.93,10.02 L 17.71,9.24 L 15.52,8.47 L 13.37,7.70 L 11.22,6.93 L 9.05,6.15 L 6.86,5.36 L 4.65,4.55 L 2.44,3.71 L 0.22,2.85 L -1.99,1.96 L -4.19,1.03 L -6.37,0.07 L -8.54,-0.95 L -10.68,-2.02 L -12.78,-3.14 L -14.85,-4.32 L -16.87,-5.56 L -18.84,-6.88 L -20.76,-8.27 L -22.62,-9.73 L -24.40,-11.29 L -26.12,-12.92 L -27.75,-14.66 L -29.30,-16.49 L -30.76,-18.42 L -32.12,-20.46 L -33.38,-22.61 L -34.54,-24.87 L -35.57,-27.26 L -36.60,-30.17 L -37.37,-33.12 L -37.89,-36.11 L -38.17,-39.12 L -38.21,-42.14 L -38.02,-45.16 L -37.61,-48.16 L -36.98,-51.13 L -36.13,-54.06 L -35.07,-56.94 L -33.81,-59.75 L -32.35,-62.49 L -30.71,-65.13 L -28.87,-67.67 L -26.85,-70.09 L -24.66,-72.39 L -22.30,-74.54 L -19.78,-76.54 L -17.10,-78.38 L -14.26,-80.03 L -11.28,-81.50 L -8.16,-82.76 L -4.90,-83.81 L -1.52,-84.62 L 2.00,-85.20 L 5.63,-85.52 L 8.88,-85.63 L 12.11,-85.56 L 15.32,-85.34 L 18.49,-84.99 L 21.62,-84.50 L 24.73,-83.90 L 27.79,-83.20 L 30.81,-82.41 L 33.79,-81.54 L 36.73,-80.62 L 39.62,-79.65 L 42.46,-78.64 L 45.25,-77.62 L 47.99,-76.58 L 50.66,-75.55 L 53.28,-74.54 L 55.85,-73.57 L 58.34,-72.64 L 60.78,-71.77 L 63.14,-70.97 L 65.44,-70.26 L 67.66,-69.65 L 69.81,-69.15 L 71.88,-68.77 L 73.88,-68.54 L 75.79,-68.46 L 99.10,-68.46 L 110.75,-61.38 L 130.31,-137.13 L 149.04,-49.32 L 159.86,-68.46 L 273.56,-68.46" fill="none" stroke="url(#splashGold)" stroke-width="32.04"
-            stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="6"/>
+    <svg class="splash-svg" viewBox="-900 -190 1800 380" role="img" aria-label="Samora">
+      <g fill="none" stroke-width="32.04" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="6">
+        <path class="splash-ghost" d="M -893.56,76.19 L -273.56,76.19 L -185.98,76.19 L -177.65,75.31 L -169.33,72.86 L -161.01,69.31 L -152.68,65.38 L -144.36,61.83 L -136.04,59.38 L -127.71,58.50 L -119.39,59.38 L -111.07,61.83 L -102.74,65.38 L -94.42,69.31 L -86.10,72.86 L -77.77,75.31 L -69.45,76.19 L -46.56,76.19 L -44.45,76.44 L -42.27,77.18 L -40.05,78.36 L -37.78,79.93 L -35.45,81.85 L -33.08,84.07 L -30.66,86.56 L -28.19,89.27 L -25.67,92.14 L -23.12,95.14 L -20.52,98.23 L -17.87,101.35 L -15.19,104.48 L -12.47,107.55 L -9.71,110.54 L -6.92,113.38 L -4.09,116.05 L -1.23,118.49 L 1.67,120.65 L 4.59,122.51 L 7.55,124.02 L 10.53,125.11 L 13.54,125.76 L 16.58,125.92 L 19.64,125.54 L 22.73,124.59 L 25.93,123.20 L 29.05,121.64 L 32.08,119.95 L 35.01,118.11 L 37.83,116.13 L 40.55,114.01 L 43.15,111.75 L 45.63,109.38 L 47.97,106.87 L 50.19,104.24 L 52.25,101.49 L 54.18,98.64 L 55.94,95.68 L 57.54,92.61 L 58.98,89.44 L 60.24,86.17 L 61.32,82.82 L 62.21,79.37 L 62.91,75.84 L 63.40,72.24 L 63.69,68.55 L 63.77,64.79 L 63.63,60.97 L 63.26,57.09 L 62.65,53.14 L 61.81,49.15 L 60.99,46.09 L 60.02,43.20 L 58.92,40.48 L 57.69,37.90 L 56.34,35.48 L 54.87,33.20 L 53.30,31.06 L 51.63,29.04 L 49.87,27.15 L 48.03,25.37 L 46.11,23.70 L 44.13,22.13 L 42.08,20.65 L 39.98,19.26 L 37.84,17.96 L 35.65,16.73 L 33.44,15.56 L 31.20,14.45 L 28.95,13.40 L 26.69,12.39 L 24.42,11.42 L 22.17,10.48 L 19.93,9.57 L 17.71,8.68 L 15.52,7.80 L 13.37,6.93 L 11.22,6.05 L 9.05,5.16 L 6.86,4.26 L 4.65,3.34 L 2.44,2.38 L 0.22,1.40 L -1.99,0.38 L -4.19,-0.68 L -6.37,-1.77 L -8.54,-2.93 L -10.68,-4.15 L -12.78,-5.43 L -14.85,-6.78 L -16.87,-8.19 L -18.84,-9.69 L -20.76,-11.28 L -22.62,-12.94 L -24.40,-14.72 L -26.12,-16.58 L -27.75,-18.56 L -29.30,-20.65 L -30.76,-22.85 L -32.12,-25.18 L -33.38,-27.63 L -34.54,-30.20 L -35.57,-32.93 L -36.60,-36.25 L -37.37,-39.61 L -37.89,-43.02 L -38.17,-46.45 L -38.21,-49.89 L -38.02,-53.33 L -37.61,-56.75 L -36.98,-60.14 L -36.13,-63.48 L -35.07,-66.76 L -33.81,-69.97 L -32.35,-73.09 L -30.71,-76.10 L -28.87,-79.00 L -26.85,-81.75 L -24.66,-84.38 L -22.30,-86.83 L -19.78,-89.11 L -17.10,-91.20 L -14.26,-93.09 L -11.28,-94.76 L -8.16,-96.20 L -4.90,-97.39 L -1.52,-98.32 L 2.00,-98.98 L 5.63,-99.34 L 8.88,-99.47 L 12.11,-99.39 L 15.32,-99.14 L 18.49,-98.74 L 21.62,-98.18 L 24.73,-97.50 L 27.79,-96.70 L 30.81,-95.80 L 33.79,-94.81 L 36.73,-93.76 L 39.62,-92.65 L 42.46,-91.50 L 45.25,-90.34 L 47.99,-89.15 L 50.66,-87.98 L 53.28,-86.83 L 55.85,-85.72 L 58.34,-84.66 L 60.78,-83.67 L 63.14,-82.76 L 65.44,-81.95 L 67.66,-81.25 L 69.81,-80.68 L 71.88,-80.25 L 73.88,-79.99 L 75.79,-79.90 L 99.10,-79.90 L 110.75,-72.82 L 130.31,-148.57 L 149.04,-60.76 L 159.86,-79.90 L 273.56,-79.90 L 893.56,-79.90"/>
+        <path class="splash-live"  d="M -893.56,76.19 L -273.56,76.19 L -185.98,76.19 L -177.65,75.31 L -169.33,72.86 L -161.01,69.31 L -152.68,65.38 L -144.36,61.83 L -136.04,59.38 L -127.71,58.50 L -119.39,59.38 L -111.07,61.83 L -102.74,65.38 L -94.42,69.31 L -86.10,72.86 L -77.77,75.31 L -69.45,76.19 L -46.56,76.19 L -44.45,76.44 L -42.27,77.18 L -40.05,78.36 L -37.78,79.93 L -35.45,81.85 L -33.08,84.07 L -30.66,86.56 L -28.19,89.27 L -25.67,92.14 L -23.12,95.14 L -20.52,98.23 L -17.87,101.35 L -15.19,104.48 L -12.47,107.55 L -9.71,110.54 L -6.92,113.38 L -4.09,116.05 L -1.23,118.49 L 1.67,120.65 L 4.59,122.51 L 7.55,124.02 L 10.53,125.11 L 13.54,125.76 L 16.58,125.92 L 19.64,125.54 L 22.73,124.59 L 25.93,123.20 L 29.05,121.64 L 32.08,119.95 L 35.01,118.11 L 37.83,116.13 L 40.55,114.01 L 43.15,111.75 L 45.63,109.38 L 47.97,106.87 L 50.19,104.24 L 52.25,101.49 L 54.18,98.64 L 55.94,95.68 L 57.54,92.61 L 58.98,89.44 L 60.24,86.17 L 61.32,82.82 L 62.21,79.37 L 62.91,75.84 L 63.40,72.24 L 63.69,68.55 L 63.77,64.79 L 63.63,60.97 L 63.26,57.09 L 62.65,53.14 L 61.81,49.15 L 60.99,46.09 L 60.02,43.20 L 58.92,40.48 L 57.69,37.90 L 56.34,35.48 L 54.87,33.20 L 53.30,31.06 L 51.63,29.04 L 49.87,27.15 L 48.03,25.37 L 46.11,23.70 L 44.13,22.13 L 42.08,20.65 L 39.98,19.26 L 37.84,17.96 L 35.65,16.73 L 33.44,15.56 L 31.20,14.45 L 28.95,13.40 L 26.69,12.39 L 24.42,11.42 L 22.17,10.48 L 19.93,9.57 L 17.71,8.68 L 15.52,7.80 L 13.37,6.93 L 11.22,6.05 L 9.05,5.16 L 6.86,4.26 L 4.65,3.34 L 2.44,2.38 L 0.22,1.40 L -1.99,0.38 L -4.19,-0.68 L -6.37,-1.77 L -8.54,-2.93 L -10.68,-4.15 L -12.78,-5.43 L -14.85,-6.78 L -16.87,-8.19 L -18.84,-9.69 L -20.76,-11.28 L -22.62,-12.94 L -24.40,-14.72 L -26.12,-16.58 L -27.75,-18.56 L -29.30,-20.65 L -30.76,-22.85 L -32.12,-25.18 L -33.38,-27.63 L -34.54,-30.20 L -35.57,-32.93 L -36.60,-36.25 L -37.37,-39.61 L -37.89,-43.02 L -38.17,-46.45 L -38.21,-49.89 L -38.02,-53.33 L -37.61,-56.75 L -36.98,-60.14 L -36.13,-63.48 L -35.07,-66.76 L -33.81,-69.97 L -32.35,-73.09 L -30.71,-76.10 L -28.87,-79.00 L -26.85,-81.75 L -24.66,-84.38 L -22.30,-86.83 L -19.78,-89.11 L -17.10,-91.20 L -14.26,-93.09 L -11.28,-94.76 L -8.16,-96.20 L -4.90,-97.39 L -1.52,-98.32 L 2.00,-98.98 L 5.63,-99.34 L 8.88,-99.47 L 12.11,-99.39 L 15.32,-99.14 L 18.49,-98.74 L 21.62,-98.18 L 24.73,-97.50 L 27.79,-96.70 L 30.81,-95.80 L 33.79,-94.81 L 36.73,-93.76 L 39.62,-92.65 L 42.46,-91.50 L 45.25,-90.34 L 47.99,-89.15 L 50.66,-87.98 L 53.28,-86.83 L 55.85,-85.72 L 58.34,-84.66 L 60.78,-83.67 L 63.14,-82.76 L 65.44,-81.95 L 67.66,-81.25 L 69.81,-80.68 L 71.88,-80.25 L 73.88,-79.99 L 75.79,-79.90 L 99.10,-79.90 L 110.75,-72.82 L 130.31,-148.57 L 149.04,-60.76 L 159.86,-79.90 L 273.56,-79.90 L 893.56,-79.90"/>
+      </g>
     </svg>
-    <div class="splash-word">SamoraTrack</div>
-    <div class="splash-note" id="splashNote">Reading your pipeline…</div>
+    <div class="splash-word">SAMORA</div>
+    <div class="splash-note" id="splashNote">Your revenue health engine is loading</div>
+    <div class="splash-rule"></div>
   </div>
 </div>
 <div id="authScreen" class="screen active">
