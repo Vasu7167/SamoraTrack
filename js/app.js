@@ -3596,7 +3596,35 @@ async function runExternalSignals(repId, resultElId) {
 // Runs automatically on app open. Scans inbox for OOO replies, creates
 // follow-up tasks on the first business day after the person returns.
 // Shows a quiet notification in the Today tab (not the SAM tab).
+// Shared busy-state helper for the small header buttons. Swaps the label,
+// blocks a second click, and restores whatever the button said before.
+function setBtnBusy(id, busyLabel) {
+  var b = document.getElementById(id); if (!b) return null;
+  if (b.dataset.busy === '1') return null;      // already running
+  b.dataset.busy = '1';
+  b.dataset.restore = b.innerHTML;
+  b.classList.add('is-busy');
+  b.disabled = true;
+  b.textContent = busyLabel;
+  return b;
+}
+function clearBtnBusy(id, doneLabel, holdMs) {
+  var b = document.getElementById(id); if (!b) return;
+  var restore = function() {
+    b.innerHTML = b.dataset.restore || b.innerHTML;
+    b.classList.remove('is-busy'); b.disabled = false; b.dataset.busy = '';
+  };
+  if (doneLabel) {
+    // Say what happened before snapping back, otherwise a scan that finds
+    // nothing is indistinguishable from a button that did nothing.
+    b.classList.remove('is-busy'); b.textContent = doneLabel;
+    setTimeout(restore, holdMs || 2200);
+  } else { restore(); }
+}
+
 async function processOooMails() {
+  var _btn = setBtnBusy('oooScanBtn', 'Scanning…');
+  // Called on load as well as by the button, so a missing button is normal.
   try {
     var r = await fetch(EDGE_FN_URL, {
       method:'POST',
@@ -3604,7 +3632,11 @@ async function processOooMails() {
       body:JSON.stringify({action:'process_ooo_mails', days:14})
     });
     var d = await r.json();
-    if (!d.ok || !d.tasksCreated?.length) return;
+    if (!d.ok || !d.tasksCreated?.length) {
+      if (_btn) clearBtnBusy('oooScanBtn', d && d.ok ? 'No new OOO replies' : 'Scan failed');
+      return;
+    }
+    if (_btn) clearBtnBusy('oooScanBtn', d.tasksCreated.length + ' follow-up' + (d.tasksCreated.length !== 1 ? 's' : '') + ' added');
     // Show quiet banner in Today tab
     var row    = document.getElementById('oooSyncRow');
     var status = document.getElementById('oooSyncStatus');
@@ -3620,7 +3652,11 @@ async function processOooMails() {
     }
     // Refresh task list so new tasks appear immediately if they're for today
     syncDown().then(function(){ render(); });
-  } catch(e) { /* silent — non-critical */ }
+  } catch(e) {
+    // A thrown request must still release the button, otherwise it spins
+    // forever and the only way out is a page reload.
+    if (_btn) clearBtnBusy('oooScanBtn', 'Scan failed');
+  }
 }
 
 // ── Auto-complete obvious tasks ───────────────────────────────────────────────
