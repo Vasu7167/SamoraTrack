@@ -402,22 +402,28 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .cfill.ok{background:var(--green)}
 .chint{font-size:11px;color:var(--coral);margin-top:2px;display:none}
 .chint.show{display:block}
-.items{display:flex;flex-direction:column;gap:8px}
+.items{display:flex;flex-direction:column;gap:0}
+/* Rows separated by hairlines, not a stack of bordered cards. Eight boxes
+   each with their own border, radius, background and 8px gutter is most of
+   what read as cluttered: the borders compete with the content and the
+   gutters make a short list look sparse. A list is a list. */
 .score-ring{position:relative;width:72px;height:72px;flex-shrink:0}
 .score-ring svg{transform:rotate(-90deg)}
 .score-ring .score-num{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:20px;font-weight:600;color:var(--text);line-height:1}
 .score-ring .score-lbl{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;white-space:nowrap}
 .day-bar{height:4px;border-radius:2px;background:var(--surface2);overflow:hidden;margin-top:4px}
 .day-bar-fill{height:100%;border-radius:2px;transition:width 0.5s}
-.item{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;display:flex;align-items:flex-start;gap:10px;transition:border-color 0.15s var(--ease);animation:slideIn 0.15s var(--ease)}
-.item:hover{border-color:var(--border2);transform:translateY(-1px)}
+.item{background:transparent;border:none;border-bottom:1px solid var(--border);border-radius:0;padding:11px 4px;display:flex;align-items:flex-start;gap:10px;transition:background 120ms var(--ease)}
+.items > .item:last-child{border-bottom:none}
+.item:hover{background:var(--surface2)}
 .drag-handle{width:20px;flex-shrink:0;cursor:grab;text-align:center;color:var(--gold-lt);font-size:16px;user-select:none;opacity:0.7}.drag-handle:hover{opacity:1}.drag-handle:hover{opacity:0.8;color:var(--gold)}
-.item.done{opacity:0.35;filter:grayscale(0.3)}
+.item.done{opacity:0.45;filter:none}
 .sortable-ghost{opacity:0.3;background:var(--surface2)!important}
 .sortable-chosen{border-color:var(--gold)!important}
 .item.done .item-text{text-decoration:line-through}
-.item.win-item{border-left:2px solid var(--green)}
-.item.priority-task{background:rgba(192,82,63,0.18) !important;border-color:rgba(192,82,63,0.5) !important;border-left:3px solid var(--coral) !important}
+.item.win-item{border-left:2px solid var(--green);padding-left:10px}
+/* A left rule reads as priority. A filled wash reads as an error state. */
+.item.priority-task{background:transparent !important;border-left:2px solid var(--coral) !important;padding-left:10px}
 .item.priority-task .item-text{color:var(--text)}
 .priority-badge{font-size:11px;font-weight:700;background:var(--coral);color:#FAF8F4;border-radius:2px;padding:2px 8px;margin-left:6px;letter-spacing:0.04em;text-transform:uppercase;vertical-align:middle}
 .delegated-badge{font-size:11px;font-weight:700;background:rgba(var(--c-accent-rgb),0.3);color:var(--gold);border:1.5px solid var(--gold);border-radius:2px;padding:2px 8px;margin-left:6px;letter-spacing:0.04em;vertical-align:middle}
@@ -442,7 +448,7 @@ body.light-mode .item.delegated-win{background:rgba(var(--c-accent-rgb),0.1) !im
 .idot{width:20px;flex-shrink:0;margin-top:3px;display:flex;align-items:center;justify-content:center}
 .idot::before{content:'';width:7px;height:7px;border-radius:50%;display:block}
 .dc::before{background:var(--coral)}.dg::before{background:var(--green)}.dm::before{background:var(--miss)}
-.item-text{flex:1;font-size:14px;color:var(--text);line-height:1.6}
+.item-text{flex:1;font-size:13px;color:var(--text);line-height:1.5}
 .item-meta{font-size:11px;color:var(--text3);margin-top:3px;letter-spacing:0.01em;opacity:0.8}
 .idel{background:none;border:none;cursor:pointer;color:var(--text3);font-size:14px;padding:0 2px;opacity:0;transition:opacity 0.15s;flex-shrink:0;margin-top:2px}
 .item:hover .idel{opacity:1}
@@ -494,8 +500,8 @@ body.light-mode .item.delegated-win{background:rgba(var(--c-accent-rgb),0.1) !im
    .active rule that lived here was removed rather than renamed: it came
    later in the cascade and silently overrode the new underline state. */
 .today-section{margin-bottom:8px}
-.today-sec-header{display:flex;align-items:center;justify-content:space-between;padding:12px 0 8px;border-bottom:1px solid var(--border);margin-bottom:8px}
-.today-sec-title{font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em}
+.today-sec-header{display:flex;align-items:center;justify-content:space-between;padding:14px 0 7px;border-bottom:1px solid var(--border);margin-bottom:0}
+.today-sec-title{font-size:11px;font-weight:var(--w-medium);color:var(--text3);text-transform:uppercase;letter-spacing:0.08em}
 .today-sec-count{font-size:12px;color:var(--text3)}
 .sam-icon{font-family:var(--font)!important;font-size:20px!important;font-weight:600;color:var(--gold)!important;line-height:1;letter-spacing:-0.02em}
 .nav-btn.active .sam-icon{color:var(--gold)!important}
@@ -555,7 +561,23 @@ body.light-mode .item.delegated-win{background:rgba(var(--c-accent-rgb),0.1) !im
 .signal-body{font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:8px}
 .signal-action{font-size:12px;color:var(--green);background:rgba(110,231,183,0.08);border-radius:2px;padding:5px 10px}
 .rtab{flex:1;padding:10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:transparent;color:var(--text2);font-family:var(--font);font-size:13px;cursor:pointer;transition:all 0.2s}
-.template-btn{font-size:12px;background:var(--surface2);border:1px solid var(--border2);border-radius:2px;color:var(--text2);padding:6px 12px;cursor:pointer;font-family:var(--font);transition:all 0.2s}
+/* Secondary actions. They were flat panels the same colour as the surface
+   behind them, which is why OOO scan did not read as pressable. Now they have
+   their own surface, a real hover, and a pressed state, so the affordance is
+   visible before you click rather than only after something happens. */
+.template-btn{font-size:12px;background:var(--surface);border:1px solid var(--border-strong,var(--border2));border-radius:var(--r-sm);color:var(--text2);padding:6px 12px;cursor:pointer;font-family:var(--font);
+  display:inline-flex;align-items:center;gap:6px;min-height:30px;
+  transition:background 120ms var(--ease),border-color 120ms var(--ease),color 120ms var(--ease)}
+.template-btn:active{background:var(--surface3,var(--surface2))}
+/* Busy state. The label is swapped by JS; this stops double-firing a scan and
+   makes the wait legible instead of looking like nothing happened. */
+.template-btn[disabled],.template-btn.is-busy{cursor:default;opacity:.75}
+.template-btn.is-busy::before{content:'';width:11px;height:11px;border-radius:var(--r-round);
+  border:1.5px solid var(--border-strong,var(--border2));border-top-color:var(--gold);
+  animation:btnSpin 700ms linear infinite;flex-shrink:0}
+@keyframes btnSpin{to{transform:rotate(360deg)}}
+.template-btn.is-busy .ico{display:none}
+@media(prefers-reduced-motion:reduce){.template-btn.is-busy::before{animation:none}}
 .pv-btn{font-size:11px;padding:5px 14px;border-radius:3px;border:1px solid var(--border2);background:var(--surface2);color:var(--text3);cursor:pointer;font-family:var(--sans);font-weight:500;transition:all 0.15s}
 .pv-btn.active{background:var(--gold);border-color:var(--gold);color:#18160F}
 .pv-btn:hover:not(.active){color:var(--text);border-color:var(--border2)}
@@ -935,8 +957,8 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
         <span style="font-size:11px;color:var(--text3)">Today's tasks</span>
         <div style="display:flex;gap:5px">
-          <button onclick="processOooMails()" style="padding:3px 8px;border-radius:3px;background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);font-size:11px;cursor:pointer" title="Scan inbox for Out-of-Office replies and create follow-up tasks"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> OOO scan</button>
-          <button id="autoCompleteBtn" onclick="autoCompleteTasks()" style="padding:3px 10px;border-radius:3px;background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);font-size:11px;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Auto-complete</button> </div> </div>
+          <button id="oooScanBtn" class="template-btn" onclick="processOooMails()" title="Scan inbox for Out-of-Office replies and create follow-up tasks"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> OOO scan</button>
+          <button id="autoCompleteBtn" class="template-btn" onclick="autoCompleteTasks()"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Auto-complete</button> </div> </div>
       <div id="today-anon-row" style="display:none;margin-bottom:8px">
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--text2)">
           <input type="checkbox" id="todayAnonToggle" style="accent-color:var(--gold);width:15px;height:15px">
