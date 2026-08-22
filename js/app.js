@@ -621,6 +621,14 @@ function switchTab(tab) {
     const mode = (seniorRole && _samMode === 'team') ? 'team' : 'self';
     setSamMode(mode);
   }
+  // SAMpaign is its own tab now. It used to be populated lazily when the SAM
+  // tab's "signal" sub-tab was opened, which no longer happens, so it loads
+  // here instead. Guarded on empty so switching tabs does not re-render and
+  // discard in-progress state in the workspace.
+  if (tab === 'sampaign') {
+    var spSec = document.getElementById('sampaignManualSection');
+    if (spSec && !spSec.innerHTML.trim()) loadSampaignWorkspace();
+  }
   if (tab === 'intel') { loadIntelligence(); }
   if (tab === 'pipeline') { loadPipeline(); loadMeetingsKpiSelf(); }
   if (tab === 'org') { if (currentUser?.refresh_token) { refreshToken().then(() => renderOrg()); } else { renderOrg(); } }
@@ -2841,12 +2849,10 @@ function setSamSubTab(tab) {
     var ivrOut = document.getElementById('ivrOutput');
     if (ivrOut && !ivrOut.innerHTML.trim()) runIntentVsReality(null, 'ivrOutput', _selfIvrPeriod);
   }
-  // Populate the SAMpaign workspace (role-gated manual campaigns section)
-  // the first time the Signal sub-tab is shown.
-  if (tab === 'signal') {
-    var spSec = document.getElementById('sampaignManualSection');
-    if (spSec && !spSec.innerHTML.trim()) loadSampaignWorkspace();
-  }
+  // The SAMpaign workspace used to be lazily populated here, when the SAM
+  // tab's Signal sub-tab was first shown. It now lives in its own top-level
+  // tab and loads from switchTab('sampaign'), so this hook is gone rather
+  // than left pointing at markup that is no longer in this panel.
 }
 
 // ── SAM Daily Brief ───────────────────────────────────────────────────────────
