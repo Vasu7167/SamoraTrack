@@ -611,6 +611,13 @@ body.light-mode .item.delegated-win{background:rgba(var(--c-accent-rgb),0.1) !im
 .nav-btn.active .nav-label{color:var(--gold);font-weight:var(--w-medium)}
 .nav-btn:hover .nav-icon,.nav-btn:hover .nav-label{color:var(--text2)}
 
+/* Six tabs on a phone bottom bar is the practical ceiling, and "SAMpaign" is
+   the longest label. Below 380px the labels shrink rather than wrap or clip,
+   which is what would otherwise happen on a small iPhone. */
+@media(max-width:380px){
+  .nav-label{font-size:10px;letter-spacing:0}
+  .nav-btn{padding:6px 0}
+}
 @media(min-width:900px){
   .bottom-nav{top:0;bottom:auto;border-top:none;border-bottom:1px solid var(--border);padding:0}
   .nav-inner{max-width:none;padding:0 20px;gap:4px;align-items:stretch;height:46px}
@@ -777,13 +784,15 @@ body.light-mode .item.delegated-win{background:rgba(var(--c-accent-rgb),0.1) !im
       <div class="items" id="today-list-misses"></div> </div>
     </div>
     <div class="today-rail">
+    <!-- Today's meetings sit above alerts: they are time-bound and the day is
+         planned around them, whereas alerts are a backlog you triage. -->
+    <div id="meetingPrepSection" style="display:none;margin-bottom:12px"></div>
     <div id="coachingAlertsPanel" style="margin-bottom:12px"></div>
     <div style="margin-bottom:12px" id="teamWinsCard">
       <button onclick="toggleTeamFeedWidget()" style="width:100%;text-align:left;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;font-family:var(--sans);font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:space-between">
         <span><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> Team wins</span><span id="teamFeedWidgetChev" style="color:var(--text3)">›</span> </button>
       <div id="teamFeedWidgetBody" style="display:none;background:var(--surface);border:1px solid var(--border);border-top:none;border-radius:0 0 var(--radius) var(--radius);padding:10px 14px">
         <div id="teamFeedWidget">Loading…</div> </div> </div>
-    <div id="meetingPrepSection" style="display:none;margin-top:12px"></div>
     </div>
   </div>
 
@@ -818,6 +827,25 @@ body.light-mode .item.delegated-win{background:rgba(var(--c-accent-rgb),0.1) !im
 
   <!-- ── Review ── -->
   <!-- ── Pipeline ── -->
+
+  <!-- ── SAMPAIGN ── -->
+  <!-- Promoted out of the SAM tab to its own top-level tab: outreach is a
+       distinct job from reading signals, and it sat below a signal feed you
+       had to scroll past to reach it. The markup below is byte-identical to
+       what was in panel-signals, only its parent changed, so
+       loadSampaignWorkspace() and every id inside it keep working. -->
+  <div class="panel" id="panel-sampaign" style="padding-bottom:120px">
+    <div id="sampaignWorkspace" style="margin-bottom:14px">
+          <div style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;padding:12px 14px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+              <span style="font-size:13px;font-weight:600;color:var(--text)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM15.5 8.5l-2 5-5 2 2-5z"/></svg> SAMpaign</span>
+              <div style="display:flex;gap:6px">
+                <button onclick="syncSequencing()" id="seqSyncBtn" style="font-size:11px;font-weight:600;padding:5px 10px;border-radius:2px;background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);color:var(--green);cursor:pointer;font-family:var(--sans)">↺ Sync</button>
+                <button onclick="loadSequencingStats()" id="seqStatsBtn" style="font-size:11px;font-weight:600;padding:5px 10px;border-radius:2px;background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);color:var(--green);cursor:pointer;font-family:var(--sans)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> Analytics</button> </div> </div>
+            <div id="seqSyncOutput" style="margin-top:2px"></div>
+            <div id="sampaignManualSection" style="margin-top:10px"></div>
+            <div id="seqStatsOutput" style="margin-top:10px"></div> </div> </div>
+  </div>
   <div class="panel" id="panel-pipeline" style="padding-bottom:120px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <div>
@@ -956,21 +984,7 @@ body.light-mode .item.delegated-win{background:rgba(var(--c-accent-rgb),0.1) !im
             <div id="timeAnalyticsOutput" style="margin-top:10px"></div>
             <div id="externalSignalsOutput" style="display:none"></div> </div> </div>
 
-        <!-- ── SAMpaign workspace (moved here from Pipeline tab) ────────────
-             One home for outreach: sync + tool-synced analytics (was the
-             separate "Sync SAMpaigns"/"SAMpaign stats" buttons above, now
-             embedded here instead) plus manual, no-tool campaigns for
-             AE/SDR/Manager. Role-gated sections render via loadSampaignWorkspace(). -->
-        <div id="sampaignWorkspace" style="margin-bottom:14px">
-          <div style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;padding:12px 14px">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-              <span style="font-size:13px;font-weight:600;color:var(--text)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM15.5 8.5l-2 5-5 2 2-5z"/></svg> SAMpaign</span>
-              <div style="display:flex;gap:6px">
-                <button onclick="syncSequencing()" id="seqSyncBtn" style="font-size:11px;font-weight:600;padding:5px 10px;border-radius:2px;background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);color:var(--green);cursor:pointer;font-family:var(--sans)">↺ Sync</button>
-                <button onclick="loadSequencingStats()" id="seqStatsBtn" style="font-size:11px;font-weight:600;padding:5px 10px;border-radius:2px;background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);color:var(--green);cursor:pointer;font-family:var(--sans)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> Analytics</button> </div> </div>
-            <div id="seqSyncOutput" style="margin-top:2px"></div>
-            <div id="sampaignManualSection" style="margin-top:10px"></div>
-            <div id="seqStatsOutput" style="margin-top:10px"></div> </div> </div>
+
 
         <!-- Signal feed + account search -->
         <div style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;padding:10px 14px;display:flex;gap:8px;margin-bottom:8px">
@@ -1477,6 +1491,9 @@ body.light-mode .item.delegated-win{background:rgba(var(--c-accent-rgb),0.1) !im
     <button class="nav-btn" onclick="switchTab('signals')" id="nav-signals">
       <span class="nav-icon sam-icon">S</span>
       <span class="nav-label">SAM</span> </button>
+    <button class="nav-btn" onclick="switchTab('sampaign')" id="nav-sampaign">
+      <span class="nav-icon"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM15.5 8.5l-2 5-5 2 2-5z"/></svg></span>
+      <span class="nav-label">SAMpaign</span> </button>
     <button class="nav-btn" onclick="switchTab('pipeline')" id="nav-pipeline">
       <span class="nav-icon">◈</span>
       <span class="nav-label">Pipeline</span> </button>
