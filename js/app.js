@@ -328,29 +328,35 @@ function _applyRoleChrome() {
   if (navIntelBtn) navIntelBtn.style.display = seniorRole ? '' : 'none';
 }
 // ── Splash control ────────────────────────────────────────────────────────
-// A floor and a ceiling rather than a fixed wait. MIN_MS covers one full draw
-// so the mark never flashes half-finished on a fast connection; MAX_MS stops
-// a stalled request holding the screen hostage. Anything in between clears as
-// soon as the data is actually in, because padding a fast load is just making
-// people wait for a logo.
-var _splashMin = 2400, _splashMax = 5000, _splashShownAt = 0, _splashDone = false, _splashTimer = null;
+// Minimum 5s, then it stays as long as the load takes. Two full sweeps of the
+// trace is the brand moment; the data being ready sooner does not cut it short.
+//
+// _splashFailsafe is not a cap on load time, it is a guard against a request
+// that never settles at all. Without it a hung fetch leaves someone staring at
+// a logo with no way forward, so at 25s the app is shown regardless and
+// whatever data arrived is rendered. That is a stuck-state guard, not a
+// deadline for a slow connection.
+var _splashMin = 5000, _splashFailsafe = 25000;
+var _splashShownAt = 0, _splashDone = false, _splashTimer = null, _splashDataReady = false;
 
 function showSplash(note) {
   var el = document.getElementById('splashScreen'); if (!el) return;
-  _splashShownAt = Date.now(); _splashDone = false;
+  _splashShownAt = Date.now(); _splashDone = false; _splashDataReady = false;
   el.classList.remove('out'); el.classList.add('on');
   if (note) { var n = document.getElementById('splashNote'); if (n) n.textContent = note; }
-  // Hard ceiling, so a hung request can never strand the user on the logo.
   clearTimeout(_splashTimer);
-  _splashTimer = setTimeout(function(){ hideSplash(true); }, _splashMax);
+  _splashTimer = setTimeout(function(){ hideSplash(true); }, _splashFailsafe);
 }
 
+// Called when the data lands. Does not dismiss on its own: if the 5s floor has
+// not elapsed it just records that the load is done, and the floor timer
+// dismisses when it expires.
 function hideSplash(force) {
   if (_splashDone) return;
   var el = document.getElementById('splashScreen'); if (!el) return;
+  _splashDataReady = true;
   var waited = Date.now() - _splashShownAt;
   if (!force && waited < _splashMin) {
-    // Data beat the animation. Let the draw finish rather than cutting it.
     clearTimeout(_splashTimer);
     _splashTimer = setTimeout(function(){ hideSplash(true); }, _splashMin - waited);
     return;
