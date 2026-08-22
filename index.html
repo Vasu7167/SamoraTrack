@@ -258,17 +258,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
   .header{padding:14px 0 12px}
   .greeting{font-size:17px}
 }
-/* The header and the date strip sit OUTSIDE the two-column grid, so left
-   unchecked they run the full 1440 while the content below is split. That is
-   what made the page look skewed: a full-width progress bar reading "1 of 2
-   done" across 2000px, and a date strip stranded beside a void.
-   Both are now capped to the same width as the main column (1.7 of 2.7 tracks,
-   less half the 32px gutter) so the page has one consistent left edge and one
-   consistent right edge at every height. */
-@media(min-width:1100px){
-  .header,.cal-strip,.progress-row{max-width:calc(62.96% - 16px)}
-  .cal-strip{margin-bottom:18px}
-}
+/* Capping these to the main column width was the wrong fix and made it worse:
+   it turned a rectangular void into an L-shaped one. The date strip was never
+   too wide, it was too NARROW for its container. Fifteen cells at a fixed
+   42px is about 630px of content sitting in a 2000px row, and everything
+   below inherited that emptiness.
+   Full-bleed regions stay full bleed; the cells stretch to fill instead. */
 .meta-row{display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap}
 .user-email{font-size:13px;color:var(--text2)}
 .role-pill{font-size:11px;font-weight:500;border-radius:3px;padding:3px 10px}
@@ -328,6 +323,15 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .cal-num{font-size:14px;font-weight:500;color:var(--text2)}
 .cal-d.active .cal-num{color:var(--gold)}
 .cal-d.today-m .cal-num{color:var(--text)}
+@media(min-width:1100px){
+  .cal-strip{gap:6px;margin-bottom:20px;overflow-x:visible}
+  .cal-d{flex:1 1 0;width:auto;min-width:0;padding:9px 4px}
+  .cal-num{font-size:15px}
+  /* A 3px rule stretched across 2000px to say "1 of 2 done" reads as a page
+     divider, not a progress indicator. Capped so it looks like a measure of
+     something rather than a horizontal rule with a caption. */
+  .progress-row{max-width:420px}
+}
 .tabs{display:none!important}
 .tab{flex:1;min-width:60px;padding:10px 8px;border-radius:var(--radius-sm);border:1px solid var(--border);background:transparent;color:var(--text2);font-family:var(--font);font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;transition:all 0.2s;position:relative}
 .tab:hover{border-color:var(--border2);color:var(--text);background:var(--surface)}
