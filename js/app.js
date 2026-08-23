@@ -327,6 +327,87 @@ function _applyRoleChrome() {
   const navIntelBtn = document.getElementById('nav-intel');
   if (navIntelBtn) navIntelBtn.style.display = seniorRole ? '' : 'none';
 }
+// ── Needs attention + metric drill-downs ──────────────────────────────────
+// Both read from these two caches, which are filled by the loaders that
+// already fetch the data. Nothing here triggers a request, so the rail and
+// the drill-downs cannot disagree with the numbers in the strip above them.
+var _naAlerts = [], _naFeed = [];
+
+function renderNeedsAttention() {
+  var el = document.getElementById('needsAttention'); if (!el) return;
+  if (!_naAlerts.length) {
+    el.innerHTML = '<div class="rail-empty">Nothing needs attention right now.</div>';
+    return;
+  }
+  // Highest severity first, then whatever order the backend ranked them in.
+  var rank = { high: 0, medium: 1, low: 2 };
+  var sorted = _naAlerts.slice().sort(function(a, b) {
+    return (rank[a.severity] == null ? 3 : rank[a.severity]) - (rank[b.severity] == null ? 3 : rank[b.severity]);
+  });
+  var sevLabel = { high: 'High', medium: 'Medium', low: 'Low' };
+  el.innerHTML = sorted.slice(0, 6).map(function(a) {
+    var sev = a.severity || 'low';
+    return '<div class="na-row" onclick="toggleMetricDrill(\'alerts\')">' +
+             '<div class="na-main">' +
+               '<div class="na-name">' + esc(a.title || 'Account needs attention') + '</div>' +
+               (a.detail ? '<div class="na-why">' + esc(a.detail) + '</div>' : '') +
+             '</div>' +
+             '<div class="na-sev ' + sev + '">' + (sevLabel[sev] || '') + '</div>' +
+           '</div>';
+  }).join('') +
+  (sorted.length > 6
+    ? '<div class="rail-empty" style="font-style:normal;cursor:pointer" onclick="toggleMetricDrill(\'alerts\')">' +
+      'and ' + (sorted.length - 6) + ' more</div>'
+    : '');
+}
+
+var _openDrill = null;
+function toggleMetricDrill(which) {
+  var host = document.getElementById('metricDrill'); if (!host) return;
+  if (_openDrill === which) {   // second click closes
+    _openDrill = null; host.classList.remove('on'); host.innerHTML = '';
+    ['metricAlerts','metricWins'].forEach(function(id){ var e=document.getElementById(id); if(e) e.classList.remove('is-open'); });
+    return;
+  }
+  _openDrill = which;
+  ['metricAlerts','metricWins'].forEach(function(id){ var e=document.getElementById(id); if(e) e.classList.remove('is-open'); });
+  var btn = document.getElementById(which === 'alerts' ? 'metricAlerts' : 'metricWins');
+  if (btn) btn.classList.add('is-open');
+
+  var title, rows;
+  if (which === 'alerts') {
+    title = 'All alerts';
+    rows = _naAlerts.length ? _naAlerts.map(function(a) {
+      var sev = a.severity || 'low';
+      return '<div class="drill-row"><div style="flex:1;min-width:0">' + esc(a.title || '') +
+             (a.detail ? '<div class="drill-why">' + esc(a.detail) + '</div>' : '') +
+             '</div><div class="na-sev ' + sev + '">' + (sev === 'high' ? 'High' : sev === 'medium' ? 'Medium' : 'Low') + '</div></div>';
+    }).join('') : '<div class="rail-empty">No active alerts.</div>';
+  } else {
+    title = 'Team wins, last 7 days';
+    var wk = _naFeed.filter(_isThisWeek);
+    rows = wk.length ? wk.map(function(f) {
+      return '<div class="drill-row"><div style="flex:1;min-width:0">' + esc(f.title || '') +
+             (f.body ? '<div class="drill-why">' + esc(f.body) + '</div>' : '') +
+             '</div><div class="drill-when">' + _relDay(f.created_at) + '</div></div>';
+    }).join('') : '<div class="rail-empty">No team wins logged this week.</div>';
+  }
+  host.innerHTML = '<div class="drill-head"><div class="drill-title">' + title + '</div>' +
+    '<button class="drill-close" onclick="toggleMetricDrill(\'' + which + '\')">Close</button></div>' + rows;
+  host.classList.add('on');
+}
+
+function _isThisWeek(f) {
+  if (!f || !f.created_at) return false;
+  var t = new Date(f.created_at).getTime();
+  return !isNaN(t) && (Date.now() - t) <= 7 * 86400000;
+}
+function _relDay(iso) {
+  var t = new Date(iso).getTime(); if (isNaN(t)) return '';
+  var d = Math.floor((Date.now() - t) / 86400000);
+  return d <= 0 ? 'today' : d === 1 ? 'yesterday' : d + 'd ago';
+}
+
 // ── Today metric strip ────────────────────────────────────────────────────
 // Each metric is written by whichever loader already owns that data, rather
 // than the strip fetching everything itself. Open tasks are local so they
@@ -4913,7 +4994,17 @@ async function loadTeamFeed(targetElId, limit) {
     window._teamFeedTarget = targetElId;
     // Team wins metric. Counted from the same payload the widget renders, so
     // the number and the list can never disagree.
-    try { if (d.ok && Array.isArray(d.feed)) _setMetric('mTeamWins', d.feed.length); } catch(_e) {}
+    try {
+      if (d.ok && Array.isArray(d.feed)) {
+        _naFeed = d.feed;
+        // x/y: wins in the last 7 days over everything in the feed window,
+        // so the headline number is this week and the denominator is the
+        // context it sits in, rather than a bare count with no scale.
+        var _wk = d.feed.filter(_isThisWeek).length;
+        _setMetric('mTeamWins', _wk, '<span class="unit">/' + d.feed.length + '</span>');
+        if (_openDrill === 'wins') { _openDrill = null; toggleMetricDrill('wins'); }
+      }
+    } catch(_e) {}
     el.innerHTML = (d.ok && d.feed) ? _renderFeedEntries(d.feed) : '<div style="font-size:12px;color:var(--coral)">Could not load feed.</div>';
   } catch(e) { el.innerHTML = '<div style="font-size:12px;color:var(--coral)">Could not load feed.</div>'; }
 }
@@ -5917,7 +6008,11 @@ function _fmtRelTime(iso) {
 // All functions here use server-side rules engine. No external AI.
 
 async function loadCoachingAlerts() {
-  var panel = document.getElementById('coachingAlertsPanel'); if (!panel) return;
+  // The old collapsible alerts panel was removed from the Today rail: the
+  // rail now shows Needs attention, and the full list lives behind the Alerts
+  // metric. This function is still the only thing that fetches alerts, so it
+  // must run WITHOUT that element or the metric and the rail both stay empty.
+  var panel = document.getElementById('coachingAlertsPanel');
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
       body:JSON.stringify({action:'get_coaching_alerts', role: profile?.role||'member'}) });
@@ -5928,9 +6023,12 @@ async function loadCoachingAlerts() {
     try {
       var _hi = alerts.filter(function(a){ return a.severity === 'high'; }).length;
       _setMetric('mAlerts', alerts.length, _hi ? ' <span class="hi">' + _hi + ' high</span>' : '');
+      _naAlerts = alerts;
+      renderNeedsAttention();
+      if (_openDrill === 'alerts') { _openDrill = null; toggleMetricDrill('alerts'); }
     } catch(_e) {}
     if (!alerts.length) {
-      panel.innerHTML = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="font-size:11px;color:var(--text3)">No active alerts</span><button onclick="runCoachingAlerts()" style="font-size:11px;padding:2px 8px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);cursor:pointer">↻ Check now</button></div>';
+      if (panel) panel.innerHTML = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="font-size:11px;color:var(--text3)">No active alerts</span><button onclick="runCoachingAlerts()" style="font-size:11px;padding:2px 8px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);cursor:pointer">↻ Check now</button></div>';
       return;
     }
     var sevColor = {high:'var(--coral)', medium:'var(--amber)', low:'var(--blue)'};
@@ -5966,7 +6064,10 @@ async function loadCoachingAlerts() {
     }
     html += '</div>';  // collapsible body
     html += '</div>';
-    panel.innerHTML = html;
+    // Guarded: the element no longer exists on Today. Throwing here would
+    // abort the function AFTER the caches were filled but BEFORE anything
+    // downstream ran, which is the worst kind of half-failure.
+    if (panel) panel.innerHTML = html;
   } catch(e) { /* non-fatal */ }
 }
 
