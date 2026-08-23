@@ -793,6 +793,41 @@ html,body{overflow-x:hidden}
   .metric-val{font-size:20px}
 }
 
+/* ── Right rail: needs attention ──────────────────────────────────────── */
+.rail-head{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;
+  padding:14px 0 7px;border-bottom:1px solid var(--border);margin-bottom:0}
+.rail-empty{font-size:12px;color:var(--text3);font-style:italic;padding:14px 0}
+.na-row{display:flex;align-items:flex-start;gap:12px;padding:11px 0;border-bottom:1px solid var(--border);cursor:pointer}
+.na-row:last-child{border-bottom:none}
+.na-row:hover{background:var(--surface2)}
+.na-main{flex:1;min-width:0}
+.na-name{font-size:13px;color:var(--text);line-height:1.4}
+.na-why{font-size:11px;color:var(--text3);margin-top:2px;line-height:1.45}
+/* Severity, not an invented score. High reads risk, medium reads warning. */
+.na-sev{font-size:11px;flex-shrink:0;white-space:nowrap;padding-top:1px}
+.na-sev.high{color:var(--coral)}
+.na-sev.medium{color:var(--amber)}
+.na-sev.low{color:var(--text3)}
+
+/* Metrics that drill down. Only the two that have something to show are
+   interactive; making all five look clickable when three are not is the kind
+   of thing that teaches people to stop clicking. */
+.metric.is-clickable{cursor:pointer;transition:background 120ms var(--ease)}
+.metric.is-clickable:hover{background:var(--surface2)}
+.metric.is-clickable .metric-lbl::after{content:' ›';color:var(--text3);font-size:12px}
+.metric.is-open .metric-lbl{color:var(--gold)}
+.metric.is-open .metric-lbl::after{content:' ⌄'}
+#metricDrill{border-bottom:1px solid var(--border);margin-bottom:18px;display:none}
+#metricDrill.on{display:block}
+.drill-head{display:flex;align-items:center;justify-content:space-between;padding:12px 0 8px}
+.drill-title{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em}
+.drill-close{background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;padding:2px 6px}
+.drill-close:hover{color:var(--text)}
+.drill-row{display:flex;align-items:flex-start;gap:12px;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px;color:var(--text)}
+.drill-row:last-child{border-bottom:none}
+.drill-why{font-size:11px;color:var(--text3);margin-top:2px}
+.drill-when{font-size:11px;color:var(--text3);flex-shrink:0;white-space:nowrap}
+
 /* Today's furniture, scoped to Today. The header and calendar strip sit in
    .app (outside the panels) so they rendered on every tab: a date picker on
    the Intel screen, and a capped-width header distorting the panels below it.
@@ -959,11 +994,14 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
        first paint and only the numbers change. -->
   <div class="metric-strip" id="todayMetrics">
     <div class="metric"><div class="metric-lbl">Open tasks</div><div class="metric-val" id="mOpenTasks">&ndash;</div></div>
-    <div class="metric"><div class="metric-lbl">Alerts</div><div class="metric-val" id="mAlerts">&ndash;</div></div>
+    <div class="metric is-clickable" id="metricAlerts" onclick="toggleMetricDrill('alerts')"><div class="metric-lbl">Alerts</div><div class="metric-val" id="mAlerts">&ndash;</div></div>
     <div class="metric"><div class="metric-lbl">Verified pipeline</div><div class="metric-val" id="mVerified">&ndash;</div></div>
     <div class="metric"><div class="metric-lbl">Coverage</div><div class="metric-val" id="mCoverage">&ndash;</div></div>
-    <div class="metric"><div class="metric-lbl">Team wins</div><div class="metric-val" id="mTeamWins">&ndash;</div></div>
+    <div class="metric is-clickable" id="metricWins" onclick="toggleMetricDrill('wins')"><div class="metric-lbl">Weekly team wins</div><div class="metric-val" id="mTeamWins">&ndash;</div></div>
   </div>
+  <!-- Drill-down for the two interactive metrics. Rendered from data already
+       held in memory, so opening it costs nothing. -->
+  <div id="metricDrill"></div>
 
   <!-- ── TODAY ── -->
   <div class="panel active" id="panel-today">
@@ -1024,12 +1062,13 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
       <div class="items" id="today-list-misses"></div> </div>
     </div>
     <div class="today-rail">
-    <div id="coachingAlertsPanel" style="margin-bottom:12px"></div>
-    <div style="margin-bottom:12px" id="teamWinsCard">
-      <button onclick="toggleTeamFeedWidget()" style="width:100%;text-align:left;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;font-family:var(--sans);font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:space-between">
-        <span><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> Team wins</span><span id="teamFeedWidgetChev" style="color:var(--text3)">›</span> </button>
-      <div id="teamFeedWidgetBody" style="display:none;background:var(--surface);border:1px solid var(--border);border-top:none;border-radius:0 0 var(--radius) var(--radius);padding:10px 14px">
-        <div id="teamFeedWidget">Loading…</div> </div> </div>
+      <!-- Needs attention. Derived from the same coaching alerts the metric
+           strip counts, so the number above and the list here can never
+           disagree. No invented delta: the alerts carry severity and a
+           reason, not a score change, and showing a made up figure next to
+           a real account name is exactly what the receipts rule forbids. -->
+      <div class="rail-head">Needs attention</div>
+      <div id="needsAttention"><div class="rail-empty">Checking your accounts…</div></div>
     </div>
   </div>
 
