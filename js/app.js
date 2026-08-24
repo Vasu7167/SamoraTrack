@@ -270,11 +270,24 @@ async function loadProfile() {
   if (!SB_URL) { const cached = localStorage.getItem('dt-profile-' + currentUser?.id); if (cached) profile = JSON.parse(cached); return; }
   try {
     const rows = await Promise.race([
-      sbGet(`user_profiles?user_id=eq.${currentUser.id}&select=role,org_id,manager_id`),
+      sbGet(`user_profiles?user_id=eq.${currentUser.id}&select=role,org_id,manager_id,is_active`),
       new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
     ]);
     if (rows && rows.length) {
       const p = rows[0];
+      // Removed from the org. The auth user is banned too, but a live session
+      // would otherwise keep working until its token expired, so say plainly
+      // what happened rather than letting them hit confusing partial failures.
+      if (p.is_active === false) {
+        localStorage.removeItem('dt-user');
+        localStorage.removeItem('dt-profile-' + currentUser.id);
+        currentUser = null; profile = null;
+        try { hideSplash(true); } catch (_e) {}
+        document.getElementById('appScreen')?.classList.remove('active');
+        document.getElementById('authScreen')?.classList.add('active');
+        showMsg('Your access to this organisation has been removed. Contact your admin.', true);
+        return;
+      }
       const orgs = await sbGet(`organisations?id=eq.${p.org_id}&select=org_code,name&limit=1`);
       profile = { ...p, org_code: orgs?.[0]?.org_code || '—', org_name: orgs?.[0]?.name || 'Unknown' };
       localStorage.setItem('dt-profile-' + currentUser.id, JSON.stringify(profile));
