@@ -348,6 +348,10 @@ var _naAlerts = [], _naFeed = [];
 
 function renderNeedsAttention() {
   var el = document.getElementById('needsAttention'); if (!el) return;
+  // The count sits in the header so a collapsed rail still says how much is
+  // behind it. A collapsed section that hides its own size is a trap.
+  var _nc = document.getElementById('naCount');
+  if (_nc) _nc.textContent = _naAlerts.length ? String(_naAlerts.length) : '';
   if (!_naAlerts.length) {
     el.innerHTML = '<div class="rail-empty">Nothing needs attention right now.</div>';
     return;
@@ -519,6 +523,11 @@ function launchApp() {
   document.getElementById('appScreen').classList.add('active');
   const role = profile?.role || 'member';
   _applyRoleChrome();
+  // An unwired helper is the same as no helper. Both read the DOM that
+  // launchApp has just made visible, so they run here rather than at parse
+  // time when #appScreen is still hidden and widths measure as zero.
+  _restoreNeedsAttentionState();
+  _wireMetricScrollHint();
   // Load ICP definition for admin users (once, on launch)
   if (['super_admin','admin','manager','director','executive'].includes(role)) {
     setTimeout(loadIcpDefinition, 2000);
@@ -724,8 +733,52 @@ function updateHeader() {
   const total = taskList.length, done = taskList.filter(t=>t.done).length;
   const pct = total ? Math.round(done/total*100) : 0;
   document.getElementById('progFill').style.width = pct + '%';
-  document.getElementById('progLbl').textContent = total ? done + ' of ' + total + ' done' : 'No tasks yet';
+  // The label used to live in its own band above the date strip, saying the
+  // same thing as the Open tasks metric. It now sits beside the Tasks heading,
+  // next to the list it describes. Kept null-safe: the element is hidden, and
+  // other screens do not render it at all.
+  var _pl = document.getElementById('progLbl');
+  if (_pl) _pl.textContent = total ? done + ' of ' + total + ' done' : 'No tasks yet';
+  var _tc = document.getElementById('tasksDoneCount');
+  if (_tc) _tc.textContent = total ? done + ' of ' + total + ' done' : '';
 }
+// Needs attention: collapsible, and the choice sticks. On a phone the rail
+// sits below the task list, so leaving it open pushes the rest of the day off
+// screen. On desktop it is a peripheral glance and stays open by default.
+function toggleNeedsAttention() {
+  var h = document.getElementById('railHead');
+  if (!h) return;
+  var collapsed = h.classList.toggle('rail-collapsed');
+  try { localStorage.setItem('naCollapsed', collapsed ? '1' : '0'); } catch (_e) {}
+}
+function _restoreNeedsAttentionState() {
+  var h = document.getElementById('railHead');
+  if (!h) return;
+  var v = null;
+  try { v = localStorage.getItem('naCollapsed'); } catch (_e) {}
+  // No stored preference: collapsed on a phone, open on a wide screen.
+  var collapse = (v === null) ? (window.innerWidth <= 900) : (v === '1');
+  h.classList.toggle('rail-collapsed', collapse);
+}
+
+// Scroll affordance for the metric strip. The scrollbar is hidden by design,
+// so without this there is nothing to say four more metrics exist to the right.
+// The chevron fades out once there is nothing left to scroll to.
+function _wireMetricScrollHint() {
+  var wrap = document.getElementById('todayMetricsWrap');
+  var strip = document.getElementById('todayMetrics');
+  if (!wrap || !strip || strip._hintWired) return;
+  strip._hintWired = true;
+  var upd = function() {
+    var atEnd = strip.scrollLeft + strip.clientWidth >= strip.scrollWidth - 4;
+    // Nothing to scroll at all (wide screen, or few metrics) also counts.
+    wrap.classList.toggle('at-end', atEnd || strip.scrollWidth <= strip.clientWidth + 4);
+  };
+  strip.addEventListener('scroll', upd, { passive: true });
+  window.addEventListener('resize', upd);
+  upd();
+}
+
 function updateBadges() {
   const d = dayData(viewDate);
   ['tasks','issues','wins','misses'].forEach(k => { const el = document.getElementById('b-'+k); if(el) el.textContent = d[k]?.length||0; });
