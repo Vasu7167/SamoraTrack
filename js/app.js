@@ -9600,6 +9600,7 @@ function loadSampaignWorkspace() {
       '<input type="file" id="sampaignNewCsv" accept=".csv,text/csv" style="font-size:11px;color:var(--text2)"/>' +
       '<button onclick="createSampaign()" style="padding:9px;border:none;border-radius:2px;background:var(--green);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--sans)">Create SAMpaign</button>' +
       '</div></div>' +
+    '<div id="sampaignListToolbar"></div>' +
     '<div id="sampaignCampaignsList"><div style="font-size:12px;color:var(--text3);padding:6px 0">Loading…</div></div>';
   _fupRender('new');
   loadSampaignCampaigns();
@@ -9730,14 +9731,85 @@ async function createSampaign() {
   } catch(e) { showToast('Error: '+e.message); }
 }
 
+// Active / Archived sub-tab, plus an owner filter for managers. Both live in
+// module state rather than the DOM so a re-render after edit, delete or
+// restore keeps whatever the user was looking at.
+window._sampaignView = window._sampaignView || 'active';
+window._sampaignOwnerFilter = window._sampaignOwnerFilter || 'all';
+
+function setSampaignView(v) {
+  window._sampaignView = (v === 'archived') ? 'archived' : 'active';
+  loadSampaignCampaigns();
+}
+function setSampaignOwnerFilter(v) {
+  window._sampaignOwnerFilter = v || 'all';
+  loadSampaignCampaigns();
+}
+
+// The toolbar is rendered from the SERVER's owner roster, not from the
+// campaigns on screen. If it were built from results, filtering to a rep with
+// no campaigns in this view would remove them from the dropdown and strand
+// the user on an empty list with no way back.
+function _renderSampaignToolbar(d) {
+  var host = document.getElementById('sampaignListToolbar');
+  if (!host) return;
+  var counts = d.counts || {};
+  var owners = d.owners || [];
+  var view = window._sampaignView;
+
+  var tab = function(key, label, n) {
+    var on = view === key;
+    return '<button onclick="setSampaignView(\''+key+'\')" style="padding:5px 11px;border:none;border-bottom:2px solid '+(on?'var(--gold)':'transparent')+
+      ';background:none;color:'+(on?'var(--text)':'var(--text3)')+';font-size:12px;font-weight:'+(on?'700':'500')+
+      ';cursor:pointer;font-family:var(--sans)">'+label+(n != null ? ' <span style="color:var(--text3);font-weight:500">'+n+'</span>' : '')+'</button>';
+  };
+
+  var filter = '';
+  // Only worth showing when there is more than one person to choose between.
+  if (owners.length > 1) {
+    var opts = ['<option value="all"'+(window._sampaignOwnerFilter==='all'?' selected':'')+'>Everyone ('+owners.length+')</option>'];
+    owners.forEach(function(o) {
+      var lbl = (o.user_id === d.me) ? o.name + ' (me)' : o.name;
+      opts.push('<option value="'+esc(o.user_id)+'"'+(window._sampaignOwnerFilter===o.user_id?' selected':'')+'>'+esc(lbl)+'</option>');
+    });
+    filter = '<select onchange="setSampaignOwnerFilter(this.value)" style="padding:4px 8px;border-radius:2px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:11px;font-family:var(--sans)">'+opts.join('')+'</select>';
+  }
+
+  host.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid var(--border2);margin:4px 0 10px">' +
+      '<div style="display:flex;gap:2px">' + tab('active','Active',counts.active) + tab('archived','Archived',counts.archived) + '</div>' +
+      '<div style="padding-bottom:4px">' + filter + '</div>' +
+    '</div>';
+}
+
 async function loadSampaignCampaigns() {
   var el = document.getElementById('sampaignCampaignsList');
   if (!el) return;
+  var viewing = window._sampaignView;
   try {
-    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body: JSON.stringify({ action:'list_sampaigns' }) });
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body: JSON.stringify({ action:'list_sampaigns', view: viewing }) });
     var d = await r.json();
     if (!d.ok) { el.innerHTML = '<div style="font-size:11px;color:var(--coral)">'+esc(d.error||'Failed to load')+'</div>'; return; }
-    if (!d.campaigns || !d.campaigns.length) { el.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:4px 0">No manual SAMpaigns yet. Create one above, or use a connected sequencing tool for SAMpaign Analytics instead.</div>'; return; }
+    _renderSampaignToolbar(d);
+
+    var all = d.campaigns || [];
+    // Filtering client-side is deliberate: the roster and counts already came
+    // back with the list, so switching person is instant and cannot produce a
+    // stale count.
+    if (window._sampaignOwnerFilter && window._sampaignOwnerFilter !== 'all') {
+      all = all.filter(function(c) { return c.owner_user_id === window._sampaignOwnerFilter; });
+    }
+    d = Object.assign({}, d, { campaigns: all });
+
+    if (!all.length) {
+      // Honest empty states: "none in this view" is a different fact from
+      // "none at all", and telling the user which one they are looking at is
+      // the difference between a filter and a bug.
+      var why = viewing === 'archived'
+        ? (window._sampaignOwnerFilter !== 'all' ? 'No archived SAMpaigns for this person.' : 'Nothing archived. Deleted SAMpaigns appear here and can be restored.')
+        : (window._sampaignOwnerFilter !== 'all' ? 'No active SAMpaigns for this person.' : 'No manual SAMpaigns yet. Create one above, or use a connected sequencing tool for SAMpaign Analytics instead.');
+      el.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:4px 0">'+esc(why)+'</div>';
+      return;
+    }
     // Cache full campaign objects (name/followup_dates/alerts_enabled) so the
     // edit form can prefill instantly without a second fetch.
     window._sampaignCampaignsCache = {};
@@ -9797,8 +9869,11 @@ async function loadSampaignCampaigns() {
                 : '<span style="font-size:11px;color:var(--text3)">not sent yet</span>') +
             '</div>' +
             '<div style="display:flex;align-items:center;gap:3px;flex-shrink:0">' +
-              (isOwner ? '<button onclick="event.stopPropagation();toggleEditSampaignForm(\''+esc(c.id)+'\')" title="Edit SAMpaign" style="background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;padding:3px 5px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 00-3-3L5 17v3z"/></svg></button>' : '') +
-              (isOwner ? '<button onclick="event.stopPropagation();deleteSampaignCampaign(\''+esc(c.id)+'\',\''+esc(c.name)+'\')" title="Delete SAMpaign" style="background:none;border:none;color:var(--coral);font-size:13px;cursor:pointer;padding:3px 5px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 6.5h15M9 6.5V4h6v2.5M6.5 6.5V20h11V6.5M10 10v6M14 10v6"/></svg></button>' : '') +
+              (viewing === 'archived'
+                ? (isOwner ? '<button onclick="event.stopPropagation();restoreSampaignCampaign(\''+esc(c.id)+'\',\''+esc(c.name)+'\')" title="Restore SAMpaign" style="background:none;border:none;color:var(--green);font-size:11px;font-weight:700;cursor:pointer;padding:3px 7px;font-family:var(--sans)">Restore</button>' : '<span style="font-size:11px;color:var(--text3)">archived</span>')
+                : '') +
+              ((viewing !== 'archived' && isOwner) ? '<button onclick="event.stopPropagation();toggleEditSampaignForm(\''+esc(c.id)+'\')" title="Edit SAMpaign" style="background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;padding:3px 5px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 00-3-3L5 17v3z"/></svg></button>' : '') +
+              ((viewing !== 'archived' && isOwner) ? '<button onclick="event.stopPropagation();deleteSampaignCampaign(\''+esc(c.id)+'\',\''+esc(c.name)+'\')" title="Delete SAMpaign" style="background:none;border:none;color:var(--coral);font-size:13px;cursor:pointer;padding:3px 5px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 6.5h15M9 6.5V4h6v2.5M6.5 6.5V20h11V6.5M10 10v6M14 10v6"/></svg></button>' : '') +
               '<span title="Open" style="font-size:12px;color:var(--gold)">⤢</span>' +
             '</div>' +
           '</div>' +
@@ -9810,6 +9885,22 @@ async function loadSampaignCampaigns() {
       '</div>';
     }).join('');
   } catch(e) { el.innerHTML = '<div style="font-size:11px;color:var(--coral)">Error: '+esc(e.message)+'</div>'; }
+}
+
+// Restore an archived SAMpaign. Says plainly what does NOT come back:
+// archiving cancelled the queued sends and cleared the follow-up dates, and
+// silently re-arming a month-old queue would email people about a campaign
+// they were dropped from.
+async function restoreSampaignCampaign(campaignId, name) {
+  if (!confirm('Restore "' + name + '"?\n\nIt returns to Active. Follow-ups and queued emails were cancelled when it was deleted and will NOT be rescheduled automatically.')) return;
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'restore_sampaign', campaign_id: campaignId }) });
+    var d = await r.json();
+    if (!d.ok) { showToast('Error: '+(d.error||'Could not restore SAMpaign')); return; }
+    showToast('SAMpaign restored to Active');
+    loadSampaignCampaigns();
+  } catch(e) { showToast('Error: '+e.message); }
 }
 
 // ── Edit SAMpaign: name / follow-up cadence / alert toggles. Domain/account
@@ -9879,7 +9970,12 @@ async function deleteSampaignCampaign(campaignId, name) {
       body: JSON.stringify({ action:'archive_sampaign', campaign_id: campaignId }) });
     var d = await r.json();
     if (!d.ok) { showToast('Error: '+(d.error||'Could not delete SAMpaign')); return; }
- showToast('SAMpaign deleted');
+    // Report what was actually disarmed. A rep deleting a campaign with 40
+    // queued emails should see that they were cancelled, not a bare "deleted".
+    var stopped = [];
+    if (d.cancelled_sends) stopped.push(d.cancelled_sends + ' queued email' + (d.cancelled_sends === 1 ? '' : 's'));
+    if (d.cleared_followups) stopped.push(d.cleared_followups + ' follow-up' + (d.cleared_followups === 1 ? '' : 's'));
+    showToast(stopped.length ? 'SAMpaign archived, ' + stopped.join(' and ') + ' cancelled' : 'SAMpaign archived');
     loadSampaignCampaigns();
   } catch(e) { showToast('Error: '+e.message); }
 }
