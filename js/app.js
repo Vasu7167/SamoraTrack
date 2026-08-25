@@ -283,8 +283,7 @@ async function loadProfile() {
         localStorage.removeItem('dt-profile-' + currentUser.id);
         currentUser = null; profile = null;
         try { hideSplash(true); } catch (_e) {}
-        document.getElementById('appScreen')?.classList.remove('active');
-        document.getElementById('authScreen')?.classList.add('active');
+        showScreen('authScreen');
         showMsg('Your access to this organisation has been removed. Contact your admin.', true);
         return;
       }
@@ -299,14 +298,28 @@ async function loadProfile() {
       .then(r=>r.json()).then(cfg=>{ if(cfg.ok){if(cfg.googleClientId)GOOGLE_CLIENT_ID_SAM=cfg.googleClientId;window._orgConfig=cfg;} }).catch(()=>{});
   } catch(e) {}
 }
+// ── Exactly one screen is visible, always ────────────────────────────────
+// Five separate places were adding and removing .active by hand, so any path
+// that added one without removing the other left BOTH mounted: the app on top
+// and the login split-screen scrolled in underneath it. That is the glitch in
+// the screenshot, and it is a whole class of bug rather than one bad line.
+//
+// Clearing every .screen before setting one makes the invariant structural
+// instead of something each call site has to remember.
+function showScreen(id) {
+  var all = document.querySelectorAll('.screen');
+  for (var i = 0; i < all.length; i++) all[i].classList.remove('active');
+  var el = document.getElementById(id);
+  if (el) el.classList.add('active');
+}
+
 function doLogout() {
   localStorage.removeItem('dt-user'); currentUser = null; profile = null; allData = {};
   // Habits are per-user server state — clear the in-memory copy so the next
   // user who signs in on this device fetches THEIR habits instead of seeing
   // (and accidentally saving over their profile with) the previous user's.
   _userHabits = null; _habitSuggestions = null;
-  document.getElementById('appScreen').classList.remove('active');
-  document.getElementById('authScreen').classList.add('active');
+  showScreen('authScreen');
 }
 
 // ── Role hierarchy (matches edge function) ──────────────────────────────
@@ -519,8 +532,7 @@ function hideSplash(force) {
 
 function launchApp() {
   showSplash('Reading your pipeline…');
-  document.getElementById('authScreen').classList.remove('active');
-  document.getElementById('appScreen').classList.add('active');
+  showScreen('appScreen');
   const role = profile?.role || 'member';
   _applyRoleChrome();
   // An unwired helper is the same as no helper. Both read the DOM that
