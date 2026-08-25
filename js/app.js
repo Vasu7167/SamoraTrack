@@ -11386,25 +11386,69 @@ async function _loadTimelineBody() {
     var acts = (data.activities || data.timeline || []).filter(function(e){ return e && e.date; });
     var series = data.score_series || [];
     if (!acts.length && !series.length) { body.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:20px 0;text-align:center">No activity found in the last ' + _tlDays + ' days.</div>'; return; }
-    body.innerHTML = _renderTimelineIntel(acts, data.engagement, series) + _renderTimelineEvents(acts);
+    body.innerHTML = _renderTimelineIntel(acts, data.engagement, series, data) + _renderTimelineEvents(acts);
   } catch(e) {
     var b = document.getElementById('timeline-body');
     if (b) b.innerHTML = '<div style="color:var(--coral);font-size:12px">Error: ' + esc(e.message) + '</div>';
   }
 }
 
-function _tlDaysAgo(dateStr) { return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000); }
+// Days since a date. Returns null for anything unparseable OR in the future.
+//
+// This previously returned a raw subtraction, so a future dated row produced a
+// NEGATIVE number, which surfaced as "Last touch -1d ago" and "touched in the
+// last -1 days". Worse than the wrong label: the temperature rule below is
+// `daysQuiet <= 3`, and a negative satisfies that, so one scheduled meeting
+// made a dead account read "Hot". An account at 11/100 health, dark 35 days,
+// was being shown as the hottest thing on the page.
+//
+// A future date is not a touch. It has not happened yet.
+function _tlDaysAgo(dateStr) {
+  var t = new Date(dateStr).getTime();
+  if (isNaN(t)) return null;
+  var d = Math.floor((Date.now() - t) / 86400000);
+  return d < 0 ? null : d;
+}
 
 // ── Samora Intelligence panel: temperature, momentum, activity, engagement ───
-function _renderTimelineIntel(acts, engagement, series) {
+function _renderTimelineIntel(acts, engagement, series, meta) {
   series = (series || []).filter(function(s){ return s && s.date; }).slice().sort(function(a,b){ return new Date(a.date) - new Date(b.date); });
   var firstScore = series.length ? series[0].score : null;
   var lastScore = series.length ? series[series.length - 1].score : null;
   var scoreDelta = (firstScore != null && lastScore != null) ? lastScore - firstScore : null;
 
-  var actDates = acts.map(function(a){ return a.date; }).filter(Boolean).sort();
-  var lastDate = actDates.length ? actDates[actDates.length - 1] : (series.length ? series[series.length - 1].date : null);
+  // Only activity that has ALREADY happened counts as a touch. A scheduled
+  // meeting is a plan, not contact, and letting one in is what produced the
+  // negative "last touch" and the false Hot reading.
+  var _now = Date.now();
+  var actDates = acts.map(function(a){ return a.date; }).filter(function(dt){
+    if (!dt) return false;
+    var t = new Date(dt).getTime();
+    return !isNaN(t) && t <= _now;
+  }).sort();
+  var lastDate = actDates.length ? actDates[actDates.length - 1] : null;
+  // Score history is a fallback ONLY. A score changing is Samora recalculating,
+  // not somebody being contacted, so it must never masquerade as a touch when
+  // real activity exists.
+  if (!lastDate && series.length) {
+    var pastScores = series.filter(function(s){ var t=new Date(s.date).getTime(); return !isNaN(t) && t <= _now; });
+    lastDate = pastScores.length ? pastScores[pastScores.length - 1].date : null;
+  }
   var daysQuiet = lastDate ? _tlDaysAgo(lastDate) : null;
+
+  // ── The backend's answer wins ────────────────────────────────────────────
+  // Deriving last touch from the activity list makes it WINDOW DEPENDENT, and
+  // that is what produced the contradiction where one account read "6d ago" on
+  // the 30d view and "29d ago" on the 60d view. The list is deduplicated by
+  // label, so a repeated label could drop its most recent instance once a
+  // wider window pulled in an older one.
+  //
+  // last_touch_days is computed server-side from real mailbox timestamps and
+  // trusted meeting records, independent of the window, and it is the same
+  // number the pipeline "Dark Nd" chip now reads. One account, one answer.
+  if (meta && meta.last_touch_days != null && meta.last_touch_days >= 0) {
+    daysQuiet = meta.last_touch_days;
+  }
 
   var activeDays = {};
   acts.forEach(function(a){ if (a.date) activeDays[a.date.slice(0,10)] = 1; });
@@ -11416,8 +11460,10 @@ function _renderTimelineIntel(acts, engagement, series) {
   var sentTot = sent.positive + sent.negative + sent.neutral;
 
   var temp, tempColor, tempWhy;
-  if (daysQuiet == null) { temp = 'Quiet'; tempColor = 'var(--text3)'; tempWhy = 'no dated activity on record'; }
-  else if (daysQuiet <= 3 && (scoreDelta || 0) > 0) { temp = 'Hot'; tempColor = 'var(--coral)'; tempWhy = 'touched in the last ' + daysQuiet + ' day' + (daysQuiet===1?'':'s') + ', signal rising'; }
+  // Ordered so the null case is caught first and every branch below can rely
+  // on daysQuiet being a real non-negative number.
+  if (daysQuiet == null) { temp = 'Quiet'; tempColor = 'var(--text3)'; tempWhy = 'no past activity on record'; }
+  else if (daysQuiet <= 3 && (scoreDelta || 0) > 0) { temp = 'Hot'; tempColor = 'var(--coral)'; tempWhy = 'touched ' + (daysQuiet === 0 ? 'today' : daysQuiet + ' day' + (daysQuiet===1?'':'s') + ' ago') + ', signal rising'; }
   else if ((scoreDelta || 0) > 0 && daysQuiet <= 14) { temp = 'Warming'; tempColor = 'var(--amber)'; tempWhy = 'signal up ' + scoreDelta + ' points, active this fortnight'; }
   else if (daysQuiet <= 14) { temp = 'Steady'; tempColor = 'var(--green)'; tempWhy = 'consistent contact, last touch ' + daysQuiet + ' day' + (daysQuiet===1?'':'s') + ' ago'; }
   else if (daysQuiet <= 30 || (scoreDelta || 0) < 0) { temp = 'Cooling'; tempColor = 'var(--amber)'; tempWhy = daysQuiet + ' days quiet' + ((scoreDelta||0) < 0 ? ', signal slipping' : ''); }
