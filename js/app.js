@@ -4999,7 +4999,14 @@ function _renderFeedEntries(entries) {
   }).join('');
 }
 async function loadTeamFeed(targetElId, limit) {
-  var el = document.getElementById(targetElId); if (!el || !currentUser?.token) return;
+  // The element may legitimately be absent: the Today screen shows the metric
+  // without rendering the feed list, and the mobile layout drops the widget
+  // entirely. Returning early here is why "Weekly team wins" sat on its
+  // placeholder dash forever. Same mistake as the coaching alerts panel.
+  // Fetch regardless, always set the metric, and only paint the list if there
+  // is somewhere to paint it.
+  var el = document.getElementById(targetElId);
+  if (!currentUser?.token) return;
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
       body:JSON.stringify({ action:'list_team_feed', limit: limit || 30 }) });
@@ -5014,12 +5021,14 @@ async function loadTeamFeed(targetElId, limit) {
         // so the headline number is this week and the denominator is the
         // context it sits in, rather than a bare count with no scale.
         var _wk = d.feed.filter(_isThisWeek).length;
+        // "0/0" is a fact. The em dash was a placeholder that never got
+        // replaced, and it read as "broken" rather than "nothing yet".
         _setMetric('mTeamWins', _wk, '<span class="unit">/' + d.feed.length + '</span>');
         if (_openDrill === 'wins') { _openDrill = null; toggleMetricDrill('wins'); }
       }
     } catch(_e) {}
-    el.innerHTML = (d.ok && d.feed) ? _renderFeedEntries(d.feed) : '<div style="font-size:12px;color:var(--coral)">Could not load feed.</div>';
-  } catch(e) { el.innerHTML = '<div style="font-size:12px;color:var(--coral)">Could not load feed.</div>'; }
+    if (el) el.innerHTML = (d.ok && d.feed) ? _renderFeedEntries(d.feed) : '<div style="font-size:12px;color:var(--coral)">Could not load feed.</div>';
+  } catch(e) { if (el) el.innerHTML = '<div style="font-size:12px;color:var(--coral)">Could not load feed.</div>'; }
 }
 let _teamFeedWidgetLoaded = false;
 function toggleTeamFeedWidget() {
@@ -9130,17 +9139,21 @@ function _magnifierIcon(sz, col) {
 }
 
 function detectiveSamCardHtml() {
-  return '<div style="background:var(--surface2);border:1px solid rgba(var(--c-accent-rgb),0.28);border-radius:3px;padding:12px;margin-bottom:14px">' +
-    '<div style="display:flex;align-items:center;gap:11px">' +
+  // Classes, not inline styles, because this needs a media query. The chip
+  // carries white-space:nowrap, so on a narrow screen it could not shrink and
+  // overflowed its flex parent straight underneath the Investigate button.
+  // Below 560px the card stacks and the button goes full width.
+  return '<div class="dsam-card">' +
+    '<div class="dsam-row">' +
       _detectiveSamAvatar(46) +
-      '<div style="flex:1;min-width:0">' +
-        '<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">' +
+      '<div class="dsam-main">' +
+        '<div class="dsam-title">' +
           '<span style="font-size:14px;font-weight:700;color:var(--text)">Detective SAM</span>' +
           _samoraIntelChip() +
         '</div>' +
         '<div style="font-size:11px;color:var(--text3);margin-top:2px">Find anyone: LinkedIn, emails, phone numbers, current and past employers.</div>' +
       '</div>' +
-      '<button onclick="openDetectiveSam()" style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:8px 14px;border-radius:3px;background:var(--c-accent-solid);border:none;color:#2A1F0C;cursor:pointer;font-family:var(--sans);flex-shrink:0">' +
+      '<button onclick="openDetectiveSam()" class="dsam-btn">' +
         _magnifierIcon(14, '#2A1F0C') + 'Investigate</button>' +
     '</div>' +
   '</div>';
