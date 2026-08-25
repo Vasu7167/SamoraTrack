@@ -316,11 +316,35 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .date-nav{display:flex;align-items:center;gap:6px;flex-shrink:0;margin-top:4px}
 .nav-arr{background:var(--surface2);border:1px solid var(--border2);border-radius:2px;color:var(--text2);width:28px;height:28px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all 0.15s}
 .nav-arr:hover{color:var(--text);border-color:var(--gold)}
+/* ── Detective SAM card ───────────────────────────────────────────────────
+   The Samora Intelligence chip sets white-space:nowrap, so it cannot shrink.
+   In a single flex row on a phone it overflowed its parent and rendered on
+   top of the Investigate button. Below 560px the card stacks instead. */
+.dsam-card{background:var(--surface2);border:1px solid rgba(var(--c-accent-rgb),0.28);
+  border-radius:3px;padding:12px;margin-bottom:14px}
+.dsam-row{display:flex;align-items:center;gap:11px}
+.dsam-main{flex:1;min-width:0}
+.dsam-title{display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-width:0}
+.dsam-btn{display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;
+  font-weight:700;padding:8px 14px;border-radius:3px;background:var(--c-accent-solid);
+  border:none;color:#2A1F0C;cursor:pointer;font-family:var(--sans);flex-shrink:0}
+@media(max-width:560px){
+  .dsam-row{flex-wrap:wrap}
+  /* The button leaves the row entirely rather than fighting for space. */
+  .dsam-btn{width:100%;margin-top:10px}
+}
+
 .datepicker-wrap{position:relative}
 .date-pill{font-size:12px;color:var(--text2);background:var(--surface2);border:1px solid var(--border2);border-radius:3px;padding:5px 12px;cursor:pointer;white-space:nowrap;transition:all 0.15s}
 .date-pill:hover,.date-pill.today{color:var(--gold);border-color:rgba(167,139,250,0.4)}
 .date-pill.future{color:var(--amber);border-color:rgba(251,191,36,0.3)}
 .dp-drop{position:absolute;top:calc(100% + 8px);right:0;background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:14px;z-index:300;width:260px;box-shadow:var(--shadow-2);display:none}
+/* right:0 anchors the panel's RIGHT edge to the pill, so a 260px panel hanging
+   off a pill near the left of the header runs off the screen. On a phone,
+   anchor left and clamp to the viewport instead. */
+@media(max-width:560px){
+  .dp-drop{left:0;right:auto;width:min(260px,calc(100vw - 32px))}
+}
 .dp-drop.open{display:block}
 .dp-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .dp-mon{font-size:13px;font-weight:500;color:var(--text)}
@@ -791,6 +815,18 @@ html,body{overflow-x:hidden}
   .metric-strip::-webkit-scrollbar{display:none}
   .metric{padding-right:18px;margin-right:18px;min-width:88px}
   .metric-val{font-size:20px}
+}
+/* ── Vertical rhythm on a phone ───────────────────────────────────────────
+   Desktop spacing carried straight onto a 375px screen cost roughly 70px of
+   dead height above the fold: 34px under the header before the date strip,
+   then 16px, then 18px under the metric strip, before any content. Each gap
+   is defensible alone and together they push the tasks off the first screen.
+   Tightened only below 700px; the desktop layout is unchanged. */
+@media(max-width:700px){
+  .header{padding:12px 0 10px;margin-bottom:10px}
+  .cal-strip{margin-bottom:10px}
+  .metric-strip{margin-bottom:10px}
+  .metric{padding-top:9px;padding-bottom:9px}
 }
 
 /* ── Right rail: needs attention ──────────────────────────────────────── */
