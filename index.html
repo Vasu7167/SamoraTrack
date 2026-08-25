@@ -292,7 +292,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 /* No bottom rule. The date strip immediately below is itself a strong
    horizontal band, so the hairline was a second divider for one boundary and
    it cost a line of height plus the padding on both sides of it. */
-.header{padding:16px 0 8px;margin-bottom:10px}
+.header{padding:14px 0 4px;margin-bottom:4px}
 .header-top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .greeting{font-family:var(--font);font-size:18px;font-weight:var(--w-medium);line-height:1.3}
 @media(min-width:900px){
@@ -362,12 +362,21 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .dp-d.dp-dot::after{content:'';width:3px;height:3px;border-radius:50%;background:currentColor;display:block;margin:1px auto 0;opacity:0.5}
 .progress-row{display:flex;align-items:center;gap:10px;margin-top:12px}
 /* Compact variant: the bar alone, no label, no vertical band of its own. */
-.progress-row.compact{margin-top:8px;gap:0}
+.progress-row.compact{margin-top:6px;gap:0}
 .progress-row.compact .prog-bar{height:2px}
 .progress-row.compact .prog-lbl[hidden]{display:none}
 .prog-bar{flex:1;height:3px;background:var(--surface2);border-radius:2px;overflow:hidden}
 .prog-fill{height:100%;background:var(--gold);border-radius:2px;transition:width 0.4s}
 .prog-lbl{font-size:13px;color:var(--text2);white-space:nowrap}
+/* ── Empty rows must take no space ────────────────────────────────────────
+   streakRow, momentumRow, productivityBanner and metricDrill are all filled
+   conditionally and are empty most days. An empty div still contributes its
+   margin, so four optional rows were silently costing ~44px between the email
+   line and the date strip, and again under the metric strip. This is the
+   single largest source of the dead space, and it is invisible in the markup
+   because the elements render as nothing. */
+.streak-row:empty,.momentum-row:empty,#productivityBanner:empty,#metricDrill:empty,
+.today-rail:empty,#nudgeBanner:empty{display:none !important;margin:0 !important}
 .streak-row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
 .spill{font-size:13px;color:var(--text2);background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:5px 12px;display:flex;align-items:center;gap:6px}
 .momentum-row{display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap}
@@ -381,9 +390,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .momentum-bar{height:6px;background:var(--surface2);border-radius:2px;overflow:hidden}
 .momentum-fill{height:100%;border-radius:2px;background:var(--c-accent-solid));transition:width 0.6s ease}
 .spill span{color:var(--text);font-weight:500}
-.cal-strip{display:flex;gap:5px;overflow-x:auto;padding-bottom:4px;margin-bottom:16px;scrollbar-width:none;min-width:0;width:100%}
+.cal-strip{display:flex;gap:5px;overflow-x:auto;padding-bottom:2px;margin-bottom:8px;scrollbar-width:none;min-width:0;width:100%}
 .cal-strip::-webkit-scrollbar{display:none}
-.cal-d{flex-shrink:0;width:42px;text-align:center;padding:7px 4px;border-radius:3px;border:1px solid transparent;cursor:pointer;transition:all 0.15s}
+.cal-d{flex-shrink:0;width:42px;text-align:center;padding:5px 4px;border-radius:3px;border:1px solid transparent;cursor:pointer;transition:all 0.15s}
 .cal-d:hover{background:var(--surface2)}
 .cal-d.active{background:var(--surface);border-color:var(--gold)}
 .cal-d.today-m{border-color:var(--border2)}
@@ -417,7 +426,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 @keyframes fadeUp{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
 @keyframes slideIn{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
 @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-.add-box{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.add-box{display:flex;flex-direction:column;gap:3px;margin-bottom:6px}
+/* The role tip is one line of grey guidance under the input. When it has no
+   text it should not reserve a line. */
+#roleTipToday:empty{display:none}
 .add-box:focus-within{border-color:var(--gold)}
 .ab-row{display:flex;gap:0;align-items:center;background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:0;overflow:hidden;transition:border-color 0.2s}.ab-row:focus-within{border-color:var(--gold)}
 .ab-row input{flex:1;background:transparent;border:none;outline:none;color:var(--text);font-family:var(--sans);font-size:14px;padding:12px 14px;letter-spacing:-0.01em}
@@ -531,7 +543,7 @@ body.light-mode .item.delegated-win{background:rgba(var(--c-accent-rgb),0.1) !im
    .active rule that lived here was removed rather than renamed: it came
    later in the cascade and silently overrode the new underline state. */
 .today-section{margin-bottom:8px}
-.today-sec-header{display:flex;align-items:center;justify-content:space-between;padding:14px 0 7px;border-bottom:1px solid var(--border);margin-bottom:0}
+.today-sec-header{display:flex;align-items:center;justify-content:space-between;padding:8px 0 6px;border-bottom:1px solid var(--border);margin-bottom:0}
 /* On a phone the add box already has 12px below it, then the header adds 14px
    above: 26px of nothing between the input and the list it feeds. */
 @media(max-width:700px){
@@ -815,8 +827,8 @@ html,body{overflow-x:hidden}
    from the content below by a hairline rather than sitting in a card. Same
    reasoning as the task rows: a box around a number adds nothing. */
 .metric-strip{display:flex;flex-wrap:wrap;gap:0;border-top:1px solid var(--border);
-  border-bottom:1px solid var(--border);margin-bottom:18px}
-.metric{padding:12px 26px 12px 0;margin-right:26px;border-right:1px solid var(--border);min-width:104px}
+  border-bottom:1px solid var(--border);margin-bottom:10px}
+.metric{padding:9px 26px 9px 0;margin-right:26px;border-right:1px solid var(--border);min-width:104px}
 .metric:last-child{border-right:none;margin-right:0;padding-right:0}
 .metric-lbl{font-size:11px;color:var(--text3);margin-bottom:3px;line-height:1.2}
 .metric-val{font-size:24px;line-height:1.1;color:var(--text);font-weight:var(--w-regular);
@@ -1109,9 +1121,9 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
            produced the large vertical gaps. Independent column flow needs
            independent formatting contexts. -->
     <div class="today-main">
-    <div id="productivityBanner" style="margin-bottom:12px"></div>
+    <div id="productivityBanner" style="margin-bottom:8px"></div>
     <div id="nudgeBanner" style="display:none;background:rgba(var(--c-accent-rgb),0.08);border:1px solid rgba(var(--c-accent-rgb),0.25);border-radius:var(--radius);padding:10px 14px;margin-bottom:12px"><div style="display:flex;align-items:center;justify-content:space-between"><div id="nudgeText" style="font-size:12px;color:var(--text2)"></div><button onclick="this.parentElement.parentElement.style.display='none'" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:0 0 0 8px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div></div>
-    <div style="display:flex;gap:8px;margin-bottom:12px">
+    <div style="display:flex;gap:8px;margin-bottom:8px">
       <button class="today-section-btn active" id="tsb-tasks" onclick="setTodaySection('tasks')"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg> Tasks</button>
       <button class="today-section-btn" id="tsb-issues" onclick="setTodaySection('issues')"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> Issues</button>
       <button class="today-section-btn" id="tsb-wins" onclick="setTodaySection('wins')"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.8l2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 10l5.9-.8z"/></svg> Wins</button>
@@ -1141,7 +1153,7 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
         <button id="todayAddBtn" onclick="addTodayItem()">+</button> </div>
       <div class="char-hint" id="ch-today"></div>
       <div style="font-size:11px;color:var(--text3);padding:0 2px" id="roleTipToday"></div>
-      <div id="today-template-row" style="display:flex;justify-content:flex-end;align-items:center;gap:6px;margin-top:8px">
+      <div id="today-template-row" style="display:flex;justify-content:flex-end;align-items:center;gap:6px;margin-top:4px">
         <button class="template-btn" onclick="shareTasksMenu()" style="display:flex;align-items:center;gap:5px;padding:5px 10px">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg> Share </button>
         <button class="template-btn" onclick="openTemplateManager()"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.5h6v3H9zM7 5H5.5v15h13V5H17"/></svg> Templates</button> </div> </div>
