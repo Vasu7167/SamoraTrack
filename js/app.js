@@ -11037,7 +11037,7 @@ async function openSampaignScoutProfile(campaignId) {
     '<div style="font-size:11px;color:var(--text3);margin:4px 0 8px">These match real titles at the account. Leave blank to use departments + seniority.</div>' +
     // Filled asynchronously. A blank box is the reason this form goes unused,
     // so the suggestions are the point of it, not decoration.
-    '<div id="samp-scout-suggest" style="margin-bottom:12px"><div style="font-size:11px;color:var(--text3)">Looking at which titles have replied to you…</div></div>' +
+    '<div id="samp-scout-suggest" style="margin-bottom:12px;max-height:172px;overflow-y:auto"><div style="font-size:11px;color:var(--text3)">Looking at which titles have replied to you…</div></div>' +
     '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Departments</div>' +
     '<div style="margin-bottom:14px">' + _SCOUT_DEPTS.map(function(x){ return chip('dept', x, (cur.departments||[]).indexOf(x) !== -1); }).join('') + '</div>' +
     '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Seniority</div>' +
@@ -11066,32 +11066,40 @@ async function _loadScoutSuggestions(campaignId) {
     var d = await r.json();
     if (!d.ok) { box.innerHTML = ''; return; }
 
+    // Chips are an aid, not the content of the dialog. Twelve of them stacked
+    // pushed Departments and Seniority below the fold and made the suggestion
+    // list look like the form itself. Six by default, the rest one tap away.
+    var chipBtn = function(title, proven, count, why) {
+      return '<button type="button" onclick="_addScoutTitle(' + JSON.stringify(title).replace(/"/g,'&quot;') + ')"' +
+        (why ? ' title="' + esc(why) + '"' : '') +
+        ' style="font-size:11px;line-height:1.2;padding:3px 8px;margin:0 4px 4px 0;border-radius:3px;cursor:pointer;' +
+        'font-family:var(--sans);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' +
+        'border:1px solid ' + (proven ? 'var(--green)' : 'var(--border2)') + ';' +
+        'background:' + (proven ? 'rgba(74,140,92,0.10)' : 'transparent') + ';' +
+        'color:' + (proven ? 'var(--green)' : 'var(--text2)') + '">+ ' + esc(title) +
+        (proven && count ? ' <span style="opacity:.7">' + count + '</span>' : '') + '</button>';
+    };
+
     var h = '';
-    if ((d.suggested_titles || []).length) {
-      h += '<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Tap to add. Ranked by what has replied to you.</div><div>';
-      d.suggested_titles.forEach(function(t) {
-        // Proven repliers are visually distinct from merely plausible ones.
-        var proven = t.replied > 0;
-        h += '<button type="button" onclick="_addScoutTitle(' + JSON.stringify(t.title).replace(/"/g,'&quot;') + ')" title="' + esc(t.why) + '" ' +
-          'style="font-size:11px;padding:4px 9px;margin:0 5px 5px 0;border-radius:3px;cursor:pointer;font-family:var(--sans);' +
-          'border:1px solid ' + (proven ? 'var(--green)' : 'var(--border2)') + ';' +
-          'background:' + (proven ? 'rgba(74,140,92,0.10)' : 'transparent') + ';' +
-          'color:' + (proven ? 'var(--green)' : 'var(--text2)') + '">+ ' + esc(t.title) +
-          (proven ? ' <span style="opacity:.75">' + t.replied + '&#9679;</span>' : '') + '</button>';
-      });
+    var titles = d.suggested_titles || [];
+    if (titles.length) {
+      var head = titles.slice(0, 6), rest = titles.slice(6);
+      h += '<div style="font-size:11px;color:var(--text3);margin-bottom:5px">Tap to add. Green has replied to you before.</div>';
+      h += '<div>' + head.map(function(t){ return chipBtn(t.title, t.replied > 0, t.replied, t.why); }).join('');
+      if (rest.length) {
+        h += '<span id="samp-scout-rest" style="display:none">' + rest.map(function(t){ return chipBtn(t.title, t.replied > 0, t.replied, t.why); }).join('') + '</span>';
+        h += '<button type="button" id="samp-scout-more" onclick="document.getElementById(\'samp-scout-rest\').style.display=\'inline\';this.remove()" ' +
+             'style="font-size:11px;padding:3px 8px;margin:0 4px 4px 0;border-radius:3px;border:1px dashed var(--border2);background:transparent;color:var(--text3);cursor:pointer;font-family:var(--sans)">' + rest.length + ' more</button>';
+      }
       h += '</div>';
     } else if (d.note) {
       h += '<div style="font-size:11px;color:var(--text3)">' + esc(d.note) + '</div>';
     }
 
-    if ((d.already_engaged || []).length) {
-      h += '<div style="font-size:11px;color:var(--text3);margin:8px 0 5px">Already engaged at this account</div><div>';
-      d.already_engaged.slice(0, 6).forEach(function(x) {
-        if (!x.title) return;
-        h += '<button type="button" onclick="_addScoutTitle(' + JSON.stringify(x.title).replace(/"/g,'&quot;') + ')" ' +
-          'style="font-size:11px;padding:4px 9px;margin:0 5px 5px 0;border-radius:3px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;font-family:var(--sans)">+ ' + esc(x.title) + '</button>';
-      });
-      h += '</div>';
+    var eng = (d.already_engaged || []).filter(function(x){ return x.title; }).slice(0, 4);
+    if (eng.length) {
+      h += '<div style="font-size:11px;color:var(--text3);margin:7px 0 4px">Already engaged here</div><div>' +
+           eng.map(function(x){ return chipBtn(x.title, false, 0, x.role || ''); }).join('') + '</div>';
     }
 
     // Location is prefilled, not just suggested, because the campaign name
