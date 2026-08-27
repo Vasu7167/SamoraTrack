@@ -11034,7 +11034,10 @@ async function openSampaignScoutProfile(campaignId) {
     '<label style="display:flex;align-items:center;gap:8px;margin:8px 0 12px;cursor:pointer"><input type="checkbox" id="samp-scout-toggle"' + (usingCamp?' checked':'') + ' style="width:15px;height:15px;accent-color:var(--gold)"><span style="font-size:12px;color:var(--text2)">Custom targets for <b>this SAMpaign only</b> (otherwise edits the org default)</span></label>' +
     '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Job titles (primary, comma separated)</div>' +
     '<textarea id="samp-scout-titles" rows="2" placeholder="e.g. CFO, Chief Financial Officer, VP Finance, Head of Procurement, Owner" style="' + inputStyle + ';resize:vertical;height:54px">' + esc((cur.jobTitles||[]).join(', ')) + '</textarea>' +
-    '<div style="font-size:11px;color:var(--text3);margin:4px 0 12px">These match real titles at the account. Leave blank to use departments + seniority.</div>' +
+    '<div style="font-size:11px;color:var(--text3);margin:4px 0 8px">These match real titles at the account. Leave blank to use departments + seniority.</div>' +
+    // Filled asynchronously. A blank box is the reason this form goes unused,
+    // so the suggestions are the point of it, not decoration.
+    '<div id="samp-scout-suggest" style="margin-bottom:12px"><div style="font-size:11px;color:var(--text3)">Looking at which titles have replied to you…</div></div>' +
     '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Departments</div>' +
     '<div style="margin-bottom:14px">' + _SCOUT_DEPTS.map(function(x){ return chip('dept', x, (cur.departments||[]).indexOf(x) !== -1); }).join('') + '</div>' +
     '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Seniority</div>' +
@@ -11045,6 +11048,82 @@ async function openSampaignScoutProfile(campaignId) {
   '</div>';
   modal.addEventListener('click', function(){ modal.remove(); });
   document.body.appendChild(modal);
+  // Only after the modal is in the DOM, or the suggestion box does not exist
+  // yet and this writes into nothing. Not awaited: the form is usable while
+  // suggestions load.
+  _loadScoutSuggestions(campaignId);
+}
+
+// Suggestions come from this org's OWN outreach history: which titles have
+// actually replied. That is evidence, not a guess about the market, so each
+// chip carries its count and the rep can disagree with it.
+async function _loadScoutSuggestions(campaignId) {
+  var box = document.getElementById('samp-scout-suggest');
+  if (!box) return;
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'suggest_scout_targets', campaign_id: campaignId }) });
+    var d = await r.json();
+    if (!d.ok) { box.innerHTML = ''; return; }
+
+    var h = '';
+    if ((d.suggested_titles || []).length) {
+      h += '<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Tap to add. Ranked by what has replied to you.</div><div>';
+      d.suggested_titles.forEach(function(t) {
+        // Proven repliers are visually distinct from merely plausible ones.
+        var proven = t.replied > 0;
+        h += '<button type="button" onclick="_addScoutTitle(' + JSON.stringify(t.title).replace(/"/g,'&quot;') + ')" title="' + esc(t.why) + '" ' +
+          'style="font-size:11px;padding:4px 9px;margin:0 5px 5px 0;border-radius:3px;cursor:pointer;font-family:var(--sans);' +
+          'border:1px solid ' + (proven ? 'var(--green)' : 'var(--border2)') + ';' +
+          'background:' + (proven ? 'rgba(74,140,92,0.10)' : 'transparent') + ';' +
+          'color:' + (proven ? 'var(--green)' : 'var(--text2)') + '">+ ' + esc(t.title) +
+          (proven ? ' <span style="opacity:.75">' + t.replied + '&#9679;</span>' : '') + '</button>';
+      });
+      h += '</div>';
+    } else if (d.note) {
+      h += '<div style="font-size:11px;color:var(--text3)">' + esc(d.note) + '</div>';
+    }
+
+    if ((d.already_engaged || []).length) {
+      h += '<div style="font-size:11px;color:var(--text3);margin:8px 0 5px">Already engaged at this account</div><div>';
+      d.already_engaged.slice(0, 6).forEach(function(x) {
+        if (!x.title) return;
+        h += '<button type="button" onclick="_addScoutTitle(' + JSON.stringify(x.title).replace(/"/g,'&quot;') + ')" ' +
+          'style="font-size:11px;padding:4px 9px;margin:0 5px 5px 0;border-radius:3px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;font-family:var(--sans)">+ ' + esc(x.title) + '</button>';
+      });
+      h += '</div>';
+    }
+
+    // Location is prefilled, not just suggested, because the campaign name
+    // already stated it and making the rep retype it is busywork.
+    if ((d.suggested_locations || []).length) {
+      var locEl = document.getElementById('samp-scout-locs');
+      if (locEl && !locEl.value.trim()) {
+        locEl.value = d.suggested_locations.join(', ');
+        h += '<div style="font-size:11px;color:var(--text3);margin-top:8px">Location prefilled from ' + esc(d.location_source || 'this campaign') + '. Clear it to search everywhere.</div>';
+      }
+    }
+    box.innerHTML = h;
+  } catch(e) { box.innerHTML = ''; }
+}
+
+function _addScoutTitle(title) {
+  var ta = document.getElementById('samp-scout-titles');
+  if (!ta) return;
+  var cur = ta.value.split(',').map(function(x){ return x.trim(); }).filter(Boolean);
+  if (cur.some(function(x){ return x.toLowerCase() === String(title).toLowerCase(); })) return;
+  cur.push(title);
+  ta.value = cur.join(', ');
+  // Titles are the PRIMARY Lusha filter and override departments/seniority
+  // entirely, so say so the moment the rep starts using them.
+  var box = document.getElementById('samp-scout-suggest');
+  if (box && !document.getElementById('samp-scout-titlenote')) {
+    var n = document.createElement('div');
+    n.id = 'samp-scout-titlenote';
+    n.style.cssText = 'font-size:11px;color:var(--gold);margin-top:8px';
+    n.textContent = 'Job titles take precedence: departments and seniority below are ignored while this box has anything in it.';
+    box.appendChild(n);
+  }
 }
 
 async function saveSampaignScoutProfile() {
