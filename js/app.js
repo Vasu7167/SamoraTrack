@@ -9646,11 +9646,28 @@ function loadSampaignWorkspace() {
   // Detective SAM is a research tool, not a campaign tool, so it is NOT
   // behind the sdr/ae/manager gate the SAMpaign workspace sits behind —
   // anyone who needs to look a person up should be able to.
-  if (!['sdr','ae','manager'].includes(role)) { el.innerHTML = detectiveSamCardHtml(); return; }
+  // The allowlist used to be ['sdr','ae','manager'], which silently excluded
+  // director, executive, admin and super_admin: they saw the Detective SAM
+  // card and no SAMpaign workspace at all, so they could not create one.
+  //
+  // That contradicted the backend, which never had such a gate.
+  // create_sampaign has no role check, and list_sampaigns has EXPLICIT
+  // branches for canSeeCrossTeam (director) and canSeeFullOrg (executive,
+  // admin) to widen which owners they see. Those branches only make sense if
+  // those roles can reach the screen, so the frontend was the thing that was
+  // wrong.
+  //
+  // Everyone gets the workspace now. The backend already scopes what each
+  // role can SEE, so the gate here was doing nothing except hiding a feature
+  // from the people most likely to be setting it up for their team.
+  var scopeLabel = ['director'].includes(role) ? ' (you + your teams)'
+                 : ['executive','admin','super_admin'].includes(role) ? ' (whole organisation)'
+                 : role === 'manager' ? ' (you + your team)'
+                 : '';
   el.innerHTML =
     detectiveSamCardHtml() +
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
-      '<span style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">My SAMpaigns'+(role==='manager'?' (you + your team)':'')+'</span>' +
+      '<span style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">My SAMpaigns'+scopeLabel+'</span>' +
       '<button onclick="toggleNewSampaignForm()" id="sampaignNewBtn" style="font-size:11px;font-weight:600;padding:5px 12px;border-radius:2px;background:var(--green);border:none;color:#fff;cursor:pointer;font-family:var(--sans)">+ New SAMpaign</button>' +
     '</div>' +
     '<div id="sampaignNewForm" style="display:none;background:var(--surface2);border-radius:3px;padding:10px;margin-bottom:12px">' +
