@@ -281,6 +281,8 @@ export const TOOL_SCHEMAS = [
   { name: 'save_sampaign_drafts',  description: 'Write ONE PERSONALIZED EMAIL PER CONTACT back into a SAMpaign as drafts. This is how you deliver outreach copy: never send mail yourself, and never ask the user to copy-paste it. Workflow: get_sampaigns (goal) → get_sampaign_contacts (who, with title/seniority/LinkedIn) → get_company_context (what we sell) → write a genuinely different email per person → save here → then schedule_sampaign_drafts. Drafts do NOT send until scheduled, so it is safe to save and let the user review. A campaign sends in WAVES: launch=1 is the initial email, launch=2 is follow-up 1, launch=3 is follow-up 2, and so on (defaults to 1). You can write later waves in advance — a follow-up should reference the earlier email and add something new, never just repeat it. Re-saving the same contact and launch replaces that draft.', params: { campaign_id: { type: 'string', required: true }, drafts: { type: 'array', required: true }, launch: { type: 'number' }, generated_by: { type: 'string' } } },
   { name: 'get_sending_limit', description: 'How many emails this user can send TODAY, and why. Call this whenever they ask about sending volume, before promising a number, or if a schedule returns fewer than they expected — it explains the reason rather than leaving them to guess. Returns today_limit, a plain-English reason, what has already gone out, what is still queued for today, and a rules list you can read back verbatim. Key facts: first emails and follow-ups share ONE daily number; a new mailbox starts around 8/day and climbs with sending history; the user can force a specific number up to 50 via force_daily on schedule_sampaign_drafts; anything over the limit is delayed to the next day, never dropped. Never tell a user a limit is impossible without calling this first — the number is earned by the mailbox and may be higher than you assume.', params: {} },
   { name: 'save_sampaign_linkedin_notes', description: 'Write ONE LINKEDIN CONNECTION NOTE PER CONTACT back into a SAMpaign. HARD LIMIT 300 characters including spaces — LinkedIn rejects anything longer, and notes over the limit are returned to you unsaved rather than truncated, so count before sending. Write short: a connection note is not an email, it is one or two sentences that earn the accept. Reference something specific about that person (their role, their company, a shared context) rather than pitching. Same inputs as email drafts: get_sampaign_contacts for who they are, get_company_context for what we sell. The rep pastes these by hand when they open the profile — LinkedIn invitations cannot be automated — so they only need to be right, not scheduled.', params: { campaign_id: { type: 'string', required: true }, notes: { type: 'array', required: true }, generated_by: { type: 'string' } } },
+  { name: 'discover_accounts', description: 'TOP OF FUNNEL. Find NEW companies to sell to that are not yet in the pipeline, from a plain-English description ("private universities in India with liberal arts departments", "FMCG distributors in the Gulf"). This PROPOSES ONLY: it creates nothing, spends no enrichment credits, and sends nothing. Each candidate is checked by fetching its website, so `verified: true` means the domain is live and its homepage actually names the organisation, and `verified: false` with the evidence line tells you why not. ALWAYS show the user the candidates and their evidence, and ALWAYS let them choose, before calling commit_discovery. Never accept unverified candidates on the user\'s behalf. Requires Discovery Mode to be enabled for the org and a manager-or-above role. Cap is 50 per call; prefer 10 to 25 so the user can actually read the list.', params: { description: { type: 'string', required: true }, region_hint: { type: 'string' }, limit: { type: 'number' } } },
+  { name: 'commit_discovery', description: 'Turn candidates the USER HAS EXPLICITLY ACCEPTED into real accounts. Call ONLY after discover_accounts and only with ids the user chose — never auto-accept everything you found. accept_ids become tracked accounts; reject_ids are remembered so the same suggestion is not proposed again. Optionally creates one SAMpaign anchored to the first account. This does NOT scout contacts and does NOT schedule or send anything: after it returns, tell the user to run contact scouting when ready. Duplicates against existing accounts are detected and skipped, and reported back.', params: { accept_ids: { type: 'array', required: true }, reject_ids: { type: 'array' }, campaign_name: { type: 'string' }, campaign_goal: { type: 'string' } } },
   { name: 'schedule_sampaign_drafts', description: 'Turn one WAVE of saved drafts into scheduled sends, automatically spread over multiple days at a deliverability-safe rate. Pass the same launch number you saved the drafts with (defaults to 1). Follow-up waves (launch>1) start on the date already set on the campaign, so you usually do not need start_at for them. ALWAYS call with dry_run=true first and show the user the plan before committing. The dry run returns today_limit and ramp_reason — READ THEM BACK TO THE USER, because that is the number that will actually go out today and why. Samora warms mailboxes up: a brand new mailbox starts around 8/day, an established one continues from what it has already been sending. If the user asks for a SPECIFIC number today, pass force_daily with that number rather than reporting that you cannot do it — force_daily overrides the suggested ramp and is capped at 50, which is where safe single-mailbox cold sending stops. Tell them when you have overridden the suggestion.', params: { campaign_id: { type: 'string', required: true }, launch: { type: 'number' }, start_at: { type: 'string' }, force_daily: { type: 'number' }, daily_cap: { type: 'number' }, window_start_hour: { type: 'number' }, window_end_hour: { type: 'number' }, skip_weekends: { type: 'boolean' }, dry_run: { type: 'boolean' } } },
 ];
 
@@ -351,6 +353,42 @@ export async function executeTool(accessToken, name, args = {}) {
         skip_weekends: args.skip_weekends ?? null,
         dry_run: !!args.dry_run
       });
+    case 'discover_accounts': {
+      const d = await edge(accessToken, 'discover_accounts', {
+        description: args.description,
+        region_hint: args.region_hint || null,
+        // Default 15, not the 50 ceiling. A conversational request should
+        // return a list a person can read, and the model can always ask again.
+        limit: Math.min(Math.max(parseInt(args.limit) || 15, 1), 50)
+      });
+      if (!d.ok) return d;
+      // Trimmed for the model: the full staging rows carry ids and timestamps
+      // it does not need, and a fat payload makes it likelier to summarise
+      // instead of showing the user the evidence.
+      return {
+        batch_id: d.batch_id,
+        query: d.query,
+        verified_count: d.verified_count,
+        unverified_count: d.unverified_count,
+        skipped_already_in_pipeline: d.skipped_existing,
+        skipped_previously_rejected: d.skipped_previously_rejected,
+        verification_incomplete: d.verification_incomplete,
+        candidates: (d.candidates || []).map(c => ({
+          id: c.id, name: c.name, domain: c.domain, region: c.region,
+          verified: c.verified, evidence: c.evidence, description: c.description
+        })),
+        next_step: 'Show these to the user with their evidence. They pick which are real. Then call commit_discovery with accept_ids and reject_ids. Nothing has been created yet.'
+      };
+    }
+    case 'commit_discovery': {
+      const d = await edge(accessToken, 'commit_discovery', {
+        accept_ids: args.accept_ids || [],
+        reject_ids: args.reject_ids || [],
+        campaign_name: args.campaign_name || null,
+        campaign_goal: args.campaign_goal || null
+      });
+      return d;
+    }
     default: throw new Error('Unknown tool: ' + name);
   }
 }
