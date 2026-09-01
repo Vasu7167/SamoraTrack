@@ -10724,7 +10724,15 @@ function _renderSampaignContacts(campaignId) {
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px">' +
         '<div style="min-width:0;flex:1"><div style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(c.name||c.email||'—')+'</div>' +
         '<div style="font-size:11px;color:var(--text3)">' +
-          (c.email
+          // A scouted contact the provider could not resolve carries a
+          // PLACEHOLDER address like scouted.samuelernest@snu.edu.in. It looks
+          // like an address and is not one, and showing it as though it were
+          // invites a rep to trust it. The "no email yet" branch below already
+          // existed and simply never fired, because c.email was set.
+          //
+          // Sending to these is blocked server-side, but the list should say
+          // so rather than leaving the rep to notice the prefix.
+          (c.email && !/^scouted\.[a-z0-9]*@/i.test(c.email)
             // A found email is an inference, not a fact — Hunter scores it
             // because it is guessing the pattern from other addresses at the
             // domain. Label it, never let it sit unmarked next to one the rep
