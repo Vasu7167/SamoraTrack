@@ -482,12 +482,34 @@ async function loadTodayPipelineMetrics() {
     var s = (d && d.summary) || {};
     var m = _fmtMoneyShort(s.verified_value_usd);
     if (m) _setMetric('mVerified', m.n, m.u ? '<span class="unit">'+m.u+'</span>' : '');
-    // Coverage: share of pipeline value that is actually verified. Same
-    // number the pipeline tab shows, not a second definition of the word.
-    if (s.total_value_usd > 0) {
-      var pct = Math.round((s.verified_value_usd / s.total_value_usd) * 100);
-      _setMetric('mCoverage', pct, '<span class="unit">%</span>', pct >= 60);
-    }
+    // ── ONE WORD, ONE MEANING ────────────────────────────────────────────
+    //
+    // THE BUG THIS FIXES. This tile said "Coverage 93%" while the Intel tab's
+    // Relationship coverage panel said 0 strong, 5 partial, 7 thin out of 12.
+    // Both were correct and they were measuring different things: this was
+    // verified pipeline VALUE, that is stakeholder COVERAGE. Two definitions
+    // of one word, side by side, is how a dashboard loses trust.
+    //
+    // Everywhere else in Samora, coverage means people: the Coverage check,
+    // coverage gaps, relationship coverage. So this tile now means people too.
+    // The verified-value number has not been lost, it is the tile immediately
+    // to the left of this one, which is why showing it twice added nothing.
+    try {
+      // Same action and same rollup the Intel panel renders, so the two can
+      // never disagree again. If that panel says 5 partial and 7 thin, this
+      // tile is computed from those exact numbers.
+      var cr = await fetch(EDGE_FN_URL, { method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+        body: JSON.stringify({ action:'get_relationship_coverage' }) });
+      var cd = await cr.json();
+      var ru = (cd && cd.rollup) || {};
+      var strong = Number(ru.strong || 0), partial = Number(ru.partial || 0), thin = Number(ru.thin || 0);
+      var totalAcc = strong + partial + thin;
+      if (totalAcc > 0) {
+        var covPct = Math.round(((strong + partial) / totalAcc) * 100);
+        _setMetric('mCoverage', covPct, '<span class="unit">%</span>', covPct >= 60);
+      }
+    } catch (_e) { /* leave the dash rather than show the wrong definition */ }
   } catch (_e) { /* strip keeps its dash rather than showing a wrong number */ }
 }
 
@@ -9759,6 +9781,72 @@ async function _syncSampaignFupTasks(campaignId, campaignName, oldDates, newDate
   return oldDates.length ? movedCount : 0;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// A DELETED CAMPAIGN MUST STOP ASKING FOR WORK
+//
+// THE BUG THIS FIXES. _syncSampaignFupTasks writes follow-up tasks into day
+// storage. deleteSampaignCampaign archives the campaign server-side and
+// cancels queued sends, but nothing ever removed those local tasks. So
+// "Follow-up 1 - Ferrero Germany" kept appearing every morning for a campaign
+// that had been cancelled, and the only way to clear it was by hand, one task
+// at a time, forever.
+//
+// Two halves, and BOTH are needed:
+//   1. purge on delete, so it stops happening, and
+//   2. a sweep on load, so the backlog already sitting in day storage from
+//      campaigns deleted before this fix clears itself.
+// Half 1 alone would leave the existing mess permanent.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Strip one campaign's follow-up tasks from every day that still carries them.
+async function _purgeSampaignFupTasks(campaignId) {
+  if (typeof allData === 'undefined' || typeof save !== 'function') return 0;
+  // Sweep day storage rather than trusting a list of dates: a task can sit on
+  // a day the campaign no longer references, which is exactly how orphans
+  // survive a reschedule.
+  var days = {};
+  Object.keys(allData || {}).forEach(function(k) {
+    var d = allData[k];
+    if (d && d.tasks && d.tasks.some(function(t){ return t && t.sampaignId === campaignId; })) days[k] = true;
+  });
+
+  var removed = 0;
+  var keys = Object.keys(days);
+  for (var i = 0; i < keys.length; i++) {
+    var d = dayData(keys[i]);
+    var before = (d.tasks || []).length;
+    d.tasks = (d.tasks || []).filter(function(t){ return !(t && t.sampaignId === campaignId); });
+    removed += before - d.tasks.length;
+    try { await save(keys[i]); } catch(e) {}
+  }
+  return removed;
+}
+
+// Self-healing sweep. Anything sourced from a SAMpaign that is no longer in
+// the live list is an orphan, and clears itself the next time the tab loads.
+// Only runs on a SUCCESSFUL fetch of the campaign list: an empty list from a
+// failed request would otherwise wipe every follow-up the rep has.
+async function _sweepOrphanFupTasks(liveCampaignIds) {
+  if (typeof allData === 'undefined' || typeof save !== 'function') return 0;
+  if (!Array.isArray(liveCampaignIds)) return 0;
+  var live = {};
+  liveCampaignIds.forEach(function(id){ live[id] = true; });
+
+  var removed = 0, touched = [];
+  Object.keys(allData || {}).forEach(function(k) {
+    var d = allData[k];
+    if (!d || !d.tasks || !d.tasks.length) return;
+    var before = d.tasks.length;
+    d.tasks = d.tasks.filter(function(t) {
+      if (!t || t.source !== 'sampaign' || !t.sampaignId) return true;
+      return !!live[t.sampaignId];
+    });
+    if (d.tasks.length !== before) { removed += before - d.tasks.length; touched.push(k); }
+  });
+  for (var i = 0; i < touched.length; i++) { try { await save(touched[i]); } catch(e) {} }
+  return removed;
+}
+
 function toggleNewSampaignForm() {
   var f = document.getElementById('sampaignNewForm'); if (!f) return;
   f.style.display = f.style.display === 'none' ? 'block' : 'none';
@@ -9887,6 +9975,21 @@ async function loadSampaignCampaigns() {
     _renderSampaignToolbar(d);
 
     var all = d.campaigns || [];
+
+    // Self-healing, per the standing rule that a backlog must never need
+    // clearing by hand. Guarded twice on purpose:
+    //   - only on the DEFAULT view, because the archived view is a list of
+    //     dead campaigns and sweeping against it would delete the tasks of
+    //     every LIVE one, and
+    //   - only on d.ok, already checked above, so a failed request cannot
+    //     present an empty list as "no campaigns exist".
+    if (!viewing || viewing === 'active') {
+      try {
+        var swept = await _sweepOrphanFupTasks(all.map(function(c){ return c.id; }));
+        if (swept) showToast('Cleared ' + swept + ' follow-up task' + (swept === 1 ? '' : 's') + ' from deleted SAMpaigns');
+      } catch(e) {}
+    }
+
     // Filtering client-side is deliberate: the roster and counts already came
     // back with the list, so switching person is instant and cannot produce a
     // stale count.
@@ -10070,8 +10173,14 @@ async function deleteSampaignCampaign(campaignId, name) {
     var stopped = [];
     if (d.cancelled_sends) stopped.push(d.cancelled_sends + ' queued email' + (d.cancelled_sends === 1 ? '' : 's'));
     if (d.cleared_followups) stopped.push(d.cleared_followups + ' follow-up' + (d.cleared_followups === 1 ? '' : 's'));
+    // The tasks this campaign created are work it was asking for. Cancel the
+    // campaign, cancel the ask.
+    var clearedTasks = 0;
+    try { clearedTasks = await _purgeSampaignFupTasks(campaignId); } catch(e) {}
+    if (clearedTasks) stopped.push(clearedTasks + ' follow-up task' + (clearedTasks === 1 ? '' : 's'));
     showToast(stopped.length ? 'SAMpaign archived, ' + stopped.join(' and ') + ' cancelled' : 'SAMpaign archived');
     loadSampaignCampaigns();
+    if (typeof render === 'function') { try { render(); } catch(e) {} }
   } catch(e) { showToast('Error: '+e.message); }
 }
 
