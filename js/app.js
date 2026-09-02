@@ -5992,6 +5992,9 @@ async function _loadDealDetailData(dealId, deal) {
     ]);
     var mData = await mRes.json(); var sData = await sRes.json();
     var stakeholders = sData.stakeholders || [];
+    // Is there proven contact on this account that no person is attached to?
+    // The backend decides; the pane just acts on it.
+    window._stkUnmapped = !!sData.unmapped_activity;
 
     // Auto-refresh if contacts exist but ALL have no activity data (stale pre-signal enrichment)
     // This silently re-enriches in background to pick up Gmail activity signals
@@ -6746,8 +6749,19 @@ function _renderStakeholdersPane(stakeholders, deal) {
   var html = '<div style="display:flex;gap:6px;border-bottom:1px solid var(--border2);margin-bottom:12px">' +
     tab('active','Active', active.length) + tab('prospective','Prospective', prospective.length) + '</div>';
 
+  // ── TWO MEANINGS OF "ACTIVE", AGAIN ─────────────────────────────────
+  // This tab counts anyone with interaction EVER. Coverage counts anyone
+  // contacted in the LAST 30 DAYS. So this pane said "Active 20" while
+  // coverage said "0 of 20 contacts active" on the same account, and both
+  // were right. Show the 30-day number here so the two reconcile on screen
+  // instead of looking like a bug.
+  var recent30 = active.filter(function(s) {
+    if (!s.last_contacted_at) return false;
+    return (Date.now() - new Date(s.last_contacted_at).getTime()) / 86400000 <= 30;
+  }).length;
+
   if (_stkTab === 'active') {
-    html += '<div style="font-size:11px;color:var(--text3);margin-bottom:10px">People with real interaction: replies, calendar invites, and anyone on the thread.</div>';
+    html += '<div style="font-size:11px;color:var(--text3);margin-bottom:10px">People with real interaction: replies, calendar invites, and anyone on the thread. <strong>' + recent30 + ' of ' + active.length + '</strong> in the last 30 days, which is the number coverage counts.</div>';
   } else {
     html += '<div style="font-size:11px;color:var(--text3);margin-bottom:10px">People reached out to or scouted, not yet interacting. They move to Active once they engage.</div>';
   }
@@ -6769,21 +6783,81 @@ function _renderStakeholdersPane(stakeholders, deal) {
     html += '<button onclick="enrichDeal(\'' + esc(dealId) + '\',\'' + esc(deal && deal.account || '') + '\')" id="enrichDealBtn" style="width:100%;margin-top:12px;padding:10px;border-radius:2px;background:var(--surface2);border:1px dashed var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer">' + _samoraIntelLabel('Find &amp; enrich contacts from activity') + '</button>';
     html += '<div id="enrichDealStatus" style="font-size:11px;color:var(--text3);margin-top:6px"></div>';
     html += '<button onclick="syncActiveStakeholders(\'' + esc(dealId) + '\')" id="syncActiveBtn" style="width:100%;margin-top:6px;padding:8px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);font-size:11px;cursor:pointer">↻ Sync recent contacts from Gmail &amp; calendar</button>';
+    html += '<div id="stkAutoSyncNote" style="font-size:11px;color:var(--text3);margin-top:6px"></div>';
   } else {
     html += '<button onclick="scoutStakeholders(\'' + esc(dealId) + '\')" id="scoutBtn" style="width:100%;margin-top:12px;padding:10px;border-radius:2px;background:rgba(var(--c-accent-rgb),0.08);border:1px solid rgba(var(--c-accent-rgb),0.4);color:var(--gold);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">' + _samoraIntelLabel('Scout stakeholders for this account') + '</button>';
     html += '<div id="scoutStatus" style="font-size:11px;color:var(--text3);margin-top:6px"></div>';
     html += '<div onclick="openScoutProfile(\'' + esc(dealId) + '\')" style="font-size:11px;color:var(--text3);text-align:center;margin-top:8px;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 16.5a4.5 4.5 0 100-9 4.5 4.5 0 000 9zM12 13a1 1 0 100-2 1 1 0 000 2z"/></svg> Who to hunt (job titles &amp; targets)</div>';
   }
   body.innerHTML = html;
+
+  // Fire and forget: if the account has proven contact that no person is
+  // attached to, map it now rather than waiting for someone to press a button.
+  if (_stkTab === 'active') { _autoMapActivityToStakeholders(deal, all); }
 }
 
 function setStkTab(t) { _stkTab = t; _renderStakeholdersPane(window._stkAll, window._stkDeal); }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AUTO-MAP ACTIVITY TO PEOPLE
+//
+// There was no auto-refresh for stakeholders. sync_active_stakeholders only
+// ever ran from the "Sync recent contacts" button, so an account could show
+// verified two-way contact yesterday and still list nobody who had spoken.
+// That is how Ferrero's procurement manager could agree commercial terms and
+// not appear in the contact list at all.
+//
+// The account already knows last_verified_contact, written by the scan from
+// real two-way email. If that is MORE RECENT than the newest contact date on
+// any known stakeholder, there is activity nobody is mapped to, and that is a
+// fact, not a guess. So run the sync, once per account per session, rather
+// than waiting for someone to notice and press a button.
+//
+// Once per session because it costs Gmail calls. Not on a timer, because the
+// signal that it is needed is precisely this mismatch.
+// ═══════════════════════════════════════════════════════════════════════════
+window._stkAutoSynced = window._stkAutoSynced || {};
+
+async function _autoMapActivityToStakeholders(deal, stakeholders) {
+  if (!deal || !deal.id) return false;
+  if (window._stkAutoSynced[deal.id]) return false;
+
+  // The backend computes this: it has both the account's proven-contact date
+  // and every stakeholder's last_contacted_at, so the rule lives in one place.
+  if (!window._stkUnmapped) return false;
+
+  window._stkAutoSynced[deal.id] = true;
+  var note = document.getElementById('stkAutoSyncNote');
+  if (note) note.textContent = 'Activity here is not mapped to anyone yet, matching it to people…';
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'sync_active_stakeholders', account_id: deal.id, days: 90 }) });
+    var d = await r.json();
+    if (d && d.ok && d.discovered) {
+      if (note) note.textContent = 'Matched ' + d.discovered + ' contact' + (d.discovered === 1 ? '' : 's') + ' from recent activity.';
+      window._stkUnmapped = false;   // _reloadStakeholders sets it again from the server
+      _reloadStakeholders(deal.id);
+      return true;
+    }
+    window._stkUnmapped = false;     // asked and answered, do not loop
+    // Nothing found is a real answer, not a failure. Say so rather than
+    // leaving a spinner that implies work is still happening.
+    if (note) note.textContent = d && d.ok
+      ? 'Recent activity could not be matched to anyone at this domain.'
+      : ((d && d.error) || 'Could not check recent activity.');
+  } catch (e) {
+    if (note) note.textContent = 'Could not check recent activity.';
+  }
+  return false;
+}
 
 async function _reloadStakeholders(dealId) {
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({ action:'get_stakeholders', account_id:dealId }) });
     var d = await r.json();
     var stk = d.stakeholders || [];
+    window._stkUnmapped = !!d.unmapped_activity;
     if (_currentDealDetail) _currentDealDetail.stakeholders = stk;
     _renderStakeholdersPane(stk, window._stkDeal || (_currentDealDetail && _currentDealDetail.deal));
   } catch(e) {}
