@@ -4933,8 +4933,30 @@ async function sendWeeklyDigest() {
     const extraEmails = (document.getElementById('digestExtraEmails')?.value||'').split(',').map(function(e){return e.trim();}).filter(function(e){return e.includes('@');});
     const r = await fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify({ action: 'weekly_digest', date_from: from, date_to: to, send_to_manager: toManager, send_to_reps: toReps, extra_emails: extraEmails }) });
     const data = await r.json();
-    if (data.success) { if (out) out.innerHTML = '<div style="font-size:12px;color:var(--green);padding:8px 0"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Digest sent to ' + data.sent + ' people for ' + data.weekLabel + '</div>'; if (btn) { btn.textContent = 'Sent'; setTimeout(() => { btn.textContent = 'Send now'; btn.disabled = false; }, 3000); } }
-    else { throw new Error(data.error || 'Failed to send'); }
+    if (data.success) {
+      // Partial delivery is not success and must not read like it. Six
+      // attempted, one delivered used to render as "sent to 6 people".
+      var okLine = '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Delivered to ' + data.sent + ' of ' + (data.attempted || data.sent) + ' for ' + esc(data.weekLabel || '');
+      var html = '<div style="font-size:12px;color:' + (data.failed ? 'var(--amber)' : 'var(--green)') + ';padding:8px 0">' + okLine + '</div>';
+      if (data.failed) {
+        html += '<div style="font-size:11px;color:var(--coral);padding:2px 0 6px">' + data.failed + ' rejected. ' + esc(data.hint || '') + '</div>';
+        html += (data.failures || []).slice(0, 5).map(function(f) {
+          return '<div style="font-size:11px;color:var(--text3)">' + esc(f.to) + ': ' + esc(f.error) + '</div>';
+        }).join('');
+      }
+      if (out) out.innerHTML = html;
+      if (btn) { btn.textContent = data.failed ? 'Sent with errors' : 'Sent'; setTimeout(function(){ btn.textContent = 'Send now'; btn.disabled = false; }, 3000); }
+    }
+    else {
+      // Zero delivered. Lead with the diagnosis, not the raw API string.
+      var msg = data.hint || data.error || 'Nothing was delivered.';
+      if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral);padding:8px 0">' + esc(msg) + '</div>' +
+        (data.failures || []).slice(0, 5).map(function(f) {
+          return '<div style="font-size:11px;color:var(--text3)">' + esc(f.to) + ': ' + esc(f.error) + '</div>';
+        }).join('');
+      if (btn) { btn.textContent = 'Send now'; btn.disabled = false; }
+      return;
+    }
   } catch(e) { if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral);padding:8px 0">Error: ' + esc(e.message) + '</div>'; if (btn) { btn.textContent = 'Send now'; btn.disabled = false; } }
 }
 function showNudgeBanner(tasks) {
