@@ -513,6 +513,20 @@ async function loadTodayPipelineMetrics() {
   } catch (_e) { /* strip keeps its dash rather than showing a wrong number */ }
 }
 
+// ── Build marker ──────────────────────────────────────────────────────────
+// Type SAMORA_BUILD in the console to see which frontend is actually loaded.
+// Vercel serves js/app.js with revalidation now, but a stale browser cache or
+// a deploy that did not land both look identical without this.
+window.SAMORA_BUILD = {
+  build: '2026-09-06-signal-hygiene',
+  features: {
+    orphan_followup_sweep: true,      // cancelled SAMpaigns stop asking for work
+    auto_map_stakeholders: true,      // pane self-heals unmapped activity
+    coverage_means_people: true,      // home tile matches the Intel panel
+    digest_reports_delivered: true    // "Delivered to 1 of 6", not "sent to 6"
+  }
+};
+
 // ── Splash control ────────────────────────────────────────────────────────
 // Minimum 5s, then it stays as long as the load takes. Two full sweeps of the
 // trace is the brand moment; the data being ready sooner does not cut it short.
