@@ -305,6 +305,8 @@ export const TOOL_SCHEMAS = [
   // that can create a commitment must ship alongside tools that can observe and
   // retract it. A write-only surface does not degrade gracefully. It degrades
   // into duplicate mail sent to real customers.
+  { name: 'get_draft_brief', description: 'ONE CALL that returns everything needed to write a wave of outreach for a SAMpaign: the campaign goal, what this org sells, the success stories you are allowed to cite, the people to write to with their titles and seniority, what is ALREADY in the send queue, recent real activity on the anchor account, and how many emails can go out today. CALL THIS INSTEAD of chaining get_sampaigns, get_company_context, get_success_stories, get_sampaign_contacts and get_sending_limit by hand: it is one round trip, it cannot silently skip a step, and it returns the queue state so you do not draft a wave that is already scheduled. Read `write_for` for who still needs an email, `proof` for the ONLY claims you may make, `account_evidence` for something specific and true to open with, and `warnings` for anything that will bite. If `warnings` mentions a queued wave, stop and ask the user before drafting. Pass launch to brief a follow-up wave rather than the initial email.', params: { campaign_id: { type: 'string', required: true }, launch: { type: 'number' }, limit: { type: 'number' } } },
+
   { name: 'get_scheduled_sends', description: 'READ THE QUEUE for a SAMpaign: every draft, queued, sent, failed and cancelled email, with the recipient, the subject, the body and the exact send time. CALL THIS FIRST whenever a user asks to change, correct, delay, stop or check anything about a campaign that has already been scheduled — before writing a single new draft. Writing new drafts for a campaign that already has queued sends does NOT replace them: it adds a second wave, and both go out. Returns each row\'s id, which is what edit_scheduled_send, reschedule_scheduled_sends and cancel_scheduled_sends take. `launch` tells you which wave a row belongs to (1 is the initial email, 2 is follow-up 1, and so on).', params: { campaign_id: { type: 'string', required: true } } },
 
   { name: 'edit_scheduled_send', description: 'Correct the subject or body of an email that is ALREADY QUEUED, in place, WITHOUT changing when it sends. This is almost always the right tool when a user says the copy is wrong: a wrong salutation, a wrong date, a typo, a wrong signature. Do NOT re-draft and re-schedule for a content fix, because that creates a duplicate wave and leaves the original live. Takes one send_id from get_scheduled_sends, so call that first and loop over the rows you need to change. Works on drafts and queued sends only; an email already sent cannot be edited and will be refused, which is correct: the recipient already has the original.', params: { send_id: { type: 'string', required: true }, subject: { type: 'string' }, body: { type: 'string' } } },
@@ -382,6 +384,95 @@ export async function executeTool(accessToken, name, args = {}) {
         allow_roll: !!args.allow_roll,
         dry_run: !!args.dry_run
       });
+    // ── get_draft_brief ───────────────────────────────────────────────────────
+    // Composed here rather than in the edge function on purpose: every piece
+    // already exists as an action, and stitching them in the connector layer
+    // means no surgery on a 20,000 line file to add a convenience.
+    //
+    // Why it exists at all. Writing a good wave needed five calls in the right
+    // order, and the order was carried in the operator's head. Skipping
+    // get_success_stories produced invented statistics; skipping the queue
+    // produced a duplicate wave. One call cannot skip a step.
+    case 'get_draft_brief': {
+      const campaignId = args.campaign_id;
+      const launch = Math.max(1, Math.min(9, parseInt(args.launch, 10) || 1));
+      const limit = Math.min(Math.max(parseInt(args.limit) || 25, 1), 100);
+
+      // Fetched together. A failure in the optional colour (account signals,
+      // timeline) must not cost the caller the parts it cannot write without.
+      const settle = (p) => p.then(v => ({ ok: true, v }), e => ({ ok: false, e: String(e && e.message || e).slice(0, 200) }));
+      const [campsR, ctxR, storiesR, contactsR, queueR, limitR] = await Promise.all([
+        settle(edge(accessToken, 'list_sampaigns', {})),
+        settle(edge(accessToken, 'get_company_context', {})),
+        settle(edge(accessToken, 'get_success_stories', { campaign_id: campaignId, account_id: null })),
+        settle(edge(accessToken, 'list_sampaign_contacts', { campaign_id: campaignId })),
+        settle(edge(accessToken, 'list_sampaign_scheduled_sends', { campaign_id: campaignId })),
+        settle(edge(accessToken, 'get_sending_limit', {}))
+      ]);
+
+      const camp = campsR.ok ? (campsR.v.campaigns || []).find(c => c.id === campaignId) : null;
+      if (!camp) return { ok: false, error: 'Campaign not found. Call get_sampaigns for the list of ids.' };
+
+      // Anchor account colour, only for account-scoped campaigns. A list
+      // campaign spans many companies, so there is no single account to read.
+      // Keyed on account_id, never on the campaign name. A campaign is called
+      // things like "Ferrero (middle East)" while the account is "Ferrero", so
+      // a name lookup misses and returns empty — which the model would read as
+      // "this account is cold" and write a false opener from. An id either
+      // resolves or errors; it does not quietly answer the wrong question.
+      let evidence = null;
+      if (camp.account_id) {
+        const tlR = await settle(edge(accessToken, 'get_account_timeline', { account_id: camp.account_id, days: 90 }));
+        evidence = tlR.ok
+          ? {
+              recent_activity: (tlR.v.timeline || tlR.v.events || []).slice(0, 8),
+              note: 'Real recorded activity on this account, last 90 days. Open with something true and specific from it. If it is EMPTY the account is genuinely cold: write as a first approach and do not imply a relationship that does not exist.'
+            }
+          : { recent_activity: null, note: 'Could not read this account\'s history (' + tlR.e + '). Treat the account as unknown rather than as cold, and do not reference past contact either way.' };
+      }
+
+      const allContacts = contactsR.ok ? (contactsR.v.contacts || []) : [];
+      const queue = queueR.ok ? (queueR.v.sends || []) : [];
+      const queueSummary = queueR.ok ? (queueR.v.summary || {}) : {};
+
+      // Who this wave is actually for. A contact that replied or is marked dead
+      // gets no more mail; a placeholder address is not a mailbox.
+      const alreadyInWave = new Set(queue.filter(s => s.launch === launch && ['draft', 'pending', 'sent'].includes(s.status)).map(s => s.contact_id));
+      const writeFor = allContacts
+        .filter(c => !['replied', 'dead'].includes(c.status))
+        .filter(c => !alreadyInWave.has(c.id))
+        .filter(c => c.email && !/^scouted\./i.test(c.email))
+        .slice(0, limit)
+        .map(c => ({ contact_id: c.id, name: c.name, email: c.email, company: c.company, title: c.title, seniority: c.seniority, department: c.department, linkedin_url: c.linkedin_url, status: c.status }));
+
+      const needsEnrichment = allContacts.filter(c => c.email && /^scouted\./i.test(c.email)).length;
+
+      const warnings = [];
+      if (queueSummary.pending) warnings.push(queueSummary.pending + ' email(s) are ALREADY QUEUED on this campaign. Do not write new drafts to change them: use get_scheduled_sends then edit_scheduled_send, which fixes the copy in place at the same send time. Writing drafts creates a second wave and both go out.');
+      if (alreadyInWave.size) warnings.push(alreadyInWave.size + ' contact(s) already have a wave ' + launch + ' email drafted, queued or sent, and have been excluded from write_for.');
+      if (needsEnrichment) warnings.push(needsEnrichment + ' contact(s) have placeholder addresses and cannot be mailed. Run enrich_sampaign_contacts if the user wants them.');
+      if (!storiesR.ok || !((storiesR.v.stories || []).length)) warnings.push('No success stories are on record for this campaign. Write from the product capability alone. Do NOT invent a client name, a statistic or a quotation.');
+      if (!writeFor.length) warnings.push('Nobody is waiting for a wave ' + launch + ' email. Everyone is already drafted, queued, sent, replied, dead, or unreachable.');
+
+      return {
+        ok: true,
+        campaign: { id: camp.id, name: camp.name, goal: camp.campaign_goal, focus: camp.focus, scope: camp.scope, account_id: camp.account_id, followup_days: camp.followup_days, followup_dates: camp.followup_dates, stats: camp.stats },
+        wave: launch,
+        what_we_sell: ctxR.ok ? ctxR.v : { error: ctxR.e },
+        proof: storiesR.ok ? (storiesR.v.stories || []) : [],
+        proof_rule: 'These are the ONLY results, client names and quotations you may use. Never invent one and never embellish one. Where usable_publicly is false, you may use what the story proves but must not name the client or attribute the quote.',
+        account_evidence: evidence,
+        write_for: writeFor,
+        write_for_count: writeFor.length,
+        contacts_total: allContacts.length,
+        queue: { summary: queueSummary, note: 'Counts every wave on this campaign. Call get_scheduled_sends for the rows.' },
+        sending: limitR.ok ? limitR.v : { error: limitR.e },
+        warnings,
+        next_step: warnings.some(w => w.startsWith('Nobody'))
+          ? 'Nothing to draft. Tell the user why rather than writing anything.'
+          : 'Write one genuinely different email per person in write_for, then save_sampaign_drafts with launch ' + launch + ', then schedule_sampaign_drafts with dry_run true and read the plan back before committing.'
+      };
+    }
     case 'get_scheduled_sends':
       return edge(accessToken, 'list_sampaign_scheduled_sends', { campaign_id: args.campaign_id });
     case 'edit_scheduled_send':
