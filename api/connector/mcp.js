@@ -75,6 +75,29 @@ WHEN THE USER SAYS...
 - "find me new companies" -> discover_accounts, show the evidence, let them choose, then commit_discovery
 - "we did a great job at X and they loved it" -> offer save_success_story, so future outreach can cite it
 - "this campaign is about Y" / a campaign whose goal is empty -> set_campaign_goal
+- "reach them on LinkedIn" / "they have no email" / "connect with them" -> save_sampaign_linkedin_notes, then queue_linkedin_actions (dry run first)
+- "what's waiting on LinkedIn" / "did they accept" -> get_linkedin_queue
+- "stop the LinkedIn ones" -> cancel_linkedin_queue, scoped to a campaign
+
+LINKEDIN SENDS NOTHING BY ITSELF
+Never tell a user that Samora will send LinkedIn invitations or messages for
+them. It does not, and no honest product can: LinkedIn has no API for it, and
+the tools that pretend otherwise are driving the user's own login in breach of
+LinkedIn's terms, with their account carrying the risk.
+
+What Samora does is write the note, order the work, and hold it in a queue. The
+rep opens the Samora browser extension and presses Send themselves, one at a
+time. So:
+- Say "queued for you to send" or "ready in your extension". Never "sent" and
+  never "scheduled", because a LinkedIn action has no send time.
+- After queueing, report estimated_days. At 15 invitations a day, 200 contacts
+  is two working weeks of the rep's clicking, and they need that number before
+  they agree to it, not after.
+- If the user asks for full automation, tell them plainly why it does not exist
+  here and what the trade is. Do not imply we are working around it.
+- Acceptance and replies are only detected when the rep runs the extension. If
+  a campaign looks stalled, check get_linkedin_queue before concluding nobody
+  responded: unchecked is not the same as no.
 
 EMPTY IS AN ANSWER
 If something returns nothing, say so plainly. Do not fill a gap with a plausible guess: this product's whole promise is that every number shows its receipts.`;
@@ -108,7 +131,7 @@ export default async function handler(req, res) {
     return res.json({
       protocolVersion: '2024-11-05',
       capabilities: { tools: {} },
-      serverInfo: { name: 'samoratrack', version: '1.1.0' },
+      serverInfo: { name: 'samoratrack', version: '1.2.0' },
       instructions: INSTRUCTIONS,
       tools: toMcpTools()
     });
@@ -123,7 +146,7 @@ export default async function handler(req, res) {
       if (method === 'initialize') {
         // instructions rides on the initialize result: this is the one moment
         // the host asks what this server is and how to use it.
-        return res.json({ jsonrpc: '2.0', id, result: { protocolVersion: '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'samoratrack', version: '1.1.0' }, instructions: INSTRUCTIONS } });
+        return res.json({ jsonrpc: '2.0', id, result: { protocolVersion: '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'samoratrack', version: '1.2.0' }, instructions: INSTRUCTIONS } });
       }
 
       if (method === 'tools/list') {
