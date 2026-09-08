@@ -9182,9 +9182,30 @@ function _renderLaunchTabs(campaignId, byLaunch, maxLaunch) {
     var rows = byLaunch[n] || [];
     var on = window._sampLaunch === n;
     var drafts = rows.filter(function(x){ return x.status === 'draft'; }).length;
-    // Launch 1 is the initial send and has no follow-up date; waves above it
-    // are dated by the campaign's own follow-up schedule.
-    var when = n === 1 ? '' : (dates[n-2] ? new Date(dates[n-2]+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'}) : 'no date set');
+    // WHAT IS SCHEDULED BEATS WHAT WAS CONFIGURED.
+    // This read only campaign.followup_dates, so a wave with 23 emails queued
+    // for tomorrow still displayed "no date set" — because the campaign row had
+    // no fixed date and the wave had been scheduled by relative days instead.
+    // The label was answering "was a date typed into the campaign" while the
+    // user was asking "when does this go out". Real send times are the truth;
+    // the configured date is the fallback for a wave not yet queued.
+    var queuedAt = rows
+      .filter(function(x){ return x.status === 'pending' && x.send_at; })
+      .map(function(x){ return x.send_at; })
+      .sort();
+    var when;
+    if (n === 1 && !queuedAt.length) when = '';
+    else if (queuedAt.length) {
+      var first = new Date(queuedAt[0]);
+      var last = new Date(queuedAt[queuedAt.length - 1]);
+      var fmt = function(dt){ return dt.toLocaleDateString('en-GB',{day:'numeric',month:'short'}); };
+      // A wave spread across days is described as a range, because "8 Sept"
+      // for something running 8 to 10 Sept is a quiet lie.
+      when = fmt(first) === fmt(last) ? fmt(first) : fmt(first) + '–' + fmt(last);
+    }
+    else if (n > 1 && dates[n-2]) when = new Date(dates[n-2]+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+    else if (n > 1 && rows.some(function(x){ return x.status === 'draft'; })) when = 'not scheduled yet';
+    else when = n === 1 ? '' : 'no date set';
     out += '<span onclick="setSampLaunch(\''+esc(campaignId)+'\','+n+')" style="cursor:pointer;font-size:11px;padding:6px 11px;border-radius:2px;' +
       'border:1px solid '+(on?'var(--gold)':'var(--border2)')+';background:'+(on?'rgba(var(--c-accent-rgb),0.09)':'transparent')+';' +
       'color:'+(rows.length?'var(--text)':'var(--text3)')+'">' +
@@ -10756,8 +10777,13 @@ function _sampGoalBlock(campaignId) {
   var c = (window._sampaignCampaignsCache || {})[campaignId] || {};
   var goal = (c.campaign_goal || '').trim();
   if (!goal) {
+    // Names the two ways to fix it, including the one the user is most likely
+    // already in. A campaign written through Claude arrives with no goal, and
+    // telling that person to go and find a pencil is the wrong instruction:
+    // the assistant can set it from the conversation it just had.
     return '<div style="font-size:11px;color:var(--text3);margin-bottom:12px">' +
-      'No goal set. Add one with the pencil on the campaign — it is what Claude writes every email against.</div>';
+      'No goal set. Every email is written against it, so outreach here will read generic. ' +
+      'Ask Claude to set the campaign goal, or add one with the pencil on the campaign.</div>';
   }
   var long = goal.length > 150;
   return '<div style="margin-bottom:14px">' +
