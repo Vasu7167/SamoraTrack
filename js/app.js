@@ -3,7 +3,7 @@ let SB_KEY = localStorage.getItem('dt-sb-key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6I
 let API_KEY = localStorage.getItem('dt-api-key') || '';
 var _userHabits = null;
 // Cache buster — update this string on every deploy to purge stale service worker cache
-var APP_VERSION = '20260712-04';
+var APP_VERSION = '20260908-01';
 (function() {
   if (localStorage.getItem('app-sw-version') !== APP_VERSION && 'serviceWorker' in navigator) {
     navigator.serviceWorker.getRegistrations().then(function(regs) {
@@ -8953,6 +8953,106 @@ function _sampComposerLaunchChanged(campaignId) {
 // Drafts written by an AI tool via the connector. Reviewed here BEFORE
 // anything is scheduled: copy that goes straight from a model into a send
 // queue means the first human to read it is the prospect.
+// ── Email body editing: rich text, not raw markup ────────────────────────────
+// Bodies have always been HTML — the assistant writes <b> and <br>, and so does
+// anyone who formats a draft. But the editor was a <textarea> showing the
+// ESCAPED source, so a rep opening a draft to fix a name saw a wall of tags and
+// had to hand-write markup to add emphasis. Nothing about that is obvious, and
+// getting it wrong was invisible until the mail landed.
+//
+// A contenteditable surface with a toolbar shows what the recipient will see.
+// document.execCommand is deprecated but is the only thing every browser still
+// implements for this, and the alternative is a selection-model editor, which
+// is a large amount of code to own for six buttons.
+var RT_ALLOWED = { B:1, STRONG:1, I:1, EM:1, U:1, A:1, BR:1, P:1, UL:1, OL:1, LI:1, DIV:1, SPAN:1 };
+
+// ALLOWLIST, not a denylist. The recurring lesson in this codebase: naming what
+// is forbidden always misses something. Anything not named here is UNWRAPPED
+// rather than deleted, because the words matter and the tag does not — a paste
+// from Word should lose its <o:p> wrappers, not the sentence inside them.
+function sanitizeEmailHtml(html) {
+  var box = document.createElement('div');
+  box.innerHTML = String(html == null ? '' : html);
+  box.querySelectorAll('script,style,meta,link,iframe,object,embed,img').forEach(function(n){ n.remove(); });
+  for (var guard = 0; guard < 500; guard++) {
+    var all = box.querySelectorAll('*'), bad = null;
+    for (var i = 0; i < all.length; i++) { if (!RT_ALLOWED[all[i].tagName]) { bad = all[i]; break; } }
+    if (!bad) break;
+    var p = bad.parentNode;
+    while (bad.firstChild) p.insertBefore(bad.firstChild, bad);
+    p.removeChild(bad);
+  }
+  // Every attribute goes except a safe href. Inline styles from a paste are the
+  // main way a draft ends up looking like a marketing blast in the inbox.
+  box.querySelectorAll('*').forEach(function(n){
+    Array.prototype.slice.call(n.attributes).forEach(function(a){
+      var keep = n.tagName === 'A' && a.name === 'href' && /^(https?:|mailto:)/i.test(String(a.value).trim());
+      if (!keep) n.removeAttribute(a.name);
+    });
+    if (n.tagName === 'A') { n.setAttribute('target','_blank'); n.setAttribute('rel','noopener noreferrer'); }
+  });
+  return box.innerHTML;
+}
+function rtIsEmpty(html) {
+  var box = document.createElement('div');
+  box.innerHTML = String(html || '').replace(/<\s*br\s*\/?\s*>/gi, ' ');
+  return !(box.textContent || '').trim();
+}
+// Reads whichever editor is on the page. The textarea branch stays so that a
+// surface not yet converted keeps working rather than silently saving blank.
+function rtValue(id) {
+  var el = document.getElementById('draftBody_' + id);
+  if (!el) return '';
+  return el.isContentEditable ? sanitizeEmailHtml(el.innerHTML) : String(el.value || '');
+}
+function _rtCmd(id, cmd) {
+  var el = document.getElementById('draftBody_' + id);
+  if (!el) return;
+  el.focus();
+  if (cmd === 'createLink') {
+    var sel = window.getSelection();
+    if (!sel || sel.isCollapsed) { showToast('Select the words to link first'); return; }
+    var url = prompt('Link to:', 'https://');
+    if (!url) return;
+    document.execCommand('createLink', false, url);
+    return;
+  }
+  document.execCommand(cmd, false, null);
+}
+// Paste as plain text, deliberately. Pasting from Word or a browser carries
+// mso- styles, fixed pixel fonts and background colours that survive into the
+// sent mail, look like a template, and cost deliverability.
+function _rtPaste(e) {
+  e.preventDefault();
+  var t = ((e.clipboardData || window.clipboardData).getData('text/plain') || '');
+  document.execCommand('insertText', false, t);
+}
+function _rtBtn(id, cmd, label, title, extra) {
+  // onmousedown preventDefault is load-bearing: without it the click blurs the
+  // editor, the selection collapses, and the command applies to nothing.
+  return '<button type="button" title="'+title+'" onmousedown="event.preventDefault()" ' +
+    'onclick="event.stopPropagation();_rtCmd(\''+esc(id)+'\',\''+cmd+'\')" ' +
+    'style="min-width:26px;height:24px;padding:0 6px;border:1px solid var(--border2);background:var(--surface);color:var(--text2);' +
+    'border-radius:2px;cursor:pointer;font-family:var(--sans);font-size:11px;line-height:1;'+(extra||'')+'">'+label+'</button>';
+}
+function _rtEditor(id, html, fontSize) {
+  var fs = fontSize || 12;
+  return '<div style="display:flex;gap:3px;align-items:center;margin-bottom:4px;flex-wrap:wrap">' +
+      _rtBtn(id, 'bold', 'B', 'Bold (Ctrl/Cmd+B)', 'font-weight:800') +
+      _rtBtn(id, 'italic', 'I', 'Italic (Ctrl/Cmd+I)', 'font-style:italic') +
+      _rtBtn(id, 'underline', 'U', 'Underline (Ctrl/Cmd+U)', 'text-decoration:underline') +
+      _rtBtn(id, 'insertUnorderedList', '&#8226;&#8202;&#8212;', 'Bullet list', '') +
+      _rtBtn(id, 'createLink', 'Link', 'Add a link to the selected words', '') +
+      _rtBtn(id, 'removeFormat', 'Clear', 'Remove formatting', '') +
+      '<span style="font-size:11px;color:var(--text3);margin-left:auto">This is how it will arrive</span>' +
+    '</div>' +
+    '<div id="draftBody_'+esc(id)+'" contenteditable="true" onpaste="_rtPaste(event)" onclick="event.stopPropagation()" ' +
+      'style="width:100%;box-sizing:border-box;min-height:150px;padding:8px 10px;border-radius:2px;border:1px solid var(--border2);' +
+      'background:var(--bg);color:var(--text);font-family:var(--sans);font-size:'+fs+'px;line-height:1.6;overflow-wrap:anywhere;outline:none">' +
+      sanitizeEmailHtml(html || '') +
+    '</div>';
+}
+
 function _renderSampaignDrafts(campaignId, drafts) {
   if (!drafts.length) return '';
   var byTool = {};
@@ -8978,7 +9078,7 @@ function _renderSampaignDrafts(campaignId, drafts) {
         '</div>' +
         '<div id="draft_'+esc(x.id)+'" style="display:none;margin-top:6px">' +
           '<input id="draftSubj_'+esc(x.id)+'" value="'+esc(x.subject||'')+'" style="width:100%;box-sizing:border-box;padding:6px 8px;border-radius:2px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:11px;margin-bottom:4px"/>' +
-          '<textarea id="draftBody_'+esc(x.id)+'" rows="7" style="width:100%;box-sizing:border-box;padding:6px 8px;border-radius:2px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:11px;line-height:1.5;resize:vertical">'+esc(x.body||'')+'</textarea>' +
+          _rtEditor(x.id, x.body || '', 11) +
           '<div style="display:flex;gap:6px;margin-top:4px">' +
             '<button onclick="saveSampaignDraftEdit(\''+esc(campaignId)+'\',\''+esc(x.id)+'\')" style="font-size:11px;font-weight:600;padding:5px 10px;border-radius:2px;background:var(--green);border:none;color:#fff;cursor:pointer;font-family:var(--sans)">Save edit</button>' +
             '<span onclick="cancelSampaignSends(\''+esc(campaignId)+'\',\''+esc(x.id)+'\')" style="font-size:11px;color:var(--coral);cursor:pointer;align-self:center">Discard</span>' +
@@ -9008,8 +9108,10 @@ function _toggleDraft(id) {
 // exactly as they were.
 async function saveSampaignDraftEdit(campaignId, sendId) {
   var subject = document.getElementById('draftSubj_'+sendId)?.value?.trim();
-  var body = document.getElementById('draftBody_'+sendId)?.value;
-  if (!subject || !body || !body.trim()) { showToast('Subject and body are both needed'); return; }
+  // Sanitised on the way out, so what is stored is what the editor allows —
+  // never whatever a paste dragged in.
+  var body = rtValue(sendId);
+  if (!subject || rtIsEmpty(body)) { showToast('Subject and body are both needed'); return; }
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
       body: JSON.stringify({ action:'update_sampaign_scheduled_send', send_id: sendId, subject: subject, body: body }) });
@@ -9213,7 +9315,7 @@ async function loadSampaignSendQueue(campaignId) {
                 '<div id="draft_'+esc(x.id)+'" style="display:none;padding:2px 10px 12px 46px">' +
                   (editable
                     ? '<input id="draftSubj_'+esc(x.id)+'" value="'+esc(x.subject||'')+'" style="width:100%;box-sizing:border-box;padding:7px 9px;border-radius:2px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px;font-weight:600;margin-bottom:5px"/>' +
-                      '<textarea id="draftBody_'+esc(x.id)+'" rows="8" style="width:100%;box-sizing:border-box;padding:8px 10px;border-radius:2px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px;line-height:1.6;resize:vertical">'+esc(x.body||'')+'</textarea>' +
+                      _rtEditor(x.id, x.body || '', 12) +
                       '<div style="display:flex;gap:9px;align-items:center;margin-top:6px">' +
                         '<button onclick="event.stopPropagation();saveSampaignDraftEdit(\''+esc(campaignId)+'\',\''+esc(x.id)+'\')" style="font-size:11px;font-weight:600;padding:6px 13px;border-radius:2px;background:var(--green);border:none;color:#fff;cursor:pointer;font-family:var(--sans)">Save edit</button>' +
                         '<span style="font-size:11px;color:var(--text3)">Send time stays the same</span>' +
@@ -9222,7 +9324,10 @@ async function loadSampaignSendQueue(campaignId) {
                     // the owner. An editable box on delivered mail would let
                     // the UI show corrected text the recipient never received.
                     : '<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:5px">'+esc(x.subject||'')+'</div>' +
-                      '<div style="font-size:12px;color:var(--text2);white-space:pre-wrap;line-height:1.6;background:var(--surface);border-radius:2px;padding:10px 12px;border:1px solid var(--border)">'+esc(x.body||'')+'</div>' +
+                      // Rendered, not escaped. A sent email shown as raw markup
+                      // is unreadable, and worse, it looks like what the
+                      // recipient got — which for one week it actually was.
+                      '<div style="font-size:12px;color:var(--text2);line-height:1.6;background:var(--surface);border-radius:2px;padding:10px 12px;border:1px solid var(--border);overflow-wrap:anywhere">'+sanitizeEmailHtml(x.body||'')+'</div>' +
                       '<div style="font-size:11px;color:var(--text3);margin-top:5px">'+
                         (x.status==='sent' ? 'Already sent, read only'
                          : x.status==='cancelled' ? 'Cancelled, never sent'
