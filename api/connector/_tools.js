@@ -316,6 +316,16 @@ export const TOOL_SCHEMAS = [
   { name: 'reschedule_scheduled_sends', description: 'MOVE queued emails to a different day or time, keeping their content. Use when the user wants a campaign to go out earlier or later, or when a wave landed on the wrong day. Pass campaign_id with launch to move a whole wave, or send_ids for specific emails, plus start_at for the new start. The wave is re-spread across the sending window at a safe rate exactly as it was originally, so you cannot use this to dump 40 emails into one minute. ALWAYS call with dry_run true first and read the plan back to the user. If the response says rolled true, the day you asked for was already full and it explains what is occupying it — tell the user that rather than reporting success. Only queued emails can move; sent ones cannot.', params: { campaign_id: { type: 'string' }, launch: { type: 'number' }, send_ids: { type: 'array' }, start_at: { type: 'string', required: true }, force_daily: { type: 'number' }, dry_run: { type: 'boolean' } } },
 
   { name: 'cancel_scheduled_sends', description: 'STOP queued emails from going out. Pass send_ids for specific ones, or campaign_id with all_pending true for a whole campaign. SCOPE IT: all_pending on its own cancels every queued email in the campaign INCLUDING later follow-up waves, which is rarely what someone means. Add launch to name one wave, or before/after (ISO dates) to bound it by day. Drafts are discarded; queued sends are marked cancelled and kept as a record. Emails already sent are never touched. This is a destructive action on the user\'s outreach: say exactly how many emails and which wave you are about to cancel, and get a clear yes, before calling it.', params: { send_ids: { type: 'array' }, campaign_id: { type: 'string' }, all_pending: { type: 'boolean' }, launch: { type: 'number' }, before: { type: 'string' }, after: { type: 'string' } } },
+
+  // ── LinkedIn: the same create/observe/retract trio as the email queue ──────
+  // Shipped together on purpose. A tool that can create a commitment without
+  // tools that can see and retract it does not degrade gracefully; it degrades
+  // into duplicate outreach to real people.
+  { name: 'queue_linkedin_actions', description: 'Queue LinkedIn outreach for a SAMpaign so the rep can run it from the Samora browser extension. IMPORTANT, AND SAY THIS TO THE USER: this SENDS NOTHING. LinkedIn has no API for invitations or messages, so Samora writes and orders the work and the rep presses Send themselves in LinkedIn. Queueing is preparing their to-do list, not dispatching mail. Contacts need a linkedin_url and a connection note: call save_sampaign_linkedin_notes FIRST, because a contact with no note is skipped rather than invited with an empty request. Defaults to kinds ["visit","invite"], a profile view before the invite, which lifts accept rate. ALWAYS call with dry_run true first and read back would_queue and the skipped counts. The response gives daily_invite_limit and estimated_days: tell the user how many days of clicking they have just created, because at 15 invites a day 200 contacts is two working weeks, and that is the number they actually need to hear.', params: { campaign_id: { type: 'string', required: true }, contact_ids: { type: 'array' }, kinds: { type: 'array' }, dry_run: { type: 'boolean' } } },
+
+  { name: 'get_linkedin_queue', description: 'See what LinkedIn work is waiting on the rep, and what has already happened. Call this BEFORE queueing anything, for the same reason you call get_scheduled_sends before writing a new email wave: a queue may already exist, and adding a second one on top produces two invitations to the same person from two rows. Also the right tool when the user asks why a campaign looks stalled, since it shows result codes such as weekly_limit or no_invite_button per contact. Defaults to what is still outstanding; pass statuses to include done, skipped, failed or cancelled.', params: { campaign_id: { type: 'string' }, statuses: { type: 'array' } } },
+
+  { name: 'cancel_linkedin_queue', description: 'Remove queued LinkedIn actions so the rep stops seeing them. Nothing was ever sent by these rows, so this retracts work rather than recalling a message. MUST be scoped: pass action_ids, or campaign_id, optionally narrowed with kind. It REFUSES an unscoped call, because the difference between cancelling one campaign and wiping the rep\'s entire queue is exactly the mistake worth making impossible. Say how many actions and which campaign before you call it.', params: { action_ids: { type: 'array' }, campaign_id: { type: 'string' }, kind: { type: 'string', enum: ['visit','invite','message','followup'] } } }
 ];
 
 // ── Tool execution ────────────────────────────────────────────────────────────
@@ -572,6 +582,32 @@ export async function executeTool(accessToken, name, args = {}) {
         campaign_mode: args.campaign_mode || 'list'
       });
       return d;
+    }
+    case 'queue_linkedin_actions':
+      return edge(accessToken, 'queue_linkedin_actions', {
+        campaign_id: args.campaign_id,
+        contact_ids: args.contact_ids || null,
+        kinds: args.kinds || null,
+        // Defaults to a DRY RUN. Every other queue tool here defaults to acting;
+        // this one does not, because the cost of an unwanted queue is a rep
+        // discovering 200 invitations they never agreed to, and the cost of an
+        // extra dry run is one more tool call.
+        dry_run: args.dry_run !== false
+      });
+    case 'get_linkedin_queue':
+      return edge(accessToken, 'list_linkedin_actions', {
+        campaign_id: args.campaign_id || null,
+        statuses: args.statuses || null
+      });
+    case 'cancel_linkedin_queue': {
+      if (!(args.action_ids && args.action_ids.length) && !args.campaign_id) {
+        throw new Error('Scope it: pass action_ids or campaign_id. Refusing to cancel an unscoped LinkedIn queue.');
+      }
+      return edge(accessToken, 'cancel_linkedin_actions', {
+        action_ids: args.action_ids || [],
+        campaign_id: args.campaign_id || null,
+        kind: args.kind || null
+      });
     }
     default: throw new Error('Unknown tool: ' + name);
   }
