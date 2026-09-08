@@ -37,6 +37,13 @@ WRITING A WAVE
 3. Write ONE GENUINELY DIFFERENT email per person. Same email with the name swapped is not personalisation and the recipient can tell. Use the person's actual role, the account's real recorded activity, and only the proof the brief returned.
 4. save_sampaign_drafts, then schedule_sampaign_drafts with dry_run true. Read the plan back to the user, including today_limit and why. Only then schedule for real.
 
+FORMATTING THE BODY
+Bodies are HTML. Use <br> for a line break and <br><br> for a paragraph gap, <b> for emphasis, <i> sparingly, <a href> for links. Do not use markdown: **bold** arrives as literal asterisks.
+EMPHASISE WHAT CARRIES THE ARGUMENT. Put <b> around the things a skim-reader must not miss: the hard number or result, the named proof, and the specific ask. A decision maker reads the first line and the bold words, so those alone should convey why this email is worth answering.
+BUT EMPHASIS ONLY WORKS IF IT IS RARE. Two to four bolded fragments in a whole email. Never bold a full sentence, never a paragraph, never the greeting or the sign-off. An email with everything bold reads as a marketing blast, and it is treated as one by both the reader and the spam filter, so over-emphasis costs more than no emphasis.
+Keep paragraphs to two or three lines. White space is doing as much work as the bold.
+SUBJECT LINES ARE PLAIN TEXT. Email headers cannot carry formatting, so never put markup in a subject: it arrives as literal characters.
+
 NEVER INVENT PROOF
 Client names, statistics, quotations and case studies come only from the brief's proof list. An outreach email citing a result that did not happen is a liability for this user, not a flourish. If there is no proof on record, say so and write from capability alone.
 
