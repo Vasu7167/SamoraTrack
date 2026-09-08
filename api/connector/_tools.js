@@ -305,6 +305,8 @@ export const TOOL_SCHEMAS = [
   // that can create a commitment must ship alongside tools that can observe and
   // retract it. A write-only surface does not degrade gracefully. It degrades
   // into duplicate mail sent to real customers.
+  { name: 'set_campaign_goal', description: 'Set or correct a SAMpaign\'s goal: the specific pitch and ask that every email in it is written against (e.g. "Bring the production to campus for Gen Z audiences; ask for a 20 minute call with Student Life"). Campaigns created outside the app often have no goal, and a campaign with no goal produces generic outreach and shows an empty state to the user. If you have just written or discussed outreach for a campaign whose goal is empty, you ALREADY KNOW the goal: set it here rather than leaving it blank or asking the user to type it in the UI. Confirm the wording with the user in one line, then save. Also takes focus, an optional angle for this campaign such as a region or a persona.', params: { campaign_id: { type: 'string', required: true }, campaign_goal: { type: 'string' }, focus: { type: 'string' } } },
+
   { name: 'get_draft_brief', description: 'ONE CALL that returns everything needed to write a wave of outreach for a SAMpaign: the campaign goal, what this org sells, the success stories you are allowed to cite, the people to write to with their titles and seniority, what is ALREADY in the send queue, recent real activity on the anchor account, and how many emails can go out today. CALL THIS INSTEAD of chaining get_sampaigns, get_company_context, get_success_stories, get_sampaign_contacts and get_sending_limit by hand: it is one round trip, it cannot silently skip a step, and it returns the queue state so you do not draft a wave that is already scheduled. Read `write_for` for who still needs an email, `proof` for the ONLY claims you may make, `account_evidence` for something specific and true to open with, and `warnings` for anything that will bite. If `warnings` mentions a queued wave, stop and ask the user before drafting. Pass launch to brief a follow-up wave rather than the initial email.', params: { campaign_id: { type: 'string', required: true }, launch: { type: 'number' }, limit: { type: 'number' } } },
 
   { name: 'get_scheduled_sends', description: 'READ THE QUEUE for a SAMpaign: every draft, queued, sent, failed and cancelled email, with the recipient, the subject, the body and the exact send time. CALL THIS FIRST whenever a user asks to change, correct, delay, stop or check anything about a campaign that has already been scheduled — before writing a single new draft. Writing new drafts for a campaign that already has queued sends does NOT replace them: it adds a second wave, and both go out. Returns each row\'s id, which is what edit_scheduled_send, reschedule_scheduled_sends and cancel_scheduled_sends take. `launch` tells you which wave a row belongs to (1 is the initial email, 2 is follow-up 1, and so on).', params: { campaign_id: { type: 'string', required: true } } },
@@ -384,6 +386,12 @@ export async function executeTool(accessToken, name, args = {}) {
         allow_roll: !!args.allow_roll,
         dry_run: !!args.dry_run
       });
+    case 'set_campaign_goal':
+      return edge(accessToken, 'update_sampaign', {
+        campaign_id: args.campaign_id,
+        ...(args.campaign_goal !== undefined ? { campaign_goal: args.campaign_goal } : {}),
+        ...(args.focus !== undefined ? { focus: args.focus } : {})
+      });
     // ── get_draft_brief ───────────────────────────────────────────────────────
     // Composed here rather than in the edge function on purpose: every piece
     // already exists as an action, and stitching them in the connector layer
@@ -451,6 +459,7 @@ export async function executeTool(accessToken, name, args = {}) {
       if (queueSummary.pending) warnings.push(queueSummary.pending + ' email(s) are ALREADY QUEUED on this campaign. Do not write new drafts to change them: use get_scheduled_sends then edit_scheduled_send, which fixes the copy in place at the same send time. Writing drafts creates a second wave and both go out.');
       if (alreadyInWave.size) warnings.push(alreadyInWave.size + ' contact(s) already have a wave ' + launch + ' email drafted, queued or sent, and have been excluded from write_for.');
       if (needsEnrichment) warnings.push(needsEnrichment + ' contact(s) have placeholder addresses and cannot be mailed. Run enrich_sampaign_contacts if the user wants them.');
+      if (!camp.campaign_goal) warnings.push('This campaign has NO GOAL set, so there is nothing for the copy to argue towards and the app shows the user an empty state. If the conversation has already told you what this campaign is for, call set_campaign_goal now, confirming the wording in one line. Do not ask the user to type it into the UI.');
       if (!storiesR.ok || !((storiesR.v.stories || []).length)) warnings.push('No success stories are on record for this campaign. Write from the product capability alone. Do NOT invent a client name, a statistic or a quotation.');
       if (!writeFor.length) warnings.push('Nobody is waiting for a wave ' + launch + ' email. Everyone is already drafted, queued, sent, replied, dead, or unreachable.');
 
