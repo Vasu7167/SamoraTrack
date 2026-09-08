@@ -3,7 +3,7 @@ let SB_KEY = localStorage.getItem('dt-sb-key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6I
 let API_KEY = localStorage.getItem('dt-api-key') || '';
 var _userHabits = null;
 // Cache buster — update this string on every deploy to purge stale service worker cache
-var APP_VERSION = '20260908-01';
+var APP_VERSION = '20260908-02';
 (function() {
   if (localStorage.getItem('app-sw-version') !== APP_VERSION && 'serviceWorker' in navigator) {
     navigator.serviceWorker.getRegistrations().then(function(regs) {
@@ -1756,16 +1756,26 @@ async function refreshYouTabConnections() {
     var outlookBtn = document.getElementById('youOutlookBtn');
     if (d.connected) {
       var icon = d.provider === 'microsoft' ? '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> Outlook' : '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> Gmail';
-      if (lbl) lbl.innerHTML = '<span style="color:var(--green)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg></span> ' + icon + ' connected — ' + esc(d.email);
-      if (sub) sub.textContent = 'Signals refreshed from your ' + (d.provider === 'microsoft' ? 'Outlook' : 'Gmail') + ' account';
- if (gmailBtn && d.provider === 'google') { gmailBtn.textContent = 'Gmail connected'; gmailBtn.style.background = 'var(--green)'; }
+      // A dead grant leaves the row in place, so "connected" alone was green
+      // while every sync failed. healthy === false is the state this screen
+      // previously could not express, and it is the one that matters.
+      var broken = d.healthy === false;
+      if (lbl) lbl.innerHTML = broken
+        ? '<span style="color:var(--coral)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 3.9L2.6 17.4A1.6 1.6 0 004 19.8h16a1.6 1.6 0 001.4-2.4L13.7 3.9a1.6 1.6 0 00-2.8 0z"/></svg></span> ' + icon + ' needs reconnecting — ' + esc(d.email || '')
+        : '<span style="color:var(--green)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg></span> ' + icon + ' connected — ' + esc(d.email);
+      if (sub) sub.textContent = broken
+        // The reason, in Google's terms, not "something went wrong". Reconnecting
+        // without knowing why it died means doing it again next week.
+        ? (d.reason || 'Reconnect to resume syncing.') + ' Until then no replies, signals or coverage can be read from this mailbox.'
+        : 'Signals refreshed from your ' + (d.provider === 'microsoft' ? 'Outlook' : 'Gmail') + ' account';
+ if (gmailBtn && d.provider === 'google') { gmailBtn.textContent = broken ? 'Reconnect Gmail' : 'Gmail connected'; gmailBtn.style.background = broken ? 'var(--coral)' : 'var(--green)'; if (broken) gmailBtn.onclick = connectGmail; }
  if (outlookBtn && d.provider === 'microsoft') { outlookBtn.textContent = 'Outlook connected'; outlookBtn.style.background = 'var(--green)'; }
     }
     // Also update SAM tab label
     var samLbl = document.getElementById('samGmailLabel'); var samSub = document.getElementById('samGmailSub');
     if (d.connected) {
- if (samLbl) samLbl.textContent = '' + (d.provider === 'microsoft' ? 'Outlook' : 'Gmail') + ' connected';
-      if (samSub) samSub.textContent = 'Signals refreshed · ' + esc(d.email);
+ if (samLbl) samLbl.textContent = (d.provider === 'microsoft' ? 'Outlook' : 'Gmail') + (d.healthy === false ? ' needs reconnecting' : ' connected');
+      if (samSub) samSub.textContent = d.healthy === false ? (d.reason || 'Reconnect under Settings.') : 'Signals refreshed · ' + esc(d.email);
     }
   } catch(e) {}
 
