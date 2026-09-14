@@ -1648,21 +1648,21 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
           <div style="flex:1">
             <div style="font-size:12px;font-weight:600;color:var(--text)">Apollo.io</div>
             <div style="font-size:11px;color:var(--text3)" id="apolloUserStatus">Not connected</div> </div>
-          <button onclick="showEnrichmentInput('apollo')" style="padding:4px 10px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:11px;cursor:pointer" id="apolloUserBtn">Connect</button> </div>
+          <button style="padding:4px 10px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:11px;cursor:pointer" id="apolloUserBtn">Connect</button> </div>
         <!-- Lusha -->
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border)">
           <div style="width:28px;height:28px;border-radius:2px;background:#FF6B35;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">Lu</div>
           <div style="flex:1">
             <div style="font-size:12px;font-weight:600;color:var(--text)">Lusha</div>
             <div style="font-size:11px;color:var(--text3)" id="lushaUserStatus">Not connected</div> </div>
-          <button onclick="showEnrichmentInput('lusha')" style="padding:4px 10px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:11px;cursor:pointer" id="lushaUserBtn">Connect</button> </div>
+          <button style="padding:4px 10px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:11px;cursor:pointer" id="lushaUserBtn">Connect</button> </div>
         <!-- Hunter -->
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
           <div style="width:28px;height:28px;border-radius:2px;background:#F97316;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">Hu</div>
           <div style="flex:1">
             <div style="font-size:12px;font-weight:600;color:var(--text)">Hunter.io</div>
             <div style="font-size:11px;color:var(--text3)" id="hunterUserStatus">Not connected</div> </div>
-          <button onclick="showEnrichmentInput('hunter')" style="padding:4px 10px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:11px;cursor:pointer" id="hunterUserBtn">Connect</button> </div>
+          <button style="padding:4px 10px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:11px;cursor:pointer" id="hunterUserBtn">Connect</button> </div>
         <!-- inline key input -->
         <div id="enrichmentKeyInput" style="display:none;margin-top:4px">
           <div style="display:flex;gap:8px">
@@ -1680,35 +1680,35 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
         <button id="connectorBtn" onclick="getConnectorToken()" style="width:100%;padding:11px;border-radius:3px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:13px;font-weight:700;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.5v5M15 3.5v5M6.5 8.5h11v3a5.5 5.5 0 01-11 0zM12 17v4"/></svg> Get my connection details →</button>
         <div id="connectorStatus" style="font-size:12px;color:var(--text3);margin-top:8px"></div> </div>
       <div id="connectorGenerated" style="display:none">
-        <!-- Claude Teams - best option -->
+        <!-- Claude — ONE card.
+             This was three: "Claude Teams/Enterprise", "Claude Desktop" and
+             "Claude.ai browser", each with its own heading and its own copy
+             box. Two of those three printed the SAME URL — app.js even says so
+             in a comment. Three cards for one connector reads as three
+             different products and makes a reader hunt for which one is theirs.
+             One URL, then the Desktop installer underneath, because that is the
+             only genuinely different mechanism. -->
         <div style="background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.25);border-radius:3px;padding:14px;margin-bottom:10px">
-          <div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:6px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.8l2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 10l5.9-.8z"/></svg> Easiest — Claude Teams/Enterprise</div>
-          <div style="font-size:11px;color:var(--text3);margin-bottom:8px;line-height:1.5">Admin adds the server once in Claude admin panel. Entire team gets SamoraTrack in Claude automatically — no individual setup, no config, nothing.</div>
-          <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Claude.ai → Settings → Connectors → Add connector → name it <strong>Samora</strong> → paste URL:</div>
+          <div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:6px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.8l2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 10l5.9-.8z"/></svg> Claude</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:8px;line-height:1.5">One URL, every plan. Settings &rarr; Connectors &rarr; Add connector &rarr; name it <strong>Samora</strong> &rarr; paste this. On Teams or Enterprise an admin adds it once and the whole team has it.</div>
           <div id="claudeMcpUrl" onclick="copyField(this,'claudeMcpUrl')" title="Click to copy" style="font-size:11px;font-family:monospace;color:var(--blue);background:var(--bg);padding:7px 8px;border-radius:2px;border:1px solid var(--border2);cursor:pointer;word-break:break-all"></div>
-          <div style="font-size:11px;color:var(--text3);margin-top:4px">→ Ask Claude: "What is going wrong with my pipeline?" "Which rep needs coaching?" "Analyse last week's intent vs reality"</div> </div>
-        <!-- Claude Desktop - individual -->
-        <div style="background:var(--surface2);border-radius:3px;padding:14px;margin-bottom:10px">
-          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 11v5.5M12 7.8v.4"/></svg> Claude Desktop (individual setup)</div>
-          <div style="font-size:11px;color:var(--text3);margin-bottom:8px">One-time config — copy → paste → restart Claude. Then ask anything in the native Claude chat.</div>
-          <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Claude Desktop — automatic installer:</div>
-          <div style="display:flex;gap:6px;margin-bottom:10px">
-            <button id="copyClaudeBtn" onclick="showClaudeInstallCmd('mac')" style="flex:1;padding:9px;border-radius:2px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:700;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 11v5.5M12 7.8v.4"/></svg> Mac</button>
-            <button onclick="showClaudeInstallCmd('windows')" style="flex:1;padding:9px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5h7.5L19 9v11.5H6zM13.5 3.5V9H19"/></svg> Windows</button> </div>
-          <div id="claudeInstallCmdPanel" style="display:none;background:var(--bg);border:1px solid var(--border2);border-radius:3px;padding:12px">
-            <div style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:6px" id="claudeInstallPlatformLabel"></div>
-            <div style="font-size:11px;color:var(--text3);margin-bottom:8px" id="claudeInstallStep1"></div>
-            <div style="background:#1A1712;border-radius:2px;padding:10px;margin-bottom:8px;position:relative">
-              <div id="claudeInstallCmd" style="font-size:11px;font-family:monospace;color:#A07824;word-break:break-all;line-height:1.5;padding-right:50px"></div>
-              <button onclick="copyInstallCmd()" id="copyCmdBtn" style="position:absolute;top:8px;right:8px;background:var(--gold);border:none;border-radius:2px;color:#18160F;font-size:11px;font-weight:700;cursor:pointer;padding:3px 8px">Copy</button> </div>
-            <div style="font-size:11px;color:var(--text3);line-height:1.6" id="claudeInstallStep2"></div> </div>
-          <!-- claude.ai browser option -->
-          <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
-            <div style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:6px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM3.2 9.5h17.6M3.2 14.5h17.6M12 3a14 14 0 000 18 14 14 0 000-18z"/></svg> Claude.ai browser (Pro / Teams / Enterprise)</div>
-            <div style="font-size:11px;color:var(--text3);margin-bottom:8px;line-height:1.5">No Desktop app needed. Works entirely in the browser — same live data, same AI analysis.</div>
-            <div style="font-size:11px;color:var(--text3);margin-bottom:6px">claude.ai → Settings → Connectors → Add connector → name it <strong>Samora</strong> → paste this URL:</div>
-            <div id="claudeBrowserUrl" onclick="copyField(this)" title="Click to copy" style="font-size:11px;font-family:monospace;color:var(--blue);background:var(--bg);padding:7px 8px;border-radius:2px;border:1px solid var(--border2);cursor:pointer;word-break:break-all;margin-bottom:6px"></div>
-            <div style="font-size:11px;color:var(--text3)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> Requires Claude Pro, Teams or Enterprise plan · Free tier does not support integrations</div> </div> </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:6px">Then ask: &ldquo;What is going wrong with my pipeline?&rdquo; &middot; &ldquo;Which rep needs coaching?&rdquo; &middot; &ldquo;Analyse last week&rsquo;s intent vs reality&rdquo;</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:6px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> Connectors need Claude Pro, Max, Teams or Enterprise. The free tier does not support them.</div>
+
+          <!-- The one genuinely different route: Desktop wants a local install
+               command, not a URL. -->
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(74,140,92,0.2)">
+            <div style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:6px">Using the Claude Desktop app? Install it automatically instead:</div>
+            <div style="display:flex;gap:6px;margin-bottom:8px">
+              <button id="copyClaudeBtn" onclick="showClaudeInstallCmd('mac')" style="flex:1;padding:8px;border-radius:2px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:700;cursor:pointer">Mac</button>
+              <button onclick="showClaudeInstallCmd('windows')" style="flex:1;padding:8px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Windows</button> </div>
+            <div id="claudeInstallCmdPanel" style="display:none;background:var(--bg);border:1px solid var(--border2);border-radius:3px;padding:12px">
+              <div style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:6px" id="claudeInstallPlatformLabel"></div>
+              <div style="font-size:11px;color:var(--text3);margin-bottom:8px" id="claudeInstallStep1"></div>
+              <div style="background:#1A1712;border-radius:2px;padding:10px;margin-bottom:8px;position:relative">
+                <div id="claudeInstallCmd" style="font-size:11px;font-family:monospace;color:#A07824;word-break:break-all;line-height:1.5;padding-right:50px"></div>
+                <button onclick="copyInstallCmd()" id="copyCmdBtn" style="position:absolute;top:8px;right:8px;background:var(--gold);border:none;border-radius:2px;color:#18160F;font-size:11px;font-weight:700;cursor:pointer;padding:3px 8px">Copy</button> </div>
+              <div style="font-size:11px;color:var(--text3);line-height:1.6" id="claudeInstallStep2"></div> </div> </div> </div>
         <!-- ChatGPT -->
         <div style="background:var(--surface2);border-radius:3px;padding:14px;margin-bottom:10px">
           <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> ChatGPT (Custom GPT)</div>
