@@ -321,11 +321,24 @@ export const TOOL_SCHEMAS = [
   // Shipped together on purpose. A tool that can create a commitment without
   // tools that can see and retract it does not degrade gracefully; it degrades
   // into duplicate outreach to real people.
-  { name: 'queue_linkedin_actions', description: 'Queue LinkedIn outreach for a SAMpaign so the rep can run it from the Samora browser extension. IMPORTANT, AND SAY THIS TO THE USER: this SENDS NOTHING. LinkedIn has no API for invitations or messages, so Samora writes and orders the work and the rep presses Send themselves in LinkedIn. Queueing is preparing their to-do list, not dispatching mail. Contacts need a linkedin_url and a connection note: call save_sampaign_linkedin_notes FIRST, because a contact with no note is skipped rather than invited with an empty request. Defaults to kinds ["visit","invite"], a profile view before the invite, which lifts accept rate. ALWAYS call with dry_run true first and read back would_queue and the skipped counts. The response gives daily_invite_limit and estimated_days: tell the user how many days of clicking they have just created, because at 15 invites a day 200 contacts is two working weeks, and that is the number they actually need to hear.', params: { campaign_id: { type: 'string', required: true }, contact_ids: { type: 'array' }, kinds: { type: 'array' }, dry_run: { type: 'boolean' } } },
+  { name: 'queue_linkedin_actions', description: 'Queue LinkedIn outreach for a SAMpaign so the rep can run it from the Samora browser extension. IMPORTANT, AND SAY THIS TO THE USER: this SENDS NOTHING. LinkedIn has no API for invitations or messages, so Samora writes and orders the work and the rep presses Send themselves in LinkedIn. Queueing is preparing their to-do list, not dispatching mail. Contacts need a linkedin_url and a connection note: call save_sampaign_linkedin_notes FIRST, because a contact with no note is skipped rather than invited with an empty request. Defaults to invites only, one queue row per contact. Pass kinds ["visit","invite"] for a warm-up pass that views the profile first, but say what that costs: it doubles the number of clicks the rep makes. ALWAYS call with dry_run true first and read back would_queue and the skipped counts. The response gives daily_invite_limit and estimated_days: tell the user how many days of clicking they have just created, because at 15 invites a day 200 contacts is two working weeks, and that is the number they actually need to hear.', params: { campaign_id: { type: 'string', required: true }, contact_ids: { type: 'array' }, kinds: { type: 'array' }, dry_run: { type: 'boolean' } } },
 
   { name: 'get_linkedin_queue', description: 'See what LinkedIn work is waiting on the rep, and what has already happened. Call this BEFORE queueing anything, for the same reason you call get_scheduled_sends before writing a new email wave: a queue may already exist, and adding a second one on top produces two invitations to the same person from two rows. Also the right tool when the user asks why a campaign looks stalled, since it shows result codes such as weekly_limit or no_invite_button per contact. Defaults to what is still outstanding; pass statuses to include done, skipped, failed or cancelled.', params: { campaign_id: { type: 'string' }, statuses: { type: 'array' } } },
 
-  { name: 'cancel_linkedin_queue', description: 'Remove queued LinkedIn actions so the rep stops seeing them. Nothing was ever sent by these rows, so this retracts work rather than recalling a message. MUST be scoped: pass action_ids, or campaign_id, optionally narrowed with kind. It REFUSES an unscoped call, because the difference between cancelling one campaign and wiping the rep\'s entire queue is exactly the mistake worth making impossible. Say how many actions and which campaign before you call it.', params: { action_ids: { type: 'array' }, campaign_id: { type: 'string' }, kind: { type: 'string', enum: ['visit','invite','message','followup'] } } }
+  { name: 'cancel_linkedin_queue', description: 'Remove queued LinkedIn actions so the rep stops seeing them. Nothing was ever sent by these rows, so this retracts work rather than recalling a message. MUST be scoped: pass action_ids, or campaign_id, optionally narrowed with kind. It REFUSES an unscoped call, because the difference between cancelling one campaign and wiping the rep\'s entire queue is exactly the mistake worth making impossible. Say how many actions and which campaign before you call it.', params: { action_ids: { type: 'array' }, campaign_id: { type: 'string' }, kind: { type: 'string', enum: ['visit','invite','message','followup'] } } },
+
+  // ── Rep-level campaign creation ───────────────────────────────────────────
+  // These three exist because an AE asked an assistant to "create a SAMpaign
+  // with the relevant stakeholders" and was told it needed manager permissions.
+  // That answer was a consequence of a MISSING TOOL, not a policy: the edge
+  // function's create_sampaign has no role gate at all. The only routes an
+  // assistant had were add_accounts and discover_accounts, both manager-gated,
+  // so it correctly reported a wall that should never have been in its way.
+  { name: 'create_sampaign', description: 'Create a SAMpaign for ONE company. This is the ordinary way to start outreach and ANY rep can do it, including AEs and SDRs: it does not need manager permissions. Requires account_name AND domain, because a SAMpaign is anchored to a tracked account. If an account with that domain or name already exists it is REUSED rather than duplicated, so this is safe to call on companies already in the pipeline. Set campaign_goal at the same time: the specific pitch and ask every email will be written against, e.g. "Introduce the AI retail execution suite; ask for 25 minutes with the Sales Director". A campaign with no goal produces generic outreach. Use this for ONE company you already know. For many companies at once use add_accounts, and to FIND companies you do not know yet use discover_accounts, both of which need a manager.', params: { account_name: { type: 'string', required: true }, domain: { type: 'string', required: true }, region: { type: 'string' }, campaign_goal: { type: 'string' }, focus: { type: 'string' }, followup_days: { type: 'number' } } },
+
+  { name: 'list_account_stakeholders', description: 'See the people Samora ALREADY KNOWS at an account: the buying group built from real email activity, with their title, seniority, department, how many exchanges are on record, and whether they are engaged, active, dark or uncontacted. Call this BEFORE scouting anything. Scouting calls the enrichment providers and spends credits; these people are already in Samora and cost nothing. Also the right tool when a rep says "add the relevant stakeholders" or "who do we know at X" — show them the list and let them choose rather than adding everyone. Pass account_id, or account_name if you only have the company name. Each row carries reachable_by_email: someone without an email address cannot be mailed, and adding them to an email campaign adds a row that can never do anything.', params: { account_id: { type: 'string' }, account_name: { type: 'string' } } },
+
+  { name: 'add_stakeholders_to_sampaign', description: 'Put people Samora ALREADY HAS into a SAMpaign as contacts. Spends NO enrichment credits, because these records already exist — this is the cheap path and it should be preferred over scout_sampaign_contacts whenever the people are already known at the account. Pass stakeholder_ids from list_account_stakeholders for a chosen few, or account_id to take the whole buying group. only_engaged true limits it to people currently engaged or active, which is usually what someone means by "the relevant stakeholders". Anyone already in the campaign is skipped rather than duplicated, and anyone without an email address is skipped and reported, since they cannot be mailed. Each contact carries a note saying they came from the account buying group and what their signal status was, so the campaign shows why they are in it. Any rep can do this on their own campaign.', params: { campaign_id: { type: 'string', required: true }, stakeholder_ids: { type: 'array' }, account_id: { type: 'string' }, only_engaged: { type: 'boolean' } } }
 ];
 
 // ── Tool execution ────────────────────────────────────────────────────────────
@@ -609,6 +622,27 @@ export async function executeTool(accessToken, name, args = {}) {
         kind: args.kind || null
       });
     }
+    case 'create_sampaign':
+      return edge(accessToken, 'create_sampaign', {
+        account_name: args.account_name,
+        domain: args.domain,
+        region: args.region || null,
+        campaign_goal: args.campaign_goal || null,
+        focus: args.focus || null,
+        followup_days: args.followup_days ?? null
+      });
+    case 'list_account_stakeholders':
+      return edge(accessToken, 'list_account_stakeholders', {
+        account_id: args.account_id || null,
+        account_name: args.account_name || null
+      });
+    case 'add_stakeholders_to_sampaign':
+      return edge(accessToken, 'add_stakeholders_to_sampaign', {
+        campaign_id: args.campaign_id,
+        stakeholder_ids: args.stakeholder_ids || null,
+        account_id: args.account_id || null,
+        only_engaged: !!args.only_engaged
+      });
     default: throw new Error('Unknown tool: ' + name);
   }
 }
