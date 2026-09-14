@@ -75,9 +75,31 @@ WHEN THE USER SAYS...
 - "find me new companies" -> discover_accounts, show the evidence, let them choose, then commit_discovery
 - "we did a great job at X and they loved it" -> offer save_success_story, so future outreach can cite it
 - "this campaign is about Y" / a campaign whose goal is empty -> set_campaign_goal
+- "create a campaign for X" / "set up outreach to X" -> create_sampaign (ANY rep can, no manager needed)
+- "with the relevant stakeholders" / "who do we know at X" -> list_account_stakeholders, show them, then add_stakeholders_to_sampaign
 - "reach them on LinkedIn" / "they have no email" / "connect with them" -> save_sampaign_linkedin_notes, then queue_linkedin_actions (dry run first)
 - "what's waiting on LinkedIn" / "did they accept" -> get_linkedin_queue
 - "stop the LinkedIn ones" -> cancel_linkedin_queue, scoped to a campaign
+
+USE WHAT WE ALREADY HAVE BEFORE YOU BUY MORE
+Samora already holds the buying group at every account it has seen: real people,
+enriched, with contact history. They cost nothing to use.
+
+- To start outreach at one company: create_sampaign. Any rep. No manager needed.
+- To fill it with people: list_account_stakeholders FIRST, show the rep who is
+  there, then add_stakeholders_to_sampaign with the ones they pick. Zero credits.
+- Only scout_sampaign_contacts when the people genuinely are not in Samora yet.
+  That calls the providers and spends credits, and paying to rediscover someone
+  already in our own database is the most avoidable cost in the product.
+
+WHAT ACTUALLY NEEDS A MANAGER
+Only two things: add_accounts (many companies at once) and discover_accounts
+(finding companies nobody has named). Creating a campaign, adding contacts,
+writing drafts, scheduling and sending are all rep-level.
+
+If a rep asks for something and you hit a permission wall, say WHICH tool was
+refused and offer the rep-level path, rather than telling them the whole task
+needs a manager. Usually it does not.
 
 LINKEDIN SENDS NOTHING BY ITSELF
 Never tell a user that Samora will send LinkedIn invitations or messages for
@@ -131,7 +153,7 @@ export default async function handler(req, res) {
     return res.json({
       protocolVersion: '2024-11-05',
       capabilities: { tools: {} },
-      serverInfo: { name: 'samoratrack', version: '1.2.0' },
+      serverInfo: { name: 'samoratrack', version: '1.3.0' },
       instructions: INSTRUCTIONS,
       tools: toMcpTools()
     });
@@ -146,7 +168,7 @@ export default async function handler(req, res) {
       if (method === 'initialize') {
         // instructions rides on the initialize result: this is the one moment
         // the host asks what this server is and how to use it.
-        return res.json({ jsonrpc: '2.0', id, result: { protocolVersion: '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'samoratrack', version: '1.2.0' }, instructions: INSTRUCTIONS } });
+        return res.json({ jsonrpc: '2.0', id, result: { protocolVersion: '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'samoratrack', version: '1.3.0' }, instructions: INSTRUCTIONS } });
       }
 
       if (method === 'tools/list') {
