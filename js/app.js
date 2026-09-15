@@ -114,6 +114,9 @@ function setMode(m) {
   document.getElementById('signupFields').style.display = m === 'signup' ? 'block' : 'none';
   const rp = document.getElementById('rolePickerWrap');
   if (rp) rp.style.display = m === 'signup' ? 'block' : 'none';
+  // Nothing to recover on the signup tab.
+  const fr = document.getElementById('forgotRow');
+  if (fr) fr.style.display = m === 'signup' ? 'none' : 'block';
   if (m === 'signup') pickSignupRole('sdr');
   showMsg('');
 }
@@ -7787,6 +7790,44 @@ document.addEventListener('click',e=>{const m=document.getElementById('carryFwdM
   // a stale cached one.
   try {
     const frag = (window.location.hash || '').replace(/^#/, '');
+
+    // A password-recovery link comes back looking EXACTLY like an OAuth return:
+    // #access_token=...&refresh_token=...  The only thing that separates them is
+    // type=recovery. Without this branch the OAuth handler below would adopt the
+    // token as an ordinary sign-in and drop the person straight into the app,
+    // never asking for the new password they clicked the link to set.
+    if (frag && /(^|&)type=recovery(&|$)/.test(frag)) {
+      const rq = new URLSearchParams(frag);
+      _recoveryToken   = rq.get('access_token');
+      _recoveryRefresh = rq.get('refresh_token');
+      // Out of the address bar immediately: it is a live credential for this
+      // account and it should not survive a copied URL or a shared screen.
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+      if (_recoveryToken) {
+        try {
+          const ru = await fetch(SB_URL + '/auth/v1/user', { headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + _recoveryToken } });
+          const rud = await ru.json();
+          const who = document.getElementById('resetWho');
+          if (who) who.textContent = rud && rud.email ? 'For ' + rud.email : '';
+        } catch (_e) {}
+        _screen('resetScreen');
+        const rp = document.getElementById('rPass'); if (rp) rp.focus();
+        return;
+      }
+    }
+
+    // An expired or already-used link comes back as #error=... with no token.
+    // Saying so beats dropping them on a sign-in screen with no explanation.
+    if (frag && /(^|&)error/.test(frag)) {
+      const eq = new URLSearchParams(frag);
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+      const am = document.getElementById('authMsg');
+      if (am && /expired|invalid/i.test(eq.get('error_description') || eq.get('error') || '')) {
+        am.style.color = 'var(--coral)';
+        am.textContent = 'That link has expired or was already used. Request a new one.';
+      }
+    }
+
     if (frag && frag.indexOf('access_token=') !== -1) {
       const q = new URLSearchParams(frag);
       const at = q.get('access_token'), rt = q.get('refresh_token');
@@ -13538,4 +13579,143 @@ async function changePassword() {
     _pwSay('Could not reach the server: ' + e.message, true);
   }
   btn.disabled = false; btn.textContent = 'Change password';
+}
+
+// ============================================================================
+// FORGOT PASSWORD
+//
+// Two halves, separated by an email:
+//   1. sendReset()   -> POST /auth/v1/recover. Supabase emails a link.
+//   2. the link lands back here with #type=recovery in the FRAGMENT, which
+//      _catchRecovery() picks up and turns into the "set a new password" screen.
+//
+// Same rule as the change-password flow: the password only ever travels between
+// this browser and Supabase Auth. sam-gmail-signals is not involved and has no
+// reason to be.
+// ============================================================================
+
+function _screen(id) {
+  document.querySelectorAll('.screen').forEach(function(el) { el.classList.remove('active'); });
+  var t = document.getElementById(id);
+  if (t) t.classList.add('active');
+}
+
+function showForgot() {
+  var a = document.getElementById('aEmail');
+  var f = document.getElementById('fEmail');
+  // Carry over whatever they already typed. Retyping an email you just entered,
+  // while locked out, is a small insult.
+  if (a && f && a.value) f.value = a.value;
+  document.getElementById('forgotMsg').textContent = '';
+  _screen('forgotScreen');
+  if (f) f.focus();
+}
+
+function showAuth() {
+  document.getElementById('authMsg').textContent = '';
+  _screen('authScreen');
+}
+
+async function sendReset() {
+  var btn = document.getElementById('forgotBtn');
+  var msg = document.getElementById('forgotMsg');
+  var email = (document.getElementById('fEmail').value || '').trim().toLowerCase();
+
+  if (!email || email.indexOf('@') === -1) {
+    msg.style.color = 'var(--coral)';
+    msg.textContent = 'Enter the email address you sign in with.';
+    return;
+  }
+
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try {
+    // redirectTo must be listed in Supabase Auth -> URL Configuration, or the
+    // link in the email silently falls back to the Site URL and the recovery
+    // fragment never reaches this app.
+    await fetch(SB_URL + '/auth/v1/recover', {
+      method: 'POST',
+      headers: { 'apikey': SB_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, redirect_to: window.location.origin + window.location.pathname })
+    });
+  } catch (e) { /* deliberately ignored, see below */ }
+
+  // ALWAYS THE SAME ANSWER, whether or not that address has an account, and
+  // whether or not the request succeeded. Anything else turns this box into a
+  // tool for checking who works here. The cost is that a typo looks like a
+  // success; the note about checking spam is there to soften that.
+  msg.style.color = 'var(--text3)';
+  msg.textContent = 'If there is an account on ' + email + ', a link is on its way. It is valid for one hour. Check spam if it has not arrived in a couple of minutes.';
+  btn.disabled = false; btn.textContent = 'Send the link';
+}
+
+function _rPwHint() {
+  var v = document.getElementById('rPass').value || '';
+  var h = document.getElementById('rPassHint');
+  if (!h) return;
+  if (v.length >= PW_MIN) { h.textContent = 'Long enough.'; h.style.color = 'var(--green)'; }
+  else { h.textContent = 'At least ' + PW_MIN + ' characters.'; h.style.color = ''; }
+}
+
+// Set by _catchRecovery. Held in memory only: a recovery token is a bearer
+// credential for the account and localStorage is the wrong home for it.
+var _recoveryToken = null;
+var _recoveryRefresh = null;
+
+async function submitReset() {
+  var btn = document.getElementById('resetBtn');
+  var msg = document.getElementById('resetMsg');
+  var p1 = document.getElementById('rPass').value || '';
+  var p2 = document.getElementById('rPass2').value || '';
+
+  if (p1.length < PW_MIN) { msg.style.color='var(--coral)'; msg.textContent = 'At least ' + PW_MIN + ' characters.'; return; }
+  if (p1 !== p2)          { msg.style.color='var(--coral)'; msg.textContent = 'The two passwords do not match.'; return; }
+  if (!_recoveryToken)    { msg.style.color='var(--coral)'; msg.textContent = 'This reset link has expired. Request a new one.'; return; }
+
+  btn.disabled = true; btn.textContent = 'Saving…';
+  msg.style.color = 'var(--text3)'; msg.textContent = '';
+  try {
+    var r = await fetch(SB_URL + '/auth/v1/user', {
+      method: 'PUT',
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + _recoveryToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: p1 })
+    });
+    var d = await r.json();
+    if (!r.ok) {
+      msg.style.color = 'var(--coral)';
+      // An expired link is the common case and deserves its own sentence,
+      // because "request a new one" is the actual next step.
+      msg.textContent = /expired|invalid/i.test(JSON.stringify(d))
+        ? 'This reset link has expired. Request a new one from the sign-in screen.'
+        : (d.msg || d.error_description || d.error || 'Could not set the password.');
+      btn.disabled = false; btn.textContent = 'Set password and sign in';
+      return;
+    }
+
+    // A reset usually means the old password was lost OR someone else had it.
+    // Ending every other session is the safe default here; unlike the settings
+    // screen there is no case for leaving them running.
+    try {
+      await fetch(SB_URL + '/auth/v1/logout?scope=others', {
+        method: 'POST', headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + _recoveryToken }
+      });
+    } catch (_e) {}
+
+    // Adopt the recovery session so they land inside the app, already signed
+    // in. Making someone type the password they just set is a pointless step.
+    var ur = await fetch(SB_URL + '/auth/v1/user', { headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + _recoveryToken } });
+    var u = await ur.json();
+    if (u && u.id) {
+      currentUser = { id: u.id, email: u.email, token: _recoveryToken, refresh_token: _recoveryRefresh || null };
+      localStorage.setItem('dt-user', JSON.stringify(currentUser));
+      _recoveryToken = null; _recoveryRefresh = null;
+      if (typeof loadProfile === 'function') { await loadProfile(); return; }
+    }
+    _recoveryToken = null; _recoveryRefresh = null;
+    msg.textContent = 'Password set. Sign in with it.';
+    setTimeout(showAuth, 1200);
+  } catch (e) {
+    msg.style.color = 'var(--coral)';
+    msg.textContent = 'Could not reach the server: ' + e.message;
+  }
+  btn.disabled = false; btn.textContent = 'Set password and sign in';
 }
