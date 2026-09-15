@@ -150,12 +150,14 @@ const SSO_SCOPES = {
 // ── Which providers are actually turned on ─────────────────────────────────
 // GoTrue publishes this at /auth/v1/settings: {"external":{"google":false,...}}
 //
-// Without checking, clicking a disabled provider NAVIGATES AWAY from the app to
-// a raw JSON error page:
-//     {"code":400,"error_code":"validation_failed",
-//      "msg":"Unsupported provider: provider is not enabled"}
-// The user is now off the site, looking at JSON, with no way back but the back
-// button. A button that cannot work should not be on the screen.
+// We ASK, but we do not hide. The first version of this hid the buttons for
+// disabled providers, which solved the wrong problem: it stopped the raw JSON
+// error page, and in exchange made a feature you are in the middle of switching
+// on look like it had been removed. Hiding a control gives the person no way to
+// tell "not built" from "not configured" from "I broke it".
+//
+// So the buttons stay. Clicking one that is not enabled says so, in words, in
+// place, and does not navigate anywhere.
 var _ssoEnabled = null;
 
 async function _loadSsoProviders() {
@@ -165,32 +167,19 @@ async function _loadSsoProviders() {
     var d = await r.json();
     _ssoEnabled = (d && d.external) || {};
   } catch (_e) {
-    // Could not ask. Leave the buttons alone rather than hiding a working
-    // sign-in route because one request failed.
+    // Could not ask. Leave everything enabled and let the click path handle it.
     _ssoEnabled = null;
-    return;
   }
-  var map = { google: 'ssoGoogleBtn', microsoft: 'ssoMicrosoftBtn' };
-  var anyOn = false;
-  Object.keys(map).forEach(function(which) {
-    var on = !!_ssoEnabled[which === 'microsoft' ? 'azure' : 'google'];
-    anyOn = anyOn || on;
-    var btn = document.getElementById(map[which]);
-    if (btn) btn.style.display = on ? '' : 'none';
-  });
-  // With no providers at all, "or use a password" is dividing a password form
-  // from nothing.
-  var or = document.getElementById('ssoOr');
-  if (or) or.style.display = anyOn ? '' : 'none';
 }
 
 function ssoSignIn(which) {
   if (!SB_URL || !SB_KEY) { showMsg('Sign-in is not configured in this build.', true); return; }
   var key = which === 'microsoft' ? 'azure' : 'google';
   if (_ssoEnabled && !_ssoEnabled[key]) {
-    // Belt and braces: the button should already be hidden, but never navigate
-    // the user off the app into a JSON error page.
-    showMsg((which === 'microsoft' ? 'Microsoft' : 'Google') + ' sign-in is not switched on for this workspace yet. Use your email and password, or ask your admin to enable it.', true);
+    // The whole point of the probe: say it here rather than navigating the
+    // person off the app to a raw JSON page they cannot come back from.
+    showMsg((which === 'microsoft' ? 'Microsoft' : 'Google') +
+      ' sign-in is not switched on for this workspace yet. Sign in with your email and password below, or ask your admin to enable it in Supabase.', true);
     return;
   }
   const provider = which === 'microsoft' ? 'azure' : 'google';
