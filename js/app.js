@@ -1718,17 +1718,51 @@ async function saveEnrichmentKey(provider, scope) {
   } catch(e) { showToast('Error: ' + e.message); }
 }
 
-function _updateEnrichmentStatus(provider, scope, connected) {
-  var elId = provider + (scope === 'org' ? 'OrgStatus' : 'UserStatus');
+// via: 'user' | 'org' | null. The distinction matters to the rep, because
+// removing a personal key does NOT disconnect a provider the org has set, and
+// the row used to read "Not connected" on a provider that was working fine
+// through the org key.
+function _updateEnrichmentStatus(provider, scope, connected, via) {
+  var elId  = provider + (scope === 'org' ? 'OrgStatus' : 'UserStatus');
   var btnId = provider + (scope === 'org' ? 'OrgBtn'    : 'UserBtn');
-  var el = document.getElementById(elId);
+  var el  = document.getElementById(elId);
   var btn = document.getElementById(btnId);
- if (el) el.textContent = connected ? 'Connected' : 'Not connected';
-  if (el)  el.style.color = connected ? 'var(--green)' : 'var(--text3)';
-  if (btn && scope === 'user') btn.textContent = connected ? 'Change' : 'Connect';
+
+  var label = !connected ? 'Not connected'
+    : (scope === 'user' && via === 'org') ? '\u2713 Connected via your organisation'
+    : '\u2713 Connected';
+  if (el) { el.textContent = label; el.style.color = connected ? 'var(--green)' : 'var(--text3)'; }
+
+  if (btn && scope === 'user') {
+    // Only a key this person owns can be removed by this person. An org key
+    // belongs to the admin, so the button offers to override it instead.
+    if (via === 'user') { btn.textContent = 'Disconnect'; btn.onclick = function(){ disconnectEnrichment(provider); }; }
+    else if (via === 'org') { btn.textContent = 'Use my own key'; btn.onclick = function(){ showEnrichmentInput(provider); }; }
+    else { btn.textContent = 'Connect'; btn.onclick = function(){ showEnrichmentInput(provider); }; }
+  }
+}
+
+async function disconnectEnrichment(provider) {
+  if (!confirm('Remove your personal ' + provider + ' key?')) return;
+  try {
+    var r = await fetch(EDGE_FN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
+      body: JSON.stringify({ action: 'clear_enrichment_key', provider: provider, scope: 'user' })
+    });
+    var d = await r.json();
+    if (d.ok) { showToast(d.note || 'Disconnected'); loadEnrichmentStatus(); }
+    else showToast('Error: ' + (d.error || 'Could not disconnect'));
+  } catch(e) { showToast('Error: ' + e.message); }
 }
 
 async function loadEnrichmentStatus() {
+  // Paint the known-nothing state first. The buttons no longer carry an inline
+  // onclick, so without this they would be dead until the request returns.
+  ['apollo','lusha','hunter'].forEach(function(p) {
+    _updateEnrichmentStatus(p, 'user', false, null);
+    _updateEnrichmentStatus(p, 'org',  false, null);
+  });
   try {
     var r = await fetch(EDGE_FN_URL, {
       method: 'POST',
@@ -1738,8 +1772,14 @@ async function loadEnrichmentStatus() {
     var d = await r.json();
     if (d.ok && d.providers) {
       ['apollo','lusha','hunter'].forEach(function(p) {
-        if (d.providers[p + '_org'])  _updateEnrichmentStatus(p, 'org',  true);
-        if (d.providers[p + '_user']) _updateEnrichmentStatus(p, 'user', true);
+        var hasOrg  = !!d.providers[p + '_org'];
+        var hasUser = !!d.providers[p + '_user'];
+        _updateEnrichmentStatus(p, 'org', hasOrg, hasOrg ? 'org' : null);
+        // A personal key wins over the org key, so that is what the row
+        // reports. Previously this branch only ran when a USER key existed,
+        // which is why an org-key-only setup read as "Not connected" to every
+        // rep while enrichment was quietly working.
+        _updateEnrichmentStatus(p, 'user', hasUser || hasOrg, hasUser ? 'user' : (hasOrg ? 'org' : null));
       });
     }
   } catch(e) {}
@@ -3357,10 +3397,22 @@ async function loadHabitsSection() {
       new Promise(function(resolve) { setTimeout(function() { resolve({ _timeout: true }); }, 5000); })
     ]);
     if (result && !result._timeout && Array.isArray(result.habits)) {
-      // Defaults ONLY when the server confirms this user has no habits yet.
-      // On error/timeout we must NOT fall back to DEFAULT_HABITS — a later
-      // "Save habits" would overwrite the user's real server-side habits.
-      _userHabits = result.habits.length ? result.habits : DEFAULT_HABITS.map(function(h){ return Object.assign({}, h); });
+      // Defaults ONLY for someone who has NEVER set habits.
+      //
+      // This used to key off result.habits.length, which meant an empty list
+      // re-seeded the three defaults — so deleting every habit was impossible.
+      // They came back on the next load, every time. An empty list is a valid
+      // answer ("I want none"); it is not the same as never having chosen.
+      //
+      // The server now says which it is via `configured`. The fallback below
+      // handles an older edge function that does not send the flag yet: in
+      // that case only an empty list AND no flag falls back, which is the old
+      // behaviour, so deploying the client first cannot break anything.
+      var neverConfigured = (result.configured === false) ||
+                            (result.configured === undefined && result.habits.length === 0);
+      _userHabits = neverConfigured
+        ? DEFAULT_HABITS.map(function(h){ return Object.assign({}, h); })
+        : result.habits;
     } else {
       // Timeout / bad response: leave habits unloaded so the next visit
       // retries — do NOT show defaults that could get saved over real data.
