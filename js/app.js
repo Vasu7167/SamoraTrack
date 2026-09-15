@@ -293,7 +293,25 @@ async function loadProfile() {
       const orgs = await sbGet(`organisations?id=eq.${p.org_id}&select=org_code,name&limit=1`);
       profile = { ...p, org_code: orgs?.[0]?.org_code || '—', org_name: orgs?.[0]?.name || 'Unknown' };
       localStorage.setItem('dt-profile-' + currentUser.id, JSON.stringify(profile));
-    } else { await setupProfile(''); }
+    } else {
+      // NO PROFILE. This is where SSO was dangerous.
+      //
+      // setupProfile('') CREATES A BRAND NEW ORGANISATION and makes the caller
+      // its super_admin. That is right for someone who deliberately signed up
+      // with a blank org code. It is badly wrong for someone who just clicked
+      // "Continue with Google": their colleague's org already exists, and they
+      // would land in a private org of one, see an empty pipeline, and have no
+      // idea why.
+      //
+      // Password signup already asks for an org code. SSO never had the chance
+      // to, so it is asked for here instead, after the fact.
+      _pendingSsoUser = true;
+      try { hideSplash(true); } catch (_e) {}
+      _screen('joinOrgScreen');
+      var jw = document.getElementById('joinWho');
+      if (jw) jw.textContent = 'Signed in as ' + (currentUser.email || '');
+      return;
+    }
   } catch(e) { const cached = localStorage.getItem('dt-profile-' + currentUser?.id); if (cached) profile = JSON.parse(cached); }
   // get_org_config fires in background — never blocks launchApp
   try {
@@ -316,12 +334,42 @@ function showScreen(id) {
   if (el) el.classList.add('active');
 }
 
-function doLogout() {
+// Every path back to the sign-in screen goes through this. doAuth() disables
+// the button and writes "Please wait…" into it, and nothing ever put it back:
+// after signing out, the button stayed disabled with that text forever and the
+// only way to sign in again was a hard refresh.
+//
+// The fix is not "reset it in doLogout". It is that the screen owns its own
+// reset, so a future third route back here cannot reintroduce the same bug.
+function _resetAuthForm() {
+  var btn = document.getElementById('authBtn');
+  if (btn) { btn.disabled = false; btn.textContent = (typeof authMode !== 'undefined' && authMode === 'signup') ? 'Create account' : 'Sign in'; }
+  var msg = document.getElementById('authMsg'); if (msg) { msg.textContent = ''; }
+  var pass = document.getElementById('aPass'); if (pass) pass.value = '';
+  var pass2 = document.getElementById('aPass2'); if (pass2) pass2.value = '';
+  var fr = document.getElementById('forgotRow');
+  if (fr) fr.style.display = (typeof authMode !== 'undefined' && authMode === 'signup') ? 'none' : 'block';
+}
+
+async function doLogout() {
+  // Revoke the session at Supabase, not just locally. Clearing localStorage
+  // leaves the access token valid until it expires, which on a shared machine
+  // means "Sign out" did not actually sign anything out.
+  try {
+    if (currentUser && currentUser.token && SB_URL) {
+      await fetch(SB_URL + '/auth/v1/logout', {
+        method: 'POST',
+        headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token }
+      });
+    }
+  } catch (_e) { /* offline: local clear below still happens */ }
+
   localStorage.removeItem('dt-user'); currentUser = null; profile = null; allData = {};
   // Habits are per-user server state — clear the in-memory copy so the next
   // user who signs in on this device fetches THEIR habits instead of seeing
   // (and accidentally saving over their profile with) the previous user's.
   _userHabits = null; _habitSuggestions = null;
+  _resetAuthForm();
   showScreen('authScreen');
 }
 
@@ -13612,7 +13660,7 @@ function showForgot() {
 }
 
 function showAuth() {
-  document.getElementById('authMsg').textContent = '';
+  _resetAuthForm();
   _screen('authScreen');
 }
 
@@ -13658,6 +13706,7 @@ function _rPwHint() {
 
 // Set by _catchRecovery. Held in memory only: a recovery token is a bearer
 // credential for the account and localStorage is the wrong home for it.
+var _pendingSsoUser = false;
 var _recoveryToken = null;
 var _recoveryRefresh = null;
 
@@ -13718,4 +13767,44 @@ async function submitReset() {
     msg.textContent = 'Could not reach the server: ' + e.message;
   }
   btn.disabled = false; btn.textContent = 'Set password and sign in';
+}
+
+
+// ── First sign-in through Google or Microsoft ───────────────────────────────
+// They are authenticated but have no profile, so we do not yet know which
+// organisation they belong to. Password signup asks for an org code up front;
+// SSO cannot, so it is asked here.
+async function joinOrg(mode) {
+  var msg = document.getElementById('joinMsg');
+  var code = (document.getElementById('joinCode').value || '').trim().toUpperCase();
+  msg.style.color = 'var(--text3)';
+
+  if (mode === 'join' && !code) {
+    msg.style.color = 'var(--coral)';
+    msg.textContent = 'Enter the code your admin gave you, or create a new organisation instead.';
+    return;
+  }
+
+  var btn = document.getElementById(mode === 'join' ? 'joinBtn' : 'createOrgBtn');
+  btn.disabled = true;
+  var was = btn.textContent; btn.textContent = 'Working…';
+  try {
+    // setupProfile handles both: a code joins the existing org as a rep, a
+    // blank string creates a new one with this person as super_admin.
+    await setupProfile(mode === 'join' ? code : '');
+    _pendingSsoUser = false;
+    if (typeof launchApp === 'function') launchApp();
+    else window.location.reload();
+  } catch (e) {
+    msg.style.color = 'var(--coral)';
+    // setupProfile already writes its own message for a bad code; only speak up
+    // when it did not.
+    if (!msg.textContent) msg.textContent = e.message || 'Could not set that up.';
+    btn.disabled = false; btn.textContent = was;
+  }
+}
+
+function joinOrgCancel() {
+  _pendingSsoUser = false;
+  doLogout();
 }
