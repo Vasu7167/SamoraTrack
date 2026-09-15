@@ -147,8 +147,52 @@ const SSO_SCOPES = {
   microsoft: 'openid email profile offline_access Mail.Read Mail.Send Calendars.Read'
 };
 
+// ── Which providers are actually turned on ─────────────────────────────────
+// GoTrue publishes this at /auth/v1/settings: {"external":{"google":false,...}}
+//
+// Without checking, clicking a disabled provider NAVIGATES AWAY from the app to
+// a raw JSON error page:
+//     {"code":400,"error_code":"validation_failed",
+//      "msg":"Unsupported provider: provider is not enabled"}
+// The user is now off the site, looking at JSON, with no way back but the back
+// button. A button that cannot work should not be on the screen.
+var _ssoEnabled = null;
+
+async function _loadSsoProviders() {
+  if (!SB_URL || !SB_KEY) return;
+  try {
+    var r = await fetch(SB_URL + '/auth/v1/settings', { headers: { 'apikey': SB_KEY } });
+    var d = await r.json();
+    _ssoEnabled = (d && d.external) || {};
+  } catch (_e) {
+    // Could not ask. Leave the buttons alone rather than hiding a working
+    // sign-in route because one request failed.
+    _ssoEnabled = null;
+    return;
+  }
+  var map = { google: 'ssoGoogleBtn', microsoft: 'ssoMicrosoftBtn' };
+  var anyOn = false;
+  Object.keys(map).forEach(function(which) {
+    var on = !!_ssoEnabled[which === 'microsoft' ? 'azure' : 'google'];
+    anyOn = anyOn || on;
+    var btn = document.getElementById(map[which]);
+    if (btn) btn.style.display = on ? '' : 'none';
+  });
+  // With no providers at all, "or use a password" is dividing a password form
+  // from nothing.
+  var or = document.getElementById('ssoOr');
+  if (or) or.style.display = anyOn ? '' : 'none';
+}
+
 function ssoSignIn(which) {
   if (!SB_URL || !SB_KEY) { showMsg('Sign-in is not configured in this build.', true); return; }
+  var key = which === 'microsoft' ? 'azure' : 'google';
+  if (_ssoEnabled && !_ssoEnabled[key]) {
+    // Belt and braces: the button should already be hidden, but never navigate
+    // the user off the app into a JSON error page.
+    showMsg((which === 'microsoft' ? 'Microsoft' : 'Google') + ' sign-in is not switched on for this workspace yet. Use your email and password, or ask your admin to enable it.', true);
+    return;
+  }
   const provider = which === 'microsoft' ? 'azure' : 'google';
   const scopes = SSO_SCOPES[which] || '';
   // Land back on the app root. Supabase returns the session in the URL
@@ -7837,6 +7881,10 @@ document.addEventListener('click',e=>{const m=document.getElementById('carryFwdM
   // broken. Runs before the stored-session check so a fresh sign-in wins over
   // a stale cached one.
   try {
+    // Which SSO providers are switched on. Fired here and not awaited: the
+    // buttons hide themselves when it lands, and sign-in must never wait on it.
+    _loadSsoProviders();
+
     const frag = (window.location.hash || '').replace(/^#/, '');
 
     // A password-recovery link comes back looking EXACTLY like an OAuth return:
