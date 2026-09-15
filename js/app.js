@@ -4658,7 +4658,17 @@ async function getCoverageCoaching(grid, outputId, repEmail) {
 }
 
 // ── You tab accordion sections ────────────────────────────────────────────────
+
+// The card names the account being changed, because "change your password" on a
+// shared machine is exactly where someone changes the wrong one.
+function _pwShowEmail() {
+  var el = document.getElementById('pwEmail');
+  if (el && currentUser && currentUser.email) el.textContent = currentUser.email;
+}
+document.addEventListener('DOMContentLoaded', _pwShowEmail);
+
 function toggleYouAcc(key) {
+  if (arguments[0] === 'password') _pwShowEmail();
   var el = document.getElementById('youAcc-' + key);
   if (el) el.classList.toggle('open');
 }
@@ -13401,3 +13411,131 @@ window.openCarryFromTask = typeof openCarryFromTask !== 'undefined' ? openCarryF
 window.closeCarryForward = typeof closeCarryForward !== 'undefined' ? closeCarryForward : function(){};
 window.confirmCarryForward = typeof confirmCarryForward !== 'undefined' ? confirmCarryForward : function(){};
 window.selectCarryDate = typeof selectCarryDate !== 'undefined' ? selectCarryDate : function(){};
+
+// ============================================================================
+// CHANGE PASSWORD
+//
+// Runs entirely between the browser and Supabase Auth. The password NEVER goes
+// to sam-gmail-signals, is never written to any table of ours, and never
+// appears in a URL. There is no reason for our backend to see it, and every
+// place a password exists is a place it can leak.
+//
+// WHY THE CURRENT PASSWORD IS REQUIRED
+//   PUT /auth/v1/user does not ask for it. So on its own, anyone holding a live
+//   session — a borrowed laptop, an unlocked machine, a stolen token — could
+//   change the password and lock the real owner out of their own account.
+//   Re-authenticating first proves the person at the keyboard is the account
+//   holder and not merely someone sitting in front of their session.
+//
+// The re-auth also hands back a fresh token, which is what the change is then
+// made with. That matters if Supabase is configured to require a recent login
+// for sensitive updates.
+// ============================================================================
+
+var PW_MIN = 10;   // Supabase's own floor is 6. Six is not a password.
+
+function _pwStrength() {
+  var v = document.getElementById('pwNew').value || '';
+  var hint = document.getElementById('pwHint');
+  if (!hint) return;
+  if (!v) { hint.textContent = 'At least ' + PW_MIN + ' characters.'; hint.style.color = 'var(--text3)'; return; }
+  if (v.length < PW_MIN) {
+    hint.textContent = (PW_MIN - v.length) + ' more character' + ((PW_MIN - v.length) === 1 ? '' : 's') + ' needed.';
+    hint.style.color = 'var(--text3)';
+    return;
+  }
+  // Length is the honest signal. Character-class rules mostly teach people to
+  // write Password1! so we do not pretend those are strength.
+  var varied = /[a-z]/.test(v) && /[A-Z0-9]/.test(v);
+  hint.textContent = varied ? 'Long enough.' : 'Long enough. A mix of cases or numbers is harder to guess.';
+  hint.style.color = 'var(--green)';
+}
+
+function _pwSay(text, isError) {
+  var el = document.getElementById('pwMsg');
+  if (!el) return;
+  el.textContent = text || '';
+  el.style.color = isError ? 'var(--red, #C4553D)' : 'var(--text3)';
+}
+
+async function changePassword() {
+  var btn     = document.getElementById('pwBtn');
+  var current = document.getElementById('pwCurrent').value || '';
+  var next    = document.getElementById('pwNew').value || '';
+  var confirm = document.getElementById('pwConfirm').value || '';
+  var others  = document.getElementById('pwSignOutOthers').checked;
+
+  if (!current)            { _pwSay('Enter your current password.', true); return; }
+  if (next.length < PW_MIN){ _pwSay('The new password needs at least ' + PW_MIN + ' characters.', true); return; }
+  if (next !== confirm)    { _pwSay('The two new passwords do not match.', true); return; }
+  if (next === current)    { _pwSay('That is your current password. Choose a different one.', true); return; }
+
+  btn.disabled = true; btn.textContent = 'Changing…';
+  _pwSay('Checking your current password…');
+
+  try {
+    // 1. Prove it is really them.
+    var reauth = await fetch(SB_URL + '/auth/v1/token?grant_type=password', {
+      method: 'POST',
+      headers: { 'apikey': SB_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: currentUser.email, password: current })
+    });
+    var rd = await reauth.json();
+    if (!reauth.ok || !rd.access_token) {
+      // Deliberately specific: this is the user's own account and telling them
+      // the current password is wrong is not an information leak, it is the
+      // only useful thing to say.
+      _pwSay('That current password is not right.', true);
+      btn.disabled = false; btn.textContent = 'Change password';
+      return;
+    }
+
+    // 2. Change it, using the token we just earned.
+    _pwSay('Saving the new password…');
+    var upd = await fetch(SB_URL + '/auth/v1/user', {
+      method: 'PUT',
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + rd.access_token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: next })
+    });
+    var ud = await upd.json();
+    if (!upd.ok) {
+      _pwSay(ud.msg || ud.error_description || ud.error || 'Supabase refused the change.', true);
+      btn.disabled = false; btn.textContent = 'Change password';
+      return;
+    }
+
+    // 3. Keep this session alive on the NEW credentials. Without this the app
+    //    carries on with the pre-change token and the rep is silently logged
+    //    out at the next refresh, which reads as "the change broke something".
+    currentUser.token = rd.access_token;
+    currentUser.refresh_token = rd.refresh_token;
+    localStorage.setItem('dt-user', JSON.stringify(currentUser));
+
+    // 4. Other devices. Done AFTER the change, so a failure here cannot leave
+    //    them signed out with the old password still live.
+    var othersNote = '';
+    if (others) {
+      try {
+        var lo = await fetch(SB_URL + '/auth/v1/logout?scope=others', {
+          method: 'POST',
+          headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token }
+        });
+        othersNote = lo.ok
+          ? ' Your other devices have been signed out.'
+          : ' Your password changed, but other devices could not be signed out — sign out manually there.';
+      } catch (e) {
+        othersNote = ' Your password changed, but other devices could not be signed out — sign out manually there.';
+      }
+    }
+
+    document.getElementById('pwCurrent').value = '';
+    document.getElementById('pwNew').value = '';
+    document.getElementById('pwConfirm').value = '';
+    _pwStrength();
+    _pwSay('Password changed.' + othersNote);
+    if (typeof showToast === 'function') showToast('Password changed');
+  } catch (e) {
+    _pwSay('Could not reach the server: ' + e.message, true);
+  }
+  btn.disabled = false; btn.textContent = 'Change password';
+}
