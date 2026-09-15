@@ -1062,6 +1062,26 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
     <div class="msg" id="authMsg"></div> </div>
 </div>
 
+<!-- ── First SSO sign-in: which organisation? ────────────────────────────────
+     Reached only when someone authenticated through Google or Microsoft has no
+     profile yet. Without this they silently became super_admin of a brand new
+     org of one, with an empty pipeline and no explanation. -->
+<div id="joinOrgScreen" class="screen">
+  <div class="auth-card">
+    <div class="auth-logo">One more thing</div>
+    <div class="field-hint" id="joinWho" style="margin-bottom:4px"></div>
+    <div class="field-hint" style="margin-bottom:14px">Which organisation are you joining? Your admin has a code. If you are the first person here, create a new one instead.</div>
+    <label class="field-label">Organisation code</label>
+    <input class="auth-input" id="joinCode" placeholder="e.g. ORG-XXXX" onkeydown="if(event.key==='Enter')joinOrg('join')"/>
+    <button class="auth-btn" id="joinBtn" onclick="joinOrg('join')" style="margin-top:14px">Join this organisation</button>
+    <div class="divider" style="margin:16px 0 12px">or</div>
+    <button class="auth-btn" id="createOrgBtn" onclick="joinOrg('create')" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border2)">Create a new organisation</button>
+    <div class="field-hint" style="margin-top:6px">You would become its admin. Only do this if nobody from your company is using SamoraTrack yet.</div>
+    <div style="text-align:center;margin-top:12px">
+      <button type="button" onclick="joinOrgCancel()" style="background:none;border:none;color:var(--text3);font-family:var(--font);font-size:12px;cursor:pointer;text-decoration:underline">Sign out</button> </div>
+    <div class="msg" id="joinMsg"></div> </div>
+</div>
+
 <!-- ── Forgot password ──────────────────────────────────────────────────────
      Its own screen rather than a mode of the sign-in form. Someone who is
      locked out is already frustrated; making them work out which fields still
