@@ -1057,7 +1057,39 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
             <div style="font-weight:600;margin-bottom:2px">AE</div>
             <div style="font-size:11px;opacity:0.7">Deal quality · Proposals · Closes</div> </button> </div> </div> </div>
     <button class="auth-btn" id="authBtn" onclick="doAuth()">Sign in</button>
+    <div id="forgotRow" style="text-align:center;margin-top:10px">
+      <button type="button" onclick="showForgot()" style="background:none;border:none;color:var(--text3);font-family:var(--font);font-size:12px;cursor:pointer;text-decoration:underline">Forgot your password?</button> </div>
     <div class="msg" id="authMsg"></div> </div>
+</div>
+
+<!-- ── Forgot password ──────────────────────────────────────────────────────
+     Its own screen rather than a mode of the sign-in form. Someone who is
+     locked out is already frustrated; making them work out which fields still
+     apply is not the moment to be clever. -->
+<div id="forgotScreen" class="screen">
+  <div class="auth-card">
+    <div class="auth-logo">Reset your password</div>
+    <div class="field-hint" style="margin-bottom:14px">Enter the email you sign in with. If there is an account on it, we will send a link to set a new password.</div>
+    <label class="field-label">Email</label>
+    <input class="auth-input" id="fEmail" type="email" placeholder="you@company.com" onkeydown="if(event.key==='Enter')sendReset()"/>
+    <button class="auth-btn" id="forgotBtn" onclick="sendReset()" style="margin-top:14px">Send the link</button>
+    <div style="text-align:center;margin-top:10px">
+      <button type="button" onclick="showAuth()" style="background:none;border:none;color:var(--text3);font-family:var(--font);font-size:12px;cursor:pointer;text-decoration:underline">Back to sign in</button> </div>
+    <div class="msg" id="forgotMsg"></div> </div>
+</div>
+
+<!-- ── Set a new password, after following the emailed link ─────────────── -->
+<div id="resetScreen" class="screen">
+  <div class="auth-card">
+    <div class="auth-logo">Set a new password</div>
+    <div class="field-hint" style="margin-bottom:14px" id="resetWho"></div>
+    <label class="field-label">New password</label>
+    <input class="auth-input" id="rPass" type="password" autocomplete="new-password" placeholder="At least 10 characters" oninput="_rPwHint()"/>
+    <div class="field-hint" id="rPassHint">At least 10 characters.</div>
+    <label class="field-label" style="margin-top:10px">Confirm new password</label>
+    <input class="auth-input" id="rPass2" type="password" autocomplete="new-password" placeholder="Type it again" onkeydown="if(event.key==='Enter')submitReset()"/>
+    <button class="auth-btn" id="resetBtn" onclick="submitReset()" style="margin-top:14px">Set password and sign in</button>
+    <div class="msg" id="resetMsg"></div> </div>
 </div>
 
 <!-- ════ MAIN APP ════ -->
