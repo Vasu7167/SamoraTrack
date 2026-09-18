@@ -3907,7 +3907,17 @@ async function refreshSampaigns() {
   var out = document.getElementById('seqSyncOutput');
   var label = btn ? btn.textContent : null;
   if (btn) { btn.textContent = '↻ Refreshing…'; btn.disabled = true; }
-  if (out) out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">Checking your inbox and reloading SAMpaigns…</div>';
+
+  // ORDER MATTERS. The common reason to press this is that a SAMpaign was
+  // just created from Claude or the assistant and the page has never heard of
+  // it. So reload the list FIRST: the new campaign appears in under a second.
+  // The inbox scan that follows is the slow part (it reads Gmail for every
+  // campaign) and it has nothing to do with whether a campaign exists, so
+  // making the person wait through it before seeing their new SAMpaign was
+  // backwards.
+  try { await loadSampaignCampaigns(); } catch(e) {}
+  if (out) out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">SAMpaigns reloaded. Checking your inbox for replies\u2026</div>';
+
   try {
     var r = await fetch(EDGE_FN_URL, {
       method: 'POST',
@@ -3917,19 +3927,35 @@ async function refreshSampaigns() {
     var d = await r.json();
 
     if (!d.ok) {
-      // A missing mailbox is a setup state, not a failure. Say which one.
-      if (out) out.innerHTML = '<div style="font-size:12px;color:var(--amber);padding:6px 0">' + esc(d.error || 'Could not read your inbox.') + '</div>';
-    } else {
-      var summary = _sampaignSyncSummary(d);
+      // The list is already refreshed by this point, so a missing mailbox is
+      // a footnote, not a failure. Say which half worked.
       if (out) out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">' +
-        (summary ? '<span style="color:var(--green);font-weight:600">Updated:</span> ' + esc(summary) : 'Up to date, nothing new since the last check.') +
-        '</div>';
+        'SAMpaigns reloaded. <span style="color:var(--amber)">Inbox not checked: ' + esc(d.error || 'no mailbox connected') + '</span></div>';
+      return;
     }
-    // Repaint regardless. Even with no inbox changes, the list may be stale
-    // from another tab or another rep on the same account.
-    try { loadSampaignCampaigns(); } catch(e) {}
+
+    var summary = _sampaignSyncSummary(d);
+    if (summary) {
+      // Statuses changed, so the cards are already stale again. One more pass.
+      try { await loadSampaignCampaigns(); } catch(e) {}
+      if (out) out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">' +
+        '<span style="color:var(--green);font-weight:600">Updated:</span> ' + esc(summary) + '</div>';
+    } else if (out) {
+      out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">SAMpaigns reloaded. Nothing new in your inbox.</div>';
+    }
+
+    // If a campaign panel is open behind this, it is showing old numbers too.
+    var overlay = document.getElementById('sampaign-detail-overlay');
+    if (overlay) {
+      var openEl = overlay.querySelector('[id^="sampaignContacts_"]');
+      var cid = openEl ? (openEl.id || '').replace('sampaignContacts_', '') : '';
+      if (cid) {
+        try { _loadSampaignDetailPerf(cid, (window._sampaignCampaignsCache || {})[cid] || {}); } catch(e) {}
+        try { _loadSampaignContactsInto(cid); } catch(e) {}
+      }
+    }
   } catch(e) {
-    if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>';
+    if (out) out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">SAMpaigns reloaded. <span style="color:var(--coral)">Inbox check failed: ' + esc(e.message) + '</span></div>';
   } finally {
     if (btn) { btn.textContent = label || '↻ Refresh'; btn.disabled = false; }
   }
