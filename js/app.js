@@ -9235,6 +9235,7 @@ function loadSampaignWorkspace() {
       '<input id="sampaignDomain" placeholder="Domain (e.g. acme.com)" style="padding:8px 10px;border:1px solid var(--border);border-radius:2px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
       '<input id="sampaignRegion" placeholder="Region (optional)" style="padding:8px 10px;border:1px solid var(--border);border-radius:2px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
       '<div style="font-size:11px;color:var(--text3)">Campaign goal / ask — what are you pitching and what do you want them to do? (used by AI drafting tools, e.g. Claude via connector)</div>' +
+      '<select id="sampaignGoalTemplate" onchange="applyGoalTemplate()" style="padding:8px 10px;border:1px solid var(--border);border-radius:2px;background:var(--surface2);color:var(--text);font-family:var(--sans);font-size:12px;display:none"></select>' +
       '<textarea id="sampaignGoal" rows="2" placeholder="e.g. Introduce our retail execution platform, get a 15-min discovery call booked with the regional sales lead" style="padding:8px 10px;border:1px solid var(--border);border-radius:2px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans);resize:vertical;height:48px"></textarea>' +
       '<div style="font-size:11px;color:var(--text3)">Who is this one for? A short label so you can tell it apart later (e.g. RTM leadership, Plant heads)</div>' +
       '<input id="sampaignFocus" maxlength="48" placeholder="Focus (e.g. RTM leadership)" style="padding:8px 10px;border:1px solid var(--border);border-radius:2px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
@@ -9255,6 +9256,7 @@ function loadSampaignWorkspace() {
       '</div></div>' +
     '<div id="sampaignCampaignsList"><div style="font-size:12px;color:var(--text3);padding:6px 0">Loading…</div></div>';
   _fupRender('new');
+  loadGoalTemplates();
   loadSampaignCampaigns();
 }
 
@@ -9320,6 +9322,40 @@ function toggleNewSampaignForm() {
   var f = document.getElementById('sampaignNewForm'); if (!f) return;
   f.style.display = f.style.display === 'none' ? 'block' : 'none';
   if (f.style.display === 'block') document.getElementById('sampaignName')?.focus();
+}
+
+// ── Campaign goal templates ───────────────────────────────────
+// An org's goals repeat: the same three or four pitches, retyped every time
+// and worded slightly differently each time, which then reads as a different
+// campaign to whoever writes the drafts. Admin keeps the list, the rep picks.
+// The picker stays HIDDEN when an org has none, so a tenant that has not set
+// any never sees an empty dropdown asking to be used.
+var _goalTemplates = [];
+async function loadGoalTemplates() {
+  try {
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'get_org_setting', key:'campaign_goal_templates' }) });
+    var d = await r.json();
+    var raw = d && d.value;
+    _goalTemplates = typeof raw === 'string' ? JSON.parse(raw || '[]') : (Array.isArray(raw) ? raw : []);
+  } catch(e) { _goalTemplates = []; }
+  var sel = document.getElementById('sampaignGoalTemplate');
+  if (!sel) return;
+  if (!_goalTemplates.length) { sel.style.display = 'none'; return; }
+  sel.innerHTML = '<option value="">Start from a saved goal, or write your own below</option>' +
+    _goalTemplates.map(function(t, i){ return '<option value="'+i+'">'+esc(t.label || ('Template '+(i+1)))+'</option>'; }).join('');
+  sel.style.display = '';
+}
+function applyGoalTemplate() {
+  var sel = document.getElementById('sampaignGoalTemplate');
+  var box = document.getElementById('sampaignGoal');
+  if (!sel || !box) return;
+  var t = _goalTemplates[parseInt(sel.value, 10)];
+  if (!t) return;
+  // Never silently overwrite something the rep has already typed.
+  if (box.value.trim() && !confirm('Replace the goal you have written with the "' + (t.label||'selected') + '" template?')) { sel.value = ''; return; }
+  box.value = t.goal || '';
+  box.focus();
 }
 
 // Guards the whole submit, not just the button, because the button can be
