@@ -807,18 +807,24 @@ html,body{overflow-x:hidden}
 .splash-word{font-size:17px;color:var(--text);margin:26px 0 8px;opacity:0;
   animation:splashTrack 900ms var(--ease) 550ms forwards}
 @keyframes splashTrack{from{letter-spacing:.02em;opacity:0}to{letter-spacing:.34em;opacity:1}}
-.splash-note{font-size:12.5px;color:var(--text2);opacity:0;
+/* The claim sits directly under the wordmark and never changes. The rule
+   separates what the product IS from what it is doing right now, so the line
+   below can keep moving without the name and the claim moving with it. */
+.splash-tag{font-size:12.5px;color:var(--text2);opacity:0;
   animation:splashRise 700ms var(--ease) 1150ms forwards}
 @keyframes splashRise{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
-.splash-rule{width:0;height:1px;background:var(--c-accent);opacity:.5;margin-top:14px;
-  animation:splashRule 1000ms var(--ease) 1500ms forwards}
+.splash-rule{width:0;height:1px;background:var(--c-accent);opacity:.5;margin:16px 0 13px;
+  animation:splashRule 900ms var(--ease) 1450ms forwards}
 @keyframes splashRule{to{width:118px}}
+/* Quieter than the claim above it on purpose: this is status, not identity. */
+.splash-note{font-size:12px;color:var(--text3);opacity:0;
+  animation:splashRise 700ms var(--ease) 1850ms forwards}
 
 @media(prefers-reduced-motion:reduce){
   .splash-live{animation:none;stroke-dasharray:none}
   .splash-ghost{opacity:.3}
-  .splash-word,.splash-note{animation:none;opacity:1;letter-spacing:.34em;transform:none}
-  .splash-note{letter-spacing:normal}
+  .splash-word,.splash-tag,.splash-note{animation:none;opacity:1;letter-spacing:.34em;transform:none}
+  .splash-tag,.splash-note{letter-spacing:normal}
   .splash-rule{animation:none;width:118px}
 }
 
@@ -994,8 +1000,9 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
       </g>
     </svg>
     <div class="splash-word">SAMORA</div>
-    <div class="splash-note" id="splashNote">Your revenue health engine is loading</div>
+    <div class="splash-tag">Your Revenue Health Engine OS</div>
     <div class="splash-rule"></div>
+    <div class="splash-note" id="splashNote">Loading your pipeline, SAMpaigns and signals…</div>
   </div>
 </div>
 <div id="authScreen" class="screen active">
