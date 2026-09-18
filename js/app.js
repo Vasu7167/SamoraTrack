@@ -3,7 +3,7 @@ let SB_KEY = localStorage.getItem('dt-sb-key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6I
 let API_KEY = localStorage.getItem('dt-api-key') || '';
 var _userHabits = null;
 // Cache buster — update this string on every deploy to purge stale service worker cache
-var APP_VERSION = '20260908-02';
+var APP_VERSION = '20260712-04';
 (function() {
   if (localStorage.getItem('app-sw-version') !== APP_VERSION && 'serviceWorker' in navigator) {
     navigator.serviceWorker.getRegistrations().then(function(regs) {
@@ -102,7 +102,7 @@ function pickSignupRole(r) {
     const btn = document.getElementById('rolePick' + role.toUpperCase());
     if (btn) {
       btn.style.borderColor = role === r ? 'var(--gold)' : 'var(--border)';
-      btn.style.background = role === r ? 'rgba(var(--c-accent-rgb),0.1)' : 'var(--surface2)';
+      btn.style.background = role === r ? 'rgba(160,117,42,0.1)' : 'var(--surface2)';
       btn.style.color = role === r ? 'var(--gold)' : 'var(--text2)';
     }
   });
@@ -114,9 +114,6 @@ function setMode(m) {
   document.getElementById('signupFields').style.display = m === 'signup' ? 'block' : 'none';
   const rp = document.getElementById('rolePickerWrap');
   if (rp) rp.style.display = m === 'signup' ? 'block' : 'none';
-  // Nothing to recover on the signup tab.
-  const fr = document.getElementById('forgotRow');
-  if (fr) fr.style.display = m === 'signup' ? 'none' : 'block';
   if (m === 'signup') pickSignupRole('sdr');
   showMsg('');
 }
@@ -125,78 +122,6 @@ function showMsg(msg, isErr) {
   el.textContent = msg;
   el.className = 'msg' + (msg ? (isErr ? ' err' : ' ok') : '');
 }
-// ── SSO sign-in ───────────────────────────────────────────────────────────
-// Signing in with the mailbox provider does two jobs at once: it authenticates
-// the user AND grants the mail scopes, so there is no separate "now connect
-// Gmail" step afterwards. That second step is the one people skip, which is
-// why a new account can sit there producing nothing.
-//
-// Uses Supabase's OAuth endpoint, so the provider must be enabled in
-// Supabase Auth first (Dashboard > Authentication > Providers) with the same
-// client id/secret already used for the Gmail connection, and the scopes
-// listed below added there. Until that is done these buttons will return a
-// provider-not-enabled error rather than silently doing nothing.
-const SSO_SCOPES = {
-  google: [
-    'https://www.googleapis.com/auth/gmail.readonly',
-    'https://www.googleapis.com/auth/gmail.send',
-    'https://www.googleapis.com/auth/calendar.readonly',
-    'email', 'profile'
-  ].join(' '),
-  // Supabase calls the Microsoft provider "azure".
-  microsoft: 'openid email profile offline_access Mail.Read Mail.Send Calendars.Read'
-};
-
-// ── Which providers are actually turned on ─────────────────────────────────
-// GoTrue publishes this at /auth/v1/settings: {"external":{"google":false,...}}
-//
-// We ASK, but we do not hide. The first version of this hid the buttons for
-// disabled providers, which solved the wrong problem: it stopped the raw JSON
-// error page, and in exchange made a feature you are in the middle of switching
-// on look like it had been removed. Hiding a control gives the person no way to
-// tell "not built" from "not configured" from "I broke it".
-//
-// So the buttons stay. Clicking one that is not enabled says so, in words, in
-// place, and does not navigate anywhere.
-var _ssoEnabled = null;
-
-async function _loadSsoProviders() {
-  if (!SB_URL || !SB_KEY) return;
-  try {
-    var r = await fetch(SB_URL + '/auth/v1/settings', { headers: { 'apikey': SB_KEY } });
-    var d = await r.json();
-    _ssoEnabled = (d && d.external) || {};
-  } catch (_e) {
-    // Could not ask. Leave everything enabled and let the click path handle it.
-    _ssoEnabled = null;
-  }
-}
-
-function ssoSignIn(which) {
-  if (!SB_URL || !SB_KEY) { showMsg('Sign-in is not configured in this build.', true); return; }
-  var key = which === 'microsoft' ? 'azure' : 'google';
-  if (_ssoEnabled && !_ssoEnabled[key]) {
-    // The whole point of the probe: say it here rather than navigating the
-    // person off the app to a raw JSON page they cannot come back from.
-    showMsg((which === 'microsoft' ? 'Microsoft' : 'Google') +
-      ' sign-in is not switched on for this workspace yet. Sign in with your email and password below, or ask your admin to enable it in Supabase.', true);
-    return;
-  }
-  const provider = which === 'microsoft' ? 'azure' : 'google';
-  const scopes = SSO_SCOPES[which] || '';
-  // Land back on the app root. Supabase returns the session in the URL
-  // fragment, which the existing bootstrap picks up on load.
-  const redirect = window.location.origin + window.location.pathname;
-  const url = SB_URL + '/auth/v1/authorize'
-    + '?provider=' + encodeURIComponent(provider)
-    + '&redirect_to=' + encodeURIComponent(redirect)
-    + '&scopes=' + encodeURIComponent(scopes)
-    // Force a refresh token back from Google, otherwise the mail connection
-    // silently expires in an hour and cannot be renewed.
-    + (provider === 'google' ? '&access_type=offline&prompt=consent' : '');
-  window.location.href = url;
-}
-
 async function doAuth() {
   const email = document.getElementById('aEmail').value.trim();
   const pass = document.getElementById('aPass').value;
@@ -306,45 +231,15 @@ async function loadProfile() {
   if (!SB_URL) { const cached = localStorage.getItem('dt-profile-' + currentUser?.id); if (cached) profile = JSON.parse(cached); return; }
   try {
     const rows = await Promise.race([
-      sbGet(`user_profiles?user_id=eq.${currentUser.id}&select=role,org_id,manager_id,is_active`),
+      sbGet(`user_profiles?user_id=eq.${currentUser.id}&select=role,org_id,manager_id`),
       new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
     ]);
     if (rows && rows.length) {
       const p = rows[0];
-      // Removed from the org. The auth user is banned too, but a live session
-      // would otherwise keep working until its token expired, so say plainly
-      // what happened rather than letting them hit confusing partial failures.
-      if (p.is_active === false) {
-        localStorage.removeItem('dt-user');
-        localStorage.removeItem('dt-profile-' + currentUser.id);
-        currentUser = null; profile = null;
-        try { hideSplash(true); } catch (_e) {}
-        showScreen('authScreen');
-        showMsg('Your access to this organisation has been removed. Contact your admin.', true);
-        return;
-      }
       const orgs = await sbGet(`organisations?id=eq.${p.org_id}&select=org_code,name&limit=1`);
       profile = { ...p, org_code: orgs?.[0]?.org_code || '—', org_name: orgs?.[0]?.name || 'Unknown' };
       localStorage.setItem('dt-profile-' + currentUser.id, JSON.stringify(profile));
-    } else {
-      // NO PROFILE. This is where SSO was dangerous.
-      //
-      // setupProfile('') CREATES A BRAND NEW ORGANISATION and makes the caller
-      // its super_admin. That is right for someone who deliberately signed up
-      // with a blank org code. It is badly wrong for someone who just clicked
-      // "Continue with Google": their colleague's org already exists, and they
-      // would land in a private org of one, see an empty pipeline, and have no
-      // idea why.
-      //
-      // Password signup already asks for an org code. SSO never had the chance
-      // to, so it is asked for here instead, after the fact.
-      _pendingSsoUser = true;
-      try { hideSplash(true); } catch (_e) {}
-      _screen('joinOrgScreen');
-      var jw = document.getElementById('joinWho');
-      if (jw) jw.textContent = 'Signed in as ' + (currentUser.email || '');
-      return;
-    }
+    } else { await setupProfile(''); }
   } catch(e) { const cached = localStorage.getItem('dt-profile-' + currentUser?.id); if (cached) profile = JSON.parse(cached); }
   // get_org_config fires in background — never blocks launchApp
   try {
@@ -352,58 +247,14 @@ async function loadProfile() {
       .then(r=>r.json()).then(cfg=>{ if(cfg.ok){if(cfg.googleClientId)GOOGLE_CLIENT_ID_SAM=cfg.googleClientId;window._orgConfig=cfg;} }).catch(()=>{});
   } catch(e) {}
 }
-// ── Exactly one screen is visible, always ────────────────────────────────
-// Five separate places were adding and removing .active by hand, so any path
-// that added one without removing the other left BOTH mounted: the app on top
-// and the login split-screen scrolled in underneath it. That is the glitch in
-// the screenshot, and it is a whole class of bug rather than one bad line.
-//
-// Clearing every .screen before setting one makes the invariant structural
-// instead of something each call site has to remember.
-function showScreen(id) {
-  var all = document.querySelectorAll('.screen');
-  for (var i = 0; i < all.length; i++) all[i].classList.remove('active');
-  var el = document.getElementById(id);
-  if (el) el.classList.add('active');
-}
-
-// Every path back to the sign-in screen goes through this. doAuth() disables
-// the button and writes "Please wait…" into it, and nothing ever put it back:
-// after signing out, the button stayed disabled with that text forever and the
-// only way to sign in again was a hard refresh.
-//
-// The fix is not "reset it in doLogout". It is that the screen owns its own
-// reset, so a future third route back here cannot reintroduce the same bug.
-function _resetAuthForm() {
-  var btn = document.getElementById('authBtn');
-  if (btn) { btn.disabled = false; btn.textContent = (typeof authMode !== 'undefined' && authMode === 'signup') ? 'Create account' : 'Sign in'; }
-  var msg = document.getElementById('authMsg'); if (msg) { msg.textContent = ''; }
-  var pass = document.getElementById('aPass'); if (pass) pass.value = '';
-  var pass2 = document.getElementById('aPass2'); if (pass2) pass2.value = '';
-  var fr = document.getElementById('forgotRow');
-  if (fr) fr.style.display = (typeof authMode !== 'undefined' && authMode === 'signup') ? 'none' : 'block';
-}
-
-async function doLogout() {
-  // Revoke the session at Supabase, not just locally. Clearing localStorage
-  // leaves the access token valid until it expires, which on a shared machine
-  // means "Sign out" did not actually sign anything out.
-  try {
-    if (currentUser && currentUser.token && SB_URL) {
-      await fetch(SB_URL + '/auth/v1/logout', {
-        method: 'POST',
-        headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token }
-      });
-    }
-  } catch (_e) { /* offline: local clear below still happens */ }
-
+function doLogout() {
   localStorage.removeItem('dt-user'); currentUser = null; profile = null; allData = {};
   // Habits are per-user server state — clear the in-memory copy so the next
   // user who signs in on this device fetches THEIR habits instead of seeing
   // (and accidentally saving over their profile with) the previous user's.
   _userHabits = null; _habitSuggestions = null;
-  _resetAuthForm();
-  showScreen('authScreen');
+  document.getElementById('appScreen').classList.remove('active');
+  document.getElementById('authScreen').classList.add('active');
 }
 
 // ── Role hierarchy (matches edge function) ──────────────────────────────
@@ -437,229 +288,11 @@ function _applyRoleChrome() {
   const navIntelBtn = document.getElementById('nav-intel');
   if (navIntelBtn) navIntelBtn.style.display = seniorRole ? '' : 'none';
 }
-// ── Needs attention + metric drill-downs ──────────────────────────────────
-// Both read from these two caches, which are filled by the loaders that
-// already fetch the data. Nothing here triggers a request, so the rail and
-// the drill-downs cannot disagree with the numbers in the strip above them.
-var _naAlerts = [], _naFeed = [];
-
-function renderNeedsAttention() {
-  var el = document.getElementById('needsAttention'); if (!el) return;
-  // The count sits in the header so a collapsed rail still says how much is
-  // behind it. A collapsed section that hides its own size is a trap.
-  var _nc = document.getElementById('naCount');
-  if (_nc) _nc.textContent = _naAlerts.length ? String(_naAlerts.length) : '';
-  if (!_naAlerts.length) {
-    el.innerHTML = '<div class="rail-empty">Nothing needs attention right now.</div>';
-    return;
-  }
-  // Highest severity first, then whatever order the backend ranked them in.
-  var rank = { high: 0, medium: 1, low: 2 };
-  var sorted = _naAlerts.slice().sort(function(a, b) {
-    return (rank[a.severity] == null ? 3 : rank[a.severity]) - (rank[b.severity] == null ? 3 : rank[b.severity]);
-  });
-  var sevLabel = { high: 'High', medium: 'Medium', low: 'Low' };
-  el.innerHTML = sorted.slice(0, 6).map(function(a) {
-    var sev = a.severity || 'low';
-    return '<div class="na-row" onclick="toggleMetricDrill(\'alerts\')">' +
-             '<div class="na-main">' +
-               '<div class="na-name">' + esc(a.title || 'Account needs attention') + '</div>' +
-               (a.detail ? '<div class="na-why">' + esc(a.detail) + '</div>' : '') +
-             '</div>' +
-             '<div class="na-sev ' + sev + '">' + (sevLabel[sev] || '') + '</div>' +
-           '</div>';
-  }).join('') +
-  (sorted.length > 6
-    ? '<div class="rail-empty" style="font-style:normal;cursor:pointer" onclick="toggleMetricDrill(\'alerts\')">' +
-      'and ' + (sorted.length - 6) + ' more</div>'
-    : '');
-}
-
-var _openDrill = null;
-function toggleMetricDrill(which) {
-  var host = document.getElementById('metricDrill'); if (!host) return;
-  if (_openDrill === which) {   // second click closes
-    _openDrill = null; host.classList.remove('on'); host.innerHTML = '';
-    ['metricAlerts','metricWins'].forEach(function(id){ var e=document.getElementById(id); if(e) e.classList.remove('is-open'); });
-    return;
-  }
-  _openDrill = which;
-  ['metricAlerts','metricWins'].forEach(function(id){ var e=document.getElementById(id); if(e) e.classList.remove('is-open'); });
-  var btn = document.getElementById(which === 'alerts' ? 'metricAlerts' : 'metricWins');
-  if (btn) btn.classList.add('is-open');
-
-  var title, rows;
-  if (which === 'alerts') {
-    title = 'All alerts';
-    rows = _naAlerts.length ? _naAlerts.map(function(a) {
-      var sev = a.severity || 'low';
-      return '<div class="drill-row"><div style="flex:1;min-width:0">' + esc(a.title || '') +
-             (a.detail ? '<div class="drill-why">' + esc(a.detail) + '</div>' : '') +
-             '</div><div class="na-sev ' + sev + '">' + (sev === 'high' ? 'High' : sev === 'medium' ? 'Medium' : 'Low') + '</div></div>';
-    }).join('') : '<div class="rail-empty">No active alerts.</div>';
-  } else {
-    title = 'Team wins, last 7 days';
-    var wk = _naFeed.filter(_isThisWeek);
-    rows = wk.length ? wk.map(function(f) {
-      return '<div class="drill-row"><div style="flex:1;min-width:0">' + esc(f.title || '') +
-             (f.body ? '<div class="drill-why">' + esc(f.body) + '</div>' : '') +
-             '</div><div class="drill-when">' + _relDay(f.created_at) + '</div></div>';
-    }).join('') : '<div class="rail-empty">No team wins logged this week.</div>';
-  }
-  host.innerHTML = '<div class="drill-head"><div class="drill-title">' + title + '</div>' +
-    '<button class="drill-close" onclick="toggleMetricDrill(\'' + which + '\')">Close</button></div>' + rows;
-  host.classList.add('on');
-}
-
-function _isThisWeek(f) {
-  if (!f || !f.created_at) return false;
-  var t = new Date(f.created_at).getTime();
-  return !isNaN(t) && (Date.now() - t) <= 7 * 86400000;
-}
-function _relDay(iso) {
-  var t = new Date(iso).getTime(); if (isNaN(t)) return '';
-  var d = Math.floor((Date.now() - t) / 86400000);
-  return d <= 0 ? 'today' : d === 1 ? 'yesterday' : d + 'd ago';
-}
-
-// ── Today metric strip ────────────────────────────────────────────────────
-// Each metric is written by whichever loader already owns that data, rather
-// than the strip fetching everything itself. Open tasks are local so they
-// paint immediately; alerts arrive with loadCoachingAlerts, pipeline and
-// coverage with the pipeline summary, team wins with the feed. Nothing here
-// adds a blocking call to the Today load, which was already the complaint.
-function _setMetric(id, main, suffixHtml, positive) {
-  var el = document.getElementById(id); if (!el) return;
-  el.innerHTML = String(main) + (suffixHtml || '');
-  el.classList.toggle('pos', !!positive);
-}
-
-function renderTodayMetrics() {
-  var d = dayData(viewDate);
-  var open = (d.tasks || []).filter(function(t){ return !t.done && !t.carriedTo; }).length;
-  _setMetric('mOpenTasks', open);
-}
-
-// Compact money. 1.28Cr and 18L read faster than 12,800,000 to an Indian
-// sales team, and the unit rides small so the figure stays dominant.
-function _fmtMoneyShort(v) {
-  if (v == null || isNaN(v)) return null;
-  var n = Number(v);
-  if (n >= 10000000) return { n: (n/10000000).toFixed(2).replace(/\.00$/,''), u: 'Cr' };
-  if (n >= 100000)   return { n: (n/100000).toFixed(1).replace(/\.0$/,''),    u: 'L'  };
-  if (n >= 1000)     return { n: Math.round(n/1000),                          u: 'K'  };
-  return { n: Math.round(n), u: '' };
-}
-
-// Pulled once per Today load and cached, because the pipeline summary is the
-// only figure here that needs a round trip of its own.
-var _metricsPipelineCache = null;
-async function loadTodayPipelineMetrics() {
-  if (!SB_URL || !currentUser?.token) return;
-  if (_metricsPipelineCache) return;
-  try {
-    var r = await fetch(EDGE_FN_URL, { method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
-      body:JSON.stringify({ action:'get_pipeline' }) });
-    var d = await r.json();
-    _metricsPipelineCache = d;
-    var s = (d && d.summary) || {};
-    var m = _fmtMoneyShort(s.verified_value_usd);
-    if (m) _setMetric('mVerified', m.n, m.u ? '<span class="unit">'+m.u+'</span>' : '');
-    // ── ONE WORD, ONE MEANING ────────────────────────────────────────────
-    //
-    // THE BUG THIS FIXES. This tile said "Coverage 93%" while the Intel tab's
-    // Relationship coverage panel said 0 strong, 5 partial, 7 thin out of 12.
-    // Both were correct and they were measuring different things: this was
-    // verified pipeline VALUE, that is stakeholder COVERAGE. Two definitions
-    // of one word, side by side, is how a dashboard loses trust.
-    //
-    // Everywhere else in Samora, coverage means people: the Coverage check,
-    // coverage gaps, relationship coverage. So this tile now means people too.
-    // The verified-value number has not been lost, it is the tile immediately
-    // to the left of this one, which is why showing it twice added nothing.
-    try {
-      // Same action and same rollup the Intel panel renders, so the two can
-      // never disagree again. If that panel says 5 partial and 7 thin, this
-      // tile is computed from those exact numbers.
-      var cr = await fetch(EDGE_FN_URL, { method:'POST',
-        headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
-        body: JSON.stringify({ action:'get_relationship_coverage' }) });
-      var cd = await cr.json();
-      var ru = (cd && cd.rollup) || {};
-      var strong = Number(ru.strong || 0), partial = Number(ru.partial || 0), thin = Number(ru.thin || 0);
-      var totalAcc = strong + partial + thin;
-      if (totalAcc > 0) {
-        var covPct = Math.round(((strong + partial) / totalAcc) * 100);
-        _setMetric('mCoverage', covPct, '<span class="unit">%</span>', covPct >= 60);
-      }
-    } catch (_e) { /* leave the dash rather than show the wrong definition */ }
-  } catch (_e) { /* strip keeps its dash rather than showing a wrong number */ }
-}
-
-// ── Build marker ──────────────────────────────────────────────────────────
-// Type SAMORA_BUILD in the console to see which frontend is actually loaded.
-// Vercel serves js/app.js with revalidation now, but a stale browser cache or
-// a deploy that did not land both look identical without this.
-window.SAMORA_BUILD = {
-  build: '2026-09-06-signal-hygiene',
-  features: {
-    orphan_followup_sweep: true,      // cancelled SAMpaigns stop asking for work
-    auto_map_stakeholders: true,      // pane self-heals unmapped activity
-    coverage_means_people: true,      // home tile matches the Intel panel
-    digest_reports_delivered: true    // "Delivered to 1 of 6", not "sent to 6"
-  }
-};
-
-// ── Splash control ────────────────────────────────────────────────────────
-// Minimum 5s, then it stays as long as the load takes. Two full sweeps of the
-// trace is the brand moment; the data being ready sooner does not cut it short.
-//
-// _splashFailsafe is not a cap on load time, it is a guard against a request
-// that never settles at all. Without it a hung fetch leaves someone staring at
-// a logo with no way forward, so at 25s the app is shown regardless and
-// whatever data arrived is rendered. That is a stuck-state guard, not a
-// deadline for a slow connection.
-var _splashMin = 5000, _splashFailsafe = 25000;
-var _splashShownAt = 0, _splashDone = false, _splashTimer = null, _splashDataReady = false;
-
-function showSplash(note) {
-  var el = document.getElementById('splashScreen'); if (!el) return;
-  _splashShownAt = Date.now(); _splashDone = false; _splashDataReady = false;
-  el.classList.remove('out'); el.classList.add('on');
-  if (note) { var n = document.getElementById('splashNote'); if (n) n.textContent = note; }
-  clearTimeout(_splashTimer);
-  _splashTimer = setTimeout(function(){ hideSplash(true); }, _splashFailsafe);
-}
-
-// Called when the data lands. Does not dismiss on its own: if the 5s floor has
-// not elapsed it just records that the load is done, and the floor timer
-// dismisses when it expires.
-function hideSplash(force) {
-  if (_splashDone) return;
-  var el = document.getElementById('splashScreen'); if (!el) return;
-  _splashDataReady = true;
-  var waited = Date.now() - _splashShownAt;
-  if (!force && waited < _splashMin) {
-    clearTimeout(_splashTimer);
-    _splashTimer = setTimeout(function(){ hideSplash(true); }, _splashMin - waited);
-    return;
-  }
-  _splashDone = true; clearTimeout(_splashTimer);
-  el.classList.add('out');
-  setTimeout(function(){ el.classList.remove('on'); }, 450);
-}
-
 function launchApp() {
-  showSplash('Reading your pipeline…');
-  showScreen('appScreen');
+  document.getElementById('authScreen').classList.remove('active');
+  document.getElementById('appScreen').classList.add('active');
   const role = profile?.role || 'member';
   _applyRoleChrome();
-  // An unwired helper is the same as no helper. Both read the DOM that
-  // launchApp has just made visible, so they run here rather than at parse
-  // time when #appScreen is still hidden and widths measure as zero.
-  _restoreNeedsAttentionState();
-  _wireMetricScrollHint();
   // Load ICP definition for admin users (once, on launch)
   if (['super_admin','admin','manager','director','executive'].includes(role)) {
     setTimeout(loadIcpDefinition, 2000);
@@ -688,18 +321,14 @@ function launchApp() {
     refreshYouTabConnections();
   }, 1500);
   setTimeout(initSortable, 200);
-  // Local-only build has nothing to fetch, so the splash is purely the draw.
-  if (!(SB_URL && SB_KEY)) hideSplash();
   if (SB_URL && SB_KEY) {
     syncDown().then(() => {
       runCarryOver(); _lastCalDate = null; render(); renderCalStrip();
       reconcileCalendarTasks();   // auto-carry tasks whose meetings moved/cancelled
       var badge = document.getElementById('global-sync-badge');
       if (badge) { badge.style.opacity = '0'; setTimeout(function(){ badge.remove(); }, 400); }
-      hideSplash();   // real data is in and rendered
     }).catch(function() {
       // syncDown failed — still hide the badge and keep local data visible
-      hideSplash(true);   // do not hold the logo open on a failed sync
       var badge = document.getElementById('global-sync-badge');
  if (badge) { badge.textContent = 'Offline — showing local data'; setTimeout(function(){ badge.style.opacity='0'; setTimeout(function(){badge.remove();},400); }, 2000); }
     });
@@ -848,7 +477,7 @@ function renderList(key, items) {
       '</div></div>';
     }
     const issueTs = item.addedAt ? `<div class="item-meta">${item.anonymous?'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 10.5V7.5a5.5 5.5 0 0111 0v3M5 10.5h14v10H5z"/></svg> Anonymous · ':''}Logged ${item.addedAt}</div>` : (item.anonymous ? '<div class="item-meta"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 10.5V7.5a5.5 5.5 0 0111 0v3M5 10.5h14v10H5z"/></svg> Anonymous</div>' : '');
-    const anonBadge = item.anonymous ? '<span style="font-size:11px;background:rgba(var(--c-accent-rgb),0.15);color:var(--gold);border-radius:2px;padding:1px 6px;margin-left:6px;font-weight:600">Anon</span>' : '';
+    const anonBadge = item.anonymous ? '<span style="font-size:11px;background:rgba(160,117,42,0.15);color:var(--gold);border-radius:2px;padding:1px 6px;margin-left:6px;font-weight:600">Anon</span>' : '';
     return `<div class="item"><div class="idot dc"></div><div style="flex:1"><div class="item-text">${esc(item.text)}${anonBadge}</div>${issueTs}</div><button class="idel" onclick="del('issues',${i})"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>`;
   }).join('');
 }
@@ -865,52 +494,8 @@ function updateHeader() {
   const total = taskList.length, done = taskList.filter(t=>t.done).length;
   const pct = total ? Math.round(done/total*100) : 0;
   document.getElementById('progFill').style.width = pct + '%';
-  // The label used to live in its own band above the date strip, saying the
-  // same thing as the Open tasks metric. It now sits beside the Tasks heading,
-  // next to the list it describes. Kept null-safe: the element is hidden, and
-  // other screens do not render it at all.
-  var _pl = document.getElementById('progLbl');
-  if (_pl) _pl.textContent = total ? done + ' of ' + total + ' done' : 'No tasks yet';
-  var _tc = document.getElementById('tasksDoneCount');
-  if (_tc) _tc.textContent = total ? done + ' of ' + total + ' done' : '';
+  document.getElementById('progLbl').textContent = total ? done + ' of ' + total + ' done' : 'No tasks yet';
 }
-// Needs attention: collapsible, and the choice sticks. On a phone the rail
-// sits below the task list, so leaving it open pushes the rest of the day off
-// screen. On desktop it is a peripheral glance and stays open by default.
-function toggleNeedsAttention() {
-  var h = document.getElementById('railHead');
-  if (!h) return;
-  var collapsed = h.classList.toggle('rail-collapsed');
-  try { localStorage.setItem('naCollapsed', collapsed ? '1' : '0'); } catch (_e) {}
-}
-function _restoreNeedsAttentionState() {
-  var h = document.getElementById('railHead');
-  if (!h) return;
-  var v = null;
-  try { v = localStorage.getItem('naCollapsed'); } catch (_e) {}
-  // No stored preference: collapsed on a phone, open on a wide screen.
-  var collapse = (v === null) ? (window.innerWidth <= 900) : (v === '1');
-  h.classList.toggle('rail-collapsed', collapse);
-}
-
-// Scroll affordance for the metric strip. The scrollbar is hidden by design,
-// so without this there is nothing to say four more metrics exist to the right.
-// The chevron fades out once there is nothing left to scroll to.
-function _wireMetricScrollHint() {
-  var wrap = document.getElementById('todayMetricsWrap');
-  var strip = document.getElementById('todayMetrics');
-  if (!wrap || !strip || strip._hintWired) return;
-  strip._hintWired = true;
-  var upd = function() {
-    var atEnd = strip.scrollLeft + strip.clientWidth >= strip.scrollWidth - 4;
-    // Nothing to scroll at all (wide screen, or few metrics) also counts.
-    wrap.classList.toggle('at-end', atEnd || strip.scrollWidth <= strip.clientWidth + 4);
-  };
-  strip.addEventListener('scroll', upd, { passive: true });
-  window.addEventListener('resize', upd);
-  upd();
-}
-
 function updateBadges() {
   const d = dayData(viewDate);
   ['tasks','issues','wins','misses'].forEach(k => { const el = document.getElementById('b-'+k); if(el) el.textContent = d[k]?.length||0; });
@@ -1023,13 +608,6 @@ function switchTab(tab) {
   const navId = navMap[tab] || tab;
   const navBtn = document.getElementById('nav-' + navId);
   if (navBtn) navBtn.classList.add('active');
-  // The greeting, date navigator, progress bar and calendar strip live in
-  // .app rather than inside the Today panel, so they used to render on every
-  // tab. They are Today's furniture: a date picker means nothing on Intel,
-  // and it was also squeezing those panels' layout. Marking the active tab on
-  // <body> lets CSS scope them without moving the markup, which other code
-  // reads by id.
-  document.body.setAttribute('data-tab', actualPanel);
   if (['tasks','issues','wins','misses'].includes(tab)) { if (tab !== 'misses') setTodaySection(tab); renderToday(); }
   if (tab === 'today') { setTodaySection('tasks'); renderToday(); }
   if (tab === 'settings') { renderSettings(); if (currentUser?.token) { loadHealthWeights(); loadNotificationRules(); } }
@@ -1042,14 +620,6 @@ function switchTab(tab) {
     if (toggleEl) toggleEl.style.display = seniorRole ? 'block' : 'none';
     const mode = (seniorRole && _samMode === 'team') ? 'team' : 'self';
     setSamMode(mode);
-  }
-  // SAMpaign is its own tab now. It used to be populated lazily when the SAM
-  // tab's "signal" sub-tab was opened, which no longer happens, so it loads
-  // here instead. Guarded on empty so switching tabs does not re-render and
-  // discard in-progress state in the workspace.
-  if (tab === 'sampaign') {
-    var spSec = document.getElementById('sampaignManualSection');
-    if (spSec && !spSec.innerHTML.trim()) loadSampaignWorkspace();
   }
   if (tab === 'intel') { loadIntelligence(); }
   if (tab === 'pipeline') { loadPipeline(); loadMeetingsKpiSelf(); }
@@ -1181,7 +751,6 @@ function renderToday() {
   });
   const addBox = document.getElementById('today-add-box'); if (addBox) addBox.style.display = todayActiveSection === 'misses' ? 'none' : '';
   updateSectionPillCounts();
-  renderTodayMetrics();
   initSortable();
   const d2 = dayData(viewDate);
   renderProductivityBanner(d2.tasks||[]);
@@ -1191,11 +760,6 @@ function renderToday() {
     _coachingAlertsLoaded = true;
     loadCoachingAlerts();
     loadMeetingPrep();
-    // Metric strip sources. Fired in parallel and never awaited, so a slow
-    // one leaves its own metric as a dash instead of holding up the others
-    // or the render. The strip is glanceable, not load bearing.
-    loadTodayPipelineMetrics();
-    try { loadTeamFeed('teamFeedWidget', 30); } catch (_e) {}
     // Auto-generate fresh alerts silently on first Today tab load
     fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
       body:JSON.stringify({action:'generate_coaching_alerts'}) }).then(function(r){return r.json();}).then(function(d){
@@ -1217,11 +781,11 @@ function renderListHTML(key, items) {
       const verifyLabels = { gmail_sent: '\u2709 Verified \u00b7 ' + (item.verifiedCount ? item.verifiedCount + ' sent' : 'sent mail'), meeting_transcript: '\ud83c\udf99 Verified \u00b7 transcript', post_meeting_followup: '\ud83d\udcc5 Post-Meeting-FollowUp-Sent', notetaker_email: '\ud83c\udf99 Verified \u00b7 ' + (notetakerNames[item.verifiedSource] ? notetakerNames[item.verifiedSource] + ' notes' : 'meeting notes') };
       // Partial bulk-send progress (e.g. 3/15 sent): shown while the task stays open.
       const progressBadge = (!item.done && item.sendProgress)
-        ? '<span style="font-size:11px;font-weight:700;color:var(--amber);background:rgba(var(--c-accent-rgb),0.12);border-radius:2px;padding:1px 6px;margin-left:6px;white-space:nowrap">\u2709 ' + esc(item.sendProgress) + ' sent</span>'
+        ? '<span style="font-size:11px;font-weight:700;color:var(--amber);background:rgba(160,117,42,0.12);border-radius:2px;padding:1px 6px;margin-left:6px;white-space:nowrap">\u2709 ' + esc(item.sendProgress) + ' sent</span>'
         : '';
       const verifyBadge = (item.autoCompleted && verifyLabels[item.verifiedVia])
         ? '<span style="font-size:11px;font-weight:700;color:var(--green);background:rgba(74,140,92,0.12);border-radius:2px;padding:1px 6px;margin-left:6px;white-space:nowrap">' + verifyLabels[item.verifiedVia] + '</span>'
-        : (item.meetingFlag ? '<span style="font-size:11px;font-weight:700;color:var(--amber);background:rgba(var(--c-accent-rgb),0.12);border-radius:2px;padding:1px 6px;margin-left:6px;white-space:nowrap">\u26a0 Meeting ' + item.meetingFlag + '</span>' : progressBadge);
+        : (item.meetingFlag ? '<span style="font-size:11px;font-weight:700;color:var(--amber);background:rgba(160,117,42,0.12);border-radius:2px;padding:1px 6px;margin-left:6px;white-space:nowrap">\u26a0 Meeting ' + item.meetingFlag + '</span>' : progressBadge);
       const carryMeta = item.carriedFrom ? '<div class="item-meta" style="color:var(--gold)">↗ Carried from ' + fmtDate(item.carriedFrom) + (item.carryReason?' · '+item.carryReason:'') + '</div>' : (item.carriedTo ? '<div class="item-meta" style="color:var(--text3)">' + (item.rescheduled ? '⟳ Rescheduled to ' : '⟶ Moved to ') + (item.carriedToLabel||item.carriedTo) + '</div>' : '');
       // Alt-contact CTA — surfaced when an OOO reply named someone else to
       // reach in the meantime (see extractAltContact in process_ooo_mails).
@@ -1266,7 +830,7 @@ function renderListHTML(key, items) {
       '</div></div>';
     }
     const issueTs = item.addedAt ? '<div class="item-meta">' + (item.anonymous?'\uD83D\uDD12 Anonymous · ':'') + 'Logged ' + item.addedAt + '</div>' : (item.anonymous ? '<div class="item-meta">\uD83D\uDD12 Anonymous</div>' : '');
-    const anonBadge = item.anonymous ? '<span style="font-size:11px;background:rgba(var(--c-accent-rgb),0.15);color:var(--gold);border-radius:2px;padding:1px 6px;margin-left:6px;font-weight:600">Anon</span>' : '';
+    const anonBadge = item.anonymous ? '<span style="font-size:11px;background:rgba(160,117,42,0.15);color:var(--gold);border-radius:2px;padding:1px 6px;margin-left:6px;font-weight:600">Anon</span>' : '';
     return '<div class="item"><div class="idot dc"></div><div style="flex:1"><div class="item-text">' + esc(item.text) + anonBadge + '</div>' + issueTs + '</div><button class="idel" onclick="delFromToday(\'issues\',' + i + ')"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>';
   }).join('');
 }
@@ -1471,7 +1035,7 @@ async function syncCalendarTasks(force) {
     if (row && status) {
       row.style.display = 'block';
       var btnsHtml = newTasks.map(function(t, i) {
-        return '<button data-cal-idx="'+i+'" class="cal-add-btn" style="margin:0 3px;padding:2px 7px;border-radius:3px;background:rgba(var(--c-accent-rgb),0.15);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;cursor:pointer">+'+esc(t.title.slice(0,25))+'</button>';
+        return '<button data-cal-idx="'+i+'" class="cal-add-btn" style="margin:0 3px;padding:2px 7px;border-radius:3px;background:rgba(160,117,42,0.15);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;cursor:pointer">+'+esc(t.title.slice(0,25))+'</button>';
       }).join('');
       status.innerHTML = '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4"/></svg> ' + newTasks.length + ' calendar event' + (newTasks.length!==1?'s':'') + ' today — ' + btnsHtml +
         '<button id="calAddAllBtn" style="margin-left:6px;padding:2px 8px;border-radius:3px;background:var(--gold);border:none;color:var(--c-canvas);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Add all</button>';
@@ -1802,51 +1366,17 @@ async function saveEnrichmentKey(provider, scope) {
   } catch(e) { showToast('Error: ' + e.message); }
 }
 
-// via: 'user' | 'org' | null. The distinction matters to the rep, because
-// removing a personal key does NOT disconnect a provider the org has set, and
-// the row used to read "Not connected" on a provider that was working fine
-// through the org key.
-function _updateEnrichmentStatus(provider, scope, connected, via) {
-  var elId  = provider + (scope === 'org' ? 'OrgStatus' : 'UserStatus');
+function _updateEnrichmentStatus(provider, scope, connected) {
+  var elId = provider + (scope === 'org' ? 'OrgStatus' : 'UserStatus');
   var btnId = provider + (scope === 'org' ? 'OrgBtn'    : 'UserBtn');
-  var el  = document.getElementById(elId);
+  var el = document.getElementById(elId);
   var btn = document.getElementById(btnId);
-
-  var label = !connected ? 'Not connected'
-    : (scope === 'user' && via === 'org') ? '\u2713 Connected via your organisation'
-    : '\u2713 Connected';
-  if (el) { el.textContent = label; el.style.color = connected ? 'var(--green)' : 'var(--text3)'; }
-
-  if (btn && scope === 'user') {
-    // Only a key this person owns can be removed by this person. An org key
-    // belongs to the admin, so the button offers to override it instead.
-    if (via === 'user') { btn.textContent = 'Disconnect'; btn.onclick = function(){ disconnectEnrichment(provider); }; }
-    else if (via === 'org') { btn.textContent = 'Use my own key'; btn.onclick = function(){ showEnrichmentInput(provider); }; }
-    else { btn.textContent = 'Connect'; btn.onclick = function(){ showEnrichmentInput(provider); }; }
-  }
-}
-
-async function disconnectEnrichment(provider) {
-  if (!confirm('Remove your personal ' + provider + ' key?')) return;
-  try {
-    var r = await fetch(EDGE_FN_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
-      body: JSON.stringify({ action: 'clear_enrichment_key', provider: provider, scope: 'user' })
-    });
-    var d = await r.json();
-    if (d.ok) { showToast(d.note || 'Disconnected'); loadEnrichmentStatus(); }
-    else showToast('Error: ' + (d.error || 'Could not disconnect'));
-  } catch(e) { showToast('Error: ' + e.message); }
+ if (el) el.textContent = connected ? 'Connected' : 'Not connected';
+  if (el)  el.style.color = connected ? 'var(--green)' : 'var(--text3)';
+  if (btn && scope === 'user') btn.textContent = connected ? 'Change' : 'Connect';
 }
 
 async function loadEnrichmentStatus() {
-  // Paint the known-nothing state first. The buttons no longer carry an inline
-  // onclick, so without this they would be dead until the request returns.
-  ['apollo','lusha','hunter'].forEach(function(p) {
-    _updateEnrichmentStatus(p, 'user', false, null);
-    _updateEnrichmentStatus(p, 'org',  false, null);
-  });
   try {
     var r = await fetch(EDGE_FN_URL, {
       method: 'POST',
@@ -1856,14 +1386,8 @@ async function loadEnrichmentStatus() {
     var d = await r.json();
     if (d.ok && d.providers) {
       ['apollo','lusha','hunter'].forEach(function(p) {
-        var hasOrg  = !!d.providers[p + '_org'];
-        var hasUser = !!d.providers[p + '_user'];
-        _updateEnrichmentStatus(p, 'org', hasOrg, hasOrg ? 'org' : null);
-        // A personal key wins over the org key, so that is what the row
-        // reports. Previously this branch only ran when a USER key existed,
-        // which is why an org-key-only setup read as "Not connected" to every
-        // rep while enrichment was quietly working.
-        _updateEnrichmentStatus(p, 'user', hasUser || hasOrg, hasUser ? 'user' : (hasOrg ? 'org' : null));
+        if (d.providers[p + '_org'])  _updateEnrichmentStatus(p, 'org',  true);
+        if (d.providers[p + '_user']) _updateEnrichmentStatus(p, 'user', true);
       });
     }
   } catch(e) {}
@@ -1880,26 +1404,16 @@ async function refreshYouTabConnections() {
     var outlookBtn = document.getElementById('youOutlookBtn');
     if (d.connected) {
       var icon = d.provider === 'microsoft' ? '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> Outlook' : '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> Gmail';
-      // A dead grant leaves the row in place, so "connected" alone was green
-      // while every sync failed. healthy === false is the state this screen
-      // previously could not express, and it is the one that matters.
-      var broken = d.healthy === false;
-      if (lbl) lbl.innerHTML = broken
-        ? '<span style="color:var(--coral)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 3.9L2.6 17.4A1.6 1.6 0 004 19.8h16a1.6 1.6 0 001.4-2.4L13.7 3.9a1.6 1.6 0 00-2.8 0z"/></svg></span> ' + icon + ' needs reconnecting — ' + esc(d.email || '')
-        : '<span style="color:var(--green)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg></span> ' + icon + ' connected — ' + esc(d.email);
-      if (sub) sub.textContent = broken
-        // The reason, in Google's terms, not "something went wrong". Reconnecting
-        // without knowing why it died means doing it again next week.
-        ? (d.reason || 'Reconnect to resume syncing.') + ' Until then no replies, signals or coverage can be read from this mailbox.'
-        : 'Signals refreshed from your ' + (d.provider === 'microsoft' ? 'Outlook' : 'Gmail') + ' account';
- if (gmailBtn && d.provider === 'google') { gmailBtn.textContent = broken ? 'Reconnect Gmail' : 'Gmail connected'; gmailBtn.style.background = broken ? 'var(--coral)' : 'var(--green)'; if (broken) gmailBtn.onclick = connectGmail; }
+      if (lbl) lbl.innerHTML = '<span style="color:var(--green)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg></span> ' + icon + ' connected — ' + esc(d.email);
+      if (sub) sub.textContent = 'Signals refreshed from your ' + (d.provider === 'microsoft' ? 'Outlook' : 'Gmail') + ' account';
+ if (gmailBtn && d.provider === 'google') { gmailBtn.textContent = 'Gmail connected'; gmailBtn.style.background = 'var(--green)'; }
  if (outlookBtn && d.provider === 'microsoft') { outlookBtn.textContent = 'Outlook connected'; outlookBtn.style.background = 'var(--green)'; }
     }
     // Also update SAM tab label
     var samLbl = document.getElementById('samGmailLabel'); var samSub = document.getElementById('samGmailSub');
     if (d.connected) {
- if (samLbl) samLbl.textContent = (d.provider === 'microsoft' ? 'Outlook' : 'Gmail') + (d.healthy === false ? ' needs reconnecting' : ' connected');
-      if (samSub) samSub.textContent = d.healthy === false ? (d.reason || 'Reconnect under Settings.') : 'Signals refreshed · ' + esc(d.email);
+ if (samLbl) samLbl.textContent = '' + (d.provider === 'microsoft' ? 'Outlook' : 'Gmail') + ' connected';
+      if (samSub) samSub.textContent = 'Signals refreshed · ' + esc(d.email);
     }
   } catch(e) {}
 
@@ -1986,7 +1500,7 @@ async function refreshPushStatus() {
     if (hint) hint.textContent = '';
   } else {
     statusEl.innerHTML = '<span style="color:var(--text3)">Off on this device</span>';
- btn.textContent = 'Enable notifications'; btn.style.background = 'var(--gold)'; btn.style.color = 'var(--c-on-accent)'; btn.style.border = 'none';
+ btn.textContent = 'Enable notifications'; btn.style.background = 'var(--gold)'; btn.style.color = '#18160F'; btn.style.border = 'none';
     if (testBtn) testBtn.style.display = 'none';
     if (hint) hint.textContent = '';
   }
@@ -2235,7 +1749,7 @@ function calcWeekScore(dateScores) {
   dateScores.forEach(function(d) { const day = new Date(d.date).getDay() || 7; const w = weights[day] || 1; total += d.score * w; totalWeight += w; });
   return Math.round(total / Math.max(totalWeight, 1));
 }
-function scoreColor(score) { return score >= 80 ? 'var(--green)' : score >= 60 ? 'var(--amber)' : 'var(--coral)'; }
+function scoreColor(score) { return score >= 80 ? '#4A8C5C' : score >= 60 ? '#C9973E' : '#C0523F'; }
 function scoreLabel(score) { return score >= 80 ? 'On track' : score >= 60 ? 'Getting there' : score >= 40 ? 'Needs focus' : 'Behind'; }
 
 function renderProductivityBanner(tasks) {
@@ -2377,7 +1891,7 @@ function renderSamAlerts() {
   const alerts = document.getElementById('samAlerts'); if (!alerts) return;
   const d = dayData(viewDate);
   const incomplete = (d.tasks||[]).filter(t => !t.done);
-  if (incomplete.length > 0) alerts.innerHTML = '<div style="background:rgba(var(--c-accent-rgb),0.1);border:1px solid var(--border2);border-radius:var(--radius);padding:12px 16px;margin-bottom:8px;font-size:13px;color:var(--text2)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> <strong style="color:var(--gold)">'+incomplete.length+' task'+(incomplete.length>1?'s':'')+' pending today</strong> — log your progress in Today tab</div>';
+  if (incomplete.length > 0) alerts.innerHTML = '<div style="background:rgba(160,117,42,0.1);border:1px solid var(--border2);border-radius:var(--radius);padding:12px 16px;margin-bottom:8px;font-size:13px;color:var(--text2)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> <strong style="color:var(--gold)">'+incomplete.length+' task'+(incomplete.length>1?'s':'')+' pending today</strong> — log your progress in Today tab</div>';
   else alerts.innerHTML = '';
 }
 async function loadMyAccounts() {
@@ -2400,7 +1914,7 @@ async function loadMyAccounts() {
         '<button onclick="openDealValueForm(\'' + r.id + '\',\'' + esc(r.account_name) + '\')" style="background:none;border:none;color:' + (hasValue ? 'var(--text3)' : 'var(--amber)') + ';cursor:pointer;font-size:11px;padding:0" title="' + (hasValue ? 'Edit deal value' : 'Add deal value') + '">' + (hasValue ? '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 7v10M14.8 9.3A3 3 0 0012 7.8h-.4a2.2 2.2 0 000 4.4h.8a2.2 2.2 0 010 4.4H12a3 3 0 01-2.8-1.5"/></svg>' : '+ $') + '</button>' +
         '<button onclick="openDomainManager(\'' + r.id + '\',\'' + esc(r.account_name) + '\',\'' + esc(r.domain||'') + '\',' + JSON.stringify(r.additional_domains||[]) + ')" style="background:none;border:none;color:' + (extraDomains ? 'var(--green)' : 'var(--text3)') + ';cursor:pointer;font-size:11px;padding:0" title="Manage email domains for signal matching"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM3.2 9.5h17.6M3.2 14.5h17.6M12 3a14 14 0 000 18 14 14 0 000-18z"/></svg>' + (extraDomains ? '<sup style=\'font-size:11px\'>+'+extraDomains+'</sup>' : '') + '</button>' +
         (r.sdr_user_id && r.sdr_user_id === currentUser.id && r.user_id !== currentUser.id
-          ? '<span style="font-size:11px;font-weight:700;color:var(--gold);background:rgba(var(--c-accent-rgb),0.12);border-radius:2px;padding:1px 5px" title="You are the SDR on this account">SDR</span>' : '') +
+          ? '<span style="font-size:11px;font-weight:700;color:var(--gold);background:rgba(160,117,42,0.12);border-radius:2px;padding:1px 5px" title="You are the SDR on this account">SDR</span>' : '') +
         (_canAssignTeam
           ? '<button onclick="openTeamAssign(\'' + r.id + '\',\'' + esc(r.account_name) + '\',\'' + (r.user_id||'') + '\',\'' + (r.sdr_user_id||'') + '\')" style="background:none;border:none;color:' + (r.sdr_user_id ? 'var(--green)' : 'var(--text3)') + ';cursor:pointer;font-size:11px;padding:0" title="Assign AE / SDR"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM2.5 20v-1.5A4.5 4.5 0 017 14h4a4.5 4.5 0 014.5 4.5V20M16 4.3a3.5 3.5 0 010 6.4M18 14.3a4.5 4.5 0 013.5 4.2V20"/></svg></button>' : '') +
         '<button onclick="removeMyAccount(\'' + r.id + '\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:0"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>' +
@@ -2619,10 +2133,10 @@ function renderIvrResults(outputId) {
 
   var sigMap = {
     gap:             { icon: '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg>', color: 'var(--coral)',  bg: 'rgba(192,82,63,0.08)',  badge: 'Not done · not found in Gmail' },
-    unverified:      { icon: '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg>',  color: 'var(--amber)',  bg: 'rgba(var(--c-accent-rgb),0.08)', badge: 'Done · not found in Gmail' },
+    unverified:      { icon: '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg>',  color: 'var(--amber)',  bg: 'rgba(160,117,42,0.08)', badge: 'Done · not found in Gmail' },
     verified:        { icon: '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg>',  color: 'var(--green)',  bg: 'rgba(74,140,92,0.08)',  badge: 'Email sent' },
     verified_hot:    { icon: '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5s5.5 4.3 5.5 9a5.5 5.5 0 01-11 0c0-2 1-3.4 1-3.4s.6 1.6 1.8 1.6c1.6 0 1.4-3.4 2.7-7.2z"/></svg>', color: 'var(--green)',  bg: 'rgba(74,140,92,0.12)',  badge: 'Email sent · reply received' },
-    partial_count:   { icon: '◑',  color: 'var(--amber)',  bg: 'rgba(var(--c-accent-rgb),0.08)', badge: 'Fewer emails found than claimed' },
+    partial_count:   { icon: '◑',  color: 'var(--amber)',  bg: 'rgba(160,117,42,0.08)', badge: 'Fewer emails found than claimed' },
     done_not_logged: { icon: '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 11v5.5M12 7.8v.4"/></svg>', color: 'var(--text3)',  bg: 'var(--surface2)',        badge: 'Found in Gmail · not logged' },
     no_source:       { icon: '○',  color: 'var(--text3)',  bg: 'var(--surface2)',        badge: 'No integration available' },
     internal:        { icon: '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.5h6v3H9zM7 5H5.5v15h13V5H17"/></svg>', color: 'var(--text3)',  bg: 'var(--surface2)',        badge: 'Internal task · not externally verifiable' },
@@ -2674,7 +2188,7 @@ function renderIvrResults(outputId) {
       var ratio = r.verificationRatio || 0;
       var qColor = ratio >= 60 ? 'var(--green)' : ratio >= 30 ? 'var(--amber)' : 'var(--coral)';
       if (r.signal === 'partial_count') {
-        quantityNote = '<div style="font-size:11px;margin-top:4px;padding:4px 8px;background:rgba(var(--c-accent-rgb),0.1);border-radius:2px;color:var(--amber)">◑ ' + found + ' of ' + claimed + ' emails found in Gmail (' + ratio + '%) — ' + (claimed - found) + ' unverified</div>';
+        quantityNote = '<div style="font-size:11px;margin-top:4px;padding:4px 8px;background:rgba(160,117,42,0.1);border-radius:2px;color:var(--amber)">◑ ' + found + ' of ' + claimed + ' emails found in Gmail (' + ratio + '%) — ' + (claimed - found) + ' unverified</div>';
       } else if (found > 0) {
         quantityNote = '<div style="font-size:11px;color:var(--text3);margin-top:3px">' + found + '/' + claimed + ' emails verified in Gmail</div>';
       }
@@ -3169,7 +2683,7 @@ function _renderSampaignAnalyticsBlock(d, opts) {
               '<div style="font-size:11px;color:var(--text3);margin-top:2px">'+acct.contacts+' contact'+(acct.contacts!==1?'s':'')+' · '+(acct.campaigns||[]).slice(0,2).join(', ')+'</div>' +
               // Collision flag — active deal found for this domain
               (acct.collision && !acct.collision.is_same_user ?
-                '<div style="display:inline-flex;align-items:center;gap:4px;margin-top:4px;padding:3px 8px;background:rgba(var(--c-accent-rgb),0.12);border:1px solid rgba(var(--c-accent-rgb),0.25);border-radius:2px">' +
+                '<div style="display:inline-flex;align-items:center;gap:4px;margin-top:4px;padding:3px 8px;background:rgba(160,117,42,0.12);border:1px solid rgba(160,117,42,0.25);border-radius:2px">' +
                 '<span style="font-size:11px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg></span>' +
                 '<span style="font-size:11px;color:var(--amber);font-weight:500">Active deal: <strong>' + esc(acct.collision.deal_name) + '</strong>' +
                 (acct.collision.deal_value ? ' ' + esc(acct.collision.deal_value) : '') +
@@ -3327,10 +2841,12 @@ function setSamSubTab(tab) {
     var ivrOut = document.getElementById('ivrOutput');
     if (ivrOut && !ivrOut.innerHTML.trim()) runIntentVsReality(null, 'ivrOutput', _selfIvrPeriod);
   }
-  // The SAMpaign workspace used to be lazily populated here, when the SAM
-  // tab's Signal sub-tab was first shown. It now lives in its own top-level
-  // tab and loads from switchTab('sampaign'), so this hook is gone rather
-  // than left pointing at markup that is no longer in this panel.
+  // Populate the SAMpaign workspace (role-gated manual campaigns section)
+  // the first time the Signal sub-tab is shown.
+  if (tab === 'signal') {
+    var spSec = document.getElementById('sampaignManualSection');
+    if (spSec && !spSec.innerHTML.trim()) loadSampaignWorkspace();
+  }
 }
 
 // ── SAM Daily Brief ───────────────────────────────────────────────────────────
@@ -3357,7 +2873,7 @@ async function loadSamBrief(force) {
         try {
           var c = JSON.parse(cached);
           out.innerHTML = renderBriefHtml(c.brief, c.brief_structured) +
-            '<div style="font-size:11px;color:var(--amber);margin-top:8px;padding:4px 8px;background:rgba(var(--c-accent-rgb),0.1);border-radius:2px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> Gemini quota reached — showing brief from ' + esc(c.date||'earlier') + '</div>';
+            '<div style="font-size:11px;color:var(--amber);margin-top:8px;padding:4px 8px;background:rgba(160,117,42,0.1);border-radius:2px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> Gemini quota reached — showing brief from ' + esc(c.date||'earlier') + '</div>';
           return;
         } catch(e2) {}
       }
@@ -3369,7 +2885,7 @@ async function loadSamBrief(force) {
     _briefLoadedDate = todayKey2;
     if (!d.cached) { try { localStorage.setItem(_BRIEF_CACHE_KEY, JSON.stringify({ brief: d.brief, brief_structured: d.brief_structured, date: todayKey2 })); } catch(e) {} }
     out.innerHTML = renderBriefHtml(d.brief, d.brief_structured) +
-      (d.cached ? '<div style="font-size:11px;color:var(--amber);margin-top:8px;padding:4px 8px;background:rgba(var(--c-accent-rgb),0.1);border-radius:2px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> Gemini quota reached — showing last brief from ' + esc(d.cached_date||'earlier') + '</div>' : '');
+      (d.cached ? '<div style="font-size:11px;color:var(--amber);margin-top:8px;padding:4px 8px;background:rgba(160,117,42,0.1);border-radius:2px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> Gemini quota reached — showing last brief from ' + esc(d.cached_date||'earlier') + '</div>' : '');
   } catch(e) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: '+esc(e.message)+'</div>'; }
 }
 
@@ -3481,22 +2997,10 @@ async function loadHabitsSection() {
       new Promise(function(resolve) { setTimeout(function() { resolve({ _timeout: true }); }, 5000); })
     ]);
     if (result && !result._timeout && Array.isArray(result.habits)) {
-      // Defaults ONLY for someone who has NEVER set habits.
-      //
-      // This used to key off result.habits.length, which meant an empty list
-      // re-seeded the three defaults — so deleting every habit was impossible.
-      // They came back on the next load, every time. An empty list is a valid
-      // answer ("I want none"); it is not the same as never having chosen.
-      //
-      // The server now says which it is via `configured`. The fallback below
-      // handles an older edge function that does not send the flag yet: in
-      // that case only an empty list AND no flag falls back, which is the old
-      // behaviour, so deploying the client first cannot break anything.
-      var neverConfigured = (result.configured === false) ||
-                            (result.configured === undefined && result.habits.length === 0);
-      _userHabits = neverConfigured
-        ? DEFAULT_HABITS.map(function(h){ return Object.assign({}, h); })
-        : result.habits;
+      // Defaults ONLY when the server confirms this user has no habits yet.
+      // On error/timeout we must NOT fall back to DEFAULT_HABITS — a later
+      // "Save habits" would overwrite the user's real server-side habits.
+      _userHabits = result.habits.length ? result.habits : DEFAULT_HABITS.map(function(h){ return Object.assign({}, h); });
     } else {
       // Timeout / bad response: leave habits unloaded so the next visit
       // retries — do NOT show defaults that could get saved over real data.
@@ -3616,7 +3120,7 @@ function _renderHabitSuggestions() {
   var h = '<div style="margin-bottom:12px"><div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4"/></svg> Detected from your calendar</div>';
   _habitSuggestions.forEach(function(s, i) {
     var dayLbl = (s.days||[]).map(function(d){ return DAY_NAMES[d]; }).join('·');
-    h += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(var(--c-accent-rgb),0.07);border:1px solid rgba(var(--c-accent-rgb),0.2);border-radius:2px;margin-bottom:5px">';
+    h += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(160,117,42,0.07);border:1px solid rgba(160,117,42,0.2);border-radius:2px;margin-bottom:5px">';
     h += '<span style="font-size:13px">'+(CHANNEL_ICONS[s.channel]||'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4"/></svg>')+'</span>';
     h += '<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(s.title)+'</div>';
     h += '<div style="font-size:11px;color:var(--text3)">'+dayLbl+' · '+esc(s.start_time||'')+' · '+s.duration_mins+'m · seen '+s.occurrences+'×'+(s.is_recurring_series?' · recurring series':'')+'</div></div>';
@@ -3717,7 +3221,7 @@ async function loadTimeAnalytics() {
 
     // Mismatches — the most useful part
     if (d.mismatches.over_invested.length || d.mismatches.under_invested.length) {
-      html += '<div style="padding:8px 10px;border-radius:2px;margin-bottom:10px;background:rgba(var(--c-accent-rgb),0.08)">';
+      html += '<div style="padding:8px 10px;border-radius:2px;margin-bottom:10px;background:rgba(160,117,42,0.08)">';
       if (d.mismatches.under_invested.length) html += '<div style="font-size:11px;color:var(--green);margin-bottom:3px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5s5.5 4.3 5.5 9a5.5 5.5 0 01-11 0c0-2 1-3.4 1-3.4s.6 1.6 1.8 1.6c1.6 0 1.4-3.4 2.7-7.2z"/></svg> Hot accounts you\'re under-investing in: <strong>'+d.mismatches.under_invested.join(', ')+'</strong></div>';
       if (d.mismatches.over_invested.length) html += '<div style="font-size:11px;color:var(--amber)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> Cold accounts consuming your time: <strong>'+d.mismatches.over_invested.join(', ')+'</strong></div>';
       html += '</div>';
@@ -3996,35 +3500,7 @@ async function runExternalSignals(repId, resultElId) {
 // Runs automatically on app open. Scans inbox for OOO replies, creates
 // follow-up tasks on the first business day after the person returns.
 // Shows a quiet notification in the Today tab (not the SAM tab).
-// Shared busy-state helper for the small header buttons. Swaps the label,
-// blocks a second click, and restores whatever the button said before.
-function setBtnBusy(id, busyLabel) {
-  var b = document.getElementById(id); if (!b) return null;
-  if (b.dataset.busy === '1') return null;      // already running
-  b.dataset.busy = '1';
-  b.dataset.restore = b.innerHTML;
-  b.classList.add('is-busy');
-  b.disabled = true;
-  b.textContent = busyLabel;
-  return b;
-}
-function clearBtnBusy(id, doneLabel, holdMs) {
-  var b = document.getElementById(id); if (!b) return;
-  var restore = function() {
-    b.innerHTML = b.dataset.restore || b.innerHTML;
-    b.classList.remove('is-busy'); b.disabled = false; b.dataset.busy = '';
-  };
-  if (doneLabel) {
-    // Say what happened before snapping back, otherwise a scan that finds
-    // nothing is indistinguishable from a button that did nothing.
-    b.classList.remove('is-busy'); b.textContent = doneLabel;
-    setTimeout(restore, holdMs || 2200);
-  } else { restore(); }
-}
-
 async function processOooMails() {
-  var _btn = setBtnBusy('oooScanBtn', 'Scanning…');
-  // Called on load as well as by the button, so a missing button is normal.
   try {
     var r = await fetch(EDGE_FN_URL, {
       method:'POST',
@@ -4032,11 +3508,7 @@ async function processOooMails() {
       body:JSON.stringify({action:'process_ooo_mails', days:14})
     });
     var d = await r.json();
-    if (!d.ok || !d.tasksCreated?.length) {
-      if (_btn) clearBtnBusy('oooScanBtn', d && d.ok ? 'No new OOO replies' : 'Scan failed');
-      return;
-    }
-    if (_btn) clearBtnBusy('oooScanBtn', d.tasksCreated.length + ' follow-up' + (d.tasksCreated.length !== 1 ? 's' : '') + ' added');
+    if (!d.ok || !d.tasksCreated?.length) return;
     // Show quiet banner in Today tab
     var row    = document.getElementById('oooSyncRow');
     var status = document.getElementById('oooSyncStatus');
@@ -4052,11 +3524,7 @@ async function processOooMails() {
     }
     // Refresh task list so new tasks appear immediately if they're for today
     syncDown().then(function(){ render(); });
-  } catch(e) {
-    // A thrown request must still release the button, otherwise it spins
-    // forever and the only way out is a page reload.
-    if (_btn) clearBtnBusy('oooScanBtn', 'Scan failed');
-  }
+  } catch(e) { /* silent — non-critical */ }
 }
 
 // ── Auto-complete obvious tasks ───────────────────────────────────────────────
@@ -4411,7 +3879,7 @@ async function runLocalIntelligence(repId, resultElId) {
         }
         grp.accounts.forEach(function(a) {
           const stalenessBadge = a.staleness === 'cold' ? '<span style="font-size:11px;font-weight:700;color:var(--coral);background:rgba(192,82,63,0.12);border-radius:2px;padding:1px 6px;margin-left:6px">\u2744 COLD</span>'
-            : a.staleness === 'stale' ? '<span style="font-size:11px;font-weight:700;color:var(--amber);background:rgba(var(--c-accent-rgb),0.12);border-radius:2px;padding:1px 6px;margin-left:6px">STALE</span>' : '';
+            : a.staleness === 'stale' ? '<span style="font-size:11px;font-weight:700;color:var(--amber);background:rgba(160,117,42,0.12);border-radius:2px;padding:1px 6px;margin-left:6px">STALE</span>' : '';
           const regionBadge = a.region ? '<span style="font-size:11px;color:var(--text3);background:rgba(0,0,0,0.06);border-radius:2px;padding:1px 6px;margin-left:5px">' + esc(a.region) + '</span>' : '';
           const indent = grp.accounts.length > 1 ? 'margin-left:10px;border-left-width:2px;' : '';
           html += '<div style="border-left:3px solid ' + cfg.color + ';' + indent + 'padding:8px 12px;margin-bottom:6px;background:rgba(0,0,0,0.04);border-radius:0 6px 6px 0">' +
@@ -4742,17 +4210,7 @@ async function getCoverageCoaching(grid, outputId, repEmail) {
 }
 
 // ── You tab accordion sections ────────────────────────────────────────────────
-
-// The card names the account being changed, because "change your password" on a
-// shared machine is exactly where someone changes the wrong one.
-function _pwShowEmail() {
-  var el = document.getElementById('pwEmail');
-  if (el && currentUser && currentUser.email) el.textContent = currentUser.email;
-}
-document.addEventListener('DOMContentLoaded', _pwShowEmail);
-
 function toggleYouAcc(key) {
-  if (arguments[0] === 'password') _pwShowEmail();
   var el = document.getElementById('youAcc-' + key);
   if (el) el.classList.toggle('open');
 }
@@ -4915,9 +4373,9 @@ async function renderTeam() {
         '</div>' +
         '<div style="padding:8px 16px;border-top:1px solid var(--border)">' +
           '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
-            '<button id="sam-btn-' + m.user_id + '" onclick="event.stopPropagation();togglePanel(\'sami-' + m.user_id + '\',function(){runSamIntelligence(\'' + m.user_id + '\',\'' + m.email + '\',\'sami-' + m.user_id + '\')})" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(var(--c-accent-rgb),0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> SAM Intelligence</button>' +
-            '<button onclick="event.stopPropagation();togglePanel(\'cov-' + m.user_id + '\',function(){runCoverageCheck(\'' + m.user_id + '\',\'' + m.email + '\',\'cov-' + m.user_id + '\')})" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(var(--c-accent-rgb),0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V4M4 20h16M8 17V11M12.5 17V7.5M17 17v-4"/></svg> Coverage</button>' +
-            '<button onclick="event.stopPropagation();togglePanel(\'ivr-' + m.user_id + '\',function(){runIntentVsReality(\'' + m.user_id + '\',\'ivr-' + m.user_id + '\')})" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(var(--c-accent-rgb),0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 16.5a4.5 4.5 0 100-9 4.5 4.5 0 000 9zM12 13a1 1 0 100-2 1 1 0 000 2z"/></svg> Intent vs Reality</button>' +
+            '<button id="sam-btn-' + m.user_id + '" onclick="event.stopPropagation();togglePanel(\'sami-' + m.user_id + '\',function(){runSamIntelligence(\'' + m.user_id + '\',\'' + m.email + '\',\'sami-' + m.user_id + '\')})" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(160,117,42,0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> SAM Intelligence</button>' +
+            '<button onclick="event.stopPropagation();togglePanel(\'cov-' + m.user_id + '\',function(){runCoverageCheck(\'' + m.user_id + '\',\'' + m.email + '\',\'cov-' + m.user_id + '\')})" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(160,117,42,0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V4M4 20h16M8 17V11M12.5 17V7.5M17 17v-4"/></svg> Coverage</button>' +
+            '<button onclick="event.stopPropagation();togglePanel(\'ivr-' + m.user_id + '\',function(){runIntentVsReality(\'' + m.user_id + '\',\'ivr-' + m.user_id + '\')})" style="flex:1;padding:8px;border-radius:var(--radius-sm);background:rgba(160,117,42,0.08);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 16.5a4.5 4.5 0 100-9 4.5 4.5 0 000 9zM12 13a1 1 0 100-2 1 1 0 000 2z"/></svg> Intent vs Reality</button>' +
           '</div>' +
           '<div id="sami-' + m.user_id + '" style="margin-top:8px"></div>' +
           '<div id="cov-' + m.user_id + '" style="margin-top:6px"></div>' +
@@ -5103,30 +4561,8 @@ async function sendWeeklyDigest() {
     const extraEmails = (document.getElementById('digestExtraEmails')?.value||'').split(',').map(function(e){return e.trim();}).filter(function(e){return e.includes('@');});
     const r = await fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify({ action: 'weekly_digest', date_from: from, date_to: to, send_to_manager: toManager, send_to_reps: toReps, extra_emails: extraEmails }) });
     const data = await r.json();
-    if (data.success) {
-      // Partial delivery is not success and must not read like it. Six
-      // attempted, one delivered used to render as "sent to 6 people".
-      var okLine = '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Delivered to ' + data.sent + ' of ' + (data.attempted || data.sent) + ' for ' + esc(data.weekLabel || '');
-      var html = '<div style="font-size:12px;color:' + (data.failed ? 'var(--amber)' : 'var(--green)') + ';padding:8px 0">' + okLine + '</div>';
-      if (data.failed) {
-        html += '<div style="font-size:11px;color:var(--coral);padding:2px 0 6px">' + data.failed + ' rejected. ' + esc(data.hint || '') + '</div>';
-        html += (data.failures || []).slice(0, 5).map(function(f) {
-          return '<div style="font-size:11px;color:var(--text3)">' + esc(f.to) + ': ' + esc(f.error) + '</div>';
-        }).join('');
-      }
-      if (out) out.innerHTML = html;
-      if (btn) { btn.textContent = data.failed ? 'Sent with errors' : 'Sent'; setTimeout(function(){ btn.textContent = 'Send now'; btn.disabled = false; }, 3000); }
-    }
-    else {
-      // Zero delivered. Lead with the diagnosis, not the raw API string.
-      var msg = data.hint || data.error || 'Nothing was delivered.';
-      if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral);padding:8px 0">' + esc(msg) + '</div>' +
-        (data.failures || []).slice(0, 5).map(function(f) {
-          return '<div style="font-size:11px;color:var(--text3)">' + esc(f.to) + ': ' + esc(f.error) + '</div>';
-        }).join('');
-      if (btn) { btn.textContent = 'Send now'; btn.disabled = false; }
-      return;
-    }
+    if (data.success) { if (out) out.innerHTML = '<div style="font-size:12px;color:var(--green);padding:8px 0"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Digest sent to ' + data.sent + ' people for ' + data.weekLabel + '</div>'; if (btn) { btn.textContent = 'Sent'; setTimeout(() => { btn.textContent = 'Send now'; btn.disabled = false; }, 3000); } }
+    else { throw new Error(data.error || 'Failed to send'); }
   } catch(e) { if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral);padding:8px 0">Error: ' + esc(e.message) + '</div>'; if (btn) { btn.textContent = 'Send now'; btn.disabled = false; } }
 }
 function showNudgeBanner(tasks) {
@@ -5278,36 +4714,14 @@ function _renderFeedEntries(entries) {
   }).join('');
 }
 async function loadTeamFeed(targetElId, limit) {
-  // The element may legitimately be absent: the Today screen shows the metric
-  // without rendering the feed list, and the mobile layout drops the widget
-  // entirely. Returning early here is why "Weekly team wins" sat on its
-  // placeholder dash forever. Same mistake as the coaching alerts panel.
-  // Fetch regardless, always set the metric, and only paint the list if there
-  // is somewhere to paint it.
-  var el = document.getElementById(targetElId);
-  if (!currentUser?.token) return;
+  var el = document.getElementById(targetElId); if (!el || !currentUser?.token) return;
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
       body:JSON.stringify({ action:'list_team_feed', limit: limit || 30 }) });
     var d = await r.json();
     window._teamFeedTarget = targetElId;
-    // Team wins metric. Counted from the same payload the widget renders, so
-    // the number and the list can never disagree.
-    try {
-      if (d.ok && Array.isArray(d.feed)) {
-        _naFeed = d.feed;
-        // x/y: wins in the last 7 days over everything in the feed window,
-        // so the headline number is this week and the denominator is the
-        // context it sits in, rather than a bare count with no scale.
-        var _wk = d.feed.filter(_isThisWeek).length;
-        // "0/0" is a fact. The em dash was a placeholder that never got
-        // replaced, and it read as "broken" rather than "nothing yet".
-        _setMetric('mTeamWins', _wk, '<span class="unit">/' + d.feed.length + '</span>');
-        if (_openDrill === 'wins') { _openDrill = null; toggleMetricDrill('wins'); }
-      }
-    } catch(_e) {}
-    if (el) el.innerHTML = (d.ok && d.feed) ? _renderFeedEntries(d.feed) : '<div style="font-size:12px;color:var(--coral)">Could not load feed.</div>';
-  } catch(e) { if (el) el.innerHTML = '<div style="font-size:12px;color:var(--coral)">Could not load feed.</div>'; }
+    el.innerHTML = (d.ok && d.feed) ? _renderFeedEntries(d.feed) : '<div style="font-size:12px;color:var(--coral)">Could not load feed.</div>';
+  } catch(e) { el.innerHTML = '<div style="font-size:12px;color:var(--coral)">Could not load feed.</div>'; }
 }
 let _teamFeedWidgetLoaded = false;
 function toggleTeamFeedWidget() {
@@ -5769,8 +5183,8 @@ function renderAppearancePanel() {
     const on = auto ? false : (isDarkCard === dark);
     const following = auto && (isDarkCard === dark);
     return 'flex:1;cursor:pointer;border-radius:3px;padding:10px;text-align:center;' +
-      'border:2px solid ' + (on ? 'var(--gold)' : (following ? 'rgba(var(--c-accent-rgb),0.35)' : 'var(--border2)')) + ';' +
-      'background:' + (on ? 'rgba(var(--c-accent-rgb),0.08)' : 'transparent') + ';';
+      'border:2px solid ' + (on ? 'var(--gold)' : (following ? 'rgba(160,117,42,0.35)' : 'var(--border2)')) + ';' +
+      'background:' + (on ? 'rgba(160,117,42,0.08)' : 'transparent') + ';';
   };
   const lightEl = document.getElementById('apprCardLight');
   const darkEl  = document.getElementById('apprCardDark');
@@ -5794,7 +5208,7 @@ function renderAppearancePanel() {
     row.innerHTML = APPR_SCALES.map(function(s) {
       const on = Math.abs(a.scale - s.value) < 0.001;
       return '<div onclick="setAppearanceScale('+s.value+')" style="flex:1;cursor:pointer;text-align:center;padding:14px 6px;border-radius:3px;' +
-        'border:2px solid '+(on?'var(--gold)':'var(--border2)')+';background:'+(on?'rgba(var(--c-accent-rgb),0.08)':'transparent')+'">' +
+        'border:2px solid '+(on?'var(--gold)':'var(--border2)')+';background:'+(on?'rgba(160,117,42,0.08)':'transparent')+'">' +
         '<div style="font-size:'+s.px+'px;font-weight:600;color:var(--text);line-height:1">Aa</div>' +
         '<div style="font-size:11px;color:var(--text3);margin-top:7px">'+s.label+'</div>' +
       '</div>';
@@ -6184,9 +5598,6 @@ async function _loadDealDetailData(dealId, deal) {
     ]);
     var mData = await mRes.json(); var sData = await sRes.json();
     var stakeholders = sData.stakeholders || [];
-    // Is there proven contact on this account that no person is attached to?
-    // The backend decides; the pane just acts on it.
-    window._stkUnmapped = !!sData.unmapped_activity;
 
     // Auto-refresh if contacts exist but ALL have no activity data (stale pre-signal enrichment)
     // This silently re-enriches in background to pick up Gmail activity signals
@@ -6235,7 +5646,7 @@ async function _renderWeeklyCheckPane(deal, forceRefresh) {
   var h = d.header || {};
   var verdictCfg = {
     on_track:        { label: 'On track',        color: 'var(--green)', bg: 'rgba(74,140,92,0.12)',  icon: '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg>' },
-    needs_attention: { label: 'Needs attention', color: 'var(--amber)', bg: 'rgba(var(--c-accent-rgb),0.14)', icon: '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg>' },
+    needs_attention: { label: 'Needs attention', color: 'var(--amber)', bg: 'rgba(160,117,42,0.14)', icon: '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg>' },
     at_risk:         { label: 'At risk',          color: 'var(--coral)', bg: 'rgba(200,80,70,0.12)',  icon: '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>' }
   }[d.verdict] || { label: 'Reviewed', color: 'var(--text2)', bg: 'var(--surface2)', icon: '•' };
   var fmtUsd = function(v){ return !v ? '—' : v>=1e6 ? '$'+(v/1e6).toFixed(1)+'M' : '$'+Math.round(v/1e3)+'K'; };
@@ -6273,7 +5684,7 @@ async function _renderWeeklyCheckPane(deal, forceRefresh) {
   });
 
   html += section('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> What needs attention', 'var(--coral)', d.going_wrong, function(w){
-    var sv = w.severity === 'high' ? { c:'var(--coral)', bg:'rgba(200,80,70,0.06)' } : { c:'var(--amber)', bg:'rgba(var(--c-accent-rgb),0.06)' };
+    var sv = w.severity === 'high' ? { c:'var(--coral)', bg:'rgba(200,80,70,0.06)' } : { c:'var(--amber)', bg:'rgba(160,117,42,0.06)' };
     return '<div style="background:'+sv.bg+';border-left:2px solid '+sv.c+';border-radius:0 6px 6px 0;padding:8px 10px;margin-bottom:6px">' +
       '<div style="font-size:12px;font-weight:600;color:var(--text)">'+esc(w.point)+' <span style="font-size:11px;font-weight:700;color:'+sv.c+';text-transform:uppercase">· '+esc(w.severity)+'</span></div>' +
       '<div style="font-size:11px;color:var(--text3);margin-top:2px">'+esc(w.evidence)+'</div></div>';
@@ -6282,7 +5693,7 @@ async function _renderWeeklyCheckPane(deal, forceRefresh) {
   if (d.do_this_week && d.do_this_week.length) {
     html += '<div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em;margin:14px 0 8px">→ Do this week</div>';
     html += d.do_this_week.map(function(t, i){
-      return '<div style="display:flex;gap:8px;align-items:flex-start;background:rgba(var(--c-accent-rgb),0.06);border:1px solid rgba(var(--c-accent-rgb),0.2);border-radius:2px;padding:8px 10px;margin-bottom:6px">' +
+      return '<div style="display:flex;gap:8px;align-items:flex-start;background:rgba(160,117,42,0.06);border:1px solid rgba(160,117,42,0.2);border-radius:2px;padding:8px 10px;margin-bottom:6px">' +
         '<span style="font-size:11px;font-weight:700;color:var(--gold);flex-shrink:0">'+(i+1)+'.</span>' +
         '<div><div style="font-size:12px;font-weight:600;color:var(--text)">'+esc(t.action)+'</div>' +
         '<div style="font-size:11px;color:var(--text3);margin-top:2px">'+esc(t.why)+'</div></div></div>';
@@ -6312,27 +5723,14 @@ function _fmtRelTime(iso) {
 // All functions here use server-side rules engine. No external AI.
 
 async function loadCoachingAlerts() {
-  // The old collapsible alerts panel was removed from the Today rail: the
-  // rail now shows Needs attention, and the full list lives behind the Alerts
-  // metric. This function is still the only thing that fetches alerts, so it
-  // must run WITHOUT that element or the metric and the rail both stay empty.
-  var panel = document.getElementById('coachingAlertsPanel');
+  var panel = document.getElementById('coachingAlertsPanel'); if (!panel) return;
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
       body:JSON.stringify({action:'get_coaching_alerts', role: profile?.role||'member'}) });
     var d = await r.json();
     var alerts = d.alerts || [];
-    // Feed the Today metric strip from data this loader already has,
-    // rather than fetching alerts twice.
-    try {
-      var _hi = alerts.filter(function(a){ return a.severity === 'high'; }).length;
-      _setMetric('mAlerts', alerts.length, _hi ? ' <span class="hi">' + _hi + ' high</span>' : '');
-      _naAlerts = alerts;
-      renderNeedsAttention();
-      if (_openDrill === 'alerts') { _openDrill = null; toggleMetricDrill('alerts'); }
-    } catch(_e) {}
     if (!alerts.length) {
-      if (panel) panel.innerHTML = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="font-size:11px;color:var(--text3)">No active alerts</span><button onclick="runCoachingAlerts()" style="font-size:11px;padding:2px 8px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);cursor:pointer">↻ Check now</button></div>';
+      panel.innerHTML = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="font-size:11px;color:var(--text3)">No active alerts</span><button onclick="runCoachingAlerts()" style="font-size:11px;padding:2px 8px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);cursor:pointer">↻ Check now</button></div>';
       return;
     }
     var sevColor = {high:'var(--coral)', medium:'var(--amber)', low:'var(--blue)'};
@@ -6368,10 +5766,7 @@ async function loadCoachingAlerts() {
     }
     html += '</div>';  // collapsible body
     html += '</div>';
-    // Guarded: the element no longer exists on Today. Throwing here would
-    // abort the function AFTER the caches were filled but BEFORE anything
-    // downstream ran, which is the worst kind of half-failure.
-    if (panel) panel.innerHTML = html;
+    panel.innerHTML = html;
   } catch(e) { /* non-fatal */ }
 }
 
@@ -6503,7 +5898,7 @@ async function _renderSignalsPane(deal, forceRefresh, _retried) {
       var cachedLbl = d.cached_at ? new Date(d.cached_at).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : 'earlier';
       html += isFreshShare
         ? '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;color:var(--text3);margin-bottom:10px;padding:4px 8px;background:var(--surface2);border-radius:2px"><span><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6.5h6l2 2.5h9v11h-17z"/></svg> Shared team fetch from ' + esc(cachedLbl) + ', saved AI quota</span><button onclick="_renderSignalsPane(_currentDealDetail.deal, true)" style="background:none;border:none;color:var(--gold);cursor:pointer;font-size:11px;font-family:var(--sans);padding:0;flex-shrink:0">↻ Refresh live</button></div>'
-        : '<div style="font-size:11px;color:var(--amber);margin-bottom:10px;padding:4px 8px;background:rgba(var(--c-accent-rgb),0.1);border-radius:2px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> Live refresh unavailable (AI quota): showing signals from ' + esc(cachedLbl) + '</div>';
+        : '<div style="font-size:11px;color:var(--amber);margin-bottom:10px;padding:4px 8px;background:rgba(160,117,42,0.1);border-radius:2px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> Live refresh unavailable (AI quota): showing signals from ' + esc(cachedLbl) + '</div>';
     }
 
     function renderSignalCards(signals) {
@@ -6663,7 +6058,7 @@ function _buildDealOverviewHTML(deal) {
 
 // ── Samora Intel button: branded entry point for stakeholder insights ────────
 function _samoraIntelBtn(onclickStr, compact) {
-  return '<button onclick="' + onclickStr + '" title="Samora Intelligence: how to work with them" style="display:inline-flex;align-items:center;gap:5px;background:rgba(var(--c-accent-rgb),0.12);border:1px solid rgba(var(--c-accent-rgb),0.35);border-radius:3px;padding:' + (compact ? '2px 8px' : '6px 12px') + ';cursor:pointer;flex-shrink:0">'
+  return '<button onclick="' + onclickStr + '" title="Samora Intelligence: how to work with them" style="display:inline-flex;align-items:center;gap:5px;background:rgba(160,117,42,0.12);border:1px solid rgba(160,117,42,0.35);border-radius:3px;padding:' + (compact ? '2px 8px' : '6px 12px') + ';cursor:pointer;flex-shrink:0">'
     + '<img src="icons/icon-48.png" alt="" style="width:' + (compact ? 12 : 16) + 'px;height:' + (compact ? 12 : 16) + 'px;border-radius:50%"/>'
     + '<span style="font-size:' + (compact ? 9 : 10) + 'px;font-weight:700;letter-spacing:.08em;color:var(--gold);text-transform:uppercase;font-family:var(--sans)">Samora Intel</span>'
     + '</button>';
@@ -6679,7 +6074,7 @@ function openMeetingInsights(idx) {
   var rows = roster.map(function(s, i) {
     var initials = (s.full_name || '?').split(' ').map(function(w){ return w[0] || ''; }).slice(0,2).join('').toUpperCase();
     var insLbl = s.insight && s.insight.label
-      ? '<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:3px;background:rgba(var(--c-accent-rgb),0.12);color:var(--gold)">' + esc(s.insight.label) + '</span>'
+      ? '<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:3px;background:rgba(160,117,42,0.12);color:var(--gold)">' + esc(s.insight.label) + '</span>'
       : '<span style="font-size:11px;color:var(--text3)">Not assessed yet, tap to read</span>';
     var click = s.id ? 'openStakeholderInsight(\'' + esc(s.id) + '\',\'' + esc(s.full_name||'') + '\')' : '';
     return '<div onclick="' + click + '" style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--border);cursor:' + (s.id ? 'pointer' : 'default') + '">' +
@@ -6739,7 +6134,7 @@ async function openStakeholderInsight(stakeholderId, name, opts) {
     if (d.style) {
       var confLbl = d.style.confidence === 'high' ? 'high confidence' : d.style.confidence === 'moderate' ? 'moderate confidence' : 'early read';
       h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">' +
-        '<span style="font-size:13px;font-weight:700;padding:3px 10px;border-radius:3px;background:rgba(var(--c-accent-rgb),0.12);color:var(--gold)">' + esc(d.style.label) + '</span>' +
+        '<span style="font-size:13px;font-weight:700;padding:3px 10px;border-radius:3px;background:rgba(160,117,42,0.12);color:var(--gold)">' + esc(d.style.label) + '</span>' +
         '<span style="font-size:11px;color:var(--text3)">' + confLbl + ' · ' + d.style.messages_scanned + ' messages</span>' +
         '<span onclick="var el=document.getElementById(\'stk-receipts\');el.style.display=el.style.display===\'none\'?\'block\':\'none\'" style="font-size:11px;color:var(--gold);cursor:pointer;text-decoration:underline dotted">why?</span>' +
       '</div>';
@@ -6819,7 +6214,7 @@ async function openSampaignContactInsight(contactId, name, opts) {
     if (d.style) {
       var confLbl = d.style.confidence === 'high' ? 'high confidence' : d.style.confidence === 'moderate' ? 'moderate confidence' : 'early read';
       h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">' +
-        '<span style="font-size:13px;font-weight:700;padding:3px 10px;border-radius:3px;background:rgba(var(--c-accent-rgb),0.12);color:var(--gold)">' + esc(d.style.label) + '</span>' +
+        '<span style="font-size:13px;font-weight:700;padding:3px 10px;border-radius:3px;background:rgba(160,117,42,0.12);color:var(--gold)">' + esc(d.style.label) + '</span>' +
         '<span style="font-size:11px;color:var(--text3)">' + confLbl + ' · ' + d.style.messages_scanned + ' messages</span>' +
         '<span onclick="var el=document.getElementById(\'spc-receipts\');el.style.display=el.style.display===\'none\'?\'block\':\'none\'" style="font-size:11px;color:var(--gold);cursor:pointer;text-decoration:underline dotted">why?</span>' +
       '</div>';
@@ -6941,19 +6336,8 @@ function _renderStakeholdersPane(stakeholders, deal) {
   var html = '<div style="display:flex;gap:6px;border-bottom:1px solid var(--border2);margin-bottom:12px">' +
     tab('active','Active', active.length) + tab('prospective','Prospective', prospective.length) + '</div>';
 
-  // ── TWO MEANINGS OF "ACTIVE", AGAIN ─────────────────────────────────
-  // This tab counts anyone with interaction EVER. Coverage counts anyone
-  // contacted in the LAST 30 DAYS. So this pane said "Active 20" while
-  // coverage said "0 of 20 contacts active" on the same account, and both
-  // were right. Show the 30-day number here so the two reconcile on screen
-  // instead of looking like a bug.
-  var recent30 = active.filter(function(s) {
-    if (!s.last_contacted_at) return false;
-    return (Date.now() - new Date(s.last_contacted_at).getTime()) / 86400000 <= 30;
-  }).length;
-
   if (_stkTab === 'active') {
-    html += '<div style="font-size:11px;color:var(--text3);margin-bottom:10px">People with real interaction: replies, calendar invites, and anyone on the thread. <strong>' + recent30 + ' of ' + active.length + '</strong> in the last 30 days, which is the number coverage counts.</div>';
+    html += '<div style="font-size:11px;color:var(--text3);margin-bottom:10px">People with real interaction: replies, calendar invites, and anyone on the thread.</div>';
   } else {
     html += '<div style="font-size:11px;color:var(--text3);margin-bottom:10px">People reached out to or scouted, not yet interacting. They move to Active once they engage.</div>';
   }
@@ -6975,81 +6359,21 @@ function _renderStakeholdersPane(stakeholders, deal) {
     html += '<button onclick="enrichDeal(\'' + esc(dealId) + '\',\'' + esc(deal && deal.account || '') + '\')" id="enrichDealBtn" style="width:100%;margin-top:12px;padding:10px;border-radius:2px;background:var(--surface2);border:1px dashed var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer">' + _samoraIntelLabel('Find &amp; enrich contacts from activity') + '</button>';
     html += '<div id="enrichDealStatus" style="font-size:11px;color:var(--text3);margin-top:6px"></div>';
     html += '<button onclick="syncActiveStakeholders(\'' + esc(dealId) + '\')" id="syncActiveBtn" style="width:100%;margin-top:6px;padding:8px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);font-size:11px;cursor:pointer">↻ Sync recent contacts from Gmail &amp; calendar</button>';
-    html += '<div id="stkAutoSyncNote" style="font-size:11px;color:var(--text3);margin-top:6px"></div>';
   } else {
-    html += '<button onclick="scoutStakeholders(\'' + esc(dealId) + '\')" id="scoutBtn" style="width:100%;margin-top:12px;padding:10px;border-radius:2px;background:rgba(var(--c-accent-rgb),0.08);border:1px solid rgba(var(--c-accent-rgb),0.4);color:var(--gold);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">' + _samoraIntelLabel('Scout stakeholders for this account') + '</button>';
+    html += '<button onclick="scoutStakeholders(\'' + esc(dealId) + '\')" id="scoutBtn" style="width:100%;margin-top:12px;padding:10px;border-radius:2px;background:rgba(160,117,42,0.08);border:1px solid rgba(160,117,42,0.4);color:var(--gold);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">' + _samoraIntelLabel('Scout stakeholders for this account') + '</button>';
     html += '<div id="scoutStatus" style="font-size:11px;color:var(--text3);margin-top:6px"></div>';
     html += '<div onclick="openScoutProfile(\'' + esc(dealId) + '\')" style="font-size:11px;color:var(--text3);text-align:center;margin-top:8px;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 16.5a4.5 4.5 0 100-9 4.5 4.5 0 000 9zM12 13a1 1 0 100-2 1 1 0 000 2z"/></svg> Who to hunt (job titles &amp; targets)</div>';
   }
   body.innerHTML = html;
-
-  // Fire and forget: if the account has proven contact that no person is
-  // attached to, map it now rather than waiting for someone to press a button.
-  if (_stkTab === 'active') { _autoMapActivityToStakeholders(deal, all); }
 }
 
 function setStkTab(t) { _stkTab = t; _renderStakeholdersPane(window._stkAll, window._stkDeal); }
-
-// ═══════════════════════════════════════════════════════════════════════════
-// AUTO-MAP ACTIVITY TO PEOPLE
-//
-// There was no auto-refresh for stakeholders. sync_active_stakeholders only
-// ever ran from the "Sync recent contacts" button, so an account could show
-// verified two-way contact yesterday and still list nobody who had spoken.
-// That is how Ferrero's procurement manager could agree commercial terms and
-// not appear in the contact list at all.
-//
-// The account already knows last_verified_contact, written by the scan from
-// real two-way email. If that is MORE RECENT than the newest contact date on
-// any known stakeholder, there is activity nobody is mapped to, and that is a
-// fact, not a guess. So run the sync, once per account per session, rather
-// than waiting for someone to notice and press a button.
-//
-// Once per session because it costs Gmail calls. Not on a timer, because the
-// signal that it is needed is precisely this mismatch.
-// ═══════════════════════════════════════════════════════════════════════════
-window._stkAutoSynced = window._stkAutoSynced || {};
-
-async function _autoMapActivityToStakeholders(deal, stakeholders) {
-  if (!deal || !deal.id) return false;
-  if (window._stkAutoSynced[deal.id]) return false;
-
-  // The backend computes this: it has both the account's proven-contact date
-  // and every stakeholder's last_contacted_at, so the rule lives in one place.
-  if (!window._stkUnmapped) return false;
-
-  window._stkAutoSynced[deal.id] = true;
-  var note = document.getElementById('stkAutoSyncNote');
-  if (note) note.textContent = 'Activity here is not mapped to anyone yet, matching it to people…';
-  try {
-    var r = await fetch(EDGE_FN_URL, { method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
-      body: JSON.stringify({ action:'sync_active_stakeholders', account_id: deal.id, days: 90 }) });
-    var d = await r.json();
-    if (d && d.ok && d.discovered) {
-      if (note) note.textContent = 'Matched ' + d.discovered + ' contact' + (d.discovered === 1 ? '' : 's') + ' from recent activity.';
-      window._stkUnmapped = false;   // _reloadStakeholders sets it again from the server
-      _reloadStakeholders(deal.id);
-      return true;
-    }
-    window._stkUnmapped = false;     // asked and answered, do not loop
-    // Nothing found is a real answer, not a failure. Say so rather than
-    // leaving a spinner that implies work is still happening.
-    if (note) note.textContent = d && d.ok
-      ? 'Recent activity could not be matched to anyone at this domain.'
-      : ((d && d.error) || 'Could not check recent activity.');
-  } catch (e) {
-    if (note) note.textContent = 'Could not check recent activity.';
-  }
-  return false;
-}
 
 async function _reloadStakeholders(dealId) {
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({ action:'get_stakeholders', account_id:dealId }) });
     var d = await r.json();
     var stk = d.stakeholders || [];
-    window._stkUnmapped = !!d.unmapped_activity;
     if (_currentDealDetail) _currentDealDetail.stakeholders = stk;
     _renderStakeholdersPane(stk, window._stkDeal || (_currentDealDetail && _currentDealDetail.deal));
   } catch(e) {}
@@ -7100,7 +6424,7 @@ async function openScoutProfile(accountId) {
   var usingAcct = !!acctP;                 // per-account override exists → edit that
   var cur = acctP || orgP;
   var chip = function(group, val, on) {
-    return '<label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:5px 10px;border-radius:3px;border:1px solid ' + (on?'var(--gold)':'var(--border2)') + ';background:' + (on?'rgba(var(--c-accent-rgb),0.08)':'transparent') + ';color:' + (on?'var(--gold)':'var(--text2)') + ';cursor:pointer;margin:0 6px 6px 0"><input type="checkbox" data-group="' + group + '" value="' + val + '"' + (on?' checked':'') + ' style="margin:0">' + val + '</label>';
+    return '<label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:5px 10px;border-radius:3px;border:1px solid ' + (on?'var(--gold)':'var(--border2)') + ';background:' + (on?'rgba(160,117,42,0.08)':'transparent') + ';color:' + (on?'var(--gold)':'var(--text2)') + ';cursor:pointer;margin:0 6px 6px 0"><input type="checkbox" data-group="' + group + '" value="' + val + '"' + (on?' checked':'') + ' style="margin:0">' + val + '</label>';
   };
   var inputStyle = 'width:100%;padding:9px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:2px;color:var(--text);font-size:13px;font-family:var(--sans);outline:none';
   var modal = document.createElement('div');
@@ -7434,7 +6758,7 @@ async function loadMeetingPrep() {
         html += '<div style="font-size:11px;color:var(--text3);margin-bottom:5px;font-weight:500">Discuss in this meeting:</div>';
         html += '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:5px">';
         m.talking_points.forEach(function(tp) {
-          html += '<span style="font-size:11px;padding:2px 8px;border-radius:2px;background:rgba(var(--c-accent-rgb),0.1);color:var(--gold)">→ ' + esc(tp) + '</span>';
+          html += '<span style="font-size:11px;padding:2px 8px;border-radius:2px;background:rgba(160,117,42,0.1);color:var(--gold)">→ ' + esc(tp) + '</span>';
         });
         html += '</div>';
       }
@@ -7510,7 +6834,7 @@ async function loadForecastPanel() {
     // KPI row
     html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px">';
     html += '<div style="background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);border-radius:2px;padding:9px 10px"><div style="font-size:11px;color:var(--green);font-weight:600;margin-bottom:2px">Verified</div><div style="font-size:16px;font-weight:600;color:var(--text)">' + fmt(d.verified) + '</div>' + (d.trend ? '<div style="font-size:11px">' + trend(d.trend.verifiedChange) + ' vs last wk</div>' : '') + '</div>';
-    html += '<div style="background:rgba(var(--c-accent-rgb),0.08);border:1px solid rgba(var(--c-accent-rgb),0.2);border-radius:2px;padding:9px 10px"><div style="font-size:11px;color:var(--amber);font-weight:600;margin-bottom:2px">Nurture</div><div style="font-size:16px;font-weight:600;color:var(--text)">' + fmt(d.nurture) + '</div><div style="font-size:11px;color:var(--text3)">' + (d.buckets&&d.buckets.nurture?d.buckets.nurture.length:0) + ' deals</div></div>';
+    html += '<div style="background:rgba(160,117,42,0.08);border:1px solid rgba(160,117,42,0.2);border-radius:2px;padding:9px 10px"><div style="font-size:11px;color:var(--amber);font-weight:600;margin-bottom:2px">Nurture</div><div style="font-size:16px;font-weight:600;color:var(--text)">' + fmt(d.nurture) + '</div><div style="font-size:11px;color:var(--text3)">' + (d.buckets&&d.buckets.nurture?d.buckets.nurture.length:0) + ' deals</div></div>';
     html += '<div style="background:rgba(192,82,63,0.08);border:1px solid rgba(192,82,63,0.2);border-radius:2px;padding:9px 10px"><div style="font-size:11px;color:var(--coral);font-weight:600;margin-bottom:2px">At risk</div><div style="font-size:16px;font-weight:600;color:var(--text)">' + fmt(d.atRisk) + '</div>' + (d.trend ? '<div style="font-size:11px">' + trend(d.trend.atRiskChange) + ' vs last wk</div>' : '') + '</div>';
     html += '</div>';
 
@@ -7735,7 +7059,7 @@ function _samoraIntelLabel(text) {
   return '<span style="display:inline-flex;align-items:center;gap:7px;justify-content:center;flex-wrap:wrap">'
     + '<img src="icons/icon-48.png" alt="Samora" style="width:16px;height:16px;border-radius:50%;flex-shrink:0"/>'
     + '<span>' + text + '</span>'
-    + '<span style="font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--gold);text-transform:uppercase;background:rgba(var(--c-accent-rgb),0.12);padding:2px 6px;border-radius:2px;flex-shrink:0">Samora Intelligence</span>'
+    + '<span style="font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--gold);text-transform:uppercase;background:rgba(160,117,42,0.12);padding:2px 6px;border-radius:2px;flex-shrink:0">Samora Intelligence</span>'
     + '</span>';
 }
 
@@ -7862,81 +7186,6 @@ document.addEventListener('click',e=>{const m=document.getElementById('carryFwdM
       await syncDown(); runCarryOver(); _lastCalDate = null; render(); reconcileCalendarTasks();
     }
   });
-  // ── OAuth return ────────────────────────────────────────────────────────
-  // Supabase sends the session back in the URL FRAGMENT, not the query string,
-  // so it never reaches the server and nothing picks it up unless we look.
-  // Without this the SSO buttons complete the provider dance and then dump the
-  // user straight back on the login screen, which looks like the button is
-  // broken. Runs before the stored-session check so a fresh sign-in wins over
-  // a stale cached one.
-  try {
-    // Which SSO providers are switched on. Fired here and not awaited: the
-    // buttons hide themselves when it lands, and sign-in must never wait on it.
-    _loadSsoProviders();
-
-    const frag = (window.location.hash || '').replace(/^#/, '');
-
-    // A password-recovery link comes back looking EXACTLY like an OAuth return:
-    // #access_token=...&refresh_token=...  The only thing that separates them is
-    // type=recovery. Without this branch the OAuth handler below would adopt the
-    // token as an ordinary sign-in and drop the person straight into the app,
-    // never asking for the new password they clicked the link to set.
-    if (frag && /(^|&)type=recovery(&|$)/.test(frag)) {
-      const rq = new URLSearchParams(frag);
-      _recoveryToken   = rq.get('access_token');
-      _recoveryRefresh = rq.get('refresh_token');
-      // Out of the address bar immediately: it is a live credential for this
-      // account and it should not survive a copied URL or a shared screen.
-      history.replaceState(null, '', window.location.pathname + window.location.search);
-      if (_recoveryToken) {
-        try {
-          const ru = await fetch(SB_URL + '/auth/v1/user', { headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + _recoveryToken } });
-          const rud = await ru.json();
-          const who = document.getElementById('resetWho');
-          if (who) who.textContent = rud && rud.email ? 'For ' + rud.email : '';
-        } catch (_e) {}
-        _screen('resetScreen');
-        const rp = document.getElementById('rPass'); if (rp) rp.focus();
-        return;
-      }
-    }
-
-    // An expired or already-used link comes back as #error=... with no token.
-    // Saying so beats dropping them on a sign-in screen with no explanation.
-    if (frag && /(^|&)error/.test(frag)) {
-      const eq = new URLSearchParams(frag);
-      history.replaceState(null, '', window.location.pathname + window.location.search);
-      const am = document.getElementById('authMsg');
-      if (am && /expired|invalid/i.test(eq.get('error_description') || eq.get('error') || '')) {
-        am.style.color = 'var(--coral)';
-        am.textContent = 'That link has expired or was already used. Request a new one.';
-      }
-    }
-
-    if (frag && frag.indexOf('access_token=') !== -1) {
-      const q = new URLSearchParams(frag);
-      const at = q.get('access_token'), rt = q.get('refresh_token');
-      if (at) {
-        // Identify the user from the token rather than trusting the fragment.
-        const ur = await fetch(SB_URL + '/auth/v1/user', { headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + at } });
-        const u = await ur.json();
-        if (u && u.id) {
-          currentUser = { id: u.id, email: u.email, token: at, refresh_token: rt };
-          localStorage.setItem('dt-user', JSON.stringify(currentUser));
-          // The provider token is what actually reads the mailbox. Stash it so
-          // the existing Gmail/Graph plumbing can adopt it instead of asking
-          // the user to connect their mail a second time.
-          const pt = q.get('provider_token'), prt = q.get('provider_refresh_token');
-          if (pt) sessionStorage.setItem('sso_provider_token', pt);
-          if (prt) sessionStorage.setItem('sso_provider_refresh_token', prt);
-        }
-      }
-      // Strip the fragment so a refresh does not replay it and so the tokens
-      // are not left sitting in the address bar.
-      history.replaceState(null, '', window.location.pathname + window.location.search);
-    }
-  } catch (_e) { /* fall through to the normal login screen */ }
-
   const saved = localStorage.getItem('dt-user');
   if (saved) {
     currentUser = JSON.parse(saved);
@@ -8059,9 +7308,9 @@ async function refreshIntelligence() {
     banners += '<div style="background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.25);border-radius:var(--radius);padding:10px 14px;margin-bottom:8px;font-size:12px;color:var(--text2)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> <strong style="color:var(--green)">SAM Intelligence</strong> \u2014 ' + samData.count + ' account' + (samData.count>1?'s':'') + ' scanned (no AI quota used)</div>';
   }
   if (aiData && aiData.geminiQuotaExhausted && aiData.message) {
-    banners += '<div style="background:rgba(var(--c-accent-rgb),0.1);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 14px;margin-bottom:8px;font-size:12px;color:var(--text2);line-height:1.6">⏳ <strong style="color:var(--gold)">AI Tool Signals limited</strong> \u2014 ' + esc(aiData.message) + '</div>';
+    banners += '<div style="background:rgba(160,117,42,0.1);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 14px;margin-bottom:8px;font-size:12px;color:var(--text2);line-height:1.6">⏳ <strong style="color:var(--gold)">AI Tool Signals limited</strong> \u2014 ' + esc(aiData.message) + '</div>';
   } else if (aiData && aiData.ok && aiData.processed > 0) {
-    banners += '<div style="background:rgba(var(--c-accent-rgb),0.08);border:1px solid rgba(var(--c-accent-rgb),0.25);border-radius:var(--radius);padding:10px 14px;margin-bottom:8px;font-size:12px;color:var(--text2)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 8.5h10v9H7zM10 12.5v1M14 12.5v1M12 5v3.5M9.5 17.5v3M14.5 17.5v3M4.5 11.5v3M19.5 11.5v3"/></svg> <strong style="color:var(--gold)">AI Tool Signals</strong> \u2014 ' + aiData.processed + ' meeting' + (aiData.processed>1?'s':'') + ' analysed</div>';
+    banners += '<div style="background:rgba(160,117,42,0.08);border:1px solid rgba(160,117,42,0.25);border-radius:var(--radius);padding:10px 14px;margin-bottom:8px;font-size:12px;color:var(--text2)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 8.5h10v9H7zM10 12.5v1M14 12.5v1M12 5v3.5M9.5 17.5v3M14.5 17.5v3M4.5 11.5v3M19.5 11.5v3"/></svg> <strong style="color:var(--gold)">AI Tool Signals</strong> \u2014 ' + aiData.processed + ' meeting' + (aiData.processed>1?'s':'') + ' analysed</div>';
   }
   if (banners && feed) {
     var bannerWrap = document.createElement('div');
@@ -8756,7 +8005,7 @@ function _renderCrmAudit() {
   html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">';
   html += '<img src="icons/icon-48.png" alt="Samora" style="width:18px;height:18px;border-radius:50%"/>';
   html += '<span style="font-size:13px;font-weight:600;color:var(--text)">CRM Verification Report</span>';
-  html += '<span style="font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--gold);text-transform:uppercase;background:rgba(var(--c-accent-rgb),0.12);padding:2px 6px;border-radius:2px">Samora Intelligence</span>';
+  html += '<span style="font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--gold);text-transform:uppercase;background:rgba(160,117,42,0.12);padding:2px 6px;border-radius:2px">Samora Intelligence</span>';
   html += '<span style="flex:1"></span>';
   html += '<button onclick="exportCrmEnriched()" style="padding:4px 12px;border-radius:3px;background:var(--gold);border:none;color:var(--c-canvas);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5v11M7.5 10.5l4.5 4.5 4.5-4.5M4.5 19.5h15"/></svg> Export enriched CSV</button>';
   html += '<button onclick="_crmAudit=null;document.getElementById(\'crmAuditSection\').innerHTML=\'\'" style="padding:4px 8px;border-radius:3px;background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-size:11px;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>';
@@ -8836,7 +8085,7 @@ async function loadSdrPanel() {
     html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">';
     html += '<img src="icons/icon-48.png" style="width:16px;height:16px;border-radius:50%"/>';
     html += '<span style="font-size:13px;font-weight:600;color:var(--text);flex:1">Pipeline Generation · last 30 days</span>';
-    html += '<span style="font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--gold);text-transform:uppercase;background:rgba(var(--c-accent-rgb),0.12);padding:2px 6px;border-radius:2px">SDR</span>';
+    html += '<span style="font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--gold);text-transform:uppercase;background:rgba(160,117,42,0.12);padding:2px 6px;border-radius:2px">SDR</span>';
     html += '</div>';
     html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">';
     html += chip(d.new_prospects, 'New stakeholders contacted', 'var(--text)');
@@ -8876,7 +8125,7 @@ function _sdrDealCard(a, kind) {
   var owner = (a._owner_email||'').split('@')[0];
   var meta = [a.region?esc(a.region):'', owner?('AE: '+esc(owner)):'', v].filter(Boolean).join(' · ');
   return '<div onclick="openSdrScout(\''+esc(a.id)+'\',\''+esc(a.account_name)+'\')" style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;padding:10px 12px;margin-bottom:6px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px">' +
-    '<div style="min-width:0"><div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(a.account_name)+(kind==='lead'?' <span style="font-size:11px;font-weight:700;color:var(--gold);background:rgba(var(--c-accent-rgb),0.12);border-radius:2px;padding:1px 5px;vertical-align:middle">MY LEAD</span>':'')+'</div>' +
+    '<div style="min-width:0"><div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(a.account_name)+(kind==='lead'?' <span style="font-size:11px;font-weight:700;color:var(--gold);background:rgba(160,117,42,0.12);border-radius:2px;padding:1px 5px;vertical-align:middle">MY LEAD</span>':'')+'</div>' +
     (meta?'<div style="font-size:11px;color:var(--text3);margin-top:2px">'+meta+'</div>':'') + '</div>' +
     '<div style="font-size:11px;color:var(--gold);flex-shrink:0;white-space:nowrap"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 16.5a4.5 4.5 0 100-9 4.5 4.5 0 000 9zM12 13a1 1 0 100-2 1 1 0 000 2z"/></svg> Scout ›</div></div>';
 }
@@ -9002,7 +8251,7 @@ function openSampaignComposer(campaignId) {
     '<div style="display:flex;gap:5px;flex-wrap:wrap;margin:7px 0">' +
       '<span style="font-size:11px;color:var(--text3);align-self:center">Insert:</span>' +
       _SAMPAIGN_SEND_VARS.map(function(v){
-        return '<span onclick="_sampInsertVar(\''+v.k+'\')" title="'+esc(v.d)+'" style="cursor:pointer;font-size:11px;font-family:var(--mono,monospace);color:var(--gold);background:rgba(var(--c-accent-rgb),0.1);border:1px solid rgba(var(--c-accent-rgb),0.25);border-radius:2px;padding:3px 7px">'+esc(v.k)+'</span>';
+        return '<span onclick="_sampInsertVar(\''+v.k+'\')" title="'+esc(v.d)+'" style="cursor:pointer;font-size:11px;font-family:var(--mono,monospace);color:var(--gold);background:rgba(160,117,42,0.1);border:1px solid rgba(160,117,42,0.25);border-radius:2px;padding:3px 7px">'+esc(v.k)+'</span>';
       }).join('') +
     '</div>' +
     '<div style="font-size:11px;color:var(--text3);margin-bottom:10px">Filled in per person at send time, so anything Enrich finds between now and then is used. A variable with no value becomes blank, never the raw {{tag}}.</div>' +
@@ -9151,106 +8400,6 @@ function _sampComposerLaunchChanged(campaignId) {
 // Drafts written by an AI tool via the connector. Reviewed here BEFORE
 // anything is scheduled: copy that goes straight from a model into a send
 // queue means the first human to read it is the prospect.
-// ── Email body editing: rich text, not raw markup ────────────────────────────
-// Bodies have always been HTML — the assistant writes <b> and <br>, and so does
-// anyone who formats a draft. But the editor was a <textarea> showing the
-// ESCAPED source, so a rep opening a draft to fix a name saw a wall of tags and
-// had to hand-write markup to add emphasis. Nothing about that is obvious, and
-// getting it wrong was invisible until the mail landed.
-//
-// A contenteditable surface with a toolbar shows what the recipient will see.
-// document.execCommand is deprecated but is the only thing every browser still
-// implements for this, and the alternative is a selection-model editor, which
-// is a large amount of code to own for six buttons.
-var RT_ALLOWED = { B:1, STRONG:1, I:1, EM:1, U:1, A:1, BR:1, P:1, UL:1, OL:1, LI:1, DIV:1, SPAN:1 };
-
-// ALLOWLIST, not a denylist. The recurring lesson in this codebase: naming what
-// is forbidden always misses something. Anything not named here is UNWRAPPED
-// rather than deleted, because the words matter and the tag does not — a paste
-// from Word should lose its <o:p> wrappers, not the sentence inside them.
-function sanitizeEmailHtml(html) {
-  var box = document.createElement('div');
-  box.innerHTML = String(html == null ? '' : html);
-  box.querySelectorAll('script,style,meta,link,iframe,object,embed,img').forEach(function(n){ n.remove(); });
-  for (var guard = 0; guard < 500; guard++) {
-    var all = box.querySelectorAll('*'), bad = null;
-    for (var i = 0; i < all.length; i++) { if (!RT_ALLOWED[all[i].tagName]) { bad = all[i]; break; } }
-    if (!bad) break;
-    var p = bad.parentNode;
-    while (bad.firstChild) p.insertBefore(bad.firstChild, bad);
-    p.removeChild(bad);
-  }
-  // Every attribute goes except a safe href. Inline styles from a paste are the
-  // main way a draft ends up looking like a marketing blast in the inbox.
-  box.querySelectorAll('*').forEach(function(n){
-    Array.prototype.slice.call(n.attributes).forEach(function(a){
-      var keep = n.tagName === 'A' && a.name === 'href' && /^(https?:|mailto:)/i.test(String(a.value).trim());
-      if (!keep) n.removeAttribute(a.name);
-    });
-    if (n.tagName === 'A') { n.setAttribute('target','_blank'); n.setAttribute('rel','noopener noreferrer'); }
-  });
-  return box.innerHTML;
-}
-function rtIsEmpty(html) {
-  var box = document.createElement('div');
-  box.innerHTML = String(html || '').replace(/<\s*br\s*\/?\s*>/gi, ' ');
-  return !(box.textContent || '').trim();
-}
-// Reads whichever editor is on the page. The textarea branch stays so that a
-// surface not yet converted keeps working rather than silently saving blank.
-function rtValue(id) {
-  var el = document.getElementById('draftBody_' + id);
-  if (!el) return '';
-  return el.isContentEditable ? sanitizeEmailHtml(el.innerHTML) : String(el.value || '');
-}
-function _rtCmd(id, cmd) {
-  var el = document.getElementById('draftBody_' + id);
-  if (!el) return;
-  el.focus();
-  if (cmd === 'createLink') {
-    var sel = window.getSelection();
-    if (!sel || sel.isCollapsed) { showToast('Select the words to link first'); return; }
-    var url = prompt('Link to:', 'https://');
-    if (!url) return;
-    document.execCommand('createLink', false, url);
-    return;
-  }
-  document.execCommand(cmd, false, null);
-}
-// Paste as plain text, deliberately. Pasting from Word or a browser carries
-// mso- styles, fixed pixel fonts and background colours that survive into the
-// sent mail, look like a template, and cost deliverability.
-function _rtPaste(e) {
-  e.preventDefault();
-  var t = ((e.clipboardData || window.clipboardData).getData('text/plain') || '');
-  document.execCommand('insertText', false, t);
-}
-function _rtBtn(id, cmd, label, title, extra) {
-  // onmousedown preventDefault is load-bearing: without it the click blurs the
-  // editor, the selection collapses, and the command applies to nothing.
-  return '<button type="button" title="'+title+'" onmousedown="event.preventDefault()" ' +
-    'onclick="event.stopPropagation();_rtCmd(\''+esc(id)+'\',\''+cmd+'\')" ' +
-    'style="min-width:26px;height:24px;padding:0 6px;border:1px solid var(--border2);background:var(--surface);color:var(--text2);' +
-    'border-radius:2px;cursor:pointer;font-family:var(--sans);font-size:11px;line-height:1;'+(extra||'')+'">'+label+'</button>';
-}
-function _rtEditor(id, html, fontSize) {
-  var fs = fontSize || 12;
-  return '<div style="display:flex;gap:3px;align-items:center;margin-bottom:4px;flex-wrap:wrap">' +
-      _rtBtn(id, 'bold', 'B', 'Bold (Ctrl/Cmd+B)', 'font-weight:800') +
-      _rtBtn(id, 'italic', 'I', 'Italic (Ctrl/Cmd+I)', 'font-style:italic') +
-      _rtBtn(id, 'underline', 'U', 'Underline (Ctrl/Cmd+U)', 'text-decoration:underline') +
-      _rtBtn(id, 'insertUnorderedList', '&#8226;&#8202;&#8212;', 'Bullet list', '') +
-      _rtBtn(id, 'createLink', 'Link', 'Add a link to the selected words', '') +
-      _rtBtn(id, 'removeFormat', 'Clear', 'Remove formatting', '') +
-      '<span style="font-size:11px;color:var(--text3);margin-left:auto">This is how it will arrive</span>' +
-    '</div>' +
-    '<div id="draftBody_'+esc(id)+'" contenteditable="true" onpaste="_rtPaste(event)" onclick="event.stopPropagation()" ' +
-      'style="width:100%;box-sizing:border-box;min-height:150px;padding:8px 10px;border-radius:2px;border:1px solid var(--border2);' +
-      'background:var(--bg);color:var(--text);font-family:var(--sans);font-size:'+fs+'px;line-height:1.6;overflow-wrap:anywhere;outline:none">' +
-      sanitizeEmailHtml(html || '') +
-    '</div>';
-}
-
 function _renderSampaignDrafts(campaignId, drafts) {
   if (!drafts.length) return '';
   var byTool = {};
@@ -9259,7 +8408,7 @@ function _renderSampaignDrafts(campaignId, drafts) {
   // that in the review header would be a small lie that compounds.
   var anyPersonalised = drafts.some(function(d){ return d.personalised; });
   var label = anyPersonalised ? 'personalised draft' : 'draft';
-  return '<div style="border:1px solid rgba(var(--c-accent-rgb),0.3);border-radius:3px;padding:11px;margin-bottom:10px;background:rgba(var(--c-accent-rgb),0.05)">' +
+  return '<div style="border:1px solid rgba(160,117,42,0.3);border-radius:3px;padding:11px;margin-bottom:10px;background:rgba(160,117,42,0.05)">' +
     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;flex-wrap:wrap">' +
       '<span style="font-size:11px;font-weight:700;color:var(--text)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 00-3-3L5 17v3z"/></svg> '+drafts.length+' '+label+(drafts.length!==1?'s':'')+' to review</span>' +
       '<span style="font-size:11px;color:var(--text3)">'+Object.keys(byTool).map(function(k){ return esc(k)+' · '+byTool[k]; }).join(', ')+'</span>' +
@@ -9276,7 +8425,7 @@ function _renderSampaignDrafts(campaignId, drafts) {
         '</div>' +
         '<div id="draft_'+esc(x.id)+'" style="display:none;margin-top:6px">' +
           '<input id="draftSubj_'+esc(x.id)+'" value="'+esc(x.subject||'')+'" style="width:100%;box-sizing:border-box;padding:6px 8px;border-radius:2px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:11px;margin-bottom:4px"/>' +
-          _rtEditor(x.id, x.body || '', 11) +
+          '<textarea id="draftBody_'+esc(x.id)+'" rows="7" style="width:100%;box-sizing:border-box;padding:6px 8px;border-radius:2px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:11px;line-height:1.5;resize:vertical">'+esc(x.body||'')+'</textarea>' +
           '<div style="display:flex;gap:6px;margin-top:4px">' +
             '<button onclick="saveSampaignDraftEdit(\''+esc(campaignId)+'\',\''+esc(x.id)+'\')" style="font-size:11px;font-weight:600;padding:5px 10px;border-radius:2px;background:var(--green);border:none;color:#fff;cursor:pointer;font-family:var(--sans)">Save edit</button>' +
             '<span onclick="cancelSampaignSends(\''+esc(campaignId)+'\',\''+esc(x.id)+'\')" style="font-size:11px;color:var(--coral);cursor:pointer;align-self:center">Discard</span>' +
@@ -9306,10 +8455,8 @@ function _toggleDraft(id) {
 // exactly as they were.
 async function saveSampaignDraftEdit(campaignId, sendId) {
   var subject = document.getElementById('draftSubj_'+sendId)?.value?.trim();
-  // Sanitised on the way out, so what is stored is what the editor allows —
-  // never whatever a paste dragged in.
-  var body = rtValue(sendId);
-  if (!subject || rtIsEmpty(body)) { showToast('Subject and body are both needed'); return; }
+  var body = document.getElementById('draftBody_'+sendId)?.value;
+  if (!subject || !body || !body.trim()) { showToast('Subject and body are both needed'); return; }
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
       body: JSON.stringify({ action:'update_sampaign_scheduled_send', send_id: sendId, subject: subject, body: body }) });
@@ -9370,36 +8517,15 @@ function _renderLaunchTabs(campaignId, byLaunch, maxLaunch) {
     var rows = byLaunch[n] || [];
     var on = window._sampLaunch === n;
     var drafts = rows.filter(function(x){ return x.status === 'draft'; }).length;
-    // WHAT IS SCHEDULED BEATS WHAT WAS CONFIGURED.
-    // This read only campaign.followup_dates, so a wave with 23 emails queued
-    // for tomorrow still displayed "no date set" — because the campaign row had
-    // no fixed date and the wave had been scheduled by relative days instead.
-    // The label was answering "was a date typed into the campaign" while the
-    // user was asking "when does this go out". Real send times are the truth;
-    // the configured date is the fallback for a wave not yet queued.
-    var queuedAt = rows
-      .filter(function(x){ return x.status === 'pending' && x.send_at; })
-      .map(function(x){ return x.send_at; })
-      .sort();
-    var when;
-    if (n === 1 && !queuedAt.length) when = '';
-    else if (queuedAt.length) {
-      var first = new Date(queuedAt[0]);
-      var last = new Date(queuedAt[queuedAt.length - 1]);
-      var fmt = function(dt){ return dt.toLocaleDateString('en-GB',{day:'numeric',month:'short'}); };
-      // A wave spread across days is described as a range, because "8 Sept"
-      // for something running 8 to 10 Sept is a quiet lie.
-      when = fmt(first) === fmt(last) ? fmt(first) : fmt(first) + '–' + fmt(last);
-    }
-    else if (n > 1 && dates[n-2]) when = new Date(dates[n-2]+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'});
-    else if (n > 1 && rows.some(function(x){ return x.status === 'draft'; })) when = 'not scheduled yet';
-    else when = n === 1 ? '' : 'no date set';
+    // Launch 1 is the initial send and has no follow-up date; waves above it
+    // are dated by the campaign's own follow-up schedule.
+    var when = n === 1 ? '' : (dates[n-2] ? new Date(dates[n-2]+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'}) : 'no date set');
     out += '<span onclick="setSampLaunch(\''+esc(campaignId)+'\','+n+')" style="cursor:pointer;font-size:11px;padding:6px 11px;border-radius:2px;' +
-      'border:1px solid '+(on?'var(--gold)':'var(--border2)')+';background:'+(on?'rgba(var(--c-accent-rgb),0.09)':'transparent')+';' +
+      'border:1px solid '+(on?'var(--gold)':'var(--border2)')+';background:'+(on?'rgba(160,117,42,0.09)':'transparent')+';' +
       'color:'+(rows.length?'var(--text)':'var(--text3)')+'">' +
       '<span style="font-weight:'+(on?'700':'600')+'">'+(n===1?'Initial send':'Follow-up '+(n-1))+'</span>' +
       (when ? '<span style="color:var(--text3)"> · '+esc(when)+'</span>' : '') +
-      (drafts ? '<span style="font-size:11px;font-weight:700;background:rgba(var(--c-accent-rgb),0.16);color:var(--gold);border-radius:2px;padding:1px 5px;margin-left:5px">'+drafts+' to review</span>'
+      (drafts ? '<span style="font-size:11px;font-weight:700;background:rgba(160,117,42,0.16);color:var(--gold);border-radius:2px;padding:1px 5px;margin-left:5px">'+drafts+' to review</span>'
               : (rows.length ? '<span style="color:var(--text3);font-size:11px"> · '+rows.length+'</span>' : '<span style="color:var(--text3);font-size:11px"> · empty</span>')) +
     '</span>';
   }
@@ -9534,7 +8660,7 @@ async function loadSampaignSendQueue(campaignId) {
                 '<div id="draft_'+esc(x.id)+'" style="display:none;padding:2px 10px 12px 46px">' +
                   (editable
                     ? '<input id="draftSubj_'+esc(x.id)+'" value="'+esc(x.subject||'')+'" style="width:100%;box-sizing:border-box;padding:7px 9px;border-radius:2px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px;font-weight:600;margin-bottom:5px"/>' +
-                      _rtEditor(x.id, x.body || '', 12) +
+                      '<textarea id="draftBody_'+esc(x.id)+'" rows="8" style="width:100%;box-sizing:border-box;padding:8px 10px;border-radius:2px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px;line-height:1.6;resize:vertical">'+esc(x.body||'')+'</textarea>' +
                       '<div style="display:flex;gap:9px;align-items:center;margin-top:6px">' +
                         '<button onclick="event.stopPropagation();saveSampaignDraftEdit(\''+esc(campaignId)+'\',\''+esc(x.id)+'\')" style="font-size:11px;font-weight:600;padding:6px 13px;border-radius:2px;background:var(--green);border:none;color:#fff;cursor:pointer;font-family:var(--sans)">Save edit</button>' +
                         '<span style="font-size:11px;color:var(--text3)">Send time stays the same</span>' +
@@ -9543,10 +8669,7 @@ async function loadSampaignSendQueue(campaignId) {
                     // the owner. An editable box on delivered mail would let
                     // the UI show corrected text the recipient never received.
                     : '<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:5px">'+esc(x.subject||'')+'</div>' +
-                      // Rendered, not escaped. A sent email shown as raw markup
-                      // is unreadable, and worse, it looks like what the
-                      // recipient got — which for one week it actually was.
-                      '<div style="font-size:12px;color:var(--text2);line-height:1.6;background:var(--surface);border-radius:2px;padding:10px 12px;border:1px solid var(--border);overflow-wrap:anywhere">'+sanitizeEmailHtml(x.body||'')+'</div>' +
+                      '<div style="font-size:12px;color:var(--text2);white-space:pre-wrap;line-height:1.6;background:var(--surface);border-radius:2px;padding:10px 12px;border:1px solid var(--border)">'+esc(x.body||'')+'</div>' +
                       '<div style="font-size:11px;color:var(--text3);margin-top:5px">'+
                         (x.status==='sent' ? 'Already sent, read only'
                          : x.status==='cancelled' ? 'Cancelled, never sent'
@@ -9650,7 +8773,7 @@ function _detectiveSamAvatar(size) {
 function _samoraIntelChip() {
   return '<span style="display:inline-flex;align-items:center;gap:6px">' +
     '<img src="icons/icon-48.png" alt="Samora" style="width:15px;height:15px;border-radius:50%;flex-shrink:0"/>' +
-    '<span style="font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--gold);text-transform:uppercase;background:rgba(var(--c-accent-rgb),0.12);padding:2px 6px;border-radius:2px;white-space:nowrap">Samora Intelligence</span>' +
+    '<span style="font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--gold);text-transform:uppercase;background:rgba(160,117,42,0.12);padding:2px 6px;border-radius:2px;white-space:nowrap">Samora Intelligence</span>' +
   '</span>';
 }
 
@@ -9660,21 +8783,17 @@ function _magnifierIcon(sz, col) {
 }
 
 function detectiveSamCardHtml() {
-  // Classes, not inline styles, because this needs a media query. The chip
-  // carries white-space:nowrap, so on a narrow screen it could not shrink and
-  // overflowed its flex parent straight underneath the Investigate button.
-  // Below 560px the card stacks and the button goes full width.
-  return '<div class="dsam-card">' +
-    '<div class="dsam-row">' +
+  return '<div style="background:var(--surface2);border:1px solid rgba(160,117,42,0.28);border-radius:3px;padding:12px;margin-bottom:14px">' +
+    '<div style="display:flex;align-items:center;gap:11px">' +
       _detectiveSamAvatar(46) +
-      '<div class="dsam-main">' +
-        '<div class="dsam-title">' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">' +
           '<span style="font-size:14px;font-weight:700;color:var(--text)">Detective SAM</span>' +
           _samoraIntelChip() +
         '</div>' +
         '<div style="font-size:11px;color:var(--text3);margin-top:2px">Find anyone: LinkedIn, emails, phone numbers, current and past employers.</div>' +
       '</div>' +
-      '<button onclick="openDetectiveSam()" class="dsam-btn">' +
+      '<button onclick="openDetectiveSam()" style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:8px 14px;border-radius:3px;background:var(--c-accent-solid);border:none;color:#2A1F0C;cursor:pointer;font-family:var(--sans);flex-shrink:0">' +
         _magnifierIcon(14, '#2A1F0C') + 'Investigate</button>' +
     '</div>' +
   '</div>';
@@ -9813,7 +8932,7 @@ function _renderDetectiveSamResult(d) {
           '<span style="font-size:11px;font-weight:700;color:var(--text)">Here is what Detective SAM would like you to know about '+esc((p.name||'them').split(' ')[0])+' before you reach out</span>' +
         '</div>' +
         d.intel.map(function(it) {
-          return '<div style="display:flex;gap:8px;align-items:flex-start;padding:6px 9px;margin-bottom:4px;background:rgba(var(--c-accent-rgb),0.07);border-radius:2px">' +
+          return '<div style="display:flex;gap:8px;align-items:flex-start;padding:6px 9px;margin-bottom:4px;background:rgba(160,117,42,0.07);border-radius:2px">' +
             '<span style="flex-shrink:0;font-size:12px">'+esc(it.icon||'•')+'</span>' +
             '<div style="min-width:0">' +
               '<div style="font-size:11px;color:var(--text);line-height:1.45">'+esc(it.text)+'</div>' +
@@ -10102,28 +9221,11 @@ function loadSampaignWorkspace() {
   // Detective SAM is a research tool, not a campaign tool, so it is NOT
   // behind the sdr/ae/manager gate the SAMpaign workspace sits behind —
   // anyone who needs to look a person up should be able to.
-  // The allowlist used to be ['sdr','ae','manager'], which silently excluded
-  // director, executive, admin and super_admin: they saw the Detective SAM
-  // card and no SAMpaign workspace at all, so they could not create one.
-  //
-  // That contradicted the backend, which never had such a gate.
-  // create_sampaign has no role check, and list_sampaigns has EXPLICIT
-  // branches for canSeeCrossTeam (director) and canSeeFullOrg (executive,
-  // admin) to widen which owners they see. Those branches only make sense if
-  // those roles can reach the screen, so the frontend was the thing that was
-  // wrong.
-  //
-  // Everyone gets the workspace now. The backend already scopes what each
-  // role can SEE, so the gate here was doing nothing except hiding a feature
-  // from the people most likely to be setting it up for their team.
-  var scopeLabel = ['director'].includes(role) ? ' (you + your teams)'
-                 : ['executive','admin','super_admin'].includes(role) ? ' (whole organisation)'
-                 : role === 'manager' ? ' (you + your team)'
-                 : '';
+  if (!['sdr','ae','manager'].includes(role)) { el.innerHTML = detectiveSamCardHtml(); return; }
   el.innerHTML =
     detectiveSamCardHtml() +
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
-      '<span style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">My SAMpaigns'+scopeLabel+'</span>' +
+      '<span style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">My SAMpaigns'+(role==='manager'?' (you + your team)':'')+'</span>' +
       '<button onclick="toggleNewSampaignForm()" id="sampaignNewBtn" style="font-size:11px;font-weight:600;padding:5px 12px;border-radius:2px;background:var(--green);border:none;color:#fff;cursor:pointer;font-family:var(--sans)">+ New SAMpaign</button>' +
     '</div>' +
     '<div id="sampaignNewForm" style="display:none;background:var(--surface2);border-radius:3px;padding:10px;margin-bottom:12px">' +
@@ -10149,9 +9251,8 @@ function loadSampaignWorkspace() {
       '<div id="sampaignAddRows_new"></div>' +
       '<div style="font-size:11px;color:var(--text3)">Or attach a CSV (name, email, phone, company, title)</div>' +
       '<input type="file" id="sampaignNewCsv" accept=".csv,text/csv" style="font-size:11px;color:var(--text2)"/>' +
-      '<button onclick="createSampaign()" style="padding:9px;border:none;border-radius:2px;background:var(--green);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--sans)">Create SAMpaign</button>' +
+      '<button id="createSampaignBtn" onclick="createSampaign()" style="padding:9px;border:none;border-radius:2px;background:var(--green);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--sans)">Create SAMpaign</button>' +
       '</div></div>' +
-    '<div id="sampaignListToolbar"></div>' +
     '<div id="sampaignCampaignsList"><div style="font-size:12px;color:var(--text3);padding:6px 0">Loading…</div></div>';
   _fupRender('new');
   loadSampaignCampaigns();
@@ -10215,79 +9316,17 @@ async function _syncSampaignFupTasks(campaignId, campaignName, oldDates, newDate
   return oldDates.length ? movedCount : 0;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// A DELETED CAMPAIGN MUST STOP ASKING FOR WORK
-//
-// THE BUG THIS FIXES. _syncSampaignFupTasks writes follow-up tasks into day
-// storage. deleteSampaignCampaign archives the campaign server-side and
-// cancels queued sends, but nothing ever removed those local tasks. So
-// "Follow-up 1 - Ferrero Germany" kept appearing every morning for a campaign
-// that had been cancelled, and the only way to clear it was by hand, one task
-// at a time, forever.
-//
-// Two halves, and BOTH are needed:
-//   1. purge on delete, so it stops happening, and
-//   2. a sweep on load, so the backlog already sitting in day storage from
-//      campaigns deleted before this fix clears itself.
-// Half 1 alone would leave the existing mess permanent.
-// ═══════════════════════════════════════════════════════════════════════════
-
-// Strip one campaign's follow-up tasks from every day that still carries them.
-async function _purgeSampaignFupTasks(campaignId) {
-  if (typeof allData === 'undefined' || typeof save !== 'function') return 0;
-  // Sweep day storage rather than trusting a list of dates: a task can sit on
-  // a day the campaign no longer references, which is exactly how orphans
-  // survive a reschedule.
-  var days = {};
-  Object.keys(allData || {}).forEach(function(k) {
-    var d = allData[k];
-    if (d && d.tasks && d.tasks.some(function(t){ return t && t.sampaignId === campaignId; })) days[k] = true;
-  });
-
-  var removed = 0;
-  var keys = Object.keys(days);
-  for (var i = 0; i < keys.length; i++) {
-    var d = dayData(keys[i]);
-    var before = (d.tasks || []).length;
-    d.tasks = (d.tasks || []).filter(function(t){ return !(t && t.sampaignId === campaignId); });
-    removed += before - d.tasks.length;
-    try { await save(keys[i]); } catch(e) {}
-  }
-  return removed;
-}
-
-// Self-healing sweep. Anything sourced from a SAMpaign that is no longer in
-// the live list is an orphan, and clears itself the next time the tab loads.
-// Only runs on a SUCCESSFUL fetch of the campaign list: an empty list from a
-// failed request would otherwise wipe every follow-up the rep has.
-async function _sweepOrphanFupTasks(liveCampaignIds) {
-  if (typeof allData === 'undefined' || typeof save !== 'function') return 0;
-  if (!Array.isArray(liveCampaignIds)) return 0;
-  var live = {};
-  liveCampaignIds.forEach(function(id){ live[id] = true; });
-
-  var removed = 0, touched = [];
-  Object.keys(allData || {}).forEach(function(k) {
-    var d = allData[k];
-    if (!d || !d.tasks || !d.tasks.length) return;
-    var before = d.tasks.length;
-    d.tasks = d.tasks.filter(function(t) {
-      if (!t || t.source !== 'sampaign' || !t.sampaignId) return true;
-      return !!live[t.sampaignId];
-    });
-    if (d.tasks.length !== before) { removed += before - d.tasks.length; touched.push(k); }
-  });
-  for (var i = 0; i < touched.length; i++) { try { await save(touched[i]); } catch(e) {} }
-  return removed;
-}
-
 function toggleNewSampaignForm() {
   var f = document.getElementById('sampaignNewForm'); if (!f) return;
   f.style.display = f.style.display === 'none' ? 'block' : 'none';
   if (f.style.display === 'block') document.getElementById('sampaignName')?.focus();
 }
 
+// Guards the whole submit, not just the button, because the button can be
+// re-enabled by a re-render while a request is still in flight.
+var _creatingSampaign = false;
 async function createSampaign() {
+  if (_creatingSampaign) return;
   var accountName = document.getElementById('sampaignName')?.value?.trim();
   var domain = document.getElementById('sampaignDomain')?.value?.trim().toLowerCase().replace(/^https?:\/\//,'').replace(/\/.*$/,'');
   var region = document.getElementById('sampaignRegion')?.value?.trim() || null;
@@ -10309,6 +9348,13 @@ async function createSampaign() {
     typedContacts = _collectSampAddRows('new');
     if (!typedContacts) return;
   }
+  // Tell the person something is happening. A create takes a few seconds and
+  // a silent button reads as a dead button, which is why people were clicking
+  // it repeatedly and ending up with three campaigns.
+  _creatingSampaign = true;
+  var _btn = document.getElementById('createSampaignBtn');
+  var _btnLabel = _btn ? _btn.textContent : null;
+  if (_btn) { _btn.disabled = true; _btn.style.opacity = '0.65'; _btn.style.cursor = 'wait'; _btn.textContent = 'Creating SAMpaign…'; }
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
       body: JSON.stringify({ action:'create_sampaign', account_name: accountName, domain: domain, region: region, campaign_goal: campaignGoal, focus: (document.getElementById('sampaignFocus')?.value||'').trim() || null, followup_dates: followup_dates, alerts_enabled: alerts_enabled }) });
@@ -10346,102 +9392,23 @@ async function createSampaign() {
     }
     loadSampaignCampaigns();
   } catch(e) { showToast('Error: '+e.message); }
-}
-
-// Active / Archived sub-tab, plus an owner filter for managers. Both live in
-// module state rather than the DOM so a re-render after edit, delete or
-// restore keeps whatever the user was looking at.
-window._sampaignView = window._sampaignView || 'active';
-window._sampaignOwnerFilter = window._sampaignOwnerFilter || 'all';
-
-function setSampaignView(v) {
-  window._sampaignView = (v === 'archived') ? 'archived' : 'active';
-  loadSampaignCampaigns();
-}
-function setSampaignOwnerFilter(v) {
-  window._sampaignOwnerFilter = v || 'all';
-  loadSampaignCampaigns();
-}
-
-// The toolbar is rendered from the SERVER's owner roster, not from the
-// campaigns on screen. If it were built from results, filtering to a rep with
-// no campaigns in this view would remove them from the dropdown and strand
-// the user on an empty list with no way back.
-function _renderSampaignToolbar(d) {
-  var host = document.getElementById('sampaignListToolbar');
-  if (!host) return;
-  var counts = d.counts || {};
-  var owners = d.owners || [];
-  var view = window._sampaignView;
-
-  var tab = function(key, label, n) {
-    var on = view === key;
-    return '<button onclick="setSampaignView(\''+key+'\')" style="padding:5px 11px;border:none;border-bottom:2px solid '+(on?'var(--gold)':'transparent')+
-      ';background:none;color:'+(on?'var(--text)':'var(--text3)')+';font-size:12px;font-weight:'+(on?'700':'500')+
-      ';cursor:pointer;font-family:var(--sans)">'+label+(n != null ? ' <span style="color:var(--text3);font-weight:500">'+n+'</span>' : '')+'</button>';
-  };
-
-  var filter = '';
-  // Only worth showing when there is more than one person to choose between.
-  if (owners.length > 1) {
-    var opts = ['<option value="all"'+(window._sampaignOwnerFilter==='all'?' selected':'')+'>Everyone ('+owners.length+')</option>'];
-    owners.forEach(function(o) {
-      var lbl = (o.user_id === d.me) ? o.name + ' (me)' : o.name;
-      opts.push('<option value="'+esc(o.user_id)+'"'+(window._sampaignOwnerFilter===o.user_id?' selected':'')+'>'+esc(lbl)+'</option>');
-    });
-    filter = '<select onchange="setSampaignOwnerFilter(this.value)" style="padding:4px 8px;border-radius:2px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:11px;font-family:var(--sans)">'+opts.join('')+'</select>';
+  finally {
+    // Always restore, including on the early returns above, so a validation
+    // failure does not leave the button dead.
+    _creatingSampaign = false;
+    var _b = document.getElementById('createSampaignBtn');
+    if (_b) { _b.disabled = false; _b.style.opacity = ''; _b.style.cursor = 'pointer'; if (_btnLabel) _b.textContent = _btnLabel; }
   }
-
-  host.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid var(--border2);margin:4px 0 10px">' +
-      '<div style="display:flex;gap:2px">' + tab('active','Active',counts.active) + tab('archived','Archived',counts.archived) + '</div>' +
-      '<div style="padding-bottom:4px">' + filter + '</div>' +
-    '</div>';
 }
 
 async function loadSampaignCampaigns() {
   var el = document.getElementById('sampaignCampaignsList');
   if (!el) return;
-  var viewing = window._sampaignView;
   try {
-    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body: JSON.stringify({ action:'list_sampaigns', view: viewing }) });
+    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body: JSON.stringify({ action:'list_sampaigns' }) });
     var d = await r.json();
     if (!d.ok) { el.innerHTML = '<div style="font-size:11px;color:var(--coral)">'+esc(d.error||'Failed to load')+'</div>'; return; }
-    _renderSampaignToolbar(d);
-
-    var all = d.campaigns || [];
-
-    // Self-healing, per the standing rule that a backlog must never need
-    // clearing by hand. Guarded twice on purpose:
-    //   - only on the DEFAULT view, because the archived view is a list of
-    //     dead campaigns and sweeping against it would delete the tasks of
-    //     every LIVE one, and
-    //   - only on d.ok, already checked above, so a failed request cannot
-    //     present an empty list as "no campaigns exist".
-    if (!viewing || viewing === 'active') {
-      try {
-        var swept = await _sweepOrphanFupTasks(all.map(function(c){ return c.id; }));
-        if (swept) showToast('Cleared ' + swept + ' follow-up task' + (swept === 1 ? '' : 's') + ' from deleted SAMpaigns');
-      } catch(e) {}
-    }
-
-    // Filtering client-side is deliberate: the roster and counts already came
-    // back with the list, so switching person is instant and cannot produce a
-    // stale count.
-    if (window._sampaignOwnerFilter && window._sampaignOwnerFilter !== 'all') {
-      all = all.filter(function(c) { return c.owner_user_id === window._sampaignOwnerFilter; });
-    }
-    d = Object.assign({}, d, { campaigns: all });
-
-    if (!all.length) {
-      // Honest empty states: "none in this view" is a different fact from
-      // "none at all", and telling the user which one they are looking at is
-      // the difference between a filter and a bug.
-      var why = viewing === 'archived'
-        ? (window._sampaignOwnerFilter !== 'all' ? 'No archived SAMpaigns for this person.' : 'Nothing archived. Deleted SAMpaigns appear here and can be restored.')
-        : (window._sampaignOwnerFilter !== 'all' ? 'No active SAMpaigns for this person.' : 'No manual SAMpaigns yet. Create one above, or use a connected sequencing tool for SAMpaign Analytics instead.');
-      el.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:4px 0">'+esc(why)+'</div>';
-      return;
-    }
+    if (!d.campaigns || !d.campaigns.length) { el.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:4px 0">No manual SAMpaigns yet. Create one above, or use a connected sequencing tool for SAMpaign Analytics instead.</div>'; return; }
     // Cache full campaign objects (name/followup_dates/alerts_enabled) so the
     // edit form can prefill instantly without a second fetch.
     window._sampaignCampaignsCache = {};
@@ -10501,11 +9468,8 @@ async function loadSampaignCampaigns() {
                 : '<span style="font-size:11px;color:var(--text3)">not sent yet</span>') +
             '</div>' +
             '<div style="display:flex;align-items:center;gap:3px;flex-shrink:0">' +
-              (viewing === 'archived'
-                ? (isOwner ? '<button onclick="event.stopPropagation();restoreSampaignCampaign(\''+esc(c.id)+'\',\''+esc(c.name)+'\')" title="Restore SAMpaign" style="background:none;border:none;color:var(--green);font-size:11px;font-weight:700;cursor:pointer;padding:3px 7px;font-family:var(--sans)">Restore</button>' : '<span style="font-size:11px;color:var(--text3)">archived</span>')
-                : '') +
-              ((viewing !== 'archived' && isOwner) ? '<button onclick="event.stopPropagation();toggleEditSampaignForm(\''+esc(c.id)+'\')" title="Edit SAMpaign" style="background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;padding:3px 5px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 00-3-3L5 17v3z"/></svg></button>' : '') +
-              ((viewing !== 'archived' && isOwner) ? '<button onclick="event.stopPropagation();deleteSampaignCampaign(\''+esc(c.id)+'\',\''+esc(c.name)+'\')" title="Delete SAMpaign" style="background:none;border:none;color:var(--coral);font-size:13px;cursor:pointer;padding:3px 5px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 6.5h15M9 6.5V4h6v2.5M6.5 6.5V20h11V6.5M10 10v6M14 10v6"/></svg></button>' : '') +
+              (isOwner ? '<button onclick="event.stopPropagation();toggleEditSampaignForm(\''+esc(c.id)+'\')" title="Edit SAMpaign" style="background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;padding:3px 5px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 00-3-3L5 17v3z"/></svg></button>' : '') +
+              (isOwner ? '<button onclick="event.stopPropagation();deleteSampaignCampaign(\''+esc(c.id)+'\',\''+esc(c.name)+'\')" title="Delete SAMpaign" style="background:none;border:none;color:var(--coral);font-size:13px;cursor:pointer;padding:3px 5px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 6.5h15M9 6.5V4h6v2.5M6.5 6.5V20h11V6.5M10 10v6M14 10v6"/></svg></button>' : '') +
               '<span title="Open" style="font-size:12px;color:var(--gold)">⤢</span>' +
             '</div>' +
           '</div>' +
@@ -10517,22 +9481,6 @@ async function loadSampaignCampaigns() {
       '</div>';
     }).join('');
   } catch(e) { el.innerHTML = '<div style="font-size:11px;color:var(--coral)">Error: '+esc(e.message)+'</div>'; }
-}
-
-// Restore an archived SAMpaign. Says plainly what does NOT come back:
-// archiving cancelled the queued sends and cleared the follow-up dates, and
-// silently re-arming a month-old queue would email people about a campaign
-// they were dropped from.
-async function restoreSampaignCampaign(campaignId, name) {
-  if (!confirm('Restore "' + name + '"?\n\nIt returns to Active. Follow-ups and queued emails were cancelled when it was deleted and will NOT be rescheduled automatically.')) return;
-  try {
-    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
-      body: JSON.stringify({ action:'restore_sampaign', campaign_id: campaignId }) });
-    var d = await r.json();
-    if (!d.ok) { showToast('Error: '+(d.error||'Could not restore SAMpaign')); return; }
-    showToast('SAMpaign restored to Active');
-    loadSampaignCampaigns();
-  } catch(e) { showToast('Error: '+e.message); }
 }
 
 // ── Edit SAMpaign: name / follow-up cadence / alert toggles. Domain/account
@@ -10602,19 +9550,8 @@ async function deleteSampaignCampaign(campaignId, name) {
       body: JSON.stringify({ action:'archive_sampaign', campaign_id: campaignId }) });
     var d = await r.json();
     if (!d.ok) { showToast('Error: '+(d.error||'Could not delete SAMpaign')); return; }
-    // Report what was actually disarmed. A rep deleting a campaign with 40
-    // queued emails should see that they were cancelled, not a bare "deleted".
-    var stopped = [];
-    if (d.cancelled_sends) stopped.push(d.cancelled_sends + ' queued email' + (d.cancelled_sends === 1 ? '' : 's'));
-    if (d.cleared_followups) stopped.push(d.cleared_followups + ' follow-up' + (d.cleared_followups === 1 ? '' : 's'));
-    // The tasks this campaign created are work it was asking for. Cancel the
-    // campaign, cancel the ask.
-    var clearedTasks = 0;
-    try { clearedTasks = await _purgeSampaignFupTasks(campaignId); } catch(e) {}
-    if (clearedTasks) stopped.push(clearedTasks + ' follow-up task' + (clearedTasks === 1 ? '' : 's'));
-    showToast(stopped.length ? 'SAMpaign archived, ' + stopped.join(' and ') + ' cancelled' : 'SAMpaign archived');
+ showToast('SAMpaign deleted');
     loadSampaignCampaigns();
-    if (typeof render === 'function') { try { render(); } catch(e) {} }
   } catch(e) { showToast('Error: '+e.message); }
 }
 
@@ -10705,7 +9642,7 @@ async function openSampaignDetail(campaignId) {
       // ── Footer: actions always reachable, never scrolled past ──
       '<div style="flex-shrink:0;display:flex;justify-content:flex-end;gap:8px;padding:12px 20px;border-top:1px solid var(--border);background:var(--surface2)">' +
         (isOwner
-          ? '<button id="sampaignSyncBtn_'+esc(campaignId)+'" onclick="syncSampaignCampaign(\''+esc(campaignId)+'\')" style="font-size:12px;font-weight:600;color:var(--gold);padding:8px 16px;border-radius:2px;background:transparent;border:1px solid rgba(var(--c-accent-rgb),0.4);cursor:pointer;font-family:var(--sans)">Sync inbox</button>' +
+          ? '<button id="sampaignSyncBtn_'+esc(campaignId)+'" onclick="syncSampaignCampaign(\''+esc(campaignId)+'\')" style="font-size:12px;font-weight:600;color:var(--gold);padding:8px 16px;border-radius:2px;background:transparent;border:1px solid rgba(160,117,42,0.4);cursor:pointer;font-family:var(--sans)">Sync inbox</button>' +
             '<button onclick="openSampaignComposer(\''+esc(campaignId)+'\')" style="font-size:12px;font-weight:600;color:#fff;padding:8px 16px;border-radius:2px;background:var(--green);border:none;cursor:pointer;font-family:var(--sans)">Schedule</button>'
           : '<span style="font-size:11px;color:var(--text3);align-self:center;margin-right:auto">Syncs from '+esc((c.owner_email||'the owner').split('@')[0])+'’s inbox, hourly</span>') +
         '<button onclick="document.getElementById(\'sampaign-detail-overlay\').remove()" style="font-size:12px;font-weight:600;color:var(--text3);padding:8px 16px;border-radius:2px;background:transparent;border:1px solid var(--border2);cursor:pointer;font-family:var(--sans)">Close</button>' +
@@ -10760,7 +9697,7 @@ function _renderSampTabs(campaignId) {
       'style="font-size:13px;font-weight:'+(on?'700':'500')+';padding-bottom:9px;cursor:pointer;white-space:nowrap;' +
         'border-bottom:2px solid '+(on?'var(--gold)':'transparent')+';color:'+(on?'var(--text)':'var(--text3)')+'">' +
       esc(t.label) +
-      (t.badge ? '<span style="font-size:11px;font-weight:700;background:rgba(var(--c-accent-rgb),0.16);color:var(--gold);border-radius:2px;padding:1px 6px;margin-left:5px">'+t.badge+'</span>' : '') +
+      (t.badge ? '<span style="font-size:11px;font-weight:700;background:rgba(160,117,42,0.16);color:var(--gold);border-radius:2px;padding:1px 6px;margin-left:5px">'+t.badge+'</span>' : '') +
     '</span>';
   }).join('');
 }
@@ -10931,7 +9868,7 @@ async function _loadSampaignDetailPerf(campaignId, c) {
         '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
         c.followup_schedule.map(function(fs) {
           var overdue = new Date(fs.next_due) < new Date(new Date().toDateString());
-          return '<span style="font-size:11px;font-weight:600;color:'+(overdue?'var(--coral)':'var(--gold)')+';background:'+(overdue?'rgba(196,90,74,0.1)':'rgba(var(--c-accent-rgb),0.1)')+';border:1px solid '+(overdue?'rgba(196,90,74,0.25)':'rgba(var(--c-accent-rgb),0.25)')+';border-radius:2px;padding:5px 10px">Follow-up '+fs.stage+' — '+fs.count+' contact'+(fs.count!==1?'s':'')+', '+(overdue?'overdue since':'scheduled')+' '+fmt(fs.next_due)+'</span>';
+          return '<span style="font-size:11px;font-weight:600;color:'+(overdue?'var(--coral)':'var(--gold)')+';background:'+(overdue?'rgba(196,90,74,0.1)':'rgba(160,117,42,0.1)')+';border:1px solid '+(overdue?'rgba(196,90,74,0.25)':'rgba(160,117,42,0.25)')+';border-radius:2px;padding:5px 10px">Follow-up '+fs.stage+' — '+fs.count+' contact'+(fs.count!==1?'s':'')+', '+(overdue?'overdue since':'scheduled')+' '+fmt(fs.next_due)+'</span>';
         }).join('') +
         '</div>';
     }
@@ -10965,13 +9902,8 @@ function _sampGoalBlock(campaignId) {
   var c = (window._sampaignCampaignsCache || {})[campaignId] || {};
   var goal = (c.campaign_goal || '').trim();
   if (!goal) {
-    // Names the two ways to fix it, including the one the user is most likely
-    // already in. A campaign written through Claude arrives with no goal, and
-    // telling that person to go and find a pencil is the wrong instruction:
-    // the assistant can set it from the conversation it just had.
     return '<div style="font-size:11px;color:var(--text3);margin-bottom:12px">' +
-      'No goal set. Every email is written against it, so outreach here will read generic. ' +
-      'Ask Claude to set the campaign goal, or add one with the pencil on the campaign.</div>';
+      'No goal set. Add one with the pencil on the campaign — it is what Claude writes every email against.</div>';
   }
   var long = goal.length > 150;
   return '<div style="margin-bottom:14px">' +
@@ -11190,8 +10122,8 @@ function _renderSampaignContacts(campaignId) {
   }
 
   html += '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">' +
-    '<label style="font-size:11px;color:var(--gold);padding:5px 10px;border-radius:2px;background:rgba(var(--c-accent-rgb),0.1);border:1px solid rgba(var(--c-accent-rgb),0.25);cursor:pointer">⇪ Upload CSV<input type="file" accept=".csv,text/csv" style="display:none" onchange="handleSampaignCsv(\''+esc(campaignId)+'\',this.files[0]);this.value=\'\'"/></label>' +
-    '<button onclick="scoutSampaignContacts(\''+esc(campaignId)+'\')" style="font-size:11px;color:var(--gold);padding:5px 10px;border-radius:2px;background:rgba(var(--c-accent-rgb),0.1);border:1px solid rgba(var(--c-accent-rgb),0.25);cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15zM16 16l5 5"/></svg> Scout more contacts</button>' +
+    '<label style="font-size:11px;color:var(--gold);padding:5px 10px;border-radius:2px;background:rgba(160,117,42,0.1);border:1px solid rgba(160,117,42,0.25);cursor:pointer">⇪ Upload CSV<input type="file" accept=".csv,text/csv" style="display:none" onchange="handleSampaignCsv(\''+esc(campaignId)+'\',this.files[0]);this.value=\'\'"/></label>' +
+    '<button onclick="scoutSampaignContacts(\''+esc(campaignId)+'\')" style="font-size:11px;color:var(--gold);padding:5px 10px;border-radius:2px;background:rgba(160,117,42,0.1);border:1px solid rgba(160,117,42,0.25);cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15zM16 16l5 5"/></svg> Scout more contacts</button>' +
     '<span onclick="openSampaignScoutProfile(\''+esc(campaignId)+'\')" style="font-size:11px;color:var(--text3);cursor:pointer;text-decoration:underline dotted"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 16.5a4.5 4.5 0 100-9 4.5 4.5 0 000 9zM12 13a1 1 0 100-2 1 1 0 000 2z"/></svg> Who to hunt</span>' +
     '<button onclick="addSampaignContactRows(\''+esc(campaignId)+'\')" style="font-size:11px;color:var(--green);padding:5px 10px;border-radius:2px;background:rgba(74,140,92,0.1);border:1px solid rgba(74,140,92,0.3);cursor:pointer">＋ Add people</button>' +
     // Always rendered, never conditional on unenriched>0. It used to vanish
@@ -11255,7 +10187,7 @@ function _renderSampaignContacts(campaignId) {
       // dependency), so it's there for contacts who haven't been emailed yet.
       // This is the field the earlier click-through insight modal couldn't
       // give prospects, since they have no message history to read.
-      var noteLine = c.outreach_note ? '<div style="font-size:11px;color:var(--gold);margin-top:3px;display:flex;gap:5px;align-items:flex-start;background:rgba(var(--c-accent-rgb),0.06);border-radius:2px;padding:4px 7px"><span style="flex-shrink:0"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg></span><span>'+esc(c.outreach_note)+'</span></div>' : '';
+      var noteLine = c.outreach_note ? '<div style="font-size:11px;color:var(--gold);margin-top:3px;display:flex;gap:5px;align-items:flex-start;background:rgba(160,117,42,0.06);border-radius:2px;padding:4px 7px"><span style="flex-shrink:0"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg></span><span>'+esc(c.outreach_note)+'</span></div>' : '';
       var intelBtn = _samoraIntelBtn('openSampaignContactInsight(\''+esc(c.id)+'\',\''+esc(c.name||c.email||'')+'\')', true);
       // Editor is collapsed by default — most rows do not need it open, and
       // 54 always-visible textareas would bury the roster.
@@ -11272,15 +10204,7 @@ function _renderSampaignContacts(campaignId) {
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px">' +
         '<div style="min-width:0;flex:1"><div style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(c.name||c.email||'—')+'</div>' +
         '<div style="font-size:11px;color:var(--text3)">' +
-          // A scouted contact the provider could not resolve carries a
-          // PLACEHOLDER address like scouted.samuelernest@snu.edu.in. It looks
-          // like an address and is not one, and showing it as though it were
-          // invites a rep to trust it. The "no email yet" branch below already
-          // existed and simply never fired, because c.email was set.
-          //
-          // Sending to these is blocked server-side, but the list should say
-          // so rather than leaving the rep to notice the prefix.
-          (c.email && !/^scouted\.[a-z0-9]*@/i.test(c.email)
+          (c.email
             // A found email is an inference, not a fact — Hunter scores it
             // because it is guessing the pattern from other addresses at the
             // domain. Label it, never let it sit unmarked next to one the rep
@@ -11431,7 +10355,7 @@ function _renderSampAddRows(campaignId, focusLast) {
   var f = function(i, field, label, req, val) {
     return '<input value="'+esc(val||'')+'" placeholder="'+esc(label)+(req?' *':'')+'" ' +
       'oninput="_sampAddRowField(\''+esc(campaignId)+'\','+i+',\''+field+'\',this.value)" ' +
-      'style="flex:1;min-width:0;padding:5px 7px;border-radius:2px;border:1px solid '+(req?'rgba(var(--c-accent-rgb),0.4)':'var(--border2)')+';background:var(--bg);color:var(--text);font-family:var(--sans);font-size:11px"/>';
+      'style="flex:1;min-width:0;padding:5px 7px;border-radius:2px;border:1px solid '+(req?'rgba(160,117,42,0.4)':'var(--border2)')+';background:var(--bg);color:var(--text);font-family:var(--sans);font-size:11px"/>';
   };
   var html = '<div style="border:1px solid var(--border2);border-radius:2px;padding:9px;margin-bottom:8px;background:var(--surface)">' +
     '<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Add people manually · give a <strong style="color:var(--gold)">name or an email</strong>, the rest is optional</div>';
@@ -11591,7 +10515,7 @@ async function openSampaignScoutProfile(campaignId) {
   var usingCamp = !!campP;
   var cur = campP || orgP;
   var chip = function(group, val, on) {
-    return '<label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:5px 10px;border-radius:3px;border:1px solid ' + (on?'var(--gold)':'var(--border2)') + ';background:' + (on?'rgba(var(--c-accent-rgb),0.08)':'transparent') + ';color:' + (on?'var(--gold)':'var(--text2)') + ';cursor:pointer;margin:0 6px 6px 0"><input type="checkbox" data-group="' + group + '" value="' + val + '"' + (on?' checked':'') + ' style="margin:0">' + val + '</label>';
+    return '<label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:5px 10px;border-radius:3px;border:1px solid ' + (on?'var(--gold)':'var(--border2)') + ';background:' + (on?'rgba(160,117,42,0.08)':'transparent') + ';color:' + (on?'var(--gold)':'var(--text2)') + ';cursor:pointer;margin:0 6px 6px 0"><input type="checkbox" data-group="' + group + '" value="' + val + '"' + (on?' checked':'') + ' style="margin:0">' + val + '</label>';
   };
   var inputStyle = 'width:100%;padding:9px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:2px;color:var(--text);font-size:13px;font-family:var(--sans);outline:none';
   var modal = document.createElement('div');
@@ -11607,10 +10531,7 @@ async function openSampaignScoutProfile(campaignId) {
     '<label style="display:flex;align-items:center;gap:8px;margin:8px 0 12px;cursor:pointer"><input type="checkbox" id="samp-scout-toggle"' + (usingCamp?' checked':'') + ' style="width:15px;height:15px;accent-color:var(--gold)"><span style="font-size:12px;color:var(--text2)">Custom targets for <b>this SAMpaign only</b> (otherwise edits the org default)</span></label>' +
     '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Job titles (primary, comma separated)</div>' +
     '<textarea id="samp-scout-titles" rows="2" placeholder="e.g. CFO, Chief Financial Officer, VP Finance, Head of Procurement, Owner" style="' + inputStyle + ';resize:vertical;height:54px">' + esc((cur.jobTitles||[]).join(', ')) + '</textarea>' +
-    '<div style="font-size:11px;color:var(--text3);margin:4px 0 8px">These match real titles at the account. Leave blank to use departments + seniority.</div>' +
-    // Filled asynchronously. A blank box is the reason this form goes unused,
-    // so the suggestions are the point of it, not decoration.
-    '<div id="samp-scout-suggest" style="margin-bottom:12px;max-height:172px;overflow-y:auto"><div style="font-size:11px;color:var(--text3)">Looking at which titles have replied to you…</div></div>' +
+    '<div style="font-size:11px;color:var(--text3);margin:4px 0 12px">These match real titles at the account. Leave blank to use departments + seniority.</div>' +
     '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Departments</div>' +
     '<div style="margin-bottom:14px">' + _SCOUT_DEPTS.map(function(x){ return chip('dept', x, (cur.departments||[]).indexOf(x) !== -1); }).join('') + '</div>' +
     '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Seniority</div>' +
@@ -11621,90 +10542,6 @@ async function openSampaignScoutProfile(campaignId) {
   '</div>';
   modal.addEventListener('click', function(){ modal.remove(); });
   document.body.appendChild(modal);
-  // Only after the modal is in the DOM, or the suggestion box does not exist
-  // yet and this writes into nothing. Not awaited: the form is usable while
-  // suggestions load.
-  _loadScoutSuggestions(campaignId);
-}
-
-// Suggestions come from this org's OWN outreach history: which titles have
-// actually replied. That is evidence, not a guess about the market, so each
-// chip carries its count and the rep can disagree with it.
-async function _loadScoutSuggestions(campaignId) {
-  var box = document.getElementById('samp-scout-suggest');
-  if (!box) return;
-  try {
-    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
-      body: JSON.stringify({ action:'suggest_scout_targets', campaign_id: campaignId }) });
-    var d = await r.json();
-    if (!d.ok) { box.innerHTML = ''; return; }
-
-    // Chips are an aid, not the content of the dialog. Twelve of them stacked
-    // pushed Departments and Seniority below the fold and made the suggestion
-    // list look like the form itself. Six by default, the rest one tap away.
-    var chipBtn = function(title, proven, count, why) {
-      return '<button type="button" onclick="_addScoutTitle(' + JSON.stringify(title).replace(/"/g,'&quot;') + ')"' +
-        (why ? ' title="' + esc(why) + '"' : '') +
-        ' style="font-size:11px;line-height:1.2;padding:3px 8px;margin:0 4px 4px 0;border-radius:3px;cursor:pointer;' +
-        'font-family:var(--sans);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' +
-        'border:1px solid ' + (proven ? 'var(--green)' : 'var(--border2)') + ';' +
-        'background:' + (proven ? 'rgba(74,140,92,0.10)' : 'transparent') + ';' +
-        'color:' + (proven ? 'var(--green)' : 'var(--text2)') + '">+ ' + esc(title) +
-        (proven && count ? ' <span style="opacity:.7">' + count + '</span>' : '') + '</button>';
-    };
-
-    var h = '';
-    var titles = d.suggested_titles || [];
-    if (titles.length) {
-      var head = titles.slice(0, 6), rest = titles.slice(6);
-      h += '<div style="font-size:11px;color:var(--text3);margin-bottom:5px">Tap to add. Green has replied to you before.</div>';
-      h += '<div>' + head.map(function(t){ return chipBtn(t.title, t.replied > 0, t.replied, t.why); }).join('');
-      if (rest.length) {
-        h += '<span id="samp-scout-rest" style="display:none">' + rest.map(function(t){ return chipBtn(t.title, t.replied > 0, t.replied, t.why); }).join('') + '</span>';
-        h += '<button type="button" id="samp-scout-more" onclick="document.getElementById(\'samp-scout-rest\').style.display=\'inline\';this.remove()" ' +
-             'style="font-size:11px;padding:3px 8px;margin:0 4px 4px 0;border-radius:3px;border:1px dashed var(--border2);background:transparent;color:var(--text3);cursor:pointer;font-family:var(--sans)">' + rest.length + ' more</button>';
-      }
-      h += '</div>';
-    } else if (d.note) {
-      h += '<div style="font-size:11px;color:var(--text3)">' + esc(d.note) + '</div>';
-    }
-
-    var eng = (d.already_engaged || []).filter(function(x){ return x.title; }).slice(0, 4);
-    if (eng.length) {
-      h += '<div style="font-size:11px;color:var(--text3);margin:7px 0 4px">Already engaged here</div><div>' +
-           eng.map(function(x){ return chipBtn(x.title, false, 0, x.role || ''); }).join('') + '</div>';
-    }
-
-    // Location is prefilled, not just suggested, because the campaign name
-    // already stated it and making the rep retype it is busywork.
-    if ((d.suggested_locations || []).length) {
-      var locEl = document.getElementById('samp-scout-locs');
-      if (locEl && !locEl.value.trim()) {
-        locEl.value = d.suggested_locations.join(', ');
-        h += '<div style="font-size:11px;color:var(--text3);margin-top:8px">Location prefilled from ' + esc(d.location_source || 'this campaign') + '. Clear it to search everywhere.</div>';
-      }
-    }
-    box.innerHTML = h;
-  } catch(e) { box.innerHTML = ''; }
-}
-
-function _addScoutTitle(title) {
-  var ta = document.getElementById('samp-scout-titles');
-  if (!ta) return;
-  var cur = ta.value.split(',').map(function(x){ return x.trim(); }).filter(Boolean);
-  if (cur.some(function(x){ return x.toLowerCase() === String(title).toLowerCase(); })) return;
-  cur.push(title);
-  ta.value = cur.join(', ');
-  // Titles are the PRIMARY Lusha filter and override departments/seniority
-  // entirely, so say so the moment the rep starts using them.
-  var box = document.getElementById('samp-scout-suggest');
-  if (box && !document.getElementById('samp-scout-titlenote')) {
-    var n = document.createElement('div');
-    n.id = 'samp-scout-titlenote';
-    n.style.cssText = 'font-size:11px;color:var(--gold);margin-top:8px';
-    n.textContent = 'Job titles take precedence: departments and seniority below are ignored while this box has anything in it.';
-    box.appendChild(n);
-  }
 }
 
 async function saveSampaignScoutProfile() {
@@ -11978,7 +10815,7 @@ function renderPipelineDeals(data) {
       : '';
     var healthBadge = d.health_score != null
       ? '<span onclick="event.stopPropagation();openHealthBreakdown(\'' + esc(d.id) + '\',\'' + esc(d.account) + '\')" style="font-size:11px;padding:1px 5px;border-radius:2px;margin-left:4px;cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;background:' +
-        (d.health_score>=70?'rgba(74,140,92,0.15)':d.health_score>=40?'rgba(var(--c-accent-rgb),0.15)':'rgba(192,82,63,0.15)') +
+        (d.health_score>=70?'rgba(74,140,92,0.15)':d.health_score>=40?'rgba(160,117,42,0.15)':'rgba(192,82,63,0.15)') +
         ';color:' + (d.health_score>=70?'var(--green)':d.health_score>=40?'var(--amber)':'var(--coral)') +
         '" title="Why this score? Tap for rule-level breakdown">H:' + d.health_score + '</span>'
       : '';
@@ -12013,7 +10850,7 @@ function renderPipelineDeals(data) {
             (localValue ? '<span style="font-size:11px;color:var(--text2)">Local: ' + localValue + '</span>' : '') +
  '<span class="edit-close-date-btn" data-opp-id="'+esc(d.id||'')+'" data-account="'+esc(d.account||'')+'" data-close="'+esc(d.expected_close||'')+'" style="font-size:11px;color:'+(d.expected_close?'var(--gold)':'var(--text3)')+';cursor:pointer;'+(d.expected_close?'font-weight:600':'')+'">'+( d.expected_close?''+d.expected_close:'+ Set close date')+'</span>' +
             (d.licenses_units ? '<span style="font-size:11px;color:var(--text3)">' + d.licenses_units + ' units</span>' : '') +
-            (d.icp_score != null ? '<span style="font-size:11px;font-weight:600;padding:1px 6px;border-radius:2px;background:' + (d.icp_score>=70?'rgba(74,140,92,.15)':d.icp_score>=40?'rgba(var(--c-accent-rgb),.15)':'rgba(136,135,128,.15)') + ';color:' + (d.icp_score>=70?'var(--green)':d.icp_score>=40?'var(--gold)':'var(--text3)') + '" title="ICP fit: ' + esc(d.icp_notes||'') + '">ICP ' + d.icp_score + '</span>' : '') +
+            (d.icp_score != null ? '<span style="font-size:11px;font-weight:600;padding:1px 6px;border-radius:2px;background:' + (d.icp_score>=70?'rgba(74,140,92,.15)':d.icp_score>=40?'rgba(160,117,42,.15)':'rgba(136,135,128,.15)') + ';color:' + (d.icp_score>=70?'var(--green)':d.icp_score>=40?'var(--gold)':'var(--text3)') + '" title="ICP fit: ' + esc(d.icp_notes||'') + '">ICP ' + d.icp_score + '</span>' : '') +
           '</div>' +
         '</div>' +
         '<div style="text-align:right;flex-shrink:0">' +
@@ -12022,7 +10859,7 @@ function renderPipelineDeals(data) {
           '<div style="margin-top:4px;font-size:11px;color:var(--text3)">' + prob + '% → ' + fmtUsd(d.weighted_value_usd) + '</div>' +
           '<div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">' +
  '<button onclick="' + (d.tier==='verified' ? 'openDealValueForm(\''+d.id+'\',\''+esc(d.account)+'\')' : d.tier==='partial' ? 'boostSignals(\''+d.id+'\',\''+esc(d.account)+'\')' : 'openDealValueForm(\''+d.id+'\',\''+esc(d.account)+'\')') + '" style="font-size:10px;padding:3px 10px;border-radius:4px;border:1px solid ' + (d.tier==='verified'?'var(--border2)':d.tier==='partial'?'var(--amber)':'var(--green)') + ';background:transparent;color:' + (d.tier==='verified'?'var(--text3)':d.tier==='partial'?'var(--amber)':'var(--green)') + ';cursor:pointer">' + (d.tier==='verified'?'Edit':d.tier==='partial'?'Boost':'Confirm') + '</button>' +
-            '<button onclick="openAccountTimeline(\''+esc(d.id)+'\',\''+esc(d.account)+'\')" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:3px 10px;border-radius:2px;border:1px solid rgba(var(--c-accent-rgb),0.4);background:rgba(var(--c-accent-rgb),0.08);color:var(--gold);font-weight:600;cursor:pointer"><img src="icons/icon-48.png" alt="" style="width:12px;height:12px;border-radius:50%"/>Timeline</button>' +
+            '<button onclick="openAccountTimeline(\''+esc(d.id)+'\',\''+esc(d.account)+'\')" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:3px 10px;border-radius:2px;border:1px solid rgba(160,117,42,0.4);background:rgba(160,117,42,0.08);color:var(--gold);font-weight:600;cursor:pointer"><img src="icons/icon-48.png" alt="" style="width:12px;height:12px;border-radius:50%"/>Timeline</button>' +
             '<button onclick="openCloseDeal(\''+esc(d.id)+'\',\''+esc(d.account)+'\')" style="font-size:11px;padding:3px 10px;border-radius:2px;border:1px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer">Close deal</button>' +
           '</div>' +
         '</div>' +
@@ -12220,69 +11057,25 @@ async function _loadTimelineBody() {
     var acts = (data.activities || data.timeline || []).filter(function(e){ return e && e.date; });
     var series = data.score_series || [];
     if (!acts.length && !series.length) { body.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:20px 0;text-align:center">No activity found in the last ' + _tlDays + ' days.</div>'; return; }
-    body.innerHTML = _renderTimelineIntel(acts, data.engagement, series, data) + _renderTimelineEvents(acts);
+    body.innerHTML = _renderTimelineIntel(acts, data.engagement, series) + _renderTimelineEvents(acts);
   } catch(e) {
     var b = document.getElementById('timeline-body');
     if (b) b.innerHTML = '<div style="color:var(--coral);font-size:12px">Error: ' + esc(e.message) + '</div>';
   }
 }
 
-// Days since a date. Returns null for anything unparseable OR in the future.
-//
-// This previously returned a raw subtraction, so a future dated row produced a
-// NEGATIVE number, which surfaced as "Last touch -1d ago" and "touched in the
-// last -1 days". Worse than the wrong label: the temperature rule below is
-// `daysQuiet <= 3`, and a negative satisfies that, so one scheduled meeting
-// made a dead account read "Hot". An account at 11/100 health, dark 35 days,
-// was being shown as the hottest thing on the page.
-//
-// A future date is not a touch. It has not happened yet.
-function _tlDaysAgo(dateStr) {
-  var t = new Date(dateStr).getTime();
-  if (isNaN(t)) return null;
-  var d = Math.floor((Date.now() - t) / 86400000);
-  return d < 0 ? null : d;
-}
+function _tlDaysAgo(dateStr) { return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000); }
 
 // ── Samora Intelligence panel: temperature, momentum, activity, engagement ───
-function _renderTimelineIntel(acts, engagement, series, meta) {
+function _renderTimelineIntel(acts, engagement, series) {
   series = (series || []).filter(function(s){ return s && s.date; }).slice().sort(function(a,b){ return new Date(a.date) - new Date(b.date); });
   var firstScore = series.length ? series[0].score : null;
   var lastScore = series.length ? series[series.length - 1].score : null;
   var scoreDelta = (firstScore != null && lastScore != null) ? lastScore - firstScore : null;
 
-  // Only activity that has ALREADY happened counts as a touch. A scheduled
-  // meeting is a plan, not contact, and letting one in is what produced the
-  // negative "last touch" and the false Hot reading.
-  var _now = Date.now();
-  var actDates = acts.map(function(a){ return a.date; }).filter(function(dt){
-    if (!dt) return false;
-    var t = new Date(dt).getTime();
-    return !isNaN(t) && t <= _now;
-  }).sort();
-  var lastDate = actDates.length ? actDates[actDates.length - 1] : null;
-  // Score history is a fallback ONLY. A score changing is Samora recalculating,
-  // not somebody being contacted, so it must never masquerade as a touch when
-  // real activity exists.
-  if (!lastDate && series.length) {
-    var pastScores = series.filter(function(s){ var t=new Date(s.date).getTime(); return !isNaN(t) && t <= _now; });
-    lastDate = pastScores.length ? pastScores[pastScores.length - 1].date : null;
-  }
+  var actDates = acts.map(function(a){ return a.date; }).filter(Boolean).sort();
+  var lastDate = actDates.length ? actDates[actDates.length - 1] : (series.length ? series[series.length - 1].date : null);
   var daysQuiet = lastDate ? _tlDaysAgo(lastDate) : null;
-
-  // ── The backend's answer wins ────────────────────────────────────────────
-  // Deriving last touch from the activity list makes it WINDOW DEPENDENT, and
-  // that is what produced the contradiction where one account read "6d ago" on
-  // the 30d view and "29d ago" on the 60d view. The list is deduplicated by
-  // label, so a repeated label could drop its most recent instance once a
-  // wider window pulled in an older one.
-  //
-  // last_touch_days is computed server-side from real mailbox timestamps and
-  // trusted meeting records, independent of the window, and it is the same
-  // number the pipeline "Dark Nd" chip now reads. One account, one answer.
-  if (meta && meta.last_touch_days != null && meta.last_touch_days >= 0) {
-    daysQuiet = meta.last_touch_days;
-  }
 
   var activeDays = {};
   acts.forEach(function(a){ if (a.date) activeDays[a.date.slice(0,10)] = 1; });
@@ -12294,10 +11087,8 @@ function _renderTimelineIntel(acts, engagement, series, meta) {
   var sentTot = sent.positive + sent.negative + sent.neutral;
 
   var temp, tempColor, tempWhy;
-  // Ordered so the null case is caught first and every branch below can rely
-  // on daysQuiet being a real non-negative number.
-  if (daysQuiet == null) { temp = 'Quiet'; tempColor = 'var(--text3)'; tempWhy = 'no past activity on record'; }
-  else if (daysQuiet <= 3 && (scoreDelta || 0) > 0) { temp = 'Hot'; tempColor = 'var(--coral)'; tempWhy = 'touched ' + (daysQuiet === 0 ? 'today' : daysQuiet + ' day' + (daysQuiet===1?'':'s') + ' ago') + ', signal rising'; }
+  if (daysQuiet == null) { temp = 'Quiet'; tempColor = 'var(--text3)'; tempWhy = 'no dated activity on record'; }
+  else if (daysQuiet <= 3 && (scoreDelta || 0) > 0) { temp = 'Hot'; tempColor = 'var(--coral)'; tempWhy = 'touched in the last ' + daysQuiet + ' day' + (daysQuiet===1?'':'s') + ', signal rising'; }
   else if ((scoreDelta || 0) > 0 && daysQuiet <= 14) { temp = 'Warming'; tempColor = 'var(--amber)'; tempWhy = 'signal up ' + scoreDelta + ' points, active this fortnight'; }
   else if (daysQuiet <= 14) { temp = 'Steady'; tempColor = 'var(--green)'; tempWhy = 'consistent contact, last touch ' + daysQuiet + ' day' + (daysQuiet===1?'':'s') + ' ago'; }
   else if (daysQuiet <= 30 || (scoreDelta || 0) < 0) { temp = 'Cooling'; tempColor = 'var(--amber)'; tempWhy = daysQuiet + ' days quiet' + ((scoreDelta||0) < 0 ? ', signal slipping' : ''); }
@@ -13310,7 +12101,7 @@ var _INTEL_CATS = [
 ];
 var _INTEL_JUNK_TYPES = ['staleness'];
 
-function _samChip() { return '<span style="font-size:9px;font-weight:700;color:var(--gold);background:rgba(var(--c-accent-rgb),0.14);border-radius:4px;padding:2px 7px;white-space:nowrap">SAM</span>'; }
+function _samChip() { return '<span style="font-size:9px;font-weight:700;color:var(--gold);background:rgba(160,117,42,0.14);border-radius:4px;padding:2px 7px;white-space:nowrap">SAM</span>'; }
 function _aiChip() { return '<span style="font-size:9px;font-weight:700;color:var(--text3);background:rgba(150,150,150,0.14);border-radius:4px;padding:2px 7px;white-space:nowrap">AI</span>'; }
 
 function renderIntelFeed() {
@@ -13537,311 +12328,3 @@ window.openCarryFromTask = typeof openCarryFromTask !== 'undefined' ? openCarryF
 window.closeCarryForward = typeof closeCarryForward !== 'undefined' ? closeCarryForward : function(){};
 window.confirmCarryForward = typeof confirmCarryForward !== 'undefined' ? confirmCarryForward : function(){};
 window.selectCarryDate = typeof selectCarryDate !== 'undefined' ? selectCarryDate : function(){};
-
-// ============================================================================
-// CHANGE PASSWORD
-//
-// Runs entirely between the browser and Supabase Auth. The password NEVER goes
-// to sam-gmail-signals, is never written to any table of ours, and never
-// appears in a URL. There is no reason for our backend to see it, and every
-// place a password exists is a place it can leak.
-//
-// WHY THE CURRENT PASSWORD IS REQUIRED
-//   PUT /auth/v1/user does not ask for it. So on its own, anyone holding a live
-//   session — a borrowed laptop, an unlocked machine, a stolen token — could
-//   change the password and lock the real owner out of their own account.
-//   Re-authenticating first proves the person at the keyboard is the account
-//   holder and not merely someone sitting in front of their session.
-//
-// The re-auth also hands back a fresh token, which is what the change is then
-// made with. That matters if Supabase is configured to require a recent login
-// for sensitive updates.
-// ============================================================================
-
-var PW_MIN = 10;   // Supabase's own floor is 6. Six is not a password.
-
-function _pwStrength() {
-  var v = document.getElementById('pwNew').value || '';
-  var hint = document.getElementById('pwHint');
-  if (!hint) return;
-  if (!v) { hint.textContent = 'At least ' + PW_MIN + ' characters.'; hint.style.color = 'var(--text3)'; return; }
-  if (v.length < PW_MIN) {
-    hint.textContent = (PW_MIN - v.length) + ' more character' + ((PW_MIN - v.length) === 1 ? '' : 's') + ' needed.';
-    hint.style.color = 'var(--text3)';
-    return;
-  }
-  // Length is the honest signal. Character-class rules mostly teach people to
-  // write Password1! so we do not pretend those are strength.
-  var varied = /[a-z]/.test(v) && /[A-Z0-9]/.test(v);
-  hint.textContent = varied ? 'Long enough.' : 'Long enough. A mix of cases or numbers is harder to guess.';
-  hint.style.color = 'var(--green)';
-}
-
-function _pwSay(text, isError) {
-  var el = document.getElementById('pwMsg');
-  if (!el) return;
-  el.textContent = text || '';
-  el.style.color = isError ? 'var(--red, #C4553D)' : 'var(--text3)';
-}
-
-async function changePassword() {
-  var btn     = document.getElementById('pwBtn');
-  var current = document.getElementById('pwCurrent').value || '';
-  var next    = document.getElementById('pwNew').value || '';
-  var confirm = document.getElementById('pwConfirm').value || '';
-  var others  = document.getElementById('pwSignOutOthers').checked;
-
-  if (!current)            { _pwSay('Enter your current password.', true); return; }
-  if (next.length < PW_MIN){ _pwSay('The new password needs at least ' + PW_MIN + ' characters.', true); return; }
-  if (next !== confirm)    { _pwSay('The two new passwords do not match.', true); return; }
-  if (next === current)    { _pwSay('That is your current password. Choose a different one.', true); return; }
-
-  btn.disabled = true; btn.textContent = 'Changing…';
-  _pwSay('Checking your current password…');
-
-  try {
-    // 1. Prove it is really them.
-    var reauth = await fetch(SB_URL + '/auth/v1/token?grant_type=password', {
-      method: 'POST',
-      headers: { 'apikey': SB_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: currentUser.email, password: current })
-    });
-    var rd = await reauth.json();
-    if (!reauth.ok || !rd.access_token) {
-      // Deliberately specific: this is the user's own account and telling them
-      // the current password is wrong is not an information leak, it is the
-      // only useful thing to say.
-      _pwSay('That current password is not right.', true);
-      btn.disabled = false; btn.textContent = 'Change password';
-      return;
-    }
-
-    // 2. Change it, using the token we just earned.
-    _pwSay('Saving the new password…');
-    var upd = await fetch(SB_URL + '/auth/v1/user', {
-      method: 'PUT',
-      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + rd.access_token, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: next })
-    });
-    var ud = await upd.json();
-    if (!upd.ok) {
-      _pwSay(ud.msg || ud.error_description || ud.error || 'Supabase refused the change.', true);
-      btn.disabled = false; btn.textContent = 'Change password';
-      return;
-    }
-
-    // 3. Keep this session alive on the NEW credentials. Without this the app
-    //    carries on with the pre-change token and the rep is silently logged
-    //    out at the next refresh, which reads as "the change broke something".
-    currentUser.token = rd.access_token;
-    currentUser.refresh_token = rd.refresh_token;
-    localStorage.setItem('dt-user', JSON.stringify(currentUser));
-
-    // 4. Other devices. Done AFTER the change, so a failure here cannot leave
-    //    them signed out with the old password still live.
-    var othersNote = '';
-    if (others) {
-      try {
-        var lo = await fetch(SB_URL + '/auth/v1/logout?scope=others', {
-          method: 'POST',
-          headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token }
-        });
-        othersNote = lo.ok
-          ? ' Your other devices have been signed out.'
-          : ' Your password changed, but other devices could not be signed out — sign out manually there.';
-      } catch (e) {
-        othersNote = ' Your password changed, but other devices could not be signed out — sign out manually there.';
-      }
-    }
-
-    document.getElementById('pwCurrent').value = '';
-    document.getElementById('pwNew').value = '';
-    document.getElementById('pwConfirm').value = '';
-    _pwStrength();
-    _pwSay('Password changed.' + othersNote);
-    if (typeof showToast === 'function') showToast('Password changed');
-  } catch (e) {
-    _pwSay('Could not reach the server: ' + e.message, true);
-  }
-  btn.disabled = false; btn.textContent = 'Change password';
-}
-
-// ============================================================================
-// FORGOT PASSWORD
-//
-// Two halves, separated by an email:
-//   1. sendReset()   -> POST /auth/v1/recover. Supabase emails a link.
-//   2. the link lands back here with #type=recovery in the FRAGMENT, which
-//      _catchRecovery() picks up and turns into the "set a new password" screen.
-//
-// Same rule as the change-password flow: the password only ever travels between
-// this browser and Supabase Auth. sam-gmail-signals is not involved and has no
-// reason to be.
-// ============================================================================
-
-function _screen(id) {
-  document.querySelectorAll('.screen').forEach(function(el) { el.classList.remove('active'); });
-  var t = document.getElementById(id);
-  if (t) t.classList.add('active');
-}
-
-function showForgot() {
-  var a = document.getElementById('aEmail');
-  var f = document.getElementById('fEmail');
-  // Carry over whatever they already typed. Retyping an email you just entered,
-  // while locked out, is a small insult.
-  if (a && f && a.value) f.value = a.value;
-  document.getElementById('forgotMsg').textContent = '';
-  _screen('forgotScreen');
-  if (f) f.focus();
-}
-
-function showAuth() {
-  _resetAuthForm();
-  _screen('authScreen');
-}
-
-async function sendReset() {
-  var btn = document.getElementById('forgotBtn');
-  var msg = document.getElementById('forgotMsg');
-  var email = (document.getElementById('fEmail').value || '').trim().toLowerCase();
-
-  if (!email || email.indexOf('@') === -1) {
-    msg.style.color = 'var(--coral)';
-    msg.textContent = 'Enter the email address you sign in with.';
-    return;
-  }
-
-  btn.disabled = true; btn.textContent = 'Sending…';
-  try {
-    // redirectTo must be listed in Supabase Auth -> URL Configuration, or the
-    // link in the email silently falls back to the Site URL and the recovery
-    // fragment never reaches this app.
-    await fetch(SB_URL + '/auth/v1/recover', {
-      method: 'POST',
-      headers: { 'apikey': SB_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email, redirect_to: window.location.origin + window.location.pathname })
-    });
-  } catch (e) { /* deliberately ignored, see below */ }
-
-  // ALWAYS THE SAME ANSWER, whether or not that address has an account, and
-  // whether or not the request succeeded. Anything else turns this box into a
-  // tool for checking who works here. The cost is that a typo looks like a
-  // success; the note about checking spam is there to soften that.
-  msg.style.color = 'var(--text3)';
-  msg.textContent = 'If there is an account on ' + email + ', a link is on its way. It is valid for one hour. Check spam if it has not arrived in a couple of minutes.';
-  btn.disabled = false; btn.textContent = 'Send the link';
-}
-
-function _rPwHint() {
-  var v = document.getElementById('rPass').value || '';
-  var h = document.getElementById('rPassHint');
-  if (!h) return;
-  if (v.length >= PW_MIN) { h.textContent = 'Long enough.'; h.style.color = 'var(--green)'; }
-  else { h.textContent = 'At least ' + PW_MIN + ' characters.'; h.style.color = ''; }
-}
-
-// Set by _catchRecovery. Held in memory only: a recovery token is a bearer
-// credential for the account and localStorage is the wrong home for it.
-var _pendingSsoUser = false;
-var _recoveryToken = null;
-var _recoveryRefresh = null;
-
-async function submitReset() {
-  var btn = document.getElementById('resetBtn');
-  var msg = document.getElementById('resetMsg');
-  var p1 = document.getElementById('rPass').value || '';
-  var p2 = document.getElementById('rPass2').value || '';
-
-  if (p1.length < PW_MIN) { msg.style.color='var(--coral)'; msg.textContent = 'At least ' + PW_MIN + ' characters.'; return; }
-  if (p1 !== p2)          { msg.style.color='var(--coral)'; msg.textContent = 'The two passwords do not match.'; return; }
-  if (!_recoveryToken)    { msg.style.color='var(--coral)'; msg.textContent = 'This reset link has expired. Request a new one.'; return; }
-
-  btn.disabled = true; btn.textContent = 'Saving…';
-  msg.style.color = 'var(--text3)'; msg.textContent = '';
-  try {
-    var r = await fetch(SB_URL + '/auth/v1/user', {
-      method: 'PUT',
-      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + _recoveryToken, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: p1 })
-    });
-    var d = await r.json();
-    if (!r.ok) {
-      msg.style.color = 'var(--coral)';
-      // An expired link is the common case and deserves its own sentence,
-      // because "request a new one" is the actual next step.
-      msg.textContent = /expired|invalid/i.test(JSON.stringify(d))
-        ? 'This reset link has expired. Request a new one from the sign-in screen.'
-        : (d.msg || d.error_description || d.error || 'Could not set the password.');
-      btn.disabled = false; btn.textContent = 'Set password and sign in';
-      return;
-    }
-
-    // A reset usually means the old password was lost OR someone else had it.
-    // Ending every other session is the safe default here; unlike the settings
-    // screen there is no case for leaving them running.
-    try {
-      await fetch(SB_URL + '/auth/v1/logout?scope=others', {
-        method: 'POST', headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + _recoveryToken }
-      });
-    } catch (_e) {}
-
-    // Adopt the recovery session so they land inside the app, already signed
-    // in. Making someone type the password they just set is a pointless step.
-    var ur = await fetch(SB_URL + '/auth/v1/user', { headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + _recoveryToken } });
-    var u = await ur.json();
-    if (u && u.id) {
-      currentUser = { id: u.id, email: u.email, token: _recoveryToken, refresh_token: _recoveryRefresh || null };
-      localStorage.setItem('dt-user', JSON.stringify(currentUser));
-      _recoveryToken = null; _recoveryRefresh = null;
-      if (typeof loadProfile === 'function') { await loadProfile(); return; }
-    }
-    _recoveryToken = null; _recoveryRefresh = null;
-    msg.textContent = 'Password set. Sign in with it.';
-    setTimeout(showAuth, 1200);
-  } catch (e) {
-    msg.style.color = 'var(--coral)';
-    msg.textContent = 'Could not reach the server: ' + e.message;
-  }
-  btn.disabled = false; btn.textContent = 'Set password and sign in';
-}
-
-
-// ── First sign-in through Google or Microsoft ───────────────────────────────
-// They are authenticated but have no profile, so we do not yet know which
-// organisation they belong to. Password signup asks for an org code up front;
-// SSO cannot, so it is asked here.
-async function joinOrg(mode) {
-  var msg = document.getElementById('joinMsg');
-  var code = (document.getElementById('joinCode').value || '').trim().toUpperCase();
-  msg.style.color = 'var(--text3)';
-
-  if (mode === 'join' && !code) {
-    msg.style.color = 'var(--coral)';
-    msg.textContent = 'Enter the code your admin gave you, or create a new organisation instead.';
-    return;
-  }
-
-  var btn = document.getElementById(mode === 'join' ? 'joinBtn' : 'createOrgBtn');
-  btn.disabled = true;
-  var was = btn.textContent; btn.textContent = 'Working…';
-  try {
-    // setupProfile handles both: a code joins the existing org as a rep, a
-    // blank string creates a new one with this person as super_admin.
-    await setupProfile(mode === 'join' ? code : '');
-    _pendingSsoUser = false;
-    if (typeof launchApp === 'function') launchApp();
-    else window.location.reload();
-  } catch (e) {
-    msg.style.color = 'var(--coral)';
-    // setupProfile already writes its own message for a bad code; only speak up
-    // when it did not.
-    if (!msg.textContent) msg.textContent = e.message || 'Could not set that up.';
-    btn.disabled = false; btn.textContent = was;
-  }
-}
-
-function joinOrgCancel() {
-  _pendingSsoUser = false;
-  doLogout();
-}
