@@ -3892,6 +3892,51 @@ async function retagSeqChannels() {
  if (btn) { btn.textContent = 'Fix channel tags'; btn.disabled = false; }
 }
 
+// ── Refresh the SAMpaigns ────────────────────────────────────────
+// This button used to call sync_sequencing, which pulls from an external
+// sequencing tool and fails with "No sequencing provider configured" for every
+// org that does not run one. Samora does its own sequencing, so for most
+// tenants that button could only ever produce an error.
+//
+// It now does what its label says: scans the rep's own inbox for replies,
+// bounces and out-of-office across all their campaigns, then repaints the
+// list. No external dependency, and it is the scan that actually moves a
+// contact off "Not contacted".
+async function refreshSampaigns() {
+  var btn = document.getElementById('seqSyncBtn');
+  var out = document.getElementById('seqSyncOutput');
+  var label = btn ? btn.textContent : null;
+  if (btn) { btn.textContent = '↻ Refreshing…'; btn.disabled = true; }
+  if (out) out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">Checking your inbox and reloading SAMpaigns…</div>';
+  try {
+    var r = await fetch(EDGE_FN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
+      body: JSON.stringify({ action: 'sync_sampaigns' })
+    });
+    var d = await r.json();
+
+    if (!d.ok) {
+      // A missing mailbox is a setup state, not a failure. Say which one.
+      if (out) out.innerHTML = '<div style="font-size:12px;color:var(--amber);padding:6px 0">' + esc(d.error || 'Could not read your inbox.') + '</div>';
+    } else {
+      var summary = _sampaignSyncSummary(d);
+      if (out) out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">' +
+        (summary ? '<span style="color:var(--green);font-weight:600">Updated:</span> ' + esc(summary) : 'Up to date, nothing new since the last check.') +
+        '</div>';
+    }
+    // Repaint regardless. Even with no inbox changes, the list may be stale
+    // from another tab or another rep on the same account.
+    try { loadSampaignCampaigns(); } catch(e) {}
+  } catch(e) {
+    if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>';
+  } finally {
+    if (btn) { btn.textContent = label || '↻ Refresh'; btn.disabled = false; }
+  }
+}
+
+// Kept for orgs that DO connect an external sequencer. Nothing calls it from
+// the UI any more; the Refresh button above replaced it.
 async function syncSequencing() {
   var btn = document.getElementById('seqSyncBtn');
   var out = document.getElementById('seqSyncOutput');
