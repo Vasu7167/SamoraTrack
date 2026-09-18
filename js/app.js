@@ -651,7 +651,7 @@ function hideSplash(force) {
 }
 
 function launchApp() {
-  showSplash('Reading your pipeline…');
+  showSplash('Loading your pipeline, SAMpaigns and signals…');
   showScreen('appScreen');
   const role = profile?.role || 'member';
   _applyRoleChrome();
@@ -10885,7 +10885,7 @@ async function openSampaignDetail(campaignId) {
       // ── Footer: actions always reachable, never scrolled past ──
       '<div style="flex-shrink:0;display:flex;justify-content:flex-end;gap:8px;padding:12px 20px;border-top:1px solid var(--border);background:var(--surface2)">' +
         (isOwner
-          ? '<button id="sampaignSyncBtn_'+esc(campaignId)+'" onclick="syncSampaignCampaign(\''+esc(campaignId)+'\')" style="font-size:12px;font-weight:600;color:var(--gold);padding:8px 16px;border-radius:2px;background:transparent;border:1px solid rgba(var(--c-accent-rgb),0.4);cursor:pointer;font-family:var(--sans)">Sync inbox</button>' +
+          ? '<button id="sampaignSyncBtn_'+esc(campaignId)+'" onclick="syncSampaignCampaign(\''+esc(campaignId)+'\')" style="font-size:12px;font-weight:600;color:var(--gold);padding:8px 16px;border-radius:2px;background:transparent;border:1px solid rgba(var(--c-accent-rgb),0.4);cursor:pointer;font-family:var(--sans)">Refresh</button>' +
             '<button onclick="openSampaignComposer(\''+esc(campaignId)+'\')" style="font-size:12px;font-weight:600;color:#fff;padding:8px 16px;border-radius:2px;background:var(--green);border:none;cursor:pointer;font-family:var(--sans)">Schedule</button>'
           : '<span style="font-size:11px;color:var(--text3);align-self:center;margin-right:auto">Syncs from '+esc((c.owner_email||'the owner').split('@')[0])+'’s inbox, hourly</span>') +
         '<button onclick="document.getElementById(\'sampaign-detail-overlay\').remove()" style="font-size:12px;font-weight:600;color:var(--text3);padding:8px 16px;border-radius:2px;background:transparent;border:1px solid var(--border2);cursor:pointer;font-family:var(--sans)">Close</button>' +
@@ -11101,7 +11101,7 @@ async function _loadSampaignDetailPerf(campaignId, c) {
         // is about to write copy against it, so hiding it on the empty state
         // would remove it at the moment it is most needed.
         perfBox.innerHTML = _sampGoalBlock(campaignId) +
-          '<div style="font-size:12px;color:var(--text3);padding:14px 0;text-align:center">Nothing has happened yet.<br><span style="font-size:11px">Add contacts, then Schedule or Sync inbox.</span></div>';
+          '<div style="font-size:12px;color:var(--text3);padding:14px 0;text-align:center">Nothing has happened yet.<br><span style="font-size:11px">Add contacts, then Schedule or Refresh.</span></div>';
       }
     }
     var schedBox = document.getElementById('sampaignDetailSchedule');
@@ -11243,7 +11243,7 @@ function _sampaignSyncSummary(d) {
 // login against only their own mailbox (see sync_sampaigns_patch.ts).
 async function syncSampaignCampaign(campaignId) {
   var btn = document.getElementById('sampaignSyncBtn_'+campaignId);
- if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; btn.textContent = 'Syncing…'; }
+ if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; btn.textContent = 'Refreshing…'; }
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body: JSON.stringify({ action:'sync_sampaigns', campaign_id: campaignId }) });
     var d = await r.json();
@@ -11251,15 +11251,19 @@ async function syncSampaignCampaign(campaignId) {
  showToast('' + (d.error || 'Sync failed'));
     } else {
       var summary = _sampaignSyncSummary(d);
- showToast(summary ? 'Synced: ' + summary : '' + (d.note || 'Inbox scanned, nothing new.'));
+ showToast(summary ? 'Refreshed: ' + summary : '' + (d.note || 'Up to date, nothing new.'));
       var c = (window._sampaignCampaignsCache || {})[campaignId] || {};
       _loadSampaignDetailPerf(campaignId, c);
       _loadSampaignContactsInto(campaignId);
+      // Refresh the list behind the panel too. The button reads "Refresh" now,
+      // so it should refresh the SAMpaigns, not just the one open in front of
+      // you: reply counts and stage changes land on the cards as well.
+      try { loadSampaignCampaigns(); } catch(e) {}
     }
   } catch(e) {
  showToast('Sync error: ' + e.message);
   } finally {
- if (btn) { btn.disabled = false; btn.style.opacity = '1'; btn.textContent = 'Sync inbox'; }
+ if (btn) { btn.disabled = false; btn.style.opacity = '1'; btn.textContent = 'Refresh'; }
   }
 }
 
