@@ -5268,8 +5268,66 @@ function tmplKey() {
   if (legacyData && legacyData !== '[]') { try { const existing = JSON.parse(localStorage.getItem('dt-tmpl-' + uid)||'[]'); if (!existing.length) localStorage.setItem('dt-tmpl-' + uid, legacyData); } catch {} localStorage.removeItem(legacyKey); }
   return 'dt-tmpl-' + uid;
 }
-function getTemplates() { const k = tmplKey(); if (!k) return []; try { return JSON.parse(localStorage.getItem(k)||'[]'); } catch { return []; } }
-function saveTemplates(list) { const k = tmplKey(); if (!k) return; localStorage.setItem(k, JSON.stringify(list)); }
+// ── Task templates: server backed, localStorage as a cache ──────────────
+// These used to live ONLY in localStorage, which meant a rep who opened the
+// app on a different laptop, cleared their browser, or switched to a new
+// machine lost every template they had written, with no way to get them back
+// and nobody able to help. They are now kept per user on the server and
+// mirrored locally, so the list follows the person and still renders instantly
+// before the fetch returns.
+//
+// getTemplates() and saveTemplates() keep their synchronous signatures on
+// purpose: they are called from render and click handlers all over this file,
+// and making them async would have meant touching every one of those.
+var _tmplCache = null;          // server truth once loaded
+var _tmplLoading = false;
+
+function getTemplates() {
+  if (_tmplCache) return _tmplCache;
+  const k = tmplKey(); if (!k) return [];
+  try { return JSON.parse(localStorage.getItem(k) || '[]'); } catch { return []; }
+}
+
+function saveTemplates(list) {
+  _tmplCache = list;
+  // Local mirror first so the UI never waits on the network, then push.
+  const k = tmplKey(); if (k) { try { localStorage.setItem(k, JSON.stringify(list)); } catch(e) {} }
+  try {
+    fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'set_user_kv', key:'task_templates', value: JSON.stringify(list) }) });
+  } catch(e) { /* the local copy is already saved; a failed sync is not a lost template */ }
+}
+
+// Runs once. Pulls the server copy, and the first time a rep with existing
+// local templates signs in, pushes those up rather than letting the empty
+// server copy overwrite what they already had.
+async function ensureTaskTemplatesLoaded(onReady) {
+  if (_tmplCache || _tmplLoading) { if (onReady) onReady(); return; }
+  _tmplLoading = true;
+  let server = [];
+  try {
+    const r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'get_user_kv', key:'task_templates' }) });
+    const d = await r.json();
+    const raw = d && d.value;
+    server = typeof raw === 'string' ? JSON.parse(raw || '[]') : (Array.isArray(raw) ? raw : []);
+  } catch(e) { server = []; }
+
+  let local = [];
+  const k = tmplKey();
+  if (k) { try { local = JSON.parse(localStorage.getItem(k) || '[]'); } catch(e) { local = []; } }
+
+  if (!server.length && local.length) {
+    // One time migration. Their existing templates become the server copy.
+    _tmplCache = local;
+    saveTemplates(local);
+  } else {
+    _tmplCache = server;
+    if (k) { try { localStorage.setItem(k, JSON.stringify(server)); } catch(e) {} }
+  }
+  _tmplLoading = false;
+  if (onReady) onReady();
+}
 function buildTasksText() {
   const d = dayData(viewDate);
   const tasks = d.tasks || [];
@@ -5382,6 +5440,9 @@ function copyTaskText() {
 function openTemplateManager() { document.getElementById('templateModal').style.display = 'flex'; renderTemplateList(); }
 function closeTemplateManager() { document.getElementById('templateModal').style.display = 'none'; }
 function renderTemplateList() {
+  // First paint uses whatever is cached locally, then repaints once the
+  // server copy lands, so the list is never blank while the fetch is in flight.
+  if (!_tmplCache) ensureTaskTemplatesLoaded(function(){ renderTemplateList(); });
   const templates = getTemplates(); const list = document.getElementById('tmplList'); const count = document.getElementById('tmplCount');
   count.textContent = templates.length ? `(${templates.length})` : '';
   if (!templates.length) { list.innerHTML = '<div style="font-size:13px;color:var(--text3);font-style:italic;padding:8px 0">No template tasks yet. Add some above.</div>'; return; }
