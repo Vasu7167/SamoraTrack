@@ -492,7 +492,7 @@ export async function executeTool(accessToken, name, args = {}) {
         wave: launch,
         what_we_sell: ctxR.ok ? ctxR.v : { error: ctxR.e },
         proof: storiesR.ok ? (storiesR.v.stories || []) : [],
-        proof_rule: 'These are the ONLY results, client names and quotations you may use. Never invent one and never embellish one. Where usable_publicly is false, you may use what the story proves but must not name the client or attribute the quote.',
+        proof_rule: 'These are the ONLY results, client names and quotations you may use. Never invent one and never embellish one. Where usable_publicly is false, you may use what the story proves but must not name the client or attribute the quote. Where a story carries a url, link the claim to it with <a href>: a reader who can go and read the case study is worth more than one more adjective, and it is only ever present on a story cleared for public use. Pick the story whose industries, personas and keywords match THIS contact, not the first in the list, and use at most one per email.',
         account_evidence: evidence,
         write_for: writeFor,
         write_for_count: writeFor.length,
