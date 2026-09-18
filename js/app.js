@@ -9236,6 +9236,10 @@ function loadSampaignWorkspace() {
       '<input id="sampaignRegion" placeholder="Region (optional)" style="padding:8px 10px;border:1px solid var(--border);border-radius:2px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
       '<div style="font-size:11px;color:var(--text3)">Campaign goal / ask — what are you pitching and what do you want them to do? (used by AI drafting tools, e.g. Claude via connector)</div>' +
       '<select id="sampaignGoalTemplate" onchange="applyGoalTemplate()" style="padding:8px 10px;border:1px solid var(--border);border-radius:2px;background:var(--surface2);color:var(--text);font-family:var(--sans);font-size:12px;display:none"></select>' +
+      '<div style="display:flex;gap:10px;align-items:center">' +
+        '<a id="sampaignGoalSave" onclick="saveGoalAsTemplate()" style="font-size:11px;color:var(--gold);cursor:pointer;display:none">Save this goal for next time</a>' +
+        '<a id="sampaignGoalForget" onclick="forgetGoalTemplate()" style="font-size:11px;color:var(--text3);cursor:pointer;display:none">Forget selected</a>' +
+      '</div>' +
       '<textarea id="sampaignGoal" rows="2" placeholder="e.g. Introduce our retail execution platform, get a 15-min discovery call booked with the regional sales lead" style="padding:8px 10px;border:1px solid var(--border);border-radius:2px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans);resize:vertical;height:48px"></textarea>' +
       '<div style="font-size:11px;color:var(--text3)">Who is this one for? A short label so you can tell it apart later (e.g. RTM leadership, Plant heads)</div>' +
       '<input id="sampaignFocus" maxlength="48" placeholder="Focus (e.g. RTM leadership)" style="padding:8px 10px;border:1px solid var(--border);border-radius:2px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
@@ -9330,32 +9334,106 @@ function toggleNewSampaignForm() {
 // campaign to whoever writes the drafts. Admin keeps the list, the rep picks.
 // The picker stays HIDDEN when an org has none, so a tenant that has not set
 // any never sees an empty dropdown asking to be used.
-var _goalTemplates = [];
+var _goalTemplates = [];      // { label, goal, mine }
+// Two tiers on purpose. The org list is the house pitches, kept by an admin so
+// everyone runs the same campaign the same way. The personal list is the goal
+// THIS rep keeps reusing, which is nobody else's business and should not need
+// an admin to add. Personal ones are stored server side rather than in
+// localStorage, unlike the daily task templates, so they survive a new laptop.
 async function loadGoalTemplates() {
+  var org = [], mine = [];
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
       body: JSON.stringify({ action:'get_org_setting', key:'campaign_goal_templates' }) });
     var d = await r.json();
     var raw = d && d.value;
-    _goalTemplates = typeof raw === 'string' ? JSON.parse(raw || '[]') : (Array.isArray(raw) ? raw : []);
-  } catch(e) { _goalTemplates = []; }
+    org = typeof raw === 'string' ? JSON.parse(raw || '[]') : (Array.isArray(raw) ? raw : []);
+  } catch(e) { org = []; }
+  try {
+    var r2 = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+      body: JSON.stringify({ action:'get_user_kv', key:'campaign_goal_templates' }) });
+    var d2 = await r2.json();
+    var raw2 = d2 && d2.value;
+    mine = typeof raw2 === 'string' ? JSON.parse(raw2 || '[]') : (Array.isArray(raw2) ? raw2 : []);
+  } catch(e) { mine = []; }
+
+  _goalTemplates = mine.map(function(t){ return { label: t.label, goal: t.goal, mine: true }; })
+    .concat(org.map(function(t){ return { label: t.label, goal: t.goal, mine: false }; }));
+
   var sel = document.getElementById('sampaignGoalTemplate');
+  var save = document.getElementById('sampaignGoalSave');
+  if (save) save.style.display = '';
   if (!sel) return;
   if (!_goalTemplates.length) { sel.style.display = 'none'; return; }
-  sel.innerHTML = '<option value="">Start from a saved goal, or write your own below</option>' +
-    _goalTemplates.map(function(t, i){ return '<option value="'+i+'">'+esc(t.label || ('Template '+(i+1)))+'</option>'; }).join('');
+  var opt = function(t, i){ return '<option value="'+i+'">'+esc(t.label || ('Template '+(i+1)))+'</option>'; };
+  var html = '<option value="">Start from a saved goal, or write your own below</option>';
+  var mineOpts = _goalTemplates.map(function(t,i){ return t.mine ? opt(t,i) : ''; }).join('');
+  var orgOpts  = _goalTemplates.map(function(t,i){ return t.mine ? '' : opt(t,i); }).join('');
+  if (mineOpts) html += '<optgroup label="My goals">' + mineOpts + '</optgroup>';
+  if (orgOpts)  html += '<optgroup label="Shared across your organisation">' + orgOpts + '</optgroup>';
+  sel.innerHTML = html;
   sel.style.display = '';
+  _syncGoalTemplateButtons();
 }
+
+function _syncGoalTemplateButtons() {
+  var sel = document.getElementById('sampaignGoalTemplate');
+  var del = document.getElementById('sampaignGoalForget');
+  if (!del) return;
+  var t = sel ? _goalTemplates[parseInt(sel.value, 10)] : null;
+  // Only a rep's OWN template is theirs to remove. The org list belongs to
+  // the admin, and a rep deleting it for everyone from a create form would be
+  // a surprise nobody could undo.
+  del.style.display = (t && t.mine) ? '' : 'none';
+}
+
 function applyGoalTemplate() {
   var sel = document.getElementById('sampaignGoalTemplate');
   var box = document.getElementById('sampaignGoal');
+  _syncGoalTemplateButtons();
   if (!sel || !box) return;
   var t = _goalTemplates[parseInt(sel.value, 10)];
   if (!t) return;
   // Never silently overwrite something the rep has already typed.
-  if (box.value.trim() && !confirm('Replace the goal you have written with the "' + (t.label||'selected') + '" template?')) { sel.value = ''; return; }
+  if (box.value.trim() && !confirm('Replace the goal you have written with the "' + (t.label||'selected') + '" template?')) { sel.value = ''; _syncGoalTemplateButtons(); return; }
   box.value = t.goal || '';
   box.focus();
+}
+
+async function _saveMyGoalTemplates(list) {
+  await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+    body: JSON.stringify({ action:'set_user_kv', key:'campaign_goal_templates', value: JSON.stringify(list) }) });
+}
+
+async function saveGoalAsTemplate() {
+  var box = document.getElementById('sampaignGoal');
+  var goal = box ? box.value.trim() : '';
+  if (!goal) { showToast('Write the goal first, then save it as a template'); return; }
+  var label = prompt('Name this goal so you can find it again:', goal.slice(0, 40));
+  if (!label || !label.trim()) return;
+  var mine = _goalTemplates.filter(function(t){ return t.mine; }).map(function(t){ return { label: t.label, goal: t.goal }; });
+  // Same name means they are updating it, not making a near-duplicate.
+  var at = mine.findIndex(function(t){ return (t.label||'').toLowerCase() === label.trim().toLowerCase(); });
+  if (at >= 0) mine[at] = { label: label.trim(), goal: goal }; else mine.push({ label: label.trim(), goal: goal });
+  try {
+    await _saveMyGoalTemplates(mine);
+    showToast(at >= 0 ? 'Template updated' : 'Saved to your goals');
+    await loadGoalTemplates();
+  } catch(e) { showToast('Could not save: ' + e.message); }
+}
+
+async function forgetGoalTemplate() {
+  var sel = document.getElementById('sampaignGoalTemplate');
+  var t = sel ? _goalTemplates[parseInt(sel.value, 10)] : null;
+  if (!t || !t.mine) return;
+  if (!confirm('Remove "' + (t.label||'this goal') + '" from your saved goals?')) return;
+  var mine = _goalTemplates.filter(function(x){ return x.mine && x.label !== t.label; }).map(function(x){ return { label: x.label, goal: x.goal }; });
+  try {
+    await _saveMyGoalTemplates(mine);
+    showToast('Removed');
+    if (sel) sel.value = '';
+    await loadGoalTemplates();
+  } catch(e) { showToast('Could not remove: ' + e.message); }
 }
 
 // Guards the whole submit, not just the button, because the button can be
