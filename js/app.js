@@ -33,7 +33,7 @@ let GOOGLE_CLIENT_ID_SAM = localStorage.getItem('dt-google-client-id') || '31854
 // Filled in once the Azure app registration exists. Overridable per tenant the
 // same way Google is, because an enterprise customer will want the consent to
 // come from an app registered in THEIR directory, not ours.
-let MICROSOFT_CLIENT_ID_SAM = localStorage.getItem('dt-microsoft-client-id') || '';
+let MICROSOFT_CLIENT_ID_SAM = localStorage.getItem('dt-microsoft-client-id') || '716a27e9-658b-4760-a568-6e2eccdf51a9';
 let currentUser = null;
 let profile = null;
 let allData = {};
