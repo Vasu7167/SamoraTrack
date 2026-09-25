@@ -25,6 +25,15 @@ let EDGE_FN_URL = SB_URL + '/functions/v1/sam-gmail-signals';
 // Google OAuth Client ID is also per-tenant (each org should use its own
 // Google Cloud project — see deployment notes) — overridable the same way.
 let GOOGLE_CLIENT_ID_SAM = localStorage.getItem('dt-google-client-id') || '318545862958-fgv5rapqspaff680u8l6ul2kchkpu6ph.apps.googleusercontent.com';
+// Microsoft is the same shape and was NOT wired up: connectOutlook() carried a
+// hardcoded empty string, so the Connect Outlook button could only ever show
+// its own setup alert. The edge function has read Graph for months, which made
+// Outlook look supported. It was supported with no front door.
+//
+// Filled in once the Azure app registration exists. Overridable per tenant the
+// same way Google is, because an enterprise customer will want the consent to
+// come from an app registered in THEIR directory, not ours.
+let MICROSOFT_CLIENT_ID_SAM = localStorage.getItem('dt-microsoft-client-id') || '';
 let currentUser = null;
 let profile = null;
 let allData = {};
@@ -144,7 +153,7 @@ const SSO_SCOPES = {
     'email', 'profile'
   ].join(' '),
   // Supabase calls the Microsoft provider "azure".
-  microsoft: 'openid email profile offline_access Mail.Read Mail.Send Calendars.Read'
+  microsoft: 'openid email profile offline_access Mail.Read Mail.Send Calendars.ReadWrite User.Read'
 };
 
 // ── Which providers are actually turned on ─────────────────────────────────
@@ -1400,13 +1409,20 @@ function connectOutlook() {
   // Microsoft OAuth 2.0 authorization URL
   // 'common' tenant = supports personal accounts (Hotmail, Outlook.com)
   //                    + work accounts (Microsoft 365, Exchange Online)
-  const MS_CLIENT_ID = ''; // Set this after Azure App Registration
+  const MS_CLIENT_ID = MICROSOFT_CLIENT_ID_SAM;
   if (!MS_CLIENT_ID) {
-    alert('Microsoft integration setup required.\n\nAsk your Samora admin to:\n1. Create an Azure App Registration\n2. Add MICROSOFT_CLIENT_ID to edge function secrets\n3. Set the redirect URI to: ' + window.location.origin);
+    alert('Outlook is not configured yet.\n\nYour Samora admin needs to:\n1. Register an app in Azure (Microsoft Entra ID → App registrations)\n2. Add the redirect URI: ' + window.location.origin + '\n3. Grant the delegated permissions Mail.Read, Mail.Send, Calendars.ReadWrite, User.Read, offline_access\n4. Put the application (client) ID into SamoraTrack, and the client secret into the edge function as MICROSOFT_CLIENT_SECRET');
     return;
   }
   const redirectUri = window.location.origin;
-  const scopes = 'Mail.Read Calendars.Read offline_access User.Read';
+  // Must match MS_SCOPES in the edge function. The grant is decided HERE, at
+  // consent time: widening the copy in the edge function alone changes nothing,
+  // because the refresh token only ever carries what this URL asked for.
+  //
+  // Mail.Send is what makes SAMpaign sending possible at all.
+  // Calendars.ReadWrite is what the calendar-write path has been asking reps to
+  // reconnect for, back when reconnecting requested read only.
+  const scopes = 'Mail.Read Mail.Send Calendars.ReadWrite offline_access User.Read';
   const state = 'user_' + currentUser.id; // carry user context through OAuth
   const authUrl = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize' +
     '?client_id=' + encodeURIComponent(MS_CLIENT_ID) +
