@@ -33,13 +33,13 @@
       if (code) {
         // Post code back to the opener (SamoraTrack main window)
         if (window.opener) {
-          window.opener.postMessage({ code: code }, 'https://samoratrack.vercel.app');
+          window.opener.postMessage({ code: code }, window.location.origin);
           document.getElementById('msg').textContent = 'Connected. Closing…';
           setTimeout(function() { window.close(); }, 800);
         } else {
           // Opener closed — redirect back with code in hash for fallback
           document.getElementById('msg').textContent = 'Almost done…';
-          window.location.href = 'https://samoratrack.vercel.app/?gmail_code=' + encodeURIComponent(code);
+          window.location.href = window.location.origin + '/?gmail_code=' + encodeURIComponent(code);
         }
       } else {
         document.getElementById('msg').textContent = 'No authorisation code received.';
