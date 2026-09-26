@@ -2168,11 +2168,11 @@ function renderMarketSignalCard(s) {
 
 function connectGmail() {
   const scope = encodeURIComponent('https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/userinfo.email');
-  const redirectUri = 'https://samoratrack.vercel.app/gmail-callback.html';
+  const redirectUri = window.location.origin + '/gmail-callback.html';
   const url = 'https://accounts.google.com/o/oauth2/v2/auth?client_id=' + GOOGLE_CLIENT_ID_SAM + '&redirect_uri=' + encodeURIComponent(redirectUri) + '&response_type=code&scope=' + scope + '&access_type=offline&prompt=consent';
   const popup = window.open(url, 'gmail_oauth', 'width=500,height=600,left=200,top=100');
   window.addEventListener('message', async function handler(e) {
-    if (e.origin !== 'https://samoratrack.vercel.app') return;
+    if (e.origin !== window.location.origin) return;
     if (!e.data?.code) return;
     window.removeEventListener('message', handler);
     if (popup) popup.close();
