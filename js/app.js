@@ -1972,6 +1972,131 @@ function _pushSupported() {
 function _isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
 }
+
+// ══ INSTALL AS AN APP ══════════════════════════════════════════════════════
+// Android Chrome, Edge and Samsung Internet fire beforeinstallprompt once the
+// manifest, icons and service worker qualify. We hold on to it so OUR button
+// can open the browser's real install dialog: one tap, then it is on the home
+// screen. iPhone has no such event and no API at all; Apple only allows Share,
+// then Add to Home Screen, so there the button opens a three-step guide.
+var _deferredInstall = null;
+window.addEventListener('beforeinstallprompt', function (e) {
+  e.preventDefault();
+  _deferredInstall = e;
+  _maybeShowInstallBar();
+  try { refreshInstallStatus(); } catch (_e) {}
+});
+window.addEventListener('appinstalled', function () {
+  _deferredInstall = null;
+  _hideInstallBar();
+  try { showToast('SamoraOS is on your home screen'); } catch (_e) {}
+  try { refreshInstallStatus(); } catch (_e) {}
+});
+function _isIOS() {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+function _isPhoneSized() {
+  return window.matchMedia('(max-width: 899px)').matches && window.matchMedia('(pointer: coarse)').matches;
+}
+async function installSamoraApp() {
+  if (_isStandalone()) { try { showToast('You are already using the installed app'); } catch (_e) {} return; }
+  if (_deferredInstall) {
+    var ev = _deferredInstall;
+    _deferredInstall = null;            // a prompt can only be used once
+    try {
+      ev.prompt();
+      var choice = await ev.userChoice;
+      if (choice && choice.outcome === 'accepted') _hideInstallBar();
+    } catch (e) { _showInstallGuide(); }
+    try { refreshInstallStatus(); } catch (_e) {}
+    return;
+  }
+  _showInstallGuide();
+}
+function _showInstallGuide() {
+  document.getElementById('installSheet')?.remove();
+  var ios = _isIOS();
+  var shareIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px"><path d="M12 15V3M8 7l4-4 4 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"/></svg>';
+  var steps = ios
+    ? ['Tap the Share button ' + shareIcon + ' in the browser bar (bottom of the screen in Safari, top right in Chrome).',
+       'Scroll down the list and tap <strong>Add to Home Screen</strong>.',
+       'Tap <strong>Add</strong>. SamoraOS now opens from its own icon, full screen.']
+    : ['Open your browser menu (the three dots, top right).',
+       'Tap <strong>Install app</strong> or <strong>Add to Home screen</strong>.',
+       'Confirm. SamoraOS now opens from its own icon, full screen.'];
+  var el = document.createElement('div');
+  el.className = 'install-sheet'; el.id = 'installSheet';
+  el.innerHTML = '<div class="install-sheet-in" onclick="event.stopPropagation()">' +
+    '<h3>Add SamoraOS to your home screen</h3>' +
+    '<p>' + (ios ? 'On iPhone this takes three taps. It is also what lets SamoraOS send you notifications.' : 'Your browser did not offer a one-tap install here, so it takes three taps from its menu.') + '</p>' +
+    steps.map(function (t, i) { return '<div class="install-step"><b>' + (i + 1) + '</b><div>' + t + '</div></div>'; }).join('') +
+    '<button class="install-sheet-done" onclick="document.getElementById(\'installSheet\').remove()">Got it</button>' +
+  '</div>';
+  el.addEventListener('click', function () { el.remove(); });
+  document.body.appendChild(el);
+}
+
+// The bar itself. Phones only, never inside the installed app, and once
+// dismissed it stays away for two weeks: the You tab keeps a permanent
+// Install row for anyone who changes their mind.
+function _installDismissedRecently() {
+  try { var t = parseInt(localStorage.getItem('dt-install-dismissed') || '0', 10); return t && (Date.now() - t) < 14 * 86400000; } catch (e) { return false; }
+}
+function dismissInstallBar() {
+  try { localStorage.setItem('dt-install-dismissed', String(Date.now())); } catch (e) {}
+  _hideInstallBar();
+}
+function _hideInstallBar() { var b = document.getElementById('installBar'); if (b) b.classList.remove('show'); }
+function _maybeShowInstallBar() {
+  if (_isStandalone() || !_isPhoneSized() || _installDismissedRecently()) return;
+  var b = document.getElementById('installBar');
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'installBar'; b.className = 'install-bar';
+    b.innerHTML = '<img src="/icons/icon-96.png" alt="">' +
+      '<div><div class="install-bar-t">Get SamoraOS on your home screen</div><div class="install-bar-s">Opens full screen, like an app</div></div>' +
+      '<button class="install-bar-go" onclick="installSamoraApp()">Install</button>' +
+      '<button class="install-bar-x" aria-label="Not now" onclick="dismissInstallBar()">×</button>';
+    document.body.appendChild(b);
+  }
+  // On the sign-in screen nothing else lives at the bottom. Inside the app the
+  // bottom belongs to the nav bar and the SAM button, so the bar sits on top.
+  var onAuth = !!document.getElementById('authScreen')?.classList.contains('active');
+  b.classList.toggle('at-bottom', onAuth);
+  b.classList.toggle('at-top', !onAuth);
+  b.classList.add('show');
+}
+function refreshInstallStatus() {
+  var st = document.getElementById('youInstallStatus');
+  var btn = document.getElementById('youInstallBtn');
+  if (!st || !btn) return;
+  if (_isStandalone()) {
+    st.innerHTML = '<span style="color:var(--green)">Installed. You are using the app now.</span>';
+    btn.style.display = 'none';
+  } else if (_deferredInstall) {
+    st.textContent = 'Ready to install in one tap.';
+    btn.style.display = ''; btn.textContent = 'Install SamoraOS';
+  } else {
+    st.textContent = _isIOS() ? 'On iPhone this is three taps from the Share menu.' : 'Install from your browser menu, or tap below for the steps.';
+    btn.style.display = ''; btn.textContent = _isIOS() ? 'Show me how' : 'Install SamoraOS';
+  }
+}
+// iPhone never fires beforeinstallprompt, so offer the guide on a timer
+// instead. Android waits for the event, so the button always works first time.
+setTimeout(function () { if (_isIOS()) _maybeShowInstallBar(); }, 2500);
+// Re-place the bar when the user signs in or out, since the auth screen and
+// the app want it at different edges.
+(function () {
+  var hook = function () {
+    var scr = document.getElementById('authScreen');
+    if (!scr) return;
+    new MutationObserver(function () {
+      var b = document.getElementById('installBar');
+      if (b && b.classList.contains('show')) _maybeShowInstallBar();
+    }).observe(scr, { attributes: true, attributeFilter: ['class'] });
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', hook); else hook();
+})();
 async function refreshPushStatus() {
   var statusEl = document.getElementById('youPushStatus');
   var btn = document.getElementById('pushToggleBtn');
@@ -8038,18 +8163,30 @@ function buildAuthOrbit() {
   // Clear whatever a previous build left, particles included. Their loops
   // check isConnected and end themselves once removed.
   stage.querySelectorAll('.aos-src,.aos-spoke,.aos-line,.aos-flow,.aos-hint').forEach(function (n) { n.remove(); });
+  // Let flexbox decide the box's height afresh. A height pinned by an earlier
+  // build (the fallback path below) would otherwise be measured as if it were
+  // the space available, and the orbital would never grow back.
+  viz.style.height = '';
   const avail = viz.clientWidth;
   // Below 900px the whole pane is display:none, so there is nothing to size.
   if (!avail || !_authOrbitLive()) return;
 
-  const W = 720, H = 620;
-  const sc = Math.min(1, avail / W);
+  const W = 720, H = 620, HH = H + 34;   // +34: the hint line below the stage
+  // Fit BOTH dimensions. Scaling to width alone made the orbital as tall as
+  // the pane was wide, so on a wide screen the tagline was pushed below the
+  // fold and the sign-in page scrolled. The pane is now exactly one screen
+  // tall (CSS) and this box gets whatever height is left after the brand row
+  // and the tagline.
+  const availH = viz.clientHeight;
+  const sc = availH > 120 ? Math.min(1, avail / W, availH / HH) : Math.min(1, avail / W);
   stage.style.transform = 'scale(' + sc + ')';
+  // Centre the scaled stage in the space it was given.
+  stage.style.left = Math.max(0, (avail - W * sc) / 2) + 'px';
+  stage.style.top = availH > 120 ? Math.max(0, (availH - HH * sc) / 2) + 'px' : '0px';
+  if (availH <= 120) viz.style.height = Math.round(HH * sc) + 'px';
   // Type back up by the inverse of the scale, capped: past 1.2 the cards
   // grow into each other, which is the exact failure this layout avoids.
   stage.style.setProperty('--k', String(Math.min(1 / sc, 1.2).toFixed(3)));
-  // +34 makes room for the hint line, which sits just below the stage.
-  viz.style.height = Math.round((H + 34) * sc) + 'px';
 
   const cx = W / 2, cy = H / 2;
   const irx = Math.min(W * 0.355, 245), iry = Math.min(H * 0.325, 195);
@@ -8150,13 +8287,13 @@ function buildAuthOrbit() {
   // Webfonts change card widths after first paint. Rebuild once they land so
   // the hover widths are measured against the real type.
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(go);
-  let rt = null, lastW = window.innerWidth;
+  let rt = null, lastW = window.innerWidth, lastH = window.innerHeight;
   window.addEventListener('resize', function () {
     clearTimeout(rt);
     rt = setTimeout(function () {
-      // Width is the only thing the layout depends on.
-      if (window.innerWidth === lastW) return;
-      lastW = window.innerWidth;
+      // Height matters now too: the orbital fits the pane in both directions.
+      if (window.innerWidth === lastW && window.innerHeight === lastH) return;
+      lastW = window.innerWidth; lastH = window.innerHeight;
       go();
     }, 200);
   });
