@@ -255,7 +255,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
      beats .screen.active (20) and .screen (10), so the auth screen renders
      permanently: you sign in, the app mounts behind it, and the login card
      just sits on top with its button stuck on "Please wait...". */
-  #authScreen.active{display:flex}
+  #authScreen.active{display:flex;height:100vh;overflow:hidden}
+  #authScreen.active .auth-card{max-height:100vh;overflow-y:auto}
   /* The left pane is the website hero, not the product: same dark ground, same
      orbital, same type. It stays dark in light mode on purpose, because it is
      the brand panel and the form beside it is where the theme applies. */
@@ -265,8 +266,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
      css/style.css section 6): a warm red-brown bloom top right, a gold one
      bottom left, over a brown-black diagonal. The previous flat #18160F
      radial is what made this pane read darker than the site. */
-  .auth-aside{display:flex;flex-direction:column;justify-content:space-between;gap:18px;
-    flex:0 0 50%;max-width:none;padding:36px 48px 32px;position:relative;overflow:hidden;
+  .auth-aside{display:flex;flex-direction:column;justify-content:flex-start;gap:14px;
+    flex:0 0 50%;max-width:none;height:100vh;box-sizing:border-box;padding:32px 48px 26px;position:relative;overflow:hidden;
     background:radial-gradient(ellipse 70% 90% at 82% 12%,rgba(139,35,21,.20),transparent 58%),
                radial-gradient(ellipse 80% 70% at 10% 92%,rgba(160,117,42,.13),transparent 60%),
                linear-gradient(168deg,#211C13 0%,#18150E 52%,#12100A 100%);
@@ -285,9 +286,11 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
   @keyframes aosDrift{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-6%,5%) scale(1.12)}}
   .auth-aside-brand{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:var(--w-medium);color:var(--o-iv);position:relative;z-index:2}
   .auth-aside-mark{width:24px;height:24px;flex-shrink:0;display:block}
-  .auth-aside-body{max-width:460px;position:relative;z-index:2}
-  .auth-quote{font-size:19px;line-height:1.4;font-weight:var(--w-regular);color:#E4DDCF;letter-spacing:-0.005em}
-  .auth-aside-foot{font-size:11px;color:#7A746A;position:relative;z-index:2}
+  .auth-aside-body{max-width:560px;margin:0 auto;text-align:center;position:relative;z-index:2;flex:0 0 auto}
+  .auth-eyebrow{font-family:var(--o-mono);font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--o-gl);margin-bottom:12px}
+  .auth-quote{font-family:var(--o-serif);font-size:clamp(22px,1.75vw,29px);line-height:1.22;font-weight:500;color:var(--o-iv);letter-spacing:.003em}
+  .auth-quote em{font-style:italic;color:var(--o-gpl)}
+  .auth-aside-foot{flex:0 0 auto;text-align:center;font-family:var(--o-mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#6B6559;position:relative;z-index:2}
 
   /* ── Orbital ───────────────────────────────────────────────────────────
      A fixed 720x620 stage, the website's own desktop geometry, scaled as one
@@ -297,7 +300,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
      --k puts type back up when the scale shrinks it, capped so the cards do
      not grow into each other. Every class is aos- prefixed so none of the
      product's styles can reach in, or out. */
-  .aos-viz{position:relative;z-index:1;width:100%;flex:0 0 auto}
+  /* Takes the height left after the brand row and the tagline. buildAuthOrbit
+     scales the stage to fit BOTH dimensions, so it can never push the page
+     past one screen, which is what made the old version scroll. */
+  .aos-viz{position:relative;z-index:1;width:100%;flex:1 1 auto;min-height:0}
   .aos-stage{position:absolute;top:0;left:0;width:720px;height:620px;transform-origin:top left;--k:1}
   .aos-core{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:176px;height:176px;border-radius:50%;
     background:radial-gradient(circle at 35% 30%,#3A2E17,#18160F);border:1px solid var(--o-gold);
@@ -1063,6 +1069,29 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
 .intel-stat-card{background:var(--surface);border:1px solid var(--border);border-radius:3px;padding:12px;text-align:center}
 .intel-stat-n{font-family:var(--font);font-size:26px;font-weight:700;line-height:1;margin-bottom:3px}
 .intel-stat-l{font-size:11px;color:var(--text3)}
+
+/* ── Install as an app ────────────────────────────────────────────────────
+   One tap on Android (the browser's own install prompt), step-by-step on
+   iPhone, where Apple offers no button a page can press. */
+.install-bar{position:fixed;left:12px;right:12px;z-index:9000;display:none;align-items:center;gap:12px;
+  padding:12px 12px 12px 14px;background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-md,3px);
+  box-shadow:0 12px 34px rgba(0,0,0,.22);font-family:var(--font)}
+.install-bar.show{display:flex}
+.install-bar.at-bottom{bottom:max(12px,env(safe-area-inset-bottom))}
+.install-bar.at-top{top:max(10px,env(safe-area-inset-top))}
+.install-bar img{width:40px;height:40px;border-radius:9px;flex-shrink:0;border:1px solid var(--border2);box-sizing:border-box}  /* the icon is white-backed, so without an edge it vanishes into the white bar */
+.install-bar-t{font-size:13px;font-weight:var(--w-medium);color:var(--text);line-height:1.3}
+.install-bar-s{font-size:11px;color:var(--text3);margin-top:2px}
+.install-bar-go{margin-left:auto;padding:9px 14px;border:none;border-radius:var(--r-sm,2px);background:var(--c-accent-solid,#B8860B);color:var(--c-on-accent,#fff);font-family:var(--font);font-size:12px;font-weight:var(--w-semibold);cursor:pointer;white-space:nowrap}
+.install-bar-x{background:none;border:none;color:var(--text3);font-size:20px;line-height:1;cursor:pointer;padding:2px 4px}
+.install-sheet{position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center}
+.install-sheet-in{background:var(--bg);width:100%;max-width:480px;border-radius:14px 14px 0 0;padding:22px 20px max(22px,env(safe-area-inset-bottom));font-family:var(--font)}
+.install-sheet h3{margin:0 0 4px;font-size:17px;font-weight:var(--w-semibold);color:var(--text)}
+.install-sheet p{margin:0 0 16px;font-size:12px;color:var(--text3);line-height:1.5}
+.install-step{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--border)}
+.install-step b{flex-shrink:0;width:22px;height:22px;border-radius:50%;background:var(--surface2);color:var(--text);font-size:12px;display:flex;align-items:center;justify-content:center}
+.install-step div{font-size:13px;color:var(--text);line-height:1.45}
+.install-sheet-done{margin-top:14px;width:100%;padding:11px;border:1px solid var(--border2);border-radius:var(--r-sm,2px);background:var(--surface);color:var(--text);font-family:var(--font);font-size:13px;font-weight:var(--w-medium);cursor:pointer}
 </style>
 <script src="/js/vendor/sortable.min.js"></script>
 </head>
@@ -1110,7 +1139,8 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
       </div>
     </div>
     <div class="auth-aside-body">
-      <div class="auth-quote">Pipeline you can actually trust, because every number shows where it came from.</div>
+      <div class="auth-eyebrow">The Revenue Operating System</div>
+      <div class="auth-quote">Pipeline you can actually trust, because every number <em>shows where it came from.</em></div>
     </div>
     <div class="auth-aside-foot">A Samora Intelligence tool</div>
   </div>
@@ -1919,6 +1949,13 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
       <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Connect your personal meeting recorder for direct transcript import and richer call signals.</div>
       <div id="youNotetakerStatus" style="font-size:12px;color:var(--text3);margin-bottom:8px">No notetaker connected</div>
       <button onclick="openNotetakerConnect()" style="padding:7px 14px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.5v5M15 3.5v5M6.5 8.5h11v3a5.5 5.5 0 01-11 0zM12 17v4"/></svg> Manage connections</button> </div> </div> </div>
+    <div class="you-acc" id="youAcc-install">
+      <button class="you-menu-item" onclick="toggleYouAcc('install'); refreshInstallStatus();"><span><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18.5h2"/></svg> Install app</span><span class="you-arrow you-acc-chev">›</span></button>
+      <div class="you-acc-body">
+    <div class="admin-card" style="margin-bottom:0">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Put SamoraOS on your home screen. It opens full screen like any other app, and on iPhone it is also what makes notifications work.</div>
+      <div id="youInstallStatus" style="font-size:12px;color:var(--text3);margin-bottom:10px">Checking…</div>
+      <button id="youInstallBtn" onclick="installSamoraApp()" style="padding:8px 14px;border-radius:2px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:700;cursor:pointer">Install SamoraOS</button> </div> </div> </div>
     <div class="you-acc" id="youAcc-notifications">
       <button class="you-menu-item" onclick="toggleYouAcc('notifications')"><span><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 10a5.5 5.5 0 0111 0c0 4.4 2 6 2 6h-15s2-1.6 2-6zM10.3 20a2 2 0 003.4 0"/></svg> Notifications</span><span class="you-arrow you-acc-chev">›</span></button>
       <div class="you-acc-body">
