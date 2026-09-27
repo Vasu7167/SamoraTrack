@@ -1,0 +1,666 @@
+/**
+ * _tools.js — shared logic for all connector API routes
+ *
+ * Sessions stored in Supabase mcp_sessions table.
+ * No Vercel KV, no extra services — Supabase is already here.
+ */
+
+import crypto from 'node:crypto';
+
+export const SB_URL   = process.env.SB_URL   || 'https://gowpuicpmrwsohongosf.supabase.co';
+export const SB_ANON  = process.env.SB_ANON  || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdvd3B1aWNwbXJ3c29ob25nb3NmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzOTExMDgsImV4cCI6MjA5NTk2NzEwOH0.35CjODxyxOjAKp-xBOBx4oAXO_qjLyVttVaJEhp7YEg';
+const SB_SERVICE      = process.env.SUPABASE_SERVICE_ROLE_KEY || SB_ANON;
+export const EDGE_FN  = SB_URL + '/functions/v1/sam-gmail-signals';
+export const HOST     = process.env.HOST || 'https://samoratrack.vercel.app';
+
+// ── Session store via Supabase mcp_sessions table ─────────────────────────────
+// Service role key bypasses RLS — sessions are internal server state,
+// not user-visible data.
+
+export async function saveSession(token, session) {
+  const row = { token, access_token: session.access_token, refresh_token: session.refresh_token, expires_at: session.expires_at, email: session.email || null };
+  await fetch(`${SB_URL}/rest/v1/mcp_sessions`, {
+    method: 'POST',
+    headers: { apikey: SB_SERVICE, Authorization: `Bearer ${SB_SERVICE}`, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify(row)
+  });
+}
+
+export async function getSession(token) {
+  if (!token) return null;
+  const r = await fetch(`${SB_URL}/rest/v1/mcp_sessions?token=eq.${encodeURIComponent(token)}&select=*&limit=1`, {
+    headers: { apikey: SB_SERVICE, Authorization: `Bearer ${SB_SERVICE}` }
+  });
+  const rows = await r.json();
+  if (!Array.isArray(rows) || !rows.length) return null;
+  return rows[0];
+}
+
+export async function updateSession(token, updates) {
+  await fetch(`${SB_URL}/rest/v1/mcp_sessions?token=eq.${encodeURIComponent(token)}`, {
+    method: 'PATCH',
+    headers: { apikey: SB_SERVICE, Authorization: `Bearer ${SB_SERVICE}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates)
+  });
+}
+
+// ── Auth helpers ──────────────────────────────────────────────────────────────
+export async function supabaseLogin(email, password) {
+  const r = await fetch(`${SB_URL}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: { apikey: SB_ANON, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password })
+  });
+  const d = await r.json();
+  if (!d.access_token) throw new Error(d.error_description || d.error || 'Login failed');
+  return d;
+}
+
+// expires_at has been read back in more than one shape depending on the
+// column type: a bigint comes back as a number (or a numeric string), a
+// timestamptz comes back as an ISO string. The original code did
+// `Date.now() < session.expires_at - 120000`, which on an ISO string
+// evaluates to `Date.now() < NaN` — always false, so it refreshed on EVERY
+// call. Supabase rotates the refresh token each time it is used, so two
+// concurrent tool calls would present the same refresh token, trip reuse
+// detection, and get the whole token family revoked. That is what a
+// connector "logging itself out" looks like from the outside.
+function parseExpiry(v) {
+  if (v === null || v === undefined || v === '') return 0;
+  if (typeof v === 'number') return v;
+  const s = String(v);
+  if (/^\d+$/.test(s)) return Number(s);         // bigint, possibly stringified
+  const t = Date.parse(s);                        // ISO timestamptz
+  return Number.isNaN(t) ? 0 : t;
+}
+
+export async function getValidAccessToken(session, token, force = false) {
+  if (!force && Date.now() < parseExpiry(session.expires_at) - 120_000) {
+    return session.access_token;
+  }
+
+  // Concurrency guard. Claude fires several tool calls in parallel; without
+  // this they would all refresh at once with the same refresh token and
+  // revoke each other. Re-read the row first: if another in-flight request
+  // already refreshed, adopt its result instead of spending our own.
+  const fresh = await getSession(token);
+  if (fresh && fresh.access_token && fresh.access_token !== session.access_token) {
+    Object.assign(session, fresh);
+    if (Date.now() < parseExpiry(fresh.expires_at) - 120_000) return fresh.access_token;
+  }
+
+  const refreshToken = (fresh && fresh.refresh_token) || session.refresh_token;
+  const r = await fetch(`${SB_URL}/auth/v1/token?grant_type=refresh_token`, {
+    method: 'POST',
+    headers: { apikey: SB_ANON, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh_token: refreshToken })
+  });
+  const d = await r.json();
+  if (!d.access_token) {
+    throw new Error('Samora session expired and could not be renewed. Reconnect at ' + HOST + '/api/connector/connect');
+  }
+  const updates = {
+    access_token: d.access_token,
+    // Stored as a number. If the column is timestamptz this write will fail
+    // loudly rather than silently round-trip into something unusable — which
+    // is the outcome to want, because parseExpiry above tolerates both but
+    // the write is where the ambiguity should be settled.
+    expires_at: Date.now() + (d.expires_in || 3600) * 1000,
+    ...(d.refresh_token ? { refresh_token: d.refresh_token } : {})
+  };
+  Object.assign(session, updates);
+  await updateSession(token, updates);
+  return session.access_token;
+}
+
+export function resolveToken(req) {
+  const auth = (req.headers.authorization || req.headers['Authorization'] || '').replace(/^Bearer\s+/i, '');
+  return auth || (req.query && req.query.token) || null;
+}
+
+// ── API key auth ──────────────────────────────────────────────────────────────
+// Replaces storing a Supabase user session. A session is built for a person at
+// a browser: refresh tokens rotate on every use, are single-use, and can be
+// revoked server-side in ways this code cannot observe. That is why the
+// connector died roughly daily and had to be re-added in Claude by hand.
+//
+// A key has no expiry and no rotating state. On each request we look it up and
+// mint a short-lived Supabase JWT for that user, signed with the project's own
+// JWT secret. Nothing is stored between calls, so nothing can drift out of
+// sync — the failure mode is designed out rather than patched.
+
+const JWT_SECRET = process.env.SUPABASE_JWT_SECRET || '';
+
+export function isApiKey(token) {
+  return typeof token === 'string' && token.startsWith('sk_samora_');
+}
+
+function b64url(input) {
+  return Buffer.from(input).toString('base64url');
+}
+
+// A Supabase-shaped user JWT. GoTrue validates the signature against the
+// project secret and resolves the user from `sub`, so the edge function sees
+// an ordinary authenticated user and needs no changes at all.
+//
+// Ten minutes deliberately: long enough for the slowest tool call, short
+// enough that a leaked token is worthless almost immediately. It is minted
+// per request and never stored.
+export function mintUserJwt(userId, email, ttlSeconds = 600) {
+  if (!JWT_SECRET) throw new Error('SUPABASE_JWT_SECRET is not set on the server — add it in Vercel environment variables (Supabase → Settings → API → JWT Secret).');
+  const now = Math.floor(Date.now() / 1000);
+  const header = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const payload = b64url(JSON.stringify({
+    aud: 'authenticated',
+    role: 'authenticated',
+    sub: userId,
+    email: email || undefined,
+    iat: now,
+    exp: now + ttlSeconds
+  }));
+  const sig = crypto.createHmac('sha256', JWT_SECRET).update(header + '.' + payload).digest('base64url');
+  return header + '.' + payload + '.' + sig;
+}
+
+// Looks up a live key by hash. The raw key is never stored, so this is the
+// only way to resolve one — and a revoked key simply does not match.
+export async function resolveApiKey(rawKey) {
+  const hash = crypto.createHash('sha256').update(rawKey).digest('hex');
+  const r = await fetch(
+    `${SB_URL}/rest/v1/mcp_api_keys?key_hash=eq.${hash}&revoked_at=is.null&select=id,user_id&limit=1`,
+    { headers: { apikey: SB_SERVICE, Authorization: `Bearer ${SB_SERVICE}` } }
+  );
+  const rows = await r.json();
+  if (!Array.isArray(rows) || !rows.length) return null;
+
+  const row = rows[0];
+  // Email is needed for the JWT's email claim; taken from the profile rather
+  // than duplicated onto the key row, so it stays correct if it changes.
+  let email = null;
+  try {
+    const p = await (await fetch(
+      `${SB_URL}/rest/v1/user_profiles?user_id=eq.${row.user_id}&select=email&limit=1`,
+      { headers: { apikey: SB_SERVICE, Authorization: `Bearer ${SB_SERVICE}` } }
+    )).json();
+    email = Array.isArray(p) && p[0] ? p[0].email : null;
+  } catch (_e) { /* non-fatal, the claim is optional */ }
+
+  // Fire and forget: useful for spotting a stale key before revoking the
+  // wrong one, never worth failing or delaying a request over.
+  fetch(`${SB_URL}/rest/v1/mcp_api_keys?id=eq.${row.id}`, {
+    method: 'PATCH',
+    headers: { apikey: SB_SERVICE, Authorization: `Bearer ${SB_SERVICE}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    body: JSON.stringify({ last_used_at: new Date().toISOString() })
+  }).catch(() => {});
+
+  return { user_id: row.user_id, email };
+}
+
+// One entry point for both credential types. API keys are the path forward;
+// existing session tokens keep working so nobody is locked out mid-migration.
+// Returns { accessToken, kind, session? } on success, or { error, status } on
+// failure. Returning the reason rather than a bare null matters here: "your
+// key was revoked" and "the server is misconfigured" are different problems
+// and a single 401 for both would send the user hunting in the wrong place.
+export async function authenticate(token) {
+  if (!token) return { error: 'No credential supplied.', status: 401 };
+
+  if (isApiKey(token)) {
+    if (!JWT_SECRET) {
+      return { error: 'Server is missing SUPABASE_JWT_SECRET, so API keys cannot be used yet. Add it in Vercel environment variables (Supabase dashboard, Settings, API, JWT Secret).', status: 500 };
+    }
+    const resolved = await resolveApiKey(token);
+    if (!resolved) return { error: 'That key is not valid, or it has been revoked.', status: 401 };
+    return { accessToken: mintUserJwt(resolved.user_id, resolved.email), kind: 'api_key' };
+  }
+
+  const session = await getSession(token);
+  if (!session) return { error: 'Invalid token. Generate a key in Samora under You, then Claude connector.', status: 401 };
+  return { accessToken: await getValidAccessToken(session, token), session, token, kind: 'session' };
+}
+
+// ── Edge function caller ──────────────────────────────────────────────────────
+export async function edge(accessToken, action, payload = {}) {
+  const r = await fetch(EDGE_FN, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}`, apikey: SB_ANON },
+    body: JSON.stringify({ action, ...payload })
+  });
+  if (!r.ok) {
+    let detail = '';
+    try {
+      const bodyText = await r.text();
+      if (bodyText) {
+        try {
+          const parsed = JSON.parse(bodyText);
+          detail = ' — ' + (parsed.error || parsed.message || bodyText).toString().slice(0, 500);
+        } catch (_e) {
+          detail = ' — ' + bodyText.slice(0, 500);
+        }
+      }
+    } catch (_e) { /* body unreadable, fall back to bare status */ }
+    const err = new Error(`${action} failed (${r.status})${detail}`);
+    // Carried so callers can distinguish "your token is stale" from "that
+    // action genuinely failed". Without it, a 401 is indistinguishable from
+    // a 500 and the only recovery anyone can offer the user is "relink it".
+    err.status = r.status;
+    throw err;
+  }
+  return r.json();
+}
+
+// ── Date helpers ──────────────────────────────────────────────────────────────
+export const today = () => new Date().toISOString().split('T')[0];
+
+export function calcRange(period) {
+  const now = new Date(); const t = today();
+  if (period === 'today')     return { from: t, to: t };
+  if (period === 'wtd')       { const m = new Date(now); m.setDate(now.getDate()-(now.getDay()||7)+1); return { from: m.toISOString().split('T')[0], to: t }; }
+  if (period === 'last_week') { const m = new Date(now); m.setDate(now.getDate()-(now.getDay()||7)-6); const s = new Date(m); s.setDate(m.getDate()+6); return { from: m.toISOString().split('T')[0], to: s.toISOString().split('T')[0] }; }
+  if (period === 'mtd')       return { from: t.slice(0,8)+'01', to: t };
+  if (period === 'qtd')       { const q=Math.floor(now.getMonth()/3)*3; return { from: `${now.getFullYear()}-${String(q+1).padStart(2,'0')}-01`, to: t }; }
+  return { from: t, to: t };
+}
+
+// ── Tool schemas ──────────────────────────────────────────────────────────────
+export const TOOL_SCHEMAS = [
+  { name: 'get_pipeline',          description: 'Pipeline with signal scores, deal values, verification tiers. Managers see team. Reps see own.',                    params: {} },
+  { name: 'get_account_signals',   description: 'All signals for an account: emails, calls, LinkedIn, sequencing, notetaker intelligence.',                         params: { account: { type: 'string', required: true }, days: { type: 'number' } } },
+  { name: 'get_account_timeline',  description: 'Chronological feed: every email, call, meeting, score change, deal change for an account.',                         params: { account_id: { type: 'string', required: true }, days: { type: 'number' } } },
+  { name: 'get_coverage',          description: 'Which accounts have verified activity (email/call/LinkedIn/WhatsApp) and which are gaps.',                           params: { date_from: { type: 'string' }, date_to: { type: 'string' }, rep_user_id: { type: 'string' } } },
+  { name: 'get_intent_vs_reality', description: 'What reps logged vs what was verified. Shows verified ✓, unverified ⚠, gaps 🚨.',                                 params: { period: { type: 'string', enum: ['today','wtd','last_week','mtd','qtd'] }, rep_user_id: { type: 'string' } } },
+  { name: 'get_team_overview',     description: 'Manager view: every rep\'s tasks, wins, pipeline, hot accounts, who hasn\'t logged today.',                         params: { date: { type: 'string' } } },
+  { name: 'get_daily_brief',       description: 'SAM AI brief: top 3 accounts to act on, calendar prep, coaching signal, single priority.',                          params: {} },
+  { name: 'get_market_signals',    description: 'Market signals: hiring, expansion, funding, news — grounded in live web search.',                                   params: { account: { type: 'string' } } },
+  { name: 'get_sequencing_stats',  description: 'SmartReach/sequencing stats: open rates, reply rates, hot prospects by rep.',                                       params: { days: { type: 'number' } } },
+  { name: 'get_analytics',         description: 'Pipeline analytics: verified vs partial, rep leaderboard, signal trends, win/loss.',                                params: { period: { type: 'string', enum: ['month','quarter','year'] } } },
+  { name: 'send_email',            description: 'Send email via connected Gmail or Outlook. ALWAYS confirm with user before calling.',                               params: { to: { type: 'string', required: true }, subject: { type: 'string', required: true }, body: { type: 'string', required: true }, cc: { type: 'string' }, account_name: { type: 'string' } } },
+  { name: 'get_sampaigns',         description: 'List the caller\'s manual SAMpaigns (account-anchored outreach campaigns) with contact-count and status summary, INCLUDING campaign_goal (the specific pitch/ask for that campaign, e.g. "book a 15-min demo"). Call this first if you don\'t already have a campaign_id — campaign_goal answers "what is this campaign about", do not ask the user that if it is present. By default this returns the caller\'s own campaigns plus any their role lets them oversee (their team, or the whole org for executives). Pass scope "org" when the user asks what colleagues are running, for example before starting outreach to an account someone else may already be working. Colleagues\' campaigns are READ ONLY: every write tool refuses a campaign the caller does not own, so never try to save drafts, schedule or scout into one.', params: { scope: { type: 'string', enum: ['visible','mine','org'] } } },
+  { name: 'get_sampaign_contacts', description: 'Full contact roster for one SAMpaign — enriched profile (title, seniority, LinkedIn), engagement status, and account-collision flag. Use this to personalize outreach emails. Call get_company_context too, before drafting any pitch copy, so you use the org\'s real product/ICP instead of asking the user what they sell.', params: { campaign_id: { type: 'string', required: true } } },
+  { name: 'get_company_context',   description: 'What this org actually sells: product names (from Admin → Products) and ICP definition (ideal use case, target industries/geographies/stakeholders, keywords, from Admin → ICP Definition). Call this BEFORE drafting any outreach, pitch, or personalized email copy — do not ask the user what they are pitching, this answers it.', params: {} },
+  { name: 'save_sampaign_drafts',  description: 'Write ONE PERSONALIZED EMAIL PER CONTACT back into a SAMpaign as drafts. This is how you deliver outreach copy: never send mail yourself, and never ask the user to copy-paste it. Workflow: get_sampaigns (goal) → get_sampaign_contacts (who, with title/seniority/LinkedIn) → get_company_context (what we sell) → write a genuinely different email per person → save here → then schedule_sampaign_drafts. Drafts do NOT send until scheduled, so it is safe to save and let the user review. A campaign sends in WAVES: launch=1 is the initial email, launch=2 is follow-up 1, launch=3 is follow-up 2, and so on (defaults to 1). You can write later waves in advance — a follow-up should reference the earlier email and add something new, never just repeat it. Re-saving the same contact and launch replaces that draft. FORMAT: bodies are HTML, not markdown. Use <br> for a line break, <br><br> between paragraphs, <b> for emphasis, <a href> for links; **asterisks** arrive as literal asterisks. Bold the two to four fragments that carry the argument — the hard number, the named proof, the specific ask — and nothing else. Never bold a whole sentence, a paragraph, the greeting or the sign-off: emphasis only works while it is rare, and an email with everything bold reads as a blast to the recipient and to the spam filter. Subjects are plain text and cannot carry markup. WARNING: re-saving replaces DRAFTS ONLY. It does NOT touch emails that are already QUEUED, and writing fresh drafts for a wave that is already queued creates a SECOND wave that goes out alongside the first. If the user is asking you to correct something already scheduled, call get_scheduled_sends and edit_scheduled_send instead: that fixes the copy in place, at the same send time, with no duplicate.', params: { campaign_id: { type: 'string', required: true }, drafts: { type: 'array', required: true }, launch: { type: 'number' }, generated_by: { type: 'string' } } },
+  { name: 'get_sending_limit', description: 'How many emails this user can send TODAY, and why. Call this whenever they ask about sending volume, before promising a number, or if a schedule returns fewer than they expected — it explains the reason rather than leaving them to guess. Returns today_limit, a plain-English reason, what has already gone out, what is still queued for today, and a rules list you can read back verbatim. Key facts: first emails and follow-ups share ONE daily number; a new mailbox starts around 8/day and climbs with sending history; the user can force a specific number up to 50 via force_daily on schedule_sampaign_drafts; anything over the limit is delayed to the next day, never dropped. Never tell a user a limit is impossible without calling this first — the number is earned by the mailbox and may be higher than you assume.', params: {} },
+  { name: 'save_sampaign_linkedin_notes', description: 'Write ONE LINKEDIN CONNECTION NOTE PER CONTACT back into a SAMpaign. HARD LIMIT 300 characters including spaces — LinkedIn rejects anything longer, and notes over the limit are returned to you unsaved rather than truncated, so count before sending. Write short: a connection note is not an email, it is one or two sentences that earn the accept. Reference something specific about that person (their role, their company, a shared context) rather than pitching. Same inputs as email drafts: get_sampaign_contacts for who they are, get_company_context for what we sell. The rep pastes these by hand when they open the profile — LinkedIn invitations cannot be automated — so they only need to be right, not scheduled.', params: { campaign_id: { type: 'string', required: true }, notes: { type: 'array', required: true }, generated_by: { type: 'string' } } },
+  { name: 'scout_sampaign_contacts', description: 'Find and add real contacts to a SAMpaign from the enrichment providers, using the "Who to hunt" targets. For an ACCOUNT campaign, call with just campaign_id. For a LIST campaign (one covering many companies), you MUST also pass account_id to say which company to scout this time — call it once per company in the list. Costs enrichment credits, so do not loop it over a long list without telling the user. Returns how many were found, how many have a real email, and how many need enrichment before they can be contacted.', params: { campaign_id: { type: 'string', required: true }, account_id: { type: 'string' } } },
+  { name: 'discover_accounts', description: 'TOP OF FUNNEL. Find NEW companies to sell to that are not yet in the pipeline, from a plain-English description ("private universities in India with liberal arts departments", "FMCG distributors in the Gulf"). This PROPOSES ONLY: it creates nothing, spends no enrichment credits, and sends nothing. Each candidate is checked by fetching its website, so `verified: true` means the domain is live and its homepage actually names the organisation, and `verified: false` with the evidence line tells you why not. ALWAYS show the user the candidates and their evidence, and ALWAYS let them choose, before calling commit_discovery. Never accept unverified candidates on the user\'s behalf. If you ALREADY know which companies to add, use add_accounts instead: this tool finds companies, it does not take a list you hand it. Requires Discovery Mode to be enabled for the org and a manager-or-above role. Cap is 50 per call; prefer 10 to 25 so the user can actually read the list. You do NOT need to call get_company_context first: this tool reads the org\'s products and ICP definition itself and gives them to the search, and reports back in `context_used` what it knew. If `context_note` says no products or ICP are configured, tell the user, because that is why the results feel generic. If this returns a 502 with retryable:true the provider is briefly overloaded, so wait and try again rather than giving up. Before re-running it at all, call list_discovery_candidates: an earlier run may have already staged exactly what the user wants, and those rows are still there.', params: { description: { type: 'string', required: true }, region_hint: { type: 'string' }, limit: { type: 'number' } } },
+  { name: 'enrich_sampaign_contacts', description: 'Try to resolve real email addresses for contacts a scout could not find one for. Those contacts carry a PLACEHOLDER address like scouted.samuelernest@snu.edu.in, which is not a real mailbox and is blocked from sending, so they are leads you cannot yet reach. Call this when a scout reports needs_enrichment above zero, or when the user asks why some contacts have no email. It uses a different provider endpoint from scouting and COSTS CREDITS, so say how many contacts you are about to enrich and confirm first. Pass contact_ids to enrich specific people, which is the cheaper option when only a few matter, such as the Registrar; omit it to attempt the whole campaign.', params: { campaign_id: { type: 'string', required: true }, contact_ids: { type: 'array' } } },
+  { name: 'get_success_stories', description: 'The proof to build outreach around: real results, client quotes and testimonials this org has earned, ranked by relevance to the campaign or account. Call this alongside get_company_context before drafting. Stories pinned to the campaign come first, then ones matching the account\'s industry and region. CRITICAL: use ONLY what these return. Never invent a statistic, a client name or a quotation, and never embellish a real one — outreach citing a result that did not happen is a liability for the user, not a flourish. If usable_publicly is false you may use what the story proves but must NOT name the client or attribute the quote. If no stories exist, say so and offer to record one rather than writing generic claims.', params: { campaign_id: { type: 'string' }, account_id: { type: 'string' } } },
+  { name: 'save_success_story', description: 'Record a real result, testimonial or case study so future outreach can cite it. Capture it whenever the user mentions one in conversation ("we performed at MAHE and a student wrote to us", "Adani Wilmar increased productive calls by 77%") — offer to save it rather than letting it stay in the chat. ALWAYS ask for and record `source`: where the claim comes from, such as a QBR deck or an email, because a number that cannot be traced cannot be defended when a prospect asks. Set usable_publicly false if the client has not agreed to be named. Tag industries, regions and personas so the story surfaces for the right accounts; leave them empty for a story usable anywhere. Pass campaign_id to pin it to one campaign.', params: { title: { type: 'string', required: true }, client_name: { type: 'string' }, headline: { type: 'string' }, metric: { type: 'string' }, source: { type: 'string' }, quote: { type: 'string' }, quote_by: { type: 'string' }, body: { type: 'string' }, industries: { type: 'array' }, regions: { type: 'array' }, personas: { type: 'array' }, products: { type: 'array' }, usable_publicly: { type: 'boolean' }, campaign_id: { type: 'string' }, story_id: { type: 'string' } } },
+  { name: 'set_scout_targets', description: 'Save WHO TO HUNT: the job titles, departments, seniorities and locations that contact scouting should look for. Call this BEFORE scouting whenever the user has told you who they want to reach ("Registrar, Vice Chancellor, Head of Liberal Arts") — otherwise scouting falls back to generic defaults and returns whoever the provider surfaces, wasting enrichment credits on the wrong people. job_titles is the strongest filter and OVERRIDES departments and seniority entirely, so prefer real titles as the user would write them. Pass campaign_id to target one SAMpaign, or omit it to set the organisation default for all future scouting. Titles over 100 characters or containing commas are split or dropped and reported back.', params: { campaign_id: { type: 'string' }, job_titles: { type: 'array' }, departments: { type: 'array' }, seniorities: { type: 'array' }, locations: { type: 'array' } } },
+  { name: 'scout_list_accounts', description: 'Scout contacts for EVERY company in a list SAMpaign, in one go, using the campaign\'s "Who to hunt" targets. This is the natural next step after add_accounts or commit_discovery: offer it as soon as a list is created rather than making the user scout companies one at a time. It costs enrichment credits, so confirm with the user first, then call it. CALL set_scout_targets FIRST. Without targeting this returns everyone at every domain: on a real ten-account run that was 391 contacts when the user wanted Registrars and Deans, all of them enriched and paid for. This tool now REFUSES with needs_targeting:true if no targets are set, and the error tells you exactly what to call. Do not pass force:true to get around it unless the user has explicitly asked for a broad exploratory pull. max_per_account defaults to 15 best-fit contacts per company, which is enough to cover a buying group; raise it only if asked. It is RESUMABLE: it does a few accounts per call, skips ones already scouted, and returns `remaining` — keep calling with the same campaign_id until remaining is 0, and tell the user the progress as you go. Reports per account how many contacts were found, how many have a real email, and how many need enrichment. An account with no domain is reported as such rather than as an empty result.', params: { campaign_id: { type: 'string', required: true }, account_ids: { type: 'array' }, batch: { type: 'number' }, max_per_account: { type: 'number' }, force: { type: 'boolean' } } },
+  { name: 'add_accounts', description: 'Add companies the user ALREADY KNOWS as tracked accounts, without AI discovery. Use this whenever you or the user already have the list — from your own research, a spreadsheet, a website, or a conversation. Do NOT route a known list through discover_accounts: that is a tool for FINDING companies, not for adding them, and it will return its own candidates rather than the ones you were asked for. Pass accounts: [{name, domain, region}] — include the domain wherever you know it, since it is what makes contact scouting work later. Accounts that ALREADY EXIST are reused rather than skipped, so you can use this purely to group existing accounts into a new list: pass the names, and every one of them ends up in the campaign whether it was created now or was already tracked. Each domain is checked by fetching the site, but a failed check does NOT block: unverified ones are still added and reported back under `unverified` for the user to glance at. Optionally creates a SAMpaign: campaign_mode "list" (default) makes ONE campaign covering all of them, which is right for one message to many companies; "one_per_account" makes one each. Does not scout contacts and sends nothing, but you should OFFER to scout next: after this returns, tell the user how many accounts were created and ask whether to run scout_list_accounts on the new list. Managers and above. Max 50 per call.', params: { accounts: { type: 'array', required: true }, campaign_name: { type: 'string' }, campaign_goal: { type: 'string' }, campaign_mode: { type: 'string', enum: ['list','one_per_account','single'] } } },
+  { name: 'list_discovery_candidates', description: 'Read back company candidates that are ALREADY STAGED from an earlier discover_accounts run. Call this FIRST if a previous discovery succeeded but you no longer have the candidate ids, or if discover_accounts is failing and the user already has a list they wanted to commit — the rows survive independently of the call that created them, so there is no need to re-run discovery and pay for another AI call. Returns candidates grouped by batch with their ids, ready to pass to commit_discovery. Defaults to pending candidates; pass status "all" to include accepted and rejected.', params: { batch_id: { type: 'string' }, status: { type: 'string', enum: ['pending','accepted','rejected','all'] } } },
+  { name: 'commit_discovery', description: 'Turn candidates the USER HAS EXPLICITLY ACCEPTED into real accounts. Call ONLY after discover_accounts and only with ids the user chose — never auto-accept everything you found. accept_ids become tracked accounts; reject_ids are remembered so the same suggestion is not proposed again. If you pass campaign_name you MUST also choose campaign_mode. Use "list" for top-of-funnel outbound, which is almost always what discovery is for: it makes ONE campaign covering every accepted company, so the user writes one message for the whole list. Use "one_per_account" when each company is its own sales conversation and deserves its own campaign, which creates one campaign per account and means 20 accepted accounts becomes 20 campaigns: say so before calling it. Use "single" only to anchor one campaign to the first account. campaign_goal is the pitch/ask and is copied to every campaign created. This does NOT scout contacts and does NOT schedule or send anything, but do not stop there: after it returns, tell the user what was created and OFFER to scout contacts for the whole list with scout_list_accounts, which is the natural next step and costs enrichment credits. Duplicates against existing accounts are detected and skipped, and reported back.', params: { accept_ids: { type: 'array', required: true }, reject_ids: { type: 'array' }, campaign_name: { type: 'string' }, campaign_goal: { type: 'string' }, campaign_mode: { type: 'string', enum: ['list','one_per_account','single'] } } },
+  { name: 'schedule_sampaign_drafts', description: 'Turn one WAVE of saved drafts into scheduled sends, automatically spread over multiple days at a deliverability-safe rate. Pass the same launch number you saved the drafts with (defaults to 1). Follow-up waves (launch>1) start on the date already set on the campaign, so you usually do not need start_at for them. ALWAYS call with dry_run=true first and show the user the plan before committing. The dry run returns today_limit and ramp_reason — READ THEM BACK TO THE USER, because that is the number that will actually go out today and why. Samora warms mailboxes up: a brand new mailbox starts around 8/day, an established one continues from what it has already been sending. If the user asks for a SPECIFIC number today, pass force_daily with that number rather than reporting that you cannot do it — force_daily overrides the suggested ramp and is capped at 50, which is where safe single-mailbox cold sending stops. Tell them when you have overridden the suggestion. If the day you asked for is already full, this REFUSES with error_code day_full and schedules NOTHING, rather than quietly starting on a later day. That is deliberate: a different day is a different outcome. The response names what is occupying the day and lists the ways out (cancel it, move it with reschedule_scheduled_sends, raise the limit with force_daily, or accept the later day with allow_roll). Never pass allow_roll on the user\'s behalf without telling them which day it will land on.', params: { campaign_id: { type: 'string', required: true }, launch: { type: 'number' }, start_at: { type: 'string' }, force_daily: { type: 'number' }, daily_cap: { type: 'number' }, window_start_hour: { type: 'number' }, window_end_hour: { type: 'number' }, skip_weekends: { type: 'boolean' }, allow_roll: { type: 'boolean' }, dry_run: { type: 'boolean' } } },
+
+  // ── The queue: see it, fix it, move it, kill it ─────────────────────────────
+  // These four exist because their absence caused a real incident. An assistant
+  // was asked to correct the salutation on 24 already-scheduled emails. It could
+  // write drafts and it could schedule them, but it could not see the queue,
+  // edit a queued email, cancel one, or move one. So it did the only thing
+  // available: wrote a second wave. The first wave stayed live and uncorrected,
+  // and the two collided on the daily cap.
+  //
+  // The general rule, worth keeping in mind when adding any tool here: a tool
+  // that can create a commitment must ship alongside tools that can observe and
+  // retract it. A write-only surface does not degrade gracefully. It degrades
+  // into duplicate mail sent to real customers.
+  { name: 'set_campaign_goal', description: 'Set or correct a SAMpaign\'s goal: the specific pitch and ask that every email in it is written against (e.g. "Bring the production to campus for Gen Z audiences; ask for a 20 minute call with Student Life"). Campaigns created outside the app often have no goal, and a campaign with no goal produces generic outreach and shows an empty state to the user. If you have just written or discussed outreach for a campaign whose goal is empty, you ALREADY KNOW the goal: set it here rather than leaving it blank or asking the user to type it in the UI. Confirm the wording with the user in one line, then save. Also takes focus, an optional angle for this campaign such as a region or a persona.', params: { campaign_id: { type: 'string', required: true }, campaign_goal: { type: 'string' }, focus: { type: 'string' } } },
+
+  { name: 'get_draft_brief', description: 'ONE CALL that returns everything needed to write a wave of outreach for a SAMpaign: the campaign goal, what this org sells, the success stories you are allowed to cite, the people to write to with their titles and seniority, what is ALREADY in the send queue, recent real activity on the anchor account, and how many emails can go out today. CALL THIS INSTEAD of chaining get_sampaigns, get_company_context, get_success_stories, get_sampaign_contacts and get_sending_limit by hand: it is one round trip, it cannot silently skip a step, and it returns the queue state so you do not draft a wave that is already scheduled. Read `write_for` for who still needs an email, `proof` for the ONLY claims you may make, `account_evidence` for something specific and true to open with, and `warnings` for anything that will bite. If `warnings` mentions a queued wave, stop and ask the user before drafting. Pass launch to brief a follow-up wave rather than the initial email.', params: { campaign_id: { type: 'string', required: true }, launch: { type: 'number' }, limit: { type: 'number' } } },
+
+  { name: 'get_scheduled_sends', description: 'READ THE QUEUE for a SAMpaign: every draft, queued, sent, failed and cancelled email, with the recipient, the subject, the body and the exact send time. CALL THIS FIRST whenever a user asks to change, correct, delay, stop or check anything about a campaign that has already been scheduled — before writing a single new draft. Writing new drafts for a campaign that already has queued sends does NOT replace them: it adds a second wave, and both go out. Returns each row\'s id, which is what edit_scheduled_send, reschedule_scheduled_sends and cancel_scheduled_sends take. `launch` tells you which wave a row belongs to (1 is the initial email, 2 is follow-up 1, and so on).', params: { campaign_id: { type: 'string', required: true } } },
+
+  { name: 'edit_scheduled_send', description: 'Correct the subject or body of an email that is ALREADY QUEUED, in place, WITHOUT changing when it sends. This is almost always the right tool when a user says the copy is wrong: a wrong salutation, a wrong date, a typo, a wrong signature. Do NOT re-draft and re-schedule for a content fix, because that creates a duplicate wave and leaves the original live. Takes one send_id from get_scheduled_sends, so call that first and loop over the rows you need to change. Works on drafts and queued sends only; an email already sent cannot be edited and will be refused, which is correct: the recipient already has the original.', params: { send_id: { type: 'string', required: true }, subject: { type: 'string' }, body: { type: 'string' } } },
+
+  { name: 'reschedule_scheduled_sends', description: 'MOVE queued emails to a different day or time, keeping their content. Use when the user wants a campaign to go out earlier or later, or when a wave landed on the wrong day. Pass campaign_id with launch to move a whole wave, or send_ids for specific emails, plus start_at for the new start. The wave is re-spread across the sending window at a safe rate exactly as it was originally, so you cannot use this to dump 40 emails into one minute. ALWAYS call with dry_run true first and read the plan back to the user. If the response says rolled true, the day you asked for was already full and it explains what is occupying it — tell the user that rather than reporting success. Only queued emails can move; sent ones cannot.', params: { campaign_id: { type: 'string' }, launch: { type: 'number' }, send_ids: { type: 'array' }, start_at: { type: 'string', required: true }, force_daily: { type: 'number' }, dry_run: { type: 'boolean' } } },
+
+  { name: 'cancel_scheduled_sends', description: 'STOP queued emails from going out. Pass send_ids for specific ones, or campaign_id with all_pending true for a whole campaign. SCOPE IT: all_pending on its own cancels every queued email in the campaign INCLUDING later follow-up waves, which is rarely what someone means. Add launch to name one wave, or before/after (ISO dates) to bound it by day. Drafts are discarded; queued sends are marked cancelled and kept as a record. Emails already sent are never touched. This is a destructive action on the user\'s outreach: say exactly how many emails and which wave you are about to cancel, and get a clear yes, before calling it.', params: { send_ids: { type: 'array' }, campaign_id: { type: 'string' }, all_pending: { type: 'boolean' }, launch: { type: 'number' }, before: { type: 'string' }, after: { type: 'string' } } },
+
+  // ── LinkedIn: the same create/observe/retract trio as the email queue ──────
+  // Shipped together on purpose. A tool that can create a commitment without
+  // tools that can see and retract it does not degrade gracefully; it degrades
+  // into duplicate outreach to real people.
+  { name: 'queue_linkedin_actions', description: 'Queue LinkedIn outreach for a SAMpaign so the rep can run it from the Samora browser extension. IMPORTANT, AND SAY THIS TO THE USER: this SENDS NOTHING. LinkedIn has no API for invitations or messages, so Samora writes and orders the work and the rep presses Send themselves in LinkedIn. Queueing is preparing their to-do list, not dispatching mail. Contacts need a linkedin_url and a connection note: call save_sampaign_linkedin_notes FIRST, because a contact with no note is skipped rather than invited with an empty request. Defaults to invites only, one queue row per contact. Pass kinds ["visit","invite"] for a warm-up pass that views the profile first, but say what that costs: it doubles the number of clicks the rep makes. ALWAYS call with dry_run true first and read back would_queue and the skipped counts. The response gives daily_invite_limit and estimated_days: tell the user how many days of clicking they have just created, because at 15 invites a day 200 contacts is two working weeks, and that is the number they actually need to hear.', params: { campaign_id: { type: 'string', required: true }, contact_ids: { type: 'array' }, kinds: { type: 'array' }, dry_run: { type: 'boolean' } } },
+
+  { name: 'get_linkedin_queue', description: 'See what LinkedIn work is waiting on the rep, and what has already happened. Call this BEFORE queueing anything, for the same reason you call get_scheduled_sends before writing a new email wave: a queue may already exist, and adding a second one on top produces two invitations to the same person from two rows. Also the right tool when the user asks why a campaign looks stalled, since it shows result codes such as weekly_limit or no_invite_button per contact. Defaults to what is still outstanding; pass statuses to include done, skipped, failed or cancelled.', params: { campaign_id: { type: 'string' }, statuses: { type: 'array' } } },
+
+  { name: 'cancel_linkedin_queue', description: 'Remove queued LinkedIn actions so the rep stops seeing them. Nothing was ever sent by these rows, so this retracts work rather than recalling a message. MUST be scoped: pass action_ids, or campaign_id, optionally narrowed with kind. It REFUSES an unscoped call, because the difference between cancelling one campaign and wiping the rep\'s entire queue is exactly the mistake worth making impossible. Say how many actions and which campaign before you call it.', params: { action_ids: { type: 'array' }, campaign_id: { type: 'string' }, kind: { type: 'string', enum: ['visit','invite','message','followup'] } } },
+
+  // ── Rep-level campaign creation ───────────────────────────────────────────
+  // These three exist because an AE asked an assistant to "create a SAMpaign
+  // with the relevant stakeholders" and was told it needed manager permissions.
+  // That answer was a consequence of a MISSING TOOL, not a policy: the edge
+  // function's create_sampaign has no role gate at all. The only routes an
+  // assistant had were add_accounts and discover_accounts, both manager-gated,
+  // so it correctly reported a wall that should never have been in its way.
+  { name: 'create_sampaign', description: 'Create a SAMpaign for ONE company. This is the ordinary way to start outreach and ANY rep can do it, including AEs and SDRs: it does not need manager permissions. Requires account_name AND domain, because a SAMpaign is anchored to a tracked account. If an account with that domain or name already exists it is REUSED rather than duplicated, so this is safe to call on companies already in the pipeline. Set campaign_goal at the same time: the specific pitch and ask every email will be written against, e.g. "Introduce the AI retail execution suite; ask for 25 minutes with the Sales Director". A campaign with no goal produces generic outreach. Use this for ONE company you already know. For many companies at once use add_accounts, and to FIND companies you do not know yet use discover_accounts, both of which need a manager.', params: { account_name: { type: 'string', required: true }, domain: { type: 'string', required: true }, region: { type: 'string' }, campaign_goal: { type: 'string' }, focus: { type: 'string' }, followup_days: { type: 'number' } } },
+
+  { name: 'list_account_stakeholders', description: 'See the people Samora ALREADY KNOWS at an account: the buying group built from real email activity, with their title, seniority, department, how many exchanges are on record, and whether they are engaged, active, dark or uncontacted. Call this BEFORE scouting anything. Scouting calls the enrichment providers and spends credits; these people are already in Samora and cost nothing. Also the right tool when a rep says "add the relevant stakeholders" or "who do we know at X" — show them the list and let them choose rather than adding everyone. Pass account_id, or account_name if you only have the company name. Each row carries reachable_by_email: someone without an email address cannot be mailed, and adding them to an email campaign adds a row that can never do anything.', params: { account_id: { type: 'string' }, account_name: { type: 'string' } } },
+
+  { name: 'add_stakeholders_to_sampaign', description: 'Put people Samora ALREADY HAS into a SAMpaign as contacts. Spends NO enrichment credits, because these records already exist — this is the cheap path and it should be preferred over scout_sampaign_contacts whenever the people are already known at the account. Pass stakeholder_ids from list_account_stakeholders for a chosen few, or account_id to take the whole buying group. only_engaged true limits it to people currently engaged or active, which is usually what someone means by "the relevant stakeholders". Anyone already in the campaign is skipped rather than duplicated, and anyone without an email address is skipped and reported, since they cannot be mailed. Each contact carries a note saying they came from the account buying group and what their signal status was, so the campaign shows why they are in it. Any rep can do this on their own campaign.', params: { campaign_id: { type: 'string', required: true }, stakeholder_ids: { type: 'array' }, account_id: { type: 'string' }, only_engaged: { type: 'boolean' } } }
+];
+
+// ── Tool execution ────────────────────────────────────────────────────────────
+export async function executeTool(accessToken, name, args = {}) {
+  switch (name) {
+    case 'get_pipeline': {
+      const d = await edge(accessToken, 'get_pipeline');
+      if (!d.deals) return d;
+      return { total_pipeline_usd: d.totalValue, weighted_forecast_usd: d.weightedValue, by_tier: d.byTier, accounts: d.deals.map(a => ({ account: a.account, signal_score: a.signal_score, tier: a.tier, deal_value_usd: a.deal_value_usd, deal_type: a.deal_type, region: a.region, icp_score: a.icp_score, rep: a.rep_email?.split('@')[0] })) };
+    }
+    case 'get_account_signals':   return edge(accessToken, 'search_account',         { account: args.account, days: args.days || 30 });
+    case 'get_account_timeline':  return edge(accessToken, 'get_account_timeline',    { account_id: args.account_id, days: args.days || 90 });
+    case 'get_coverage': {
+      const d = await edge(accessToken, 'account_coverage', { date_from: args.date_from || today(), date_to: args.date_to || today(), rep_user_id: args.rep_user_id || null });
+      if (!d.accountGrid) return d;
+      return { period: `${args.date_from||today()} → ${args.date_to||today()}`, summary: d.summary, verified: d.accountGrid.filter(a=>a.email?.verified>0||a.call?.verified>0).map(a=>({account:a.account,email:a.email?.verified,calls:a.call?.verified})), gaps: d.accountGrid.filter(a=>!a.email?.verified&&!a.call?.verified&&(a.email?.logged>0||a.call?.logged>0)).map(a=>({account:a.account,email_logged:a.email?.logged,calls_logged:a.call?.logged})), untouched: d.accountGrid.filter(a=>!a.email?.logged&&!a.call?.logged).map(a=>a.account) };
+    }
+    case 'get_intent_vs_reality': {
+      const { from, to } = calcRange(args.period || 'last_week');
+      const d = await edge(accessToken, 'intent_vs_reality', { date_from: from, date_to: to, rep_user_id: args.rep_user_id || null });
+      if (!d.results) return d;
+      return { period: `${from} → ${to}`, summary: { verified: d.verified, gaps: d.gaps, total: d.totalTasks, rate: d.totalTasks>0?Math.round(d.verified/d.totalTasks*100)+'%':'0%' }, results: d.results.map(r=>({date:r.date,task:r.text,account:r.account,signal:r.signal,done:r.done,outcome:r.activityOutcome||null})) };
+    }
+    case 'get_team_overview':     return edge(accessToken, 'get_team_digest',         { date: args.date || today() });
+    case 'get_daily_brief':       return edge(accessToken, 'generate_daily_brief');
+    case 'get_market_signals':    return edge(accessToken, 'scan_external_signals',   args.account ? { account: args.account } : {});
+    case 'get_sequencing_stats':  return edge(accessToken, 'get_sequencing_stats',    { days: args.days || 30 });
+    case 'get_analytics':         return edge(accessToken, 'get_analytics',           { period: args.period || 'month' });
+    case 'send_email':            return edge(accessToken, 'send_email_via_provider', { to: args.to, subject: args.subject, body: args.body, cc: args.cc||null, account_name: args.account_name||null });
+    // scope 'visible' pins the pre-2026-09-27 behaviour. The server's own
+    // default is now the whole org, which is right for the app's list and
+    // wrong for an assistant asked about "my SAMpaigns".
+    case 'get_sampaigns':         return edge(accessToken, 'list_sampaigns', { scope: ['mine','org','visible'].includes(args && args.scope) ? args.scope : 'visible' });
+    case 'get_sampaign_contacts': return edge(accessToken, 'list_sampaign_contacts', { campaign_id: args.campaign_id });
+    case 'get_company_context':  return edge(accessToken, 'get_company_context', {});
+    case 'save_sampaign_drafts': {
+      // Normalise here rather than trusting the model's shape. Different
+      // tools emit {contact_id,subject,body} vs {id,...} vs {contactId,...},
+      // and a silently-dropped draft is worse than a loud rejection.
+      const raw = Array.isArray(args.drafts) ? args.drafts : [];
+      const drafts = raw.map(d => ({
+        contact_id: d.contact_id || d.contactId || d.id || null,
+        subject: d.subject || d.title || '',
+        body: d.body || d.message || d.text || ''
+      })).filter(d => d.contact_id);
+      if (!drafts.length) throw new Error('drafts must be a non-empty array of { contact_id, subject, body }');
+      return edge(accessToken, 'save_sampaign_drafts', { campaign_id: args.campaign_id, drafts, launch: args.launch || 1, generated_by: args.generated_by || 'ai' });
+    }
+    case 'get_sending_limit': return edge(accessToken, 'get_sending_limit', {});
+    case 'save_sampaign_linkedin_notes': {
+      const rawN = Array.isArray(args.notes) ? args.notes : [];
+      const notes = rawN.map(n => ({
+        contact_id: n.contact_id || n.contactId || n.id || null,
+        note: n.note || n.message || n.text || ''
+      })).filter(n => n.contact_id && n.note);
+      if (!notes.length) throw new Error('notes must be a non-empty array of { contact_id, note }');
+      const over = notes.filter(n => n.note.replace(/\s+/g, ' ').trim().length > 300);
+      if (over.length) throw new Error(over.length + ' note(s) exceed LinkedIn\'s 300-character limit. Shorten them and resend — they were not saved.');
+      return edge(accessToken, 'save_sampaign_linkedin_notes', { campaign_id: args.campaign_id, notes, generated_by: args.generated_by || 'ai' });
+    }
+    case 'schedule_sampaign_drafts':
+      return edge(accessToken, 'schedule_sampaign_drafts', {
+        campaign_id: args.campaign_id,
+        launch: args.launch || 1,
+        start_at: args.start_at || null,
+        force_daily: args.force_daily ?? null,
+        daily_cap: args.daily_cap ?? null,
+        window_start_hour: args.window_start_hour ?? null,
+        window_end_hour: args.window_end_hour ?? null,
+        skip_weekends: args.skip_weekends ?? null,
+        allow_roll: !!args.allow_roll,
+        dry_run: !!args.dry_run
+      });
+    case 'set_campaign_goal':
+      return edge(accessToken, 'update_sampaign', {
+        campaign_id: args.campaign_id,
+        ...(args.campaign_goal !== undefined ? { campaign_goal: args.campaign_goal } : {}),
+        ...(args.focus !== undefined ? { focus: args.focus } : {})
+      });
+    // ── get_draft_brief ───────────────────────────────────────────────────────
+    // Composed here rather than in the edge function on purpose: every piece
+    // already exists as an action, and stitching them in the connector layer
+    // means no surgery on a 20,000 line file to add a convenience.
+    //
+    // Why it exists at all. Writing a good wave needed five calls in the right
+    // order, and the order was carried in the operator's head. Skipping
+    // get_success_stories produced invented statistics; skipping the queue
+    // produced a duplicate wave. One call cannot skip a step.
+    case 'get_draft_brief': {
+      const campaignId = args.campaign_id;
+      const launch = Math.max(1, Math.min(9, parseInt(args.launch, 10) || 1));
+      const limit = Math.min(Math.max(parseInt(args.limit) || 25, 1), 100);
+
+      // Fetched together. A failure in the optional colour (account signals,
+      // timeline) must not cost the caller the parts it cannot write without.
+      const settle = (p) => p.then(v => ({ ok: true, v }), e => ({ ok: false, e: String(e && e.message || e).slice(0, 200) }));
+      const [campsR, ctxR, storiesR, contactsR, queueR, limitR] = await Promise.all([
+        settle(edge(accessToken, 'list_sampaigns', { scope: 'visible' })),
+        settle(edge(accessToken, 'get_company_context', {})),
+        settle(edge(accessToken, 'get_success_stories', { campaign_id: campaignId, account_id: null })),
+        settle(edge(accessToken, 'list_sampaign_contacts', { campaign_id: campaignId })),
+        settle(edge(accessToken, 'list_sampaign_scheduled_sends', { campaign_id: campaignId })),
+        settle(edge(accessToken, 'get_sending_limit', {}))
+      ]);
+
+      const camp = campsR.ok ? (campsR.v.campaigns || []).find(c => c.id === campaignId) : null;
+      if (!camp) return { ok: false, error: 'Campaign not found. Call get_sampaigns for the list of ids.' };
+
+      // Anchor account colour, only for account-scoped campaigns. A list
+      // campaign spans many companies, so there is no single account to read.
+      // Keyed on account_id, never on the campaign name. A campaign is called
+      // things like "Ferrero (middle East)" while the account is "Ferrero", so
+      // a name lookup misses and returns empty — which the model would read as
+      // "this account is cold" and write a false opener from. An id either
+      // resolves or errors; it does not quietly answer the wrong question.
+      let evidence = null;
+      if (camp.account_id) {
+        const tlR = await settle(edge(accessToken, 'get_account_timeline', { account_id: camp.account_id, days: 90 }));
+        evidence = tlR.ok
+          ? {
+              recent_activity: (tlR.v.timeline || tlR.v.events || []).slice(0, 8),
+              note: 'Real recorded activity on this account, last 90 days. Open with something true and specific from it. If it is EMPTY the account is genuinely cold: write as a first approach and do not imply a relationship that does not exist.'
+            }
+          : { recent_activity: null, note: 'Could not read this account\'s history (' + tlR.e + '). Treat the account as unknown rather than as cold, and do not reference past contact either way.' };
+      }
+
+      const allContacts = contactsR.ok ? (contactsR.v.contacts || []) : [];
+      const queue = queueR.ok ? (queueR.v.sends || []) : [];
+      const queueSummary = queueR.ok ? (queueR.v.summary || {}) : {};
+
+      // Who this wave is actually for. A contact that replied or is marked dead
+      // gets no more mail; a placeholder address is not a mailbox.
+      const alreadyInWave = new Set(queue.filter(s => s.launch === launch && ['draft', 'pending', 'sent'].includes(s.status)).map(s => s.contact_id));
+      const writeFor = allContacts
+        .filter(c => !['replied', 'dead'].includes(c.status))
+        .filter(c => !alreadyInWave.has(c.id))
+        .filter(c => c.email && !/^scouted\./i.test(c.email))
+        .slice(0, limit)
+        .map(c => ({ contact_id: c.id, name: c.name, email: c.email, company: c.company, title: c.title, seniority: c.seniority, department: c.department, linkedin_url: c.linkedin_url, status: c.status }));
+
+      const needsEnrichment = allContacts.filter(c => c.email && /^scouted\./i.test(c.email)).length;
+
+      const warnings = [];
+      if (queueSummary.pending) warnings.push(queueSummary.pending + ' email(s) are ALREADY QUEUED on this campaign. Do not write new drafts to change them: use get_scheduled_sends then edit_scheduled_send, which fixes the copy in place at the same send time. Writing drafts creates a second wave and both go out.');
+      if (alreadyInWave.size) warnings.push(alreadyInWave.size + ' contact(s) already have a wave ' + launch + ' email drafted, queued or sent, and have been excluded from write_for.');
+      if (needsEnrichment) warnings.push(needsEnrichment + ' contact(s) have placeholder addresses and cannot be mailed. Run enrich_sampaign_contacts if the user wants them.');
+      if (!camp.campaign_goal) warnings.push('This campaign has NO GOAL set, so there is nothing for the copy to argue towards and the app shows the user an empty state. If the conversation has already told you what this campaign is for, call set_campaign_goal now, confirming the wording in one line. Do not ask the user to type it into the UI.');
+      if (!storiesR.ok || !((storiesR.v.stories || []).length)) warnings.push('No success stories are on record for this campaign. Write from the product capability alone. Do NOT invent a client name, a statistic or a quotation.');
+      if (!writeFor.length) warnings.push('Nobody is waiting for a wave ' + launch + ' email. Everyone is already drafted, queued, sent, replied, dead, or unreachable.');
+
+      return {
+        ok: true,
+        campaign: { id: camp.id, name: camp.name, goal: camp.campaign_goal, focus: camp.focus, scope: camp.scope, account_id: camp.account_id, followup_days: camp.followup_days, followup_dates: camp.followup_dates, stats: camp.stats },
+        wave: launch,
+        what_we_sell: ctxR.ok ? ctxR.v : { error: ctxR.e },
+        proof: storiesR.ok ? (storiesR.v.stories || []) : [],
+        proof_rule: 'These are the ONLY results, client names and quotations you may use. Never invent one and never embellish one. Where usable_publicly is false, you may use what the story proves but must not name the client or attribute the quote. Where a story carries a url, link the claim to it with <a href>: a reader who can go and read the case study is worth more than one more adjective, and it is only ever present on a story cleared for public use. Pick the story whose industries, personas and keywords match THIS contact, not the first in the list, and use at most one per email.',
+        account_evidence: evidence,
+        write_for: writeFor,
+        write_for_count: writeFor.length,
+        contacts_total: allContacts.length,
+        queue: { summary: queueSummary, note: 'Counts every wave on this campaign. Call get_scheduled_sends for the rows.' },
+        sending: limitR.ok ? limitR.v : { error: limitR.e },
+        warnings,
+        next_step: warnings.some(w => w.startsWith('Nobody'))
+          ? 'Nothing to draft. Tell the user why rather than writing anything.'
+          : 'Write one genuinely different email per person in write_for, then save_sampaign_drafts with launch ' + launch + ', then schedule_sampaign_drafts with dry_run true and read the plan back before committing.'
+      };
+    }
+    case 'get_scheduled_sends':
+      return edge(accessToken, 'list_sampaign_scheduled_sends', { campaign_id: args.campaign_id });
+    case 'edit_scheduled_send':
+      return edge(accessToken, 'update_sampaign_scheduled_send', { send_id: args.send_id, subject: args.subject, body: args.body });
+    case 'reschedule_scheduled_sends':
+      return edge(accessToken, 'reschedule_sampaign_scheduled_sends', {
+        campaign_id: args.campaign_id || null,
+        launch: args.launch ?? null,
+        send_ids: args.send_ids || null,
+        start_at: args.start_at,
+        force_daily: args.force_daily ?? null,
+        dry_run: !!args.dry_run
+      });
+    case 'cancel_scheduled_sends':
+      return edge(accessToken, 'cancel_sampaign_scheduled_send', {
+        send_ids: args.send_ids || null,
+        campaign_id: args.campaign_id || null,
+        all_pending: !!args.all_pending,
+        launch: args.launch ?? null,
+        before: args.before || null,
+        after: args.after || null
+      });
+    case 'scout_sampaign_contacts':
+      return edge(accessToken, 'scout_sampaign_contacts', { campaign_id: args.campaign_id, account_id: args.account_id || null });
+    case 'discover_accounts': {
+      const d = await edge(accessToken, 'discover_accounts', {
+        description: args.description,
+        region_hint: args.region_hint || null,
+        // Default 15, not the 50 ceiling. A conversational request should
+        // return a list a person can read, and the model can always ask again.
+        limit: Math.min(Math.max(parseInt(args.limit) || 15, 1), 50)
+      });
+      if (!d.ok) return d;
+      // Trimmed for the model: the full staging rows carry ids and timestamps
+      // it does not need, and a fat payload makes it likelier to summarise
+      // instead of showing the user the evidence.
+      return {
+        batch_id: d.batch_id,
+        query: d.query,
+        verified_count: d.verified_count,
+        unverified_count: d.unverified_count,
+        skipped_already_in_pipeline: d.skipped_existing,
+        skipped_previously_rejected: d.skipped_previously_rejected,
+        verification_incomplete: d.verification_incomplete,
+        candidates: (d.candidates || []).map(c => ({
+          id: c.id, name: c.name, domain: c.domain, region: c.region,
+          verified: c.verified, evidence: c.evidence, description: c.description
+        })),
+        next_step: 'Show these to the user with their evidence. They pick which are real. Then call commit_discovery with accept_ids and reject_ids. Nothing has been created yet.'
+      };
+    }
+    case 'enrich_sampaign_contacts':
+      return edge(accessToken, 'enrich_sampaign_contacts', { campaign_id: args.campaign_id, contact_ids: args.contact_ids || null });
+    case 'get_success_stories':
+      return edge(accessToken, 'get_success_stories', { campaign_id: args.campaign_id || null, account_id: args.account_id || null });
+    case 'save_success_story':
+      return edge(accessToken, 'save_success_story', args);
+    case 'set_scout_targets':
+      return edge(accessToken, 'set_scout_targets', {
+        campaign_id: args.campaign_id || null,
+        job_titles: args.job_titles || [], departments: args.departments || [],
+        seniorities: args.seniorities || [], locations: args.locations || []
+      });
+    case 'scout_list_accounts':
+      return edge(accessToken, 'scout_list_accounts', {
+        campaign_id: args.campaign_id, account_ids: args.account_ids || null,
+        batch: args.batch || 3,
+        max_per_account: args.max_per_account || 15,
+        force: args.force === true
+      });
+    case 'add_accounts':
+      return edge(accessToken, 'add_accounts', {
+        accounts: args.accounts || [],
+        campaign_name: args.campaign_name || null,
+        campaign_goal: args.campaign_goal || null,
+        campaign_mode: args.campaign_mode || 'list'
+      });
+    case 'list_discovery_candidates':
+      return edge(accessToken, 'list_discovery_candidates', { batch_id: args.batch_id || null, status: args.status || 'pending' });
+    case 'commit_discovery': {
+      const d = await edge(accessToken, 'commit_discovery', {
+        accept_ids: args.accept_ids || [],
+        reject_ids: args.reject_ids || [],
+        campaign_name: args.campaign_name || null,
+        campaign_goal: args.campaign_goal || null,
+        // No default: forcing the model to choose is deliberate, because
+        // "one campaign or twenty" is the user's call, not ours.
+        campaign_mode: args.campaign_mode || 'list'
+      });
+      return d;
+    }
+    case 'queue_linkedin_actions':
+      return edge(accessToken, 'queue_linkedin_actions', {
+        campaign_id: args.campaign_id,
+        contact_ids: args.contact_ids || null,
+        kinds: args.kinds || null,
+        // Defaults to a DRY RUN. Every other queue tool here defaults to acting;
+        // this one does not, because the cost of an unwanted queue is a rep
+        // discovering 200 invitations they never agreed to, and the cost of an
+        // extra dry run is one more tool call.
+        dry_run: args.dry_run !== false
+      });
+    case 'get_linkedin_queue':
+      return edge(accessToken, 'list_linkedin_actions', {
+        campaign_id: args.campaign_id || null,
+        statuses: args.statuses || null
+      });
+    case 'cancel_linkedin_queue': {
+      if (!(args.action_ids && args.action_ids.length) && !args.campaign_id) {
+        throw new Error('Scope it: pass action_ids or campaign_id. Refusing to cancel an unscoped LinkedIn queue.');
+      }
+      return edge(accessToken, 'cancel_linkedin_actions', {
+        action_ids: args.action_ids || [],
+        campaign_id: args.campaign_id || null,
+        kind: args.kind || null
+      });
+    }
+    case 'create_sampaign':
+      return edge(accessToken, 'create_sampaign', {
+        account_name: args.account_name,
+        domain: args.domain,
+        region: args.region || null,
+        campaign_goal: args.campaign_goal || null,
+        focus: args.focus || null,
+        followup_days: args.followup_days ?? null
+      });
+    case 'list_account_stakeholders':
+      return edge(accessToken, 'list_account_stakeholders', {
+        account_id: args.account_id || null,
+        account_name: args.account_name || null
+      });
+    case 'add_stakeholders_to_sampaign':
+      return edge(accessToken, 'add_stakeholders_to_sampaign', {
+        campaign_id: args.campaign_id,
+        stakeholder_ids: args.stakeholder_ids || null,
+        account_id: args.account_id || null,
+        only_engaged: !!args.only_engaged
+      });
+    default: throw new Error('Unknown tool: ' + name);
+  }
+}
+
+// ── Schema converters ─────────────────────────────────────────────────────────
+export function toOpenApiSpec(host) {
+  const paths = {};
+  TOOL_SCHEMAS.forEach(t => {
+    const props = {};
+    Object.entries(t.params).forEach(([k,v]) => { props[k] = { type: v.type||'string', ...(v.enum?{enum:v.enum}:{}), description: k }; });
+    paths[`/api/connector/${t.name}`] = { post: { operationId: t.name, summary: t.description, security: [{bearerAuth:[]}], requestBody: { required: Object.keys(t.params).length>0, content: { 'application/json': { schema: { type:'object', properties: props, required: Object.entries(t.params).filter(([,v])=>v.required).map(([k])=>k) } } } }, responses: { '200': { description:'Success', content: { 'application/json': { schema: { type:'object' } } } } } } };
+  });
+  return { openapi:'3.0.0', info:{ title:'SamoraOS', version:'1.0.0', description:'B2B sales intelligence API' }, servers:[{url:host}], components:{ securitySchemes:{ bearerAuth:{ type:'http', scheme:'bearer' } } }, paths };
+}
+
+export function toGeminiFunctions() {
+  return TOOL_SCHEMAS.map(t => ({ name: t.name, description: t.description, parameters: { type:'OBJECT', properties: Object.fromEntries(Object.entries(t.params).map(([k,v])=>[k,{type:(v.type||'string').toUpperCase(),...(v.enum?{enum:v.enum}:{})}])), required: Object.entries(t.params).filter(([,v])=>v.required).map(([k])=>k) } }));
+}

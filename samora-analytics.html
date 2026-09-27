@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Samora Analytics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#F5F0E8;--surface:#FAF7F2;--surface2:#EDE8DF;--border:#D6CFC4;--border2:#C8C0B4;
+  --text:#1A1712;--text2:#3D3A34;--text3:#78716C;
+  --gold:#A07824;--green:#4A8C5C;--coral:#C0523F;--amber:#A07824;--blue:#3A6EA8;
+  --sans:'DM Sans',sans-serif;--serif:'EB Garamond',serif;--mono:'DM Mono',monospace;
+}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.logo{font-family:var(--serif);font-size:18px;font-weight:600;letter-spacing:-0.01em}
+.logo span{color:var(--gold)}
+.topbar-right{display:flex;align-items:center;gap:12px}
+.period-pills{display:flex;gap:4px}
+.pill{padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:transparent;font-family:var(--sans);font-size:12px;cursor:pointer;color:var(--text2)}
+.pill.active{background:var(--gold);border-color:var(--gold);color:#18160F;font-weight:600}
+.user-badge{font-size:12px;color:var(--text3);padding:5px 10px;background:var(--surface2);border-radius:20px}
+#loginWrap{max-width:360px;margin:80px auto;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:32px}
+#loginWrap h2{font-family:var(--serif);font-size:22px;margin-bottom:4px}
+#loginWrap p{font-size:13px;color:var(--text3);margin-bottom:20px}
+.inp{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);font-family:var(--sans);font-size:14px;color:var(--text);outline:none;margin-bottom:10px}
+.btn{width:100%;padding:11px;border:none;border-radius:8px;background:var(--gold);color:#18160F;font-family:var(--sans);font-size:14px;font-weight:600;cursor:pointer}
+.btn-sm{padding:5px 14px;border:1px solid var(--border);border-radius:20px;background:var(--surface2);font-family:var(--sans);font-size:12px;cursor:pointer;color:var(--text2)}
+.main{max-width:1200px;margin:0 auto;padding:24px}
+.kpi-strip{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:24px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px}
+.kpi-val{font-size:24px;font-weight:700;color:var(--text);line-height:1.1}
+.kpi-label{font-size:11px;color:var(--text3);margin-top:4px;text-transform:uppercase;letter-spacing:0.06em}
+.kpi-sub{font-size:11px;margin-top:4px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.grid3{display:grid;grid-template-columns:2fr 1fr 1fr;gap:16px;margin-bottom:16px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 20px}
+.card-title{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:14px}
+.tier-bar{display:flex;height:12px;border-radius:6px;overflow:hidden;width:100%;margin-bottom:4px}
+.tier-v{background:var(--green)}
+.tier-p{background:var(--amber);opacity:0.7}
+.tier-a{background:var(--coral);opacity:0.4}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:left;padding:6px 10px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);font-size:11px}
+td{padding:8px 10px;border-bottom:1px solid var(--border)}
+tr:last-child td{border-bottom:none}
+.badge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:600}
+.badge-g{background:rgba(74,140,92,.15);color:var(--green)}
+.badge-a{background:rgba(160,117,42,.15);color:var(--amber)}
+.badge-r{background:rgba(192,82,63,.15);color:var(--coral)}
+.spark-line{position:relative;height:40px;width:100%}
+canvas{display:block}
+.section-title{font-size:14px;font-weight:600;color:var(--text);margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.section-title span{font-size:11px;color:var(--text3);font-weight:400}
+.empty{font-size:12px;color:var(--text3);font-style:italic;padding:12px 0}
+.rep-bar-wrap{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.rep-name{font-size:12px;color:var(--text2);width:90px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rep-bar{height:18px;border-radius:4px;display:flex;overflow:hidden;flex:1}
+.rep-bar-v{background:var(--green);height:100%}
+.rep-bar-p{background:var(--amber);opacity:0.6;height:100%}
+.rep-val{font-size:11px;color:var(--text3);width:60px;text-align:right;flex-shrink:0}
+.donut-wrap{display:flex;align-items:center;gap:16px}
+.donut-legend{font-size:11px;flex:1}
+.donut-row{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.donut-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+#loadingState{text-align:center;padding:80px 0;color:var(--text3);font-size:14px}
+.wl-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.wl-icon{font-size:20px;flex-shrink:0}
+.wl-val{font-size:20px;font-weight:700}
+.wl-label{font-size:11px;color:var(--text3)}
+.sig-score{display:inline-block;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:700}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">SAMORA <span>Analytics</span></div>
+  <div class="topbar-right">
+    <div class="period-pills">
+      <button class="pill active" onclick="setPeriod('month',this)">Month</button>
+      <button class="pill" onclick="setPeriod('quarter',this)">Quarter</button>
+      <button class="pill" onclick="setPeriod('year',this)">Year</button>
+    </div>
+    <div class="user-badge" id="userBadge">—</div>
+    <button class="btn-sm" onclick="logout()">Sign out</button>
+  </div>
+</div>
+
+<div id="loginWrap" style="display:none">
+  <h2>Samora Analytics</h2>
+  <p>Sign in with your Samora account to view your pipeline analytics.</p>
+  <input class="inp" type="email" id="lEmail" placeholder="your@email.com" autocomplete="email"/>
+  <input class="inp" type="password" id="lPass" placeholder="Password" autocomplete="current-password"/>
+  <button class="btn" onclick="login()">Sign in</button>
+  <div id="lErr" style="font-size:12px;color:var(--coral);margin-top:8px"></div>
+</div>
+
+<div class="main" id="mainWrap" style="display:none">
+  <div id="loadingState">Loading analytics…</div>
+  <div id="analyticsContent" style="display:none"></div>
+</div>
+
+<script>
+const SB_URL  = 'https://gowpuicpmrwsohongosf.supabase.co';
+const SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdvd3B1aWNwbXJ3c29ob25nb3NmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzOTExMDgsImV4cCI6MjA5NTk2NzEwOH0.35CjODxyxOjAKp-xBOBx4oAXO_qjLyVttVaJEhp7YEg';
+const EDGE    = SB_URL + '/functions/v1/sam-gmail-signals';
+let currentUser = null;
+let currentPeriod = 'month';
+let lastData = null;
+
+function fmtUsd(v) {
+  if (!v) return '$0';
+  if (v >= 1e6) return '$'+Math.round(v/1e6*10)/10+'M';
+  if (v >= 1e3) return '$'+Math.round(v/1e3)+'K';
+  return '$'+Math.round(v);
+}
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function sigColor(s){ return s>=60?'var(--green)':s>=35?'var(--amber)':'var(--coral)'; }
+function sigBadge(s){ return s!=null?'<span class="sig-score" style="background:'+sigColor(s)+'20;color:'+sigColor(s)+'">'+s+'</span>':'—'; }
+
+async function edgeFetch(action, extra) {
+  const r = await fetch(EDGE, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_ANON}, body:JSON.stringify({action,...extra}) });
+  return r.json();
+}
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+function checkAuth() {
+  const saved = localStorage.getItem('samora_analytics_session');
+  if (saved) {
+    try { currentUser = JSON.parse(saved); showApp(); return; } catch(e){}
+  }
+  document.getElementById('loginWrap').style.display = 'block';
+}
+
+async function login() {
+  const email = document.getElementById('lEmail').value.trim();
+  const pass  = document.getElementById('lPass').value;
+  const err   = document.getElementById('lErr');
+  err.textContent = '';
+  try {
+    const r = await fetch(SB_URL+'/auth/v1/token?grant_type=password',{method:'POST',headers:{'apikey':SB_ANON,'Content-Type':'application/json'},body:JSON.stringify({email,password:pass})});
+    const d = await r.json();
+    if (d.error) { err.textContent = d.error_description || d.error; return; }
+    currentUser = { token: d.access_token, email };
+    localStorage.setItem('samora_analytics_session', JSON.stringify(currentUser));
+    document.getElementById('loginWrap').style.display = 'none';
+    showApp();
+  } catch(e) { err.textContent = 'Network error — try again'; }
+}
+
+function logout() { localStorage.removeItem('samora_analytics_session'); currentUser = null; location.reload(); }
+document.addEventListener('keydown', function(e){ if(e.key==='Enter') login(); });
+
+function showApp() {
+  document.getElementById('loginWrap').style.display = 'none';
+  document.getElementById('mainWrap').style.display = 'block';
+  document.getElementById('userBadge').textContent = currentUser.email.split('@')[0];
+  loadAnalytics();
+}
+
+function setPeriod(p, btn) {
+  currentPeriod = p;
+  document.querySelectorAll('.pill').forEach(function(b){ b.classList.toggle('active', b===btn); });
+  loadAnalytics();
+}
+
+async function loadAnalytics() {
+  document.getElementById('loadingState').style.display = 'block';
+  document.getElementById('analyticsContent').style.display = 'none';
+  document.getElementById('analyticsContent').innerHTML = '';
+  try {
+    const d = await edgeFetch('get_analytics', { period: currentPeriod });
+    if (!d.ok) { document.getElementById('loadingState').textContent = d.error || 'Failed to load analytics.'; return; }
+    lastData = d;
+    renderAnalytics(d);
+  } catch(e) { document.getElementById('loadingState').textContent = 'Error: '+e.message; }
+}
+
+function renderAnalytics(d) {
+  const p = d.pipeline || {};
+  const wl = d.won_lost || {};
+  const repMax = Math.max.apply(null, (d.by_rep||[]).map(function(r){return r.pipeline;})||[1]);
+  const regionMax = Math.max.apply(null, (d.by_region||[]).map(function(r){return r.value;})||[1]);
+  const periodLabel = currentPeriod === 'month' ? 'This month' : currentPeriod === 'quarter' ? 'This quarter' : 'This year';
+  const REGION_COLORS = ['#A07824','#4A8C5C','#3A6EA8','#C0523F','#78716C','#6366f1','#ec4899'];
+
+  let html = '';
+
+  // ── KPI strip ──────────────────────────────────────────────────────────────
+  html += '<div class="kpi-strip">';
+  html += kpiCard('Total Pipeline', fmtUsd(p.total), p.total_accounts+' accounts', '');
+  html += kpiCard('Verified Pipeline', fmtUsd(p.verified), p.total>0?Math.round(p.verified/p.total*100)+'% of total':'', 'var(--green)');
+  html += kpiCard('Weighted Forecast', fmtUsd(p.weighted_forecast), 'Signal-probability weighted', 'var(--gold)');
+  html += kpiCard('Win Rate', wl.win_rate!=null?wl.win_rate+'%':'No closed deals', wl.won_count+' won · '+wl.lost_count+' lost', wl.win_rate>=60?'var(--green)':wl.win_rate>0?'var(--amber)':'var(--text3)');
+  html += kpiCard('Won Value', fmtUsd(wl.won_value), periodLabel, 'var(--green)');
+  html += '</div>';
+
+  // ── Pipeline tier breakdown ────────────────────────────────────────────────
+  html += '<div class="grid2"><div class="card"><div class="card-title">Pipeline verification breakdown</div>';
+  if (p.total > 0) {
+    var vPct = Math.round(p.verified/p.total*100);
+    var pPct = Math.round(p.partial/p.total*100);
+    var aPct = 100 - vPct - pPct;
+    html += '<div class="tier-bar"><div class="tier-v" style="width:'+vPct+'%"></div><div class="tier-p" style="width:'+pPct+'%"></div><div class="tier-a" style="width:'+Math.max(aPct,0)+'%"></div></div>';
+    html += '<div style="display:flex;gap:16px;margin-bottom:16px;margin-top:6px">';
+    html += '<div><div style="font-size:11px;color:var(--green);font-weight:600">✓ Verified</div><div style="font-size:15px;font-weight:700">'+fmtUsd(p.verified)+'</div><div style="font-size:10px;color:var(--text3)">'+vPct+'% · signal ≥40 + rep value</div></div>';
+    html += '<div><div style="font-size:11px;color:var(--amber);font-weight:600">⚡ Partial</div><div style="font-size:15px;font-weight:700">'+fmtUsd(p.partial)+'</div><div style="font-size:10px;color:var(--text3)">'+pPct+'% · rep stated, signals weak</div></div>';
+    html += '<div><div style="font-size:11px;color:var(--coral);font-weight:600">~ AI-extracted</div><div style="font-size:15px;font-weight:700">'+fmtUsd(p.ai_extracted)+'</div><div style="font-size:10px;color:var(--text3)">'+Math.max(aPct,0)+'% · detected, unconfirmed</div></div>';
+    html += '</div>';
+  } else { html += '<div class="empty">No pipeline data yet.</div>'; }
+  html += '</div>';
+
+  // ── Won / Lost ─────────────────────────────────────────────────────────────
+  html += '<div class="card"><div class="card-title">Won / Lost · '+esc(periodLabel)+'</div>';
+  html += '<div class="wl-row"><div class="wl-icon">🏆</div><div><div class="wl-val" style="color:var(--green)">'+fmtUsd(wl.won_value)+'</div><div class="wl-label">'+wl.won_count+' deals won</div></div></div>';
+  html += '<div class="wl-row"><div class="wl-icon">❌</div><div><div class="wl-val" style="color:var(--coral)">'+fmtUsd(wl.lost_value)+'</div><div class="wl-label">'+wl.lost_count+' deals lost</div></div></div>';
+  if (wl.loss_reasons && wl.loss_reasons.length) {
+    html += '<div style="font-size:11px;color:var(--text3);margin-top:10px;border-top:1px solid var(--border);padding-top:10px">Loss reasons:</div>';
+    html += wl.loss_reasons.slice(0,4).map(function(lr){ return '<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>'+esc(lr.reason)+'</span><span style="font-weight:600">'+lr.count+'</span></div>'; }).join('');
+  } else { html += '<div class="empty" style="margin-top:8px">No closed deals yet — use "Close deal" on pipeline cards.</div>'; }
+  html += '</div></div>';
+
+  // ── Rep performance ────────────────────────────────────────────────────────
+  html += '<div class="card" style="margin-bottom:16px"><div class="card-title">Rep performance · pipeline breakdown</div>';
+  if (!d.by_rep || !d.by_rep.length) { html += '<div class="empty">No rep data.</div>'; }
+  else {
+    d.by_rep.forEach(function(r) {
+      if (!r.pipeline) return;
+      var vW = repMax>0?r.verified/repMax*100:0, pW = repMax>0?r.partial/repMax*100:0;
+      html += '<div class="rep-bar-wrap" title="'+esc(r.email)+'">';
+      html += '<div class="rep-name">'+esc(r.rep_name)+'</div>';
+      html += '<div class="rep-bar"><div class="rep-bar-v" style="width:'+vW+'%"></div><div class="rep-bar-p" style="width:'+pW+'%"></div></div>';
+      html += '<div class="rep-val">'+fmtUsd(r.pipeline)+'</div>';
+      html += '</div>';
+    });
+    html += '<div style="display:flex;gap:12px;margin-top:8px;font-size:10px;color:var(--text3)"><span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;background:var(--green);border-radius:2px;display:inline-block"></span>Verified</span><span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;background:var(--amber);opacity:0.6;border-radius:2px;display:inline-block"></span>Partial</span></div>';
+  }
+  html += '</div>';
+
+  // ── Rep table ──────────────────────────────────────────────────────────────
+  html += '<div class="card" style="margin-bottom:16px"><div class="card-title">Rep scorecard</div>';
+  html += '<table><thead><tr><th>Rep</th><th>Pipeline</th><th>Verified %</th><th>Avg Signal</th><th>Completion</th><th>Wins</th></tr></thead><tbody>';
+  (d.by_rep||[]).forEach(function(r) {
+    var vPct = r.pipeline > 0 ? Math.round(r.verified/r.pipeline*100) : 0;
+    html += '<tr>';
+    html += '<td><div style="font-weight:500">'+esc(r.rep_name)+'</div><div style="font-size:10px;color:var(--text3)">'+esc(r.email.split('@')[0])+'</div></td>';
+    html += '<td style="font-weight:600">'+fmtUsd(r.pipeline)+'<br><span style="font-size:10px;color:var(--text3)">'+r.deals+' deals</span></td>';
+    html += '<td><span class="badge '+(vPct>=60?'badge-g':vPct>=30?'badge-a':'badge-r')+'">'+vPct+'%</span></td>';
+    html += '<td>'+sigBadge(r.avg_signal)+'</td>';
+    html += '<td>'+r.completion_rate+'%<br><span style="font-size:10px;color:var(--text3)">'+r.tasks_done+'/'+r.tasks_total+' tasks</span></td>';
+    html += '<td style="color:var(--green);font-weight:600">'+r.wins+'</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table></div>';
+
+  // ── Region + signal trend row ──────────────────────────────────────────────
+  html += '<div class="grid2" style="margin-bottom:16px">';
+
+  // Region chart
+  html += '<div class="card"><div class="card-title">Pipeline by region</div>';
+  if (d.by_region && d.by_region.length) {
+    d.by_region.slice(0,7).forEach(function(r, i) {
+      var pct = regionMax > 0 ? r.value/regionMax*100 : 0;
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">';
+      html += '<div style="font-size:11px;color:var(--text2);width:100px;flex-shrink:0">'+esc(r.region)+'</div>';
+      html += '<div style="flex:1;height:14px;background:var(--surface2);border-radius:4px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+REGION_COLORS[i%REGION_COLORS.length]+';border-radius:4px"></div></div>';
+      html += '<div style="font-size:11px;color:var(--text3);width:60px;text-align:right">'+fmtUsd(r.value)+'</div>';
+      html += '</div>';
+    });
+  } else { html += '<div class="empty">No region data.</div>'; }
+  html += '</div>';
+
+  // Signal trend
+  html += '<div class="card"><div class="card-title">Average signal score trend</div>';
+  if (d.signal_trend && d.signal_trend.length > 1) {
+    var maxScore = Math.max.apply(null, d.signal_trend.map(function(w){return w.avg;}));
+    html += '<div style="display:flex;align-items:flex-end;gap:4px;height:80px;margin-bottom:6px">';
+    d.signal_trend.forEach(function(w) {
+      var h = maxScore > 0 ? Math.round(w.avg/maxScore*80) : 4;
+      var c = w.avg >= 50 ? 'var(--green)' : w.avg >= 30 ? 'var(--amber)' : 'var(--coral)';
+      html += '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">';
+      html += '<div style="font-size:9px;color:var(--text3)">'+w.avg+'</div>';
+      html += '<div style="height:'+h+'px;width:100%;background:'+c+';border-radius:2px 2px 0 0;min-height:4px" title="Week of '+esc(w.week)+': avg signal '+w.avg+'"></div>';
+      html += '</div>';
+    });
+    html += '</div>';
+    html += '<div style="font-size:10px;color:var(--text3)">Weekly average · '+d.signal_trend.length+' data points · based on logged signal scores</div>';
+  } else { html += '<div class="empty">Not enough history yet. Run "Scan channels" regularly to build the trend.</div>'; }
+  html += '</div>';
+
+  html += '</div>';
+
+  // ── Top accounts table ─────────────────────────────────────────────────────
+  html += '<div class="card" style="margin-bottom:16px"><div class="card-title">Top accounts by signal strength</div>';
+  if (!d.top_accounts || !d.top_accounts.length) { html += '<div class="empty">Run SAM Intelligence to score accounts.</div>'; }
+  else {
+    html += '<table><thead><tr><th>Account</th><th>Signal</th><th>ICP</th><th>Pipeline</th><th>Stage</th><th>Region</th><th>Rep</th></tr></thead><tbody>';
+    d.top_accounts.forEach(function(a) {
+      html += '<tr>';
+      html += '<td style="font-weight:500">'+esc(a.account_name)+'</td>';
+      html += '<td>'+sigBadge(a.signal_score)+'</td>';
+      html += '<td>'+(a.icp_score!=null?sigBadge(a.icp_score):'—')+'</td>';
+      html += '<td>'+fmtUsd(a.deal_value_usd)+'</td>';
+      html += '<td><span style="font-size:11px;color:var(--text3)">'+esc(a.deal_type||'—')+'</span></td>';
+      html += '<td><span style="font-size:11px;color:var(--text3)">'+esc(a.region||'—')+'</span></td>';
+      html += '<td style="font-size:11px;color:var(--text3)">'+(a.rep_email?(a.rep_email.split('@')[0]):'—')+'</td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+  }
+  html += '</div>';
+
+  // ── SmartReach outreach analytics ─────────────────────────────────────────
+  const seqEntries = Object.entries(d.seq_by_rep || {});
+  if (seqEntries.length) {
+    html += '<div class="card" style="margin-bottom:16px"><div class="card-title">Sequencing activity · '+esc(periodLabel)+'</div>';
+    html += '<table><thead><tr><th>Rep</th><th>Emails sent</th><th>Replies</th><th>Reply rate</th></tr></thead><tbody>';
+    seqEntries.sort(function(a,b){return b[1].sent-a[1].sent;}).forEach(function(e) {
+      var repName = (e[0].split('@')[0]||'').split('.').map(function(w){return w.charAt(0).toUpperCase()+w.slice(1);}).join(' ');
+      var rateColor = e[1].sent>0&&e[1].replied/e[1].sent>0.12?'var(--green)':e[1].sent>0&&e[1].replied/e[1].sent>0.07?'var(--amber)':'var(--coral)';
+      html += '<tr><td>'+esc(repName)+'</td><td>'+e[1].sent+'</td><td>'+e[1].replied+'</td>';
+      html += '<td><span style="color:'+rateColor+';font-weight:600">'+(e[1].sent>0?Math.round(e[1].replied/e[1].sent*100)+'%':'—')+'</span></td></tr>';
+    });
+    html += '</tbody></table></div>';
+  }
+
+  html += '<div style="text-align:center;font-size:11px;color:var(--text3);padding:16px 0">Samora Analytics · Verified intelligence · Not CRM assumptions</div>';
+
+  document.getElementById('loadingState').style.display = 'none';
+  document.getElementById('analyticsContent').innerHTML = html;
+  document.getElementById('analyticsContent').style.display = 'block';
+}
+
+function kpiCard(label, val, sub, color) {
+  return '<div class="kpi"><div class="kpi-val" style="color:'+(color||'var(--text)')+'">'+val+'</div><div class="kpi-label">'+label+'</div>'+(sub?'<div class="kpi-sub" style="color:'+(color||'var(--text3)')+'">'+sub+'</div>':'')+'</div>';
+}
+
+window.onload = checkAuth;
+</script>
+</body>
+</html>
