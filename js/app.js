@@ -117,17 +117,94 @@ function pickSignupRole(r) {
   });
 }
 function setMode(m) {
+  // 'signup' no longer exists: anything asking for it gets the request form.
+  if (m === 'signup') m = 'request';
   authMode = m;
-  document.querySelectorAll('.auth-tab').forEach((t,i) => t.classList.toggle('active', i === (m==='login'?0:1)));
-  document.getElementById('authBtn').textContent = m === 'login' ? 'Sign in' : 'Create account';
-  document.getElementById('signupFields').style.display = m === 'signup' ? 'block' : 'none';
-  const rp = document.getElementById('rolePickerWrap');
-  if (rp) rp.style.display = m === 'signup' ? 'block' : 'none';
-  // Nothing to recover on the signup tab.
-  const fr = document.getElementById('forgotRow');
-  if (fr) fr.style.display = m === 'signup' ? 'none' : 'block';
-  if (m === 'signup') pickSignupRole('sdr');
+  const req = m === 'request';
+  document.querySelectorAll('.auth-tab').forEach((t,i) => t.classList.toggle('active', i === (req ? 1 : 0)));
+  const btn = document.getElementById('authBtn');
+  btn.textContent = req ? 'Request access' : 'Sign in';
+  btn.disabled = false;
+  const show = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
+  show('requestIntro', req); show('requestTop', req); show('requestFields', req);
+  show('passwordBlock', !req); show('forgotRow', !req);
+  show('signupFields', false);
+  // Google and Microsoft sign in; they cannot create an account any more, so
+  // they have no place on the request form, and hiding them keeps the form
+  // on one screen.
+  show('ssoGoogleBtn', !req); show('ssoMicrosoftBtn', !req); show('ssoOr', !req);
+  const sub = document.querySelector('#authScreen .auth-sub'); if (sub) sub.style.display = req ? 'none' : '';
+  const ttl = document.querySelector('#authScreen .auth-logo'); if (ttl) ttl.textContent = req ? 'Request access to SamoraOS' : 'Sign in to SamoraOS';
+  const lbl = document.getElementById('aEmailLabel'); if (lbl) lbl.textContent = req ? 'Work email' : 'Email';
   showMsg('');
+}
+
+// Request access: saves the details and tells us. Creates no account.
+async function submitAccessRequest() {
+  const btn = document.getElementById('authBtn');
+  const val = (id) => ((document.getElementById(id) || {}).value || '').trim();
+  const body = {
+    action: 'request_access',
+    name: val('rqName'), email: val('aEmail'), company: val('rqCompany'),
+    team_size: val('rqTeam'), phone: val('rqPhone'), message: val('rqMsg'),
+    website: val('rqWebsite')
+  };
+  if (!body.name || !body.company || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(body.email)) {
+    showMsg('Please add your name, your work email and your company.', true); return;
+  }
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try {
+    const r = await fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SB_KEY, 'apikey': SB_KEY }, body: JSON.stringify(body) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.ok) { showMsg(d.error || 'Could not send that just now. Please try again in a minute.', true); btn.disabled = false; btn.textContent = 'Request access'; return; }
+    showMsg('Thanks, ' + body.name.split(/\s+/)[0] + '. We have your request and will be in touch within one working day.', false);
+    btn.textContent = 'Request sent';
+    ['rqName','rqCompany','rqTeam','rqPhone','rqMsg'].forEach((id) => { const el = document.getElementById(id); if (el) el.value = ''; });
+  } catch (e) {
+    showMsg('Connection error: ' + e.message, true); btn.disabled = false; btn.textContent = 'Request access';
+  }
+}
+
+// ── First sign-in with a temporary password ──────────────────────────────
+function showSetPasswordScreen() {
+  try { hideSplash(true); } catch (_e) {}
+  showScreen('setPwScreen');
+  const m = document.getElementById('spMsg'); if (m) { m.textContent = ''; m.className = 'msg'; }
+  setTimeout(() => { const i = document.getElementById('spNew'); if (i) i.focus(); }, 50);
+}
+async function submitFirstPassword() {
+  const p1 = (document.getElementById('spNew') || {}).value || '';
+  const p2 = (document.getElementById('spNew2') || {}).value || '';
+  const msg = document.getElementById('spMsg'); const btn = document.getElementById('spBtn');
+  const say = (t, err) => { msg.textContent = t; msg.className = 'msg' + (err ? ' err' : ' ok'); };
+  if (p1.length < 8) return say('Use at least 8 characters.', true);
+  if (p1 !== p2) return say('The two passwords do not match.', true);
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const r = await fetch(SB_URL + '/auth/v1/user', {
+      method: 'PUT', headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: p1, data: { must_change_password: false } })
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const t = d.msg || d.error_description || d.error || ('HTTP ' + r.status);
+      say(/different/i.test(t) ? 'Choose a password different from the temporary one.' : 'Could not save: ' + t, true);
+      btn.disabled = false; btn.textContent = 'Save and continue'; return;
+    }
+    delete currentUser.must_change;
+    localStorage.setItem('dt-user', JSON.stringify(currentUser));
+    btn.disabled = false; btn.textContent = 'Save and continue';
+    await loadProfile();
+    if (profile) launchApp(); else showScreen('authScreen');
+  } catch (e) {
+    say('Connection error: ' + e.message, true); btn.disabled = false; btn.textContent = 'Save and continue';
+  }
+}
+function joinOrgRequestAccess() {
+  const em = (currentUser && currentUser.email) || '';
+  _pendingSsoUser = false;
+  doLogout();
+  setTimeout(() => { setMode('request'); const e = document.getElementById('aEmail'); if (e) e.value = em; }, 50);
 }
 function showMsg(msg, isErr) {
   const el = document.getElementById('authMsg');
@@ -207,6 +284,9 @@ function ssoSignIn(which) {
 }
 
 async function doAuth() {
+  // The request form has no password, so it must branch off before the
+  // email-and-password check below.
+  if (authMode === 'request' || authMode === 'signup') return submitAccessRequest();
   const email = document.getElementById('aEmail').value.trim();
   const pass = document.getElementById('aPass').value;
   if (!email || !pass) { showMsg('Please enter email and password.', true); return; }
@@ -240,7 +320,12 @@ async function doAuth() {
       const signinUser = d.user || d;
       if (!signinUser?.id) { showMsg('Sign in failed — please try again.', true); btn.disabled=false; btn.textContent='Sign in'; return; }
       currentUser = { id: signinUser.id, email: signinUser.email || email, token: d.access_token, refresh_token: d.refresh_token };
+      // Created from the admin panel with a temporary password: they choose
+      // their own before anything else opens. Remembered locally so a reload
+      // cannot skip it.
+      if (signinUser.user_metadata && signinUser.user_metadata.must_change_password === true) currentUser.must_change = true;
       localStorage.setItem('dt-user', JSON.stringify(currentUser));
+      if (currentUser.must_change) { btn.disabled = false; btn.textContent = 'Sign in'; showSetPasswordScreen(); return; }
       await loadProfile();
     }
     launchApp();
@@ -5114,8 +5199,8 @@ async function renderTeam() {
   try {
     let q;
     const seeAll = ['super_admin','admin','director','executive'].includes(profile?.role);
-    if (seeAll) q = 'user_profiles?org_id=eq.' + profile.org_id + '&select=user_id,email,role,manager_id';
-    else q = 'user_profiles?org_id=eq.' + profile.org_id + '&manager_id=eq.' + currentUser.id + '&select=user_id,email,role,manager_id';
+    if (seeAll) q = 'user_profiles?org_id=eq.' + profile.org_id + '&is_active=not.is.false&select=user_id,email,role,manager_id';
+    else q = 'user_profiles?org_id=eq.' + profile.org_id + '&manager_id=eq.' + currentUser.id + '&is_active=not.is.false&select=user_id,email,role,manager_id';
     const members = await sbGet(q);
     const others = (members || []).filter(m => m.user_id !== currentUser.id);
     if (!others.length) { tl.innerHTML = '<div class="empty"><div class="empty-icon"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM2.5 20v-1.5A4.5 4.5 0 017 14h4a4.5 4.5 0 014.5 4.5V20M16 4.3a3.5 3.5 0 010 6.4M18 14.3a4.5 4.5 0 013.5 4.2V20"/></svg></div>No team members found. Share your org code for members to join.</div>'; return; }
@@ -5384,7 +5469,7 @@ async function loadExecDashboard() {
   const container = document.getElementById('execDashboard'); if (!container||!currentUser?.token||!profile?.org_id) return;
   container.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text3);font-size:13px">Loading org pulse…</div>';
   try {
-    const members = await sbGet('user_profiles?org_id=eq.' + profile.org_id + '&select=user_id,email,role');
+    const members = await sbGet('user_profiles?org_id=eq.' + profile.org_id + '&is_active=not.is.false&select=user_id,email,role');
     if (!members?.length) { container.innerHTML = '<div style="padding:20px;color:var(--text3)">No team members found</div>'; return; }
     const reps = members.filter(function(m){return m.role==='member'||m.role==='sdr'||m.role==='ae'||m.role==='manager';});
     const {from:dateFrom,to:dateTo,label:dateLabel} = getExecDateRange();
@@ -5672,7 +5757,7 @@ async function renderOrg() {
   if (assignSection) assignSection.style.display = isSuperAdmin ? '' : 'none';
   if (!SB_URL || !isSuperAdmin) return;
   try {
-    orgPeople = await sbGet(`user_profiles?org_id=eq.${profile.org_id}&select=user_id,email,role,manager_id`);
+    orgPeople = await sbGet(`user_profiles?org_id=eq.${profile.org_id}&is_active=not.is.false&select=user_id,email,role,manager_id`);
     renderPeopleTable(); renderAssignCard();
     const accountRepSel = document.getElementById('accountRepSelect');
     if (accountRepSel) accountRepSel.innerHTML = '<option value="">Select a rep…</option>' + orgPeople.map(p => '<option value="' + p.user_id + '">' + esc(p.email) + '</option>').join('');
@@ -5698,8 +5783,16 @@ function renderAssignCard() {
   }).join('');
   document.getElementById('assignCard').innerHTML = html;
 }
-async function updateRole(userId, newRole) { if (!SB_URL) return; try { await sbPatch(`user_profiles?user_id=eq.${userId}`, { role: newRole }); await renderOrg(); } catch(e) { alert('Error updating role: ' + e.message); } }
-async function assignToManager(managerId, memberId) { if (!memberId || !SB_URL) return; try { await sbPatch(`user_profiles?user_id=eq.${memberId}`, { manager_id: managerId }); await renderOrg(); } catch(e) { alert('Error assigning member: ' + e.message); } }
+// Both go through the edge function (org_update_member), which checks the
+// caller is an admin of the same org. The browser can no longer write
+// user_profiles directly: that permission is what let anyone set their own role.
+async function _orgUpdateMember(body) {
+  const r = await fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify(Object.assign({ action: 'org_update_member' }, body)) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || !d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+}
+async function updateRole(userId, newRole) { if (!SB_URL) return; try { await _orgUpdateMember({ user_id: userId, role: newRole }); await renderOrg(); } catch(e) { alert('Could not change the role: ' + e.message); await renderOrg(); } }
+async function assignToManager(managerId, memberId) { if (!memberId || !SB_URL) return; try { await _orgUpdateMember({ user_id: memberId, manager_id: managerId }); await renderOrg(); } catch(e) { alert('Could not assign: ' + e.message); } }
 
 async function loadRepAccounts() {
   const repId = document.getElementById('accountRepSelect')?.value; const list = document.getElementById('repAccountsList'); const addRow = document.getElementById('addAccountRow');
@@ -8417,6 +8510,7 @@ function buildAuthOrbit() {
       const ok = await refreshToken();
       if (!ok) { localStorage.removeItem('dt-user'); currentUser = null; registerSW(); return; }
     }
+    if (currentUser?.must_change) { showSetPasswordScreen(); registerSW(); return; }
     const _finishLaunch = function() {
       const pendingCode = sessionStorage.getItem('ms_pending_code');
       if (pendingCode) {
@@ -9367,7 +9461,7 @@ async function loadSdrPlayground() {
     var teamIds = [];
     var emailById = {};
     if (mgr) {
-      var peers = await sbGet('user_profiles?org_id=eq.'+org+'&manager_id=eq.'+mgr+'&select=user_id,email,role');
+      var peers = await sbGet('user_profiles?org_id=eq.'+org+'&manager_id=eq.'+mgr+'&is_active=not.is.false&select=user_id,email,role');
       (peers||[]).forEach(function(p){ if (p.user_id !== currentUser.id) { teamIds.push(p.user_id); emailById[p.user_id]=p.email; } });
       teamIds.push(mgr);
       try { var mgrRow = await sbGet('user_profiles?user_id=eq.'+mgr+'&select=user_id,email&limit=1'); if (mgrRow&&mgrRow[0]) emailById[mgr]=mgrRow[0].email; } catch(e){}
@@ -13930,7 +14024,7 @@ async function populateIntelRepFilter() {
   try {
     if (!_intelRepsCache) {
       var seeAllReps = ['super_admin','admin','director','executive'].includes(profile.role);
-      var q = 'user_profiles?org_id=eq.' + profile.org_id + '&select=user_id,email,role,manager_id&order=email';
+      var q = 'user_profiles?org_id=eq.' + profile.org_id + '&is_active=not.is.false&select=user_id,email,role,manager_id&order=email';
       var allMembers = await sbGet(q);
       // Only show frontline reps (member/sdr/ae), never managers/admins/super_admins themselves.
       var reps = (allMembers || []).filter(function(p) {
