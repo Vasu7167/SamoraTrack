@@ -266,8 +266,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
      css/style.css section 6): a warm red-brown bloom top right, a gold one
      bottom left, over a brown-black diagonal. The previous flat #18160F
      radial is what made this pane read darker than the site. */
+  /* The form gets under a third of the screen (never narrower than 360px,
+     never wider than 480px); the orbital takes everything else. */
   .auth-aside{display:flex;flex-direction:column;justify-content:flex-start;gap:14px;
-    flex:0 0 50%;max-width:none;height:100vh;box-sizing:border-box;padding:32px 48px 26px;position:relative;overflow:hidden;
+    flex:0 0 calc(100% - clamp(360px, 31vw, 480px));max-width:none;height:100vh;box-sizing:border-box;padding:32px 48px 26px;position:relative;overflow:hidden;
     background:radial-gradient(ellipse 70% 90% at 82% 12%,rgba(139,35,21,.20),transparent 58%),
                radial-gradient(ellipse 80% 70% at 10% 92%,rgba(160,117,42,.13),transparent 60%),
                linear-gradient(168deg,#211C13 0%,#18150E 52%,#12100A 100%);
@@ -351,7 +353,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
   @media (prefers-reduced-motion:reduce){
     .aos-ring--1,.aos-ring--2,.aos-core::before,.aos-core::after,.auth-aside::before{animation:none}
   }
-  .auth-card{padding:40px;max-width:500px}
+  .auth-card{padding:32px 30px;max-width:420px}
 }
 .auth-tabs{display:flex;gap:6px;margin-bottom:18px}
 .auth-tab{flex:1;padding:8px;border-radius:var(--radius-sm);border:1px solid var(--border);background:transparent;color:var(--text2);font-family:var(--font);font-size:13px;cursor:pointer;transition:all 0.2s;position:relative;z-index:10;pointer-events:all}
@@ -1165,28 +1167,43 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
 
     <div class="auth-tabs">
       <button class="auth-tab active" onclick="setMode('login')">Sign in</button>
-      <button class="auth-tab" onclick="setMode('signup')">Create account</button> </div>
-    <label class="field-label">Email</label>
+      <button class="auth-tab" onclick="setMode('request')">Request access</button> </div>
+    <!-- Self-serve sign-up is gone: SamoraOS is B2B, and an organisation is set
+         up by us, not by whoever finds this page. That is how a stray
+         "genefied.ai" org with its own super_admin appeared. People who want
+         in leave their details here instead, and their admin (or we) create
+         the account. -->
+    <div id="requestIntro" class="field-hint" style="display:none;margin:2px 0 12px">Tell us who you are and we will set your team up. If your company already uses SamoraOS, your admin can add you directly.</div>
+    <div id="requestTop" style="display:none">
+      <label class="field-label">Your name</label>
+      <input class="auth-input" id="rqName" autocomplete="name" placeholder="Full name"/>
+    </div>
+    <label class="field-label" id="aEmailLabel">Email</label>
     <input class="auth-input" id="aEmail" type="email" placeholder="you@company.com"/>
+    <div id="passwordBlock">
     <label class="field-label">Password</label>
     <input class="auth-input" id="aPass" type="password" placeholder="Password" onkeydown="if(event.key==='Enter'&&authMode==='login')doAuth()"/>
-    <div id="signupFields" style="display:none">
-      <label class="field-label">Confirm password</label>
-      <input class="auth-input" id="aPass2" type="password" placeholder="Confirm password"/>
-      <div class="divider">org setup</div>
-      <label class="field-label">Organisation code</label>
-      <div class="field-hint">Leave blank to create a new organisation (you'll become Super Admin)</div>
-      <input class="auth-input" id="aOrgCode" placeholder="e.g. ORG-XXXX — leave blank to create new"/>
-      <div id="rolePickerWrap" style="display:none;margin-top:12px">
-        <label class="field-label">Your role</label>
-        <div class="field-hint">This shapes your daily coaching and task framing</div>
-        <div style="display:flex;gap:8px;margin-top:6px">
-          <button type="button" id="rolePickSDR" onclick="pickSignupRole('sdr')" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:2px;background:var(--surface2);color:var(--text2);cursor:pointer;font-family:var(--font);font-size:13px;transition:all .2s">
-            <div style="font-weight:600;margin-bottom:2px">SDR</div>
-            <div style="font-size:11px;opacity:0.7">Coverage · Outreach · Pipeline build</div> </button>
-          <button type="button" id="rolePickAE" onclick="pickSignupRole('ae')" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:2px;background:var(--surface2);color:var(--text2);cursor:pointer;font-family:var(--font);font-size:13px;transition:all .2s">
-            <div style="font-weight:600;margin-bottom:2px">AE</div>
-            <div style="font-size:11px;opacity:0.7">Deal quality · Proposals · Closes</div> </button> </div> </div> </div>
+    </div>
+    <div id="requestFields" style="display:none">
+      <label class="field-label">Company</label>
+      <input class="auth-input" id="rqCompany" autocomplete="organization" placeholder="Company name"/>
+      <div style="display:flex;gap:10px">
+        <div style="flex:1">
+          <label class="field-label">Team size</label>
+          <select class="auth-input" id="rqTeam" style="appearance:auto">
+            <option value="">Choose</option><option>1 to 5</option><option>6 to 20</option><option>21 to 50</option><option>51 to 200</option><option>200+</option>
+          </select>
+        </div>
+        <div style="flex:1">
+          <label class="field-label">Phone <span style="color:var(--text3);font-weight:400">(optional)</span></label>
+          <input class="auth-input" id="rqPhone" autocomplete="tel" placeholder="+91"/>
+        </div>
+      </div>
+      <label class="field-label">Anything we should know? <span style="color:var(--text3);font-weight:400">(optional)</span></label>
+      <textarea class="auth-input" id="rqMsg" rows="2" placeholder="What you sell, what you want Samora to fix" style="resize:vertical;min-height:54px"></textarea>
+      <!-- Honeypot: invisible to people, irresistible to bots. -->
+      <input id="rqWebsite" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-10000px;width:1px;height:1px;opacity:0"/>
+    </div>
     <button class="auth-btn" id="authBtn" onclick="doAuth()">Sign in</button>
     <div id="forgotRow" style="text-align:center;margin-top:10px">
       <button type="button" onclick="showForgot()" style="background:none;border:none;color:var(--text3);font-family:var(--font);font-size:12px;cursor:pointer;text-decoration:underline">Forgot your password?</button> </div>
@@ -1199,18 +1216,31 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
      org of one, with an empty pipeline and no explanation. -->
 <div id="joinOrgScreen" class="screen">
   <div class="auth-card">
-    <div class="auth-logo">One more thing</div>
+    <div class="auth-logo">Almost there</div>
     <div class="field-hint" id="joinWho" style="margin-bottom:4px"></div>
-    <div class="field-hint" style="margin-bottom:14px">Which organisation are you joining? Your admin has a code. If you are the first person here, create a new one instead.</div>
-    <label class="field-label">Organisation code</label>
-    <input class="auth-input" id="joinCode" placeholder="e.g. ORG-XXXX" onkeydown="if(event.key==='Enter')joinOrg('join')"/>
-    <button class="auth-btn" id="joinBtn" onclick="joinOrg('join')" style="margin-top:14px">Join this organisation</button>
-    <div class="divider" style="margin:16px 0 12px">or</div>
-    <button class="auth-btn" id="createOrgBtn" onclick="joinOrg('create')" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border2)">Create a new organisation</button>
-    <div class="field-hint" style="margin-top:6px">You would become its admin. Only do this if nobody from your company is using SamoraOS yet.</div>
+    <div class="field-hint" style="margin-bottom:16px">This login is not linked to an organisation yet. Accounts are set up by your company's SamoraOS admin, so ask them to add you with this email. If your company does not use SamoraOS yet, request access and we will be in touch.</div>
+    <button class="auth-btn" onclick="joinOrgRequestAccess()">Request access</button>
     <div style="text-align:center;margin-top:12px">
       <button type="button" onclick="joinOrgCancel()" style="background:none;border:none;color:var(--text3);font-family:var(--font);font-size:12px;cursor:pointer;text-decoration:underline">Sign out</button> </div>
     <div class="msg" id="joinMsg"></div> </div>
+</div>
+
+<!-- ── First sign-in with a temporary password ─────────────────────────────
+     Accounts created from the admin panel get a temporary password in their
+     welcome email and are flagged must_change_password. Nothing else in the
+     app opens until they have chosen their own. -->
+<div id="setPwScreen" class="screen">
+  <div class="auth-card">
+    <div class="auth-logo">Choose your password</div>
+    <div class="field-hint" style="margin-bottom:14px">You signed in with a temporary password. Pick your own to continue; the temporary one stops working once you do.</div>
+    <label class="field-label">New password</label>
+    <input class="auth-input" id="spNew" type="password" autocomplete="new-password" placeholder="At least 8 characters"/>
+    <label class="field-label">Confirm it</label>
+    <input class="auth-input" id="spNew2" type="password" autocomplete="new-password" placeholder="Same again" onkeydown="if(event.key==='Enter')submitFirstPassword()"/>
+    <button class="auth-btn" id="spBtn" onclick="submitFirstPassword()" style="margin-top:14px">Save and continue</button>
+    <div style="text-align:center;margin-top:10px">
+      <button type="button" onclick="doLogout()" style="background:none;border:none;color:var(--text3);font-family:var(--font);font-size:12px;cursor:pointer;text-decoration:underline">Sign out</button> </div>
+    <div class="msg" id="spMsg"></div> </div>
 </div>
 
 <!-- ── Forgot password ──────────────────────────────────────────────────────
