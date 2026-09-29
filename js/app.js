@@ -8273,15 +8273,20 @@ function buildAuthOrbit() {
   const availH = viz.clientHeight;
   // Up to 1.12x when the column has room (the wide-screen split gives it a
   // whole column), never so large the cards collide.
-  const sc = availH > 120 ? Math.min(1.12, avail / W, availH / HH) : Math.min(1, avail / W);
+  // On wide screens the orbital has its own column. The outer source chips
+  // already overhang the 720px frame by ~40px a side; that overhang lands in
+  // the column gap and the pane padding, so the frame itself must not bleed
+  // (at 1.12x SmartReach was clipped by the form pane).
+  const wide = window.matchMedia('(min-width: 1200px)').matches;
+  const sc = availH > 120 ? Math.min(wide ? 1.2 : 1.12, avail / W, availH / HH) : Math.min(1, avail / W);
   stage.style.transform = 'scale(' + sc + ')';
   // Centre the scaled stage in the space it was given.
-  stage.style.left = Math.max(0, (avail - W * sc) / 2) + 'px';
+  stage.style.left = (wide ? (avail - W * sc) / 2 : Math.max(0, (avail - W * sc) / 2)) + 'px';
   stage.style.top = availH > 120 ? Math.max(0, (availH - HH * sc) / 2) + 'px' : '0px';
   if (availH <= 120) viz.style.height = Math.round(HH * sc) + 'px';
   // Type back up by the inverse of the scale, capped: past 1.2 the cards
   // grow into each other, which is the exact failure this layout avoids.
-  stage.style.setProperty('--k', String(Math.min(1 / sc, 1.2).toFixed(3)));
+  stage.style.setProperty('--k', String(Math.min(1 / sc, wide ? 1.32 : 1.2).toFixed(3)));
 
   const cx = W / 2, cy = H / 2;
   const irx = Math.min(W * 0.355, 245), iry = Math.min(H * 0.325, 195);
