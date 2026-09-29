@@ -749,6 +749,10 @@ function launchApp() {
   showScreen('appScreen');
   const role = profile?.role || 'member';
   _applyRoleChrome();
+  // Every sign-in lands on Today. Sign out lives in the You tab and signing
+  // out does not reload the page (nor does an installed PWA), so the You panel
+  // stayed active and the next sign-in opened on You instead of Today.
+  _landOnToday();
   // An unwired helper is the same as no helper. Both read the DOM that
   // launchApp has just made visible, so they run here rather than at parse
   // time when #appScreen is still hidden and widths measure as zero.
@@ -1103,6 +1107,23 @@ function updateCBar(t) {
   bar.classList.toggle('vis', val > 0);
   fill.style.width = pct + '%';
   fill.className = 'cfill' + (val >= MIN ? ' ok' : '');
+}
+
+// DOM-only reset to Today: no renders, because on sign-in the data has not
+// loaded yet and the normal load path renders Today once it has.
+function _landOnToday() {
+  currentTab = 'today';
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-today'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.id === 'nav-today'));
+  document.body.setAttribute('data-tab', 'today');
+  todayActiveSection = 'tasks';
+  document.querySelectorAll('.today-section-btn').forEach(b => b.classList.toggle('active', b.id === 'tsb-tasks'));
+  ['tasks','issues','wins','misses'].forEach(sec => {
+    const el = document.getElementById('today-' + sec + '-section');
+    if (el) el.style.display = sec === 'tasks' ? '' : 'none';
+  });
+  const addBox = document.getElementById('today-add-box'); if (addBox) addBox.style.display = '';
+  try { window.scrollTo(0, 0); } catch (_e) {}
 }
 
 function switchTab(tab) {
