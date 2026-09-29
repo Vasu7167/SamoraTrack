@@ -14658,7 +14658,9 @@ async function submitReset() {
     var r = await fetch(SB_URL + '/auth/v1/user', {
       method: 'PUT',
       headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + _recoveryToken, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: p1 })
+      // They chose this password themselves, so any "change your temporary
+      // password" flag from an admin-created account no longer applies.
+      body: JSON.stringify({ password: p1, data: { must_change_password: false } })
     });
     var d = {}; try { d = await r.json(); } catch (_e) {}
     if (!r.ok) {
@@ -14690,7 +14692,16 @@ async function submitReset() {
       currentUser = { id: u.id, email: u.email, token: _recoveryToken, refresh_token: _recoveryRefresh || null };
       localStorage.setItem('dt-user', JSON.stringify(currentUser));
       _recoveryToken = null; _recoveryRefresh = null;
-      if (typeof loadProfile === 'function') { setTimeout(loadProfile, 700); return; }
+      // loadProfile() only FETCHES the profile; it never opens the app. Calling
+      // it alone left "Signing you in..." on screen forever. Same sequence as
+      // every other sign-in path: load, then launch.
+      await loadProfile();
+      // loadProfile may already have moved on (removed user, or no org yet).
+      var stillHere = document.getElementById('resetScreen');
+      if (stillHere && !stillHere.classList.contains('active')) return;
+      if (profile) { launchApp(); return; }
+      showAuth();
+      return;
     }
     _recoveryToken = null; _recoveryRefresh = null;
     var sub = document.getElementById('resetDoneSub'); if (sub) sub.textContent = 'Sign in with your new password.';
