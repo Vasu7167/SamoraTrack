@@ -8479,14 +8479,15 @@ function buildAuthOrbit() {
       // account and it should not survive a copied URL or a shared screen.
       history.replaceState(null, '', window.location.pathname + window.location.search);
       if (_recoveryToken) {
+        let rEmail = '';
         try {
           const ru = await fetch(SB_URL + '/auth/v1/user', { headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + _recoveryToken } });
           const rud = await ru.json();
-          const who = document.getElementById('resetWho');
-          if (who) who.textContent = rud && rud.email ? 'For ' + rud.email : '';
+          if (!ru.ok) { try { hideSplash(true); } catch (_e) {} _showResetExpired(); return; }
+          rEmail = (rud && rud.email) || '';
         } catch (_e) {}
-        _screen('resetScreen');
-        const rp = document.getElementById('rPass'); if (rp) rp.focus();
+        try { hideSplash(true); } catch (_e) {}
+        _openResetScreen(rEmail);
         return;
       }
     }
@@ -8496,10 +8497,13 @@ function buildAuthOrbit() {
     if (frag && /(^|&)error/.test(frag)) {
       const eq = new URLSearchParams(frag);
       history.replaceState(null, '', window.location.pathname + window.location.search);
-      const am = document.getElementById('authMsg');
-      if (am && /expired|invalid/i.test(eq.get('error_description') || eq.get('error') || '')) {
-        am.style.color = 'var(--coral)';
-        am.textContent = 'That link has expired or was already used. Request a new one.';
+      // An expired email link arrives as error_code=otp_expired ("Email link
+      // is invalid or has expired"). OAuth errors are left alone. Show the dedicated
+      // expired state (with a one-tap "send a new link"), not a hidden message.
+      if (/otp_expired|email link/i.test((eq.get('error_code') || '') + ' ' + (eq.get('error_description') || ''))) {
+        try { hideSplash(true); } catch (_e) {}
+        _showResetExpired();
+        return;
       }
     }
 
@@ -14487,15 +14491,41 @@ function _screen(id) {
   if (t) t.classList.add('active');
 }
 
-function showForgot() {
+// Show a message in one of the .msg boxes. The class is what makes it visible:
+// .msg is display:none until it carries err / ok / info. Setting only the text
+// (as this flow used to) produced messages nobody could see, which is why
+// "Send the link" appeared to do nothing and the reset button seemed dead.
+function _flowMsg(el, text, kind) {
+  if (typeof el === 'string') el = document.getElementById(el);
+  if (!el) return;
+  el.textContent = text || '';
+  el.style.color = '';
+  el.className = 'msg' + (text ? ' ' + (kind || 'err') : '');
+}
+
+function _flowState(ids, show) {
+  ids.forEach(function (id) { var e = document.getElementById(id); if (e) e.style.display = id === show ? '' : 'none'; });
+}
+
+function _validEmail(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v); }
+
+function showForgot(prefill) {
   var a = document.getElementById('aEmail');
   var f = document.getElementById('fEmail');
   // Carry over whatever they already typed. Retyping an email you just entered,
   // while locked out, is a small insult.
-  if (a && f && a.value) f.value = a.value;
-  document.getElementById('forgotMsg').textContent = '';
+  if (f) f.value = (typeof prefill === 'string' && prefill) ? prefill : ((a && a.value) || f.value || '');
+  _flowMsg('forgotMsg', '');
+  _flowState(['forgotForm', 'forgotSent'], 'forgotForm');
+  var btn = document.getElementById('forgotBtn'); if (btn) { btn.disabled = false; btn.textContent = 'Send reset link'; }
   _screen('forgotScreen');
-  if (f) f.focus();
+  if (f) setTimeout(function () { f.focus(); }, 30);
+}
+
+function forgotDifferent() {
+  _flowMsg('forgotMsg', '');
+  _flowState(['forgotForm', 'forgotSent'], 'forgotForm');
+  var f = document.getElementById('fEmail'); if (f) { f.select(); f.focus(); }
 }
 
 function showAuth() {
@@ -14503,88 +14533,149 @@ function showAuth() {
   _screen('authScreen');
 }
 
-async function sendReset() {
-  var btn = document.getElementById('forgotBtn');
-  var msg = document.getElementById('forgotMsg');
+// Supabase allows one recovery email per address per 60 seconds. The resend
+// button counts that down instead of letting people click into a silent 429.
+var _resendTimer;
+function _resendCooldown(sec) {
+  var b = document.getElementById('fResend'); if (!b) return;
+  clearInterval(_resendTimer);
+  var left = sec;
+  var tick = function () {
+    if (left <= 0) { clearInterval(_resendTimer); b.disabled = false; b.textContent = 'Resend link'; return; }
+    b.disabled = true; b.textContent = 'Resend link in ' + left + 's'; left--;
+  };
+  tick(); _resendTimer = setInterval(tick, 1000);
+}
+
+async function sendReset(isResend) {
+  var btn = document.getElementById(isResend ? 'fResend' : 'forgotBtn');
   var email = (document.getElementById('fEmail').value || '').trim().toLowerCase();
 
-  if (!email || email.indexOf('@') === -1) {
-    msg.style.color = 'var(--coral)';
-    msg.textContent = 'Enter the email address you sign in with.';
+  if (!_validEmail(email)) {
+    _flowMsg('forgotMsg', 'Enter the full email address you sign in with, like name@company.com.', 'err');
+    var fe = document.getElementById('fEmail'); if (fe) fe.focus();
     return;
   }
-
-  btn.disabled = true; btn.textContent = 'Sending…';
+  _flowMsg('forgotMsg', '');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  var status = 0;
   try {
-    // redirectTo must be listed in Supabase Auth -> URL Configuration, or the
-    // link in the email silently falls back to the Site URL and the recovery
-    // fragment never reaches this app.
     // GoTrue reads redirect_to from the QUERY STRING on /recover (that is what
-    // supabase-js sends). In the JSON body it is silently ignored, so the link
-    // fell back to the project's Site URL, which pointed at Vercel.
-    await fetch(SB_URL + '/auth/v1/recover?redirect_to=' + encodeURIComponent(window.location.origin + '/'), {
+    // supabase-js sends); in the JSON body it is silently ignored. The target
+    // must also be listed in Supabase Auth, URL Configuration, Redirect URLs.
+    var r = await fetch(SB_URL + '/auth/v1/recover?redirect_to=' + encodeURIComponent(window.location.origin + '/'), {
       method: 'POST',
       headers: { 'apikey': SB_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: email })
     });
-  } catch (e) { /* deliberately ignored, see below */ }
+    status = r.status;
+  } catch (e) {
+    // A network failure is the one outcome we can honestly report: nothing
+    // left this device, so "check your inbox" would be a lie.
+    if (btn) { btn.disabled = false; btn.textContent = isResend ? 'Resend link' : 'Send reset link'; }
+    _flowMsg('forgotMsg', 'Could not reach SamoraOS. Check your connection and try again.', 'err');
+    if (isResend) _flowState(['forgotForm', 'forgotSent'], 'forgotForm');
+    return;
+  }
 
-  // ALWAYS THE SAME ANSWER, whether or not that address has an account, and
-  // whether or not the request succeeded. Anything else turns this box into a
-  // tool for checking who works here. The cost is that a typo looks like a
-  // success; the note about checking spam is there to soften that.
-  msg.style.color = 'var(--text3)';
-  msg.textContent = 'If there is an account on ' + email + ', a link is on its way. It is valid for one hour. Check spam if it has not arrived in a couple of minutes.';
-  btn.disabled = false; btn.textContent = 'Send the link';
+  // Otherwise ALWAYS the same answer, whether or not the address has an
+  // account. Anything else turns this box into a tool for checking who works
+  // where. A 429 (asked again within 60s) also lands here: an earlier link is
+  // already on its way.
+  var to = document.getElementById('fSentTo'); if (to) to.textContent = email;
+  _flowState(['forgotForm', 'forgotSent'], 'forgotSent');
+  if (btn && !isResend) { btn.disabled = false; btn.textContent = 'Send reset link'; }
+  _resendCooldown(60);
+  if (typeof showToast === 'function') showToast(isResend ? 'Sent again. Check your inbox.' : 'Reset link sent. Check your inbox.');
+}
+
+function _togglePw(btn) {
+  var inp = btn && btn.parentNode ? btn.parentNode.querySelector('input') : null;
+  if (!inp) return;
+  var show = inp.type === 'password';
+  inp.type = show ? 'text' : 'password';
+  btn.textContent = show ? 'Hide' : 'Show';
+  btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
 }
 
 function _rPwHint() {
   var v = document.getElementById('rPass').value || '';
-  var h = document.getElementById('rPassHint');
-  if (!h) return;
-  if (v.length >= PW_MIN) { h.textContent = 'Long enough.'; h.style.color = 'var(--green)'; }
-  else { h.textContent = 'At least ' + PW_MIN + ' characters.'; h.style.color = ''; }
+  var v2 = document.getElementById('rPass2').value || '';
+  var len = document.getElementById('rRuleLen'), mt = document.getElementById('rRuleMatch');
+  if (len) len.classList.toggle('ok', v.length >= PW_MIN);
+  if (mt) mt.classList.toggle('ok', v.length > 0 && v === v2);
+  var m = document.getElementById('resetMsg');
+  if (m && m.classList.contains('err')) _flowMsg(m, '');
 }
 
-// Set by _catchRecovery. Held in memory only: a recovery token is a bearer
-// credential for the account and localStorage is the wrong home for it.
-var _pendingSsoUser = false;
-var _recoveryToken = null;
-var _recoveryRefresh = null;
+// Set by the recovery-link handler in init(). Held in memory only: a recovery
+// token is a bearer credential for the account and localStorage is the wrong
+// home for it.
+//
+// NO INITIALISERS HERE, on purpose. init() is an async IIFE near the top of
+// this file: it stores the token and then awaits. While it waits, the rest of
+// the file finishes executing, and "var _recoveryToken = null" down here used
+// to run AFTER the token was stored and wipe it. Result: the reset button
+// found no token and (invisibly) reported an expired link. A bare "var" is
+// hoisted without an assignment, so it cannot clobber anything.
+var _pendingSsoUser;
+var _recoveryToken;
+var _recoveryRefresh;
+var _resetEmail;
+
+// Prepare the reset screen for a fresh link (called from init()).
+function _openResetScreen(email) {
+  _resetEmail = email || '';
+  var who = document.getElementById('resetWho');
+  if (who) who.textContent = email ? 'For ' + email : '';
+  var u = document.getElementById('rUser'); if (u) u.value = email || '';
+  ['rPass', 'rPass2'].forEach(function (id) { var e = document.getElementById(id); if (e) { e.value = ''; e.type = 'password'; } });
+  document.querySelectorAll('#resetScreen .pw-eye').forEach(function (b) { b.textContent = 'Show'; });
+  _rPwHint(); _flowMsg('resetMsg', '');
+  var btn = document.getElementById('resetBtn'); if (btn) { btn.disabled = false; btn.textContent = 'Set password and sign in'; }
+  _flowState(['resetForm', 'resetExpired', 'resetDone'], 'resetForm');
+  _screen('resetScreen');
+  setTimeout(function () { var rp = document.getElementById('rPass'); if (rp) rp.focus(); }, 30);
+}
+
+function _showResetExpired() {
+  _flowState(['resetForm', 'resetExpired', 'resetDone'], 'resetExpired');
+  _screen('resetScreen');
+}
 
 async function submitReset() {
   var btn = document.getElementById('resetBtn');
-  var msg = document.getElementById('resetMsg');
   var p1 = document.getElementById('rPass').value || '';
   var p2 = document.getElementById('rPass2').value || '';
 
-  if (p1.length < PW_MIN) { msg.style.color='var(--coral)'; msg.textContent = 'At least ' + PW_MIN + ' characters.'; return; }
-  if (p1 !== p2)          { msg.style.color='var(--coral)'; msg.textContent = 'The two passwords do not match.'; return; }
-  if (!_recoveryToken)    { msg.style.color='var(--coral)'; msg.textContent = 'This reset link has expired. Request a new one.'; return; }
+  if (!_recoveryToken) { _showResetExpired(); return; }
+  if (p1.length < PW_MIN) { _flowMsg('resetMsg', 'Use at least ' + PW_MIN + ' characters.', 'err'); document.getElementById('rPass').focus(); return; }
+  if (p1 !== p2)          { _flowMsg('resetMsg', 'The two passwords do not match.', 'err'); document.getElementById('rPass2').focus(); return; }
 
   btn.disabled = true; btn.textContent = 'Saving…';
-  msg.style.color = 'var(--text3)'; msg.textContent = '';
+  _flowMsg('resetMsg', '');
   try {
     var r = await fetch(SB_URL + '/auth/v1/user', {
       method: 'PUT',
       headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + _recoveryToken, 'Content-Type': 'application/json' },
       body: JSON.stringify({ password: p1 })
     });
-    var d = await r.json();
+    var d = {}; try { d = await r.json(); } catch (_e) {}
     if (!r.ok) {
-      msg.style.color = 'var(--coral)';
-      // An expired link is the common case and deserves its own sentence,
-      // because "request a new one" is the actual next step.
-      msg.textContent = /expired|invalid/i.test(JSON.stringify(d))
-        ? 'This reset link has expired. Request a new one from the sign-in screen.'
-        : (d.msg || d.error_description || d.error || 'Could not set the password.');
+      var txt = JSON.stringify(d);
+      if (r.status === 401 || r.status === 403 || /expired|invalid|jwt/i.test(txt)) { _showResetExpired(); return; }
+      var why = d.msg || d.error_description || d.error || 'Could not set the password.';
+      if (/same|different from the old/i.test(why)) why = 'Choose a password you have not used before.';
+      else if (/weak|pwned|leaked/i.test(why)) why = 'That password is too easy to guess or has appeared in a data breach. Try a longer, unique one.';
+      _flowMsg('resetMsg', why, 'err');
       btn.disabled = false; btn.textContent = 'Set password and sign in';
       return;
     }
 
+    _flowState(['resetForm', 'resetExpired', 'resetDone'], 'resetDone');
+
     // A reset usually means the old password was lost OR someone else had it.
-    // Ending every other session is the safe default here; unlike the settings
-    // screen there is no case for leaving them running.
+    // Ending every other session is the safe default here.
     try {
       await fetch(SB_URL + '/auth/v1/logout?scope=others', {
         method: 'POST', headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + _recoveryToken }
@@ -14599,16 +14690,16 @@ async function submitReset() {
       currentUser = { id: u.id, email: u.email, token: _recoveryToken, refresh_token: _recoveryRefresh || null };
       localStorage.setItem('dt-user', JSON.stringify(currentUser));
       _recoveryToken = null; _recoveryRefresh = null;
-      if (typeof loadProfile === 'function') { await loadProfile(); return; }
+      if (typeof loadProfile === 'function') { setTimeout(loadProfile, 700); return; }
     }
     _recoveryToken = null; _recoveryRefresh = null;
-    msg.textContent = 'Password set. Sign in with it.';
-    setTimeout(showAuth, 1200);
+    var sub = document.getElementById('resetDoneSub'); if (sub) sub.textContent = 'Sign in with your new password.';
+    setTimeout(showAuth, 1600);
   } catch (e) {
-    msg.style.color = 'var(--coral)';
-    msg.textContent = 'Could not reach the server: ' + e.message;
+    _flowState(['resetForm', 'resetExpired', 'resetDone'], 'resetForm');
+    _flowMsg('resetMsg', 'Could not reach SamoraOS. Check your connection and try again.', 'err');
+    btn.disabled = false; btn.textContent = 'Set password and sign in';
   }
-  btn.disabled = false; btn.textContent = 'Set password and sign in';
 }
 
 
