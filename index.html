@@ -397,6 +397,29 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .msg{font-size:13px;margin-top:10px;padding:9px 12px;border-radius:2px;display:none}
 .msg.err{background:rgba(251,124,107,0.1);color:var(--coral);display:block}
 .msg.ok{background:rgba(110,231,183,0.08);color:var(--green);display:block}
+.msg.info{background:var(--surface2);color:var(--text2);display:block}
+/* Forgot / reset password flow */
+.flow-card{max-width:420px}
+.flow-brand{display:flex;align-items:center;gap:10px;margin-bottom:28px;font-size:15px;font-weight:var(--w-medium,500);color:var(--text)}
+.flow-brand img{border-radius:8px;border:1px solid var(--border)}
+.flow-icon{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:16px;color:var(--gold);background:rgba(200,150,30,.10);border:1px solid rgba(200,150,30,.35)}
+.flow-icon--warn{color:var(--coral);background:rgba(251,124,107,.08);border-color:rgba(251,124,107,.35)}
+.flow-mail{display:flex;gap:8px;margin:4px 0 2px}.flow-mail .sso-btn{flex:1;text-decoration:none}
+.flow-tip{font-size:12px;color:var(--text3);line-height:1.5;margin:10px 0 4px}
+.flow-link{background:none;border:none;color:var(--text3);font-family:var(--font);font-size:13px;cursor:pointer;text-decoration:underline;padding:8px}
+.flow-link:hover{color:var(--text)}
+.flow-foot{text-align:center;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}
+.auth-btn--ghost{background:transparent;border:1px solid var(--border2);color:var(--text);margin-top:12px}
+.auth-btn:disabled{opacity:.55;cursor:default}
+.pw-wrap{position:relative}.pw-wrap .auth-input{padding-right:70px}
+.pw-eye{position:absolute;right:8px;top:8px;height:34px;padding:0 10px;background:none;border:none;color:var(--text3);font-family:var(--font);font-size:12px;cursor:pointer;border-radius:var(--radius-sm)}
+.pw-eye:hover{color:var(--text);background:var(--surface)}
+.pw-rules{list-style:none;margin:-2px 0 12px;padding:0;font-size:12px;color:var(--text3)}
+.pw-rules li{display:flex;align-items:center;gap:8px;padding:2px 0}
+.pw-rules li::before{content:'';width:14px;height:14px;border-radius:50%;border:1.5px solid var(--border2);flex-shrink:0;box-sizing:border-box}
+.pw-rules li.ok{color:var(--green)}
+.pw-rules li.ok::before{border-color:var(--green);background:var(--green) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M3.5 7.2l2.3 2.3 4.7-4.8' fill='none' stroke='white' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/12px no-repeat}
+.sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
 .divider{display:flex;align-items:center;gap:10px;margin:14px 0;color:var(--text3);font-size:12px}
 .divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--border)}
 #appScreen{flex-direction:column;background:var(--bg);min-height:100vh}
@@ -1280,33 +1303,70 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
 </div>
 
 <!-- ── Forgot password ──────────────────────────────────────────────────────
-     Its own screen rather than a mode of the sign-in form. Someone who is
-     locked out is already frustrated; making them work out which fields still
-     apply is not the moment to be clever. -->
+     Two states on one screen: the request form, then "check your inbox".
+     The confirmation is deliberately identical whether or not the address has
+     an account (no account enumeration), and says so honestly with "If". -->
 <div id="forgotScreen" class="screen">
-  <div class="auth-card">
-    <div class="auth-logo">Reset your password</div>
-    <div class="field-hint" style="margin-bottom:14px">Enter the email you sign in with. If there is an account on it, we will send a link to set a new password.</div>
-    <label class="field-label">Email</label>
-    <input class="auth-input" id="fEmail" type="email" placeholder="you@company.com" onkeydown="if(event.key==='Enter')sendReset()"/>
-    <button class="auth-btn" id="forgotBtn" onclick="sendReset()" style="margin-top:14px">Send the link</button>
-    <div style="text-align:center;margin-top:10px">
-      <button type="button" onclick="showAuth()" style="background:none;border:none;color:var(--text3);font-family:var(--font);font-size:12px;cursor:pointer;text-decoration:underline">Back to sign in</button> </div>
-    <div class="msg" id="forgotMsg"></div> </div>
+  <div class="auth-card flow-card">
+    <div class="flow-brand"><img src="icons/icon-96.png" alt="" width="34" height="34"/><span>SamoraOS</span></div>
+    <div id="forgotForm">
+      <div class="auth-logo">Reset your password</div>
+      <div class="auth-sub">Enter the email you sign in with. We will send you a link to choose a new password.</div>
+      <label class="field-label" for="fEmail">Work email</label>
+      <input class="auth-input" id="fEmail" type="email" autocomplete="email" inputmode="email" autocapitalize="off" spellcheck="false" placeholder="you@company.com" onkeydown="if(event.key==='Enter')sendReset()"/>
+      <div class="msg" id="forgotMsg" role="alert"></div>
+      <button class="auth-btn" id="forgotBtn" onclick="sendReset()">Send reset link</button>
+    </div>
+    <div id="forgotSent" style="display:none" role="status" aria-live="polite">
+      <div class="flow-icon"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3.5 6.5l8.5 6 8.5-6"/></svg></div>
+      <div class="auth-logo">Check your inbox</div>
+      <div class="auth-sub">If <b id="fSentTo"></b> has a SamoraOS account, a reset link is on its way. The link works once and expires in 1 hour.</div>
+      <div class="flow-mail">
+        <a class="sso-btn" href="https://mail.google.com/mail/u/0/#search/subject%3A(reset+password)+newer_than%3A1d" target="_blank" rel="noopener">Open Gmail</a>
+        <a class="sso-btn" href="https://outlook.office.com/mail/" target="_blank" rel="noopener">Open Outlook</a>
+      </div>
+      <div class="flow-tip">Nothing after a couple of minutes? Check spam or promotions, and make sure this is the address you sign in with.</div>
+      <button class="auth-btn auth-btn--ghost" id="fResend" onclick="sendReset(true)">Resend link</button>
+      <div style="text-align:center"><button type="button" class="flow-link" onclick="forgotDifferent()">Use a different email</button></div>
+    </div>
+    <div class="flow-foot"><button type="button" class="flow-link" onclick="showAuth()">Back to sign in</button></div>
+  </div>
 </div>
 
 <!-- ── Set a new password, after following the emailed link ─────────────── -->
 <div id="resetScreen" class="screen">
-  <div class="auth-card">
-    <div class="auth-logo">Set a new password</div>
-    <div class="field-hint" style="margin-bottom:14px" id="resetWho"></div>
-    <label class="field-label">New password</label>
-    <input class="auth-input" id="rPass" type="password" autocomplete="new-password" placeholder="At least 10 characters" oninput="_rPwHint()"/>
-    <div class="field-hint" id="rPassHint">At least 10 characters.</div>
-    <label class="field-label" style="margin-top:10px">Confirm new password</label>
-    <input class="auth-input" id="rPass2" type="password" autocomplete="new-password" placeholder="Type it again" onkeydown="if(event.key==='Enter')submitReset()"/>
-    <button class="auth-btn" id="resetBtn" onclick="submitReset()" style="margin-top:14px">Set password and sign in</button>
-    <div class="msg" id="resetMsg"></div> </div>
+  <div class="auth-card flow-card">
+    <div class="flow-brand"><img src="icons/icon-96.png" alt="" width="34" height="34"/><span>SamoraOS</span></div>
+    <form id="resetForm" onsubmit="event.preventDefault();submitReset()" novalidate>
+      <div class="auth-logo">Choose a new password</div>
+      <div class="auth-sub" id="resetWho"></div>
+      <!-- For password managers: lets them save the new password against the right account. -->
+      <input type="email" id="rUser" autocomplete="username" class="sr-only" tabindex="-1" aria-hidden="true" readonly/>
+      <label class="field-label" for="rPass">New password</label>
+      <div class="pw-wrap"><input class="auth-input" id="rPass" type="password" autocomplete="new-password" placeholder="At least 10 characters" oninput="_rPwHint()"/><button type="button" class="pw-eye" onclick="_togglePw(this)" aria-label="Show password">Show</button></div>
+      <label class="field-label" for="rPass2">Confirm new password</label>
+      <div class="pw-wrap"><input class="auth-input" id="rPass2" type="password" autocomplete="new-password" placeholder="Type it again" oninput="_rPwHint()"/><button type="button" class="pw-eye" onclick="_togglePw(this)" aria-label="Show password">Show</button></div>
+      <ul class="pw-rules" aria-live="polite">
+        <li id="rRuleLen">At least 10 characters</li>
+        <li id="rRuleMatch">Both passwords match</li>
+      </ul>
+      <div class="msg" id="resetMsg" role="alert"></div>
+      <button type="submit" class="auth-btn" id="resetBtn">Set password and sign in</button>
+      <div class="flow-tip" style="text-align:center">For your security, this signs you out of SamoraOS on every other device.</div>
+    </form>
+    <div id="resetExpired" style="display:none" role="alert">
+      <div class="flow-icon flow-icon--warn"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+      <div class="auth-logo">This link has expired</div>
+      <div class="auth-sub">Reset links work once and expire after an hour. Send yourself a fresh one; it only takes a moment.</div>
+      <button class="auth-btn" onclick="showForgot(_resetEmail)">Send a new link</button>
+      <div class="flow-foot"><button type="button" class="flow-link" onclick="showAuth()">Back to sign in</button></div>
+    </div>
+    <div id="resetDone" style="display:none" role="status" aria-live="polite">
+      <div class="flow-icon"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+      <div class="auth-logo">Password updated</div>
+      <div class="auth-sub" id="resetDoneSub">Signing you in&hellip;</div>
+    </div>
+  </div>
 </div>
 
 <!-- ════ MAIN APP ════ -->
