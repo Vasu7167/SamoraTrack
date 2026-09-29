@@ -8271,7 +8271,9 @@ function buildAuthOrbit() {
   // tall (CSS) and this box gets whatever height is left after the brand row
   // and the tagline.
   const availH = viz.clientHeight;
-  const sc = availH > 120 ? Math.min(1, avail / W, availH / HH) : Math.min(1, avail / W);
+  // Up to 1.12x when the column has room (the wide-screen split gives it a
+  // whole column), never so large the cards collide.
+  const sc = availH > 120 ? Math.min(1.12, avail / W, availH / HH) : Math.min(1, avail / W);
   stage.style.transform = 'scale(' + sc + ')';
   // Centre the scaled stage in the space it was given.
   stage.style.left = Math.max(0, (avail - W * sc) / 2) + 'px';
