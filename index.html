@@ -368,21 +368,20 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
     column-gap:clamp(24px,3vw,56px);row-gap:0;padding:36px clamp(40px,4vw,72px) 30px}
   .auth-aside-brand{grid-area:brand}
   .aos-viz{grid-area:viz;height:100%;align-self:stretch}
-  .auth-aside-body{grid-area:copy;align-self:center;text-align:left;margin:0;max-width:500px}
-  .auth-eyebrow{margin-bottom:18px}
-  .auth-quote{font-size:clamp(32px,2.7vw,48px);line-height:1.12;letter-spacing:-.005em}
-  .auth-proof{display:block;list-style:none;margin:34px 0 0;padding:0;border-top:1px solid rgba(160,117,42,.22)}
-  .auth-proof li{display:flex;gap:16px;padding:16px 0;border-bottom:1px solid rgba(160,117,42,.14)}
-  .auth-proof-n{font-family:var(--o-mono);font-size:11px;letter-spacing:.12em;color:var(--o-gl);padding-top:3px;flex:0 0 22px}
-  .auth-proof b{display:block;font-family:var(--o-serif);font-size:19px;font-weight:600;color:var(--o-iv);line-height:1.25;margin-bottom:3px}
-  .auth-proof span:not(.auth-proof-n){display:block;font-size:13.5px;line-height:1.55;color:#A39C8E}
+  .auth-aside-body{grid-area:copy;align-self:center;text-align:left;margin:0;max-width:440px}
+  .auth-eyebrow{margin-bottom:16px}
+  .auth-quote{font-size:clamp(28px,2.25vw,40px);line-height:1.15;letter-spacing:-.005em;text-wrap:balance}
+  .auth-proof{display:block;list-style:none;margin:28px 0 0;padding:0;border-top:1px solid rgba(160,117,42,.22)}
+  .auth-proof li{display:grid;grid-template-columns:28px 1fr;align-items:baseline;padding:13px 0;border-bottom:1px solid rgba(160,117,42,.14)}
+  .auth-proof-n{font-family:var(--o-mono);font-size:11px;letter-spacing:.08em;color:var(--o-gl)}
+  .auth-proof b{display:block;font-family:var(--o-serif);font-size:18px;font-weight:600;color:var(--o-iv);line-height:1.25;margin-bottom:2px}
+  .auth-proof span:not(.auth-proof-n){display:block;font-size:13px;line-height:1.5;color:#A39C8E}
   .auth-aside-foot{grid-area:foot;display:flex;justify-content:space-between;align-items:center;gap:16px;text-align:left;
     padding-top:16px;border-top:1px solid rgba(58,52,40,.7)}
   .auth-trust{display:inline;color:#8A8374}
 }
-@media(min-width:1200px) and (max-height:700px){
+@media(min-width:1200px) and (max-height:620px){
   .auth-proof li:nth-child(3){display:none}
-  .auth-quote{font-size:clamp(28px,2.3vw,38px)}
 }
 .auth-tabs{display:flex;gap:6px;margin-bottom:18px}
 .auth-tab{flex:1;padding:8px;border-radius:var(--radius-sm);border:1px solid var(--border);background:transparent;color:var(--text2);font-family:var(--font);font-size:13px;cursor:pointer;transition:all 0.2s;position:relative;z-index:10;pointer-events:all}
@@ -1170,14 +1169,14 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
       </div>
     </div>
     <div class="auth-aside-body">
-      <div class="auth-eyebrow">The Revenue Operating System</div>
+      <div class="auth-eyebrow">Your Revenue Health Engine OS</div>
       <div class="auth-quote">Pipeline you can actually trust, because every number <em>shows where it came from.</em></div>
-      <!-- Wide screens only: the three promises, each one something the
-           product does on day one, none of them a claim we cannot show. -->
+      <!-- Wide screens only: three things a rep GETS on day one. Written for
+           the AE and SDR, never as an audit ("receipts" read as surveillance). -->
       <ul class="auth-proof">
-        <li><span class="auth-proof-n">01</span><div><b>Every number shows its receipts</b><span>Scores, badges and forecasts open up to the evidence and the rule behind them.</span></div></li>
-        <li><span class="auth-proof-n">02</span><div><b>Your day, already lined up</b><span>Daily Command puts the next move on every deal in front of you each morning.</span></div></li>
-        <li><span class="auth-proof-n">03</span><div><b>Works where you already sell</b><span>Gmail or Outlook, your calendar and your sequencing tools. Nothing scraped.</span></div></li>
+        <li><span class="auth-proof-n">01</span><div><b>Know where to spend today</b><span>Daily Command lines up your next move on every deal, each morning.</span></div></li>
+        <li><span class="auth-proof-n">02</span><div><b>Catch buyers as they warm up</b><span>Replies, meetings and intent come together, so the right accounts rise to the top.</span></div></li>
+        <li><span class="auth-proof-n">03</span><div><b>Walk into every meeting ready</b><span>Who is attending, what was said last time, and what to ask next.</span></div></li>
       </ul>
     </div>
     <div class="auth-aside-foot"><span>A Samora Intelligence tool</span><span class="auth-trust">Your data stays in your organisation &middot; Export everything, any time</span></div>
