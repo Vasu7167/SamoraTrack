@@ -14498,10 +14498,13 @@ async function sendReset() {
     // redirectTo must be listed in Supabase Auth -> URL Configuration, or the
     // link in the email silently falls back to the Site URL and the recovery
     // fragment never reaches this app.
-    await fetch(SB_URL + '/auth/v1/recover', {
+    // GoTrue reads redirect_to from the QUERY STRING on /recover (that is what
+    // supabase-js sends). In the JSON body it is silently ignored, so the link
+    // fell back to the project's Site URL, which pointed at Vercel.
+    await fetch(SB_URL + '/auth/v1/recover?redirect_to=' + encodeURIComponent(window.location.origin + '/'), {
       method: 'POST',
       headers: { 'apikey': SB_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email, redirect_to: window.location.origin + window.location.pathname })
+      body: JSON.stringify({ email: email })
     });
   } catch (e) { /* deliberately ignored, see below */ }
 
