@@ -269,7 +269,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
   /* The form gets under a third of the screen (never narrower than 360px,
      never wider than 480px); the orbital takes everything else. */
   .auth-aside{display:flex;flex-direction:column;justify-content:flex-start;gap:14px;
-    flex:0 0 calc(100% - clamp(360px, 31vw, 480px));max-width:none;height:100vh;box-sizing:border-box;padding:32px 48px 26px;position:relative;overflow:hidden;
+    flex:0 0 calc(100% - clamp(360px, 28vw, 460px));max-width:none;height:100vh;box-sizing:border-box;padding:32px 48px 26px;position:relative;overflow:hidden;
     background:radial-gradient(ellipse 70% 90% at 82% 12%,rgba(139,35,21,.20),transparent 58%),
                radial-gradient(ellipse 80% 70% at 10% 92%,rgba(160,117,42,.13),transparent 60%),
                linear-gradient(168deg,#211C13 0%,#18150E 52%,#12100A 100%);
@@ -363,19 +363,19 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
    fills its own column, and a quiet trust line at the foot. Centring a
    fixed-size orbital in a 1000px pane is what left the empty brown. */
 @media(min-width:1200px){
-  .auth-aside{display:grid;grid-template-columns:minmax(330px,.82fr) minmax(0,1.18fr);
+  .auth-aside{display:grid;grid-template-columns:minmax(290px,.62fr) minmax(0,1.38fr);
     grid-template-rows:auto minmax(0,1fr) auto;grid-template-areas:"brand brand" "copy viz" "foot foot";
-    column-gap:clamp(24px,3vw,56px);row-gap:0;padding:36px clamp(40px,4vw,72px) 30px}
+    column-gap:clamp(28px,2.4vw,44px);row-gap:0;padding:32px clamp(44px,4.2vw,72px) 26px}
   .auth-aside-brand{grid-area:brand}
   .aos-viz{grid-area:viz;height:100%;align-self:stretch}
-  .auth-aside-body{grid-area:copy;align-self:center;text-align:left;margin:0;max-width:440px}
+  .auth-aside-body{grid-area:copy;align-self:center;text-align:left;margin:0;max-width:clamp(290px,24vw,460px);position:relative;z-index:3}
   .auth-eyebrow{margin-bottom:16px}
-  .auth-quote{font-size:clamp(28px,2.25vw,40px);line-height:1.15;letter-spacing:-.005em;text-wrap:balance}
-  .auth-proof{display:block;list-style:none;margin:28px 0 0;padding:0;border-top:1px solid rgba(160,117,42,.22)}
-  .auth-proof li{display:grid;grid-template-columns:28px 1fr;align-items:baseline;padding:13px 0;border-bottom:1px solid rgba(160,117,42,.14)}
-  .auth-proof-n{font-family:var(--o-mono);font-size:11px;letter-spacing:.08em;color:var(--o-gl)}
-  .auth-proof b{display:block;font-family:var(--o-serif);font-size:18px;font-weight:600;color:var(--o-iv);line-height:1.25;margin-bottom:2px}
-  .auth-proof span:not(.auth-proof-n){display:block;font-size:13px;line-height:1.5;color:#A39C8E}
+  .auth-quote{font-size:clamp(26px,2vw,38px);line-height:1.15;letter-spacing:-.005em;text-wrap:balance}
+  .auth-proof{display:block;list-style:none;margin:24px 0 0;padding:0;border-top:1px solid rgba(160,117,42,.22)}
+  .auth-proof li{display:block;padding:12px 0;border-bottom:1px solid rgba(160,117,42,.14)}
+  .auth-proof .auth-proof-who{display:block;font-family:var(--o-mono);font-size:clamp(10.5px,.62vw,12px);letter-spacing:.16em;text-transform:uppercase;color:var(--o-gl);margin-bottom:4px;line-height:1.4}
+  .auth-proof b{display:block;font-family:var(--o-serif);font-size:clamp(18px,1.15vw,22px);font-weight:600;color:var(--o-iv);line-height:1.25;margin-bottom:2px}
+  .auth-proof span:not(.auth-proof-who){display:block;font-size:clamp(13px,.8vw,15px);line-height:1.5;color:#A39C8E}
   .auth-aside-foot{grid-area:foot;display:flex;justify-content:space-between;align-items:center;gap:16px;text-align:left;
     padding-top:16px;border-top:1px solid rgba(58,52,40,.7)}
   .auth-trust{display:inline;color:#8A8374}
@@ -1171,12 +1171,13 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
     <div class="auth-aside-body">
       <div class="auth-eyebrow">Your Revenue Health Engine OS</div>
       <div class="auth-quote">Pipeline you can actually trust, because every number <em>shows where it came from.</em></div>
-      <!-- Wide screens only: three things a rep GETS on day one. Written for
-           the AE and SDR, never as an audit ("receipts" read as surveillance). -->
+      <!-- Wide screens only: one promise per audience (SDR/AE, every seller,
+           managers and CXOs) so each reader finds the line that is for them.
+           What they GET, never an audit ("receipts" read as surveillance). -->
       <ul class="auth-proof">
-        <li><span class="auth-proof-n">01</span><div><b>Know where to spend today</b><span>Daily Command lines up your next move on every deal, each morning.</span></div></li>
-        <li><span class="auth-proof-n">02</span><div><b>Catch buyers as they warm up</b><span>Replies, meetings and intent come together, so the right accounts rise to the top.</span></div></li>
-        <li><span class="auth-proof-n">03</span><div><b>Walk into every meeting ready</b><span>Who is attending, what was said last time, and what to ask next.</span></div></li>
+        <li><span class="auth-proof-who">For SDRs and AEs</span><b>Pipeline that turns into meetings</b><span>Where your buyers are, what they want to hear, and the outreach that gets you in the room.</span></li>
+        <li><span class="auth-proof-who">For every seller</span><b>Sam, your digital twin</b><span>A daily briefing on today&rsquo;s meetings and accounts, so you always walk in prepared.</span></li>
+        <li><span class="auth-proof-who">For managers and CXOs</span><b>An org that learns what works</b><span>See what is really moving deals across the team, and turn it into daily guidance for everyone.</span></li>
       </ul>
     </div>
     <div class="auth-aside-foot"><span>A Samora Intelligence tool</span><span class="auth-trust">Your data stays in your organisation &middot; Export everything, any time</span></div>
