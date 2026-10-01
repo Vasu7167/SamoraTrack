@@ -443,7 +443,7 @@ async function loadProfile() {
   // get_org_config fires in background — never blocks launchApp
   try {
     fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'get_org_config'}) })
-      .then(r=>r.json()).then(cfg=>{ if(cfg.ok){if(cfg.googleClientId)GOOGLE_CLIENT_ID_SAM=cfg.googleClientId;window._orgConfig=cfg;} }).catch(()=>{});
+      .then(r=>r.json()).then(cfg=>{ if(cfg.ok){if(cfg.googleClientId)GOOGLE_CLIENT_ID_SAM=cfg.googleClientId;window._orgConfig=cfg;_applyDemoChip();} }).catch(()=>{});
   } catch(e) {}
 }
 // ── Exactly one screen is visible, always ────────────────────────────────
@@ -1227,7 +1227,7 @@ function setSamMode(mode) {
         var sub    = document.getElementById('samGmailSub');
         if (d.connected) {
           if (banner) banner.style.display = 'none';
- if (sub) sub.textContent = '' + (d.provider==='microsoft'?'Outlook':'Gmail') + ' · ' + esc(d.email);
+ if (sub) sub.textContent = d.demo ? 'Demo workspace: mailbox evidence is simulated' : '' + (d.provider==='microsoft'?'Outlook':'Gmail') + ' · ' + esc(d.email);
         } else {
           if (banner) banner.style.display = 'block';
           if (sub) sub.textContent = 'Connect Gmail or Outlook in You tab to enable signal verification';
@@ -1517,7 +1517,34 @@ async function loadSamSignals() {
     renderSignalCards(signals);
   } catch(e) { renderGmailNotConnected(); }
 }
+// ── Demo workspace ─────────────────────────────────────────────────────────
+// org_settings.features.demo_workspace marks an org as a demo (Flick2Know for
+// the FieldAssist demo). The data is simulated, so the app says so in one
+// small chip rather than passing it off as someone's live mailbox: every
+// number shows its receipts, and in a demo the receipt is "simulated".
+function _isDemoWorkspace() { return !!(window._orgConfig && window._orgConfig.features && window._orgConfig.features.demo_workspace); }
+function _applyDemoChip() {
+  var have = document.getElementById('demoChip');
+  if (!_isDemoWorkspace()) { if (have) have.remove(); return; }
+  if (have) return;
+  var org = document.getElementById('uOrg');
+  if (!org || !org.parentNode) return;
+  var chip = document.createElement('span');
+  chip.id = 'demoChip';
+  chip.title = 'This workspace runs on simulated activity for demonstrations';
+  chip.textContent = 'Demo workspace';
+  chip.style.cssText = 'font-size:11px;font-weight:600;letter-spacing:.02em;color:var(--gold);background:rgba(var(--c-accent-rgb),0.12);border:1px solid rgba(var(--c-accent-rgb),0.35);border-radius:3px;padding:3px 10px';
+  org.parentNode.insertBefore(chip, org.nextSibling);
+}
+
 function renderGmailNotConnected() {
+  if (_isDemoWorkspace()) {
+    var dl = document.getElementById('samGmailLabel'); var ds = document.getElementById('samGmailSub');
+    if (dl) dl.textContent = 'Demo mailbox'; if (ds) ds.textContent = 'Demo workspace: mailbox evidence is simulated';
+    var df = document.getElementById('samFeed');
+    if (df) df.innerHTML = '<div style="text-align:center;padding:32px 20px;color:var(--text3);font-size:13px;line-height:1.6">Demo workspace: live inbox signals appear here once a mailbox is connected.<br>Intent vs Reality and the Team tab run on the simulated activity.</div>';
+    return;
+  }
   const label = document.getElementById('samGmailLabel'); const sub = document.getElementById('samGmailSub');
   if (label) label.textContent = 'Gmail not connected'; if (sub) sub.textContent = 'Connect your Gmail to see live email signals';
   const feed = document.getElementById('samFeed');
@@ -2041,15 +2068,17 @@ async function refreshYouTabConnections() {
         // The reason, in Google's terms, not "something went wrong". Reconnecting
         // without knowing why it died means doing it again next week.
         ? (d.reason || 'Reconnect to resume syncing.') + ' Until then no replies, signals or coverage can be read from this mailbox.'
-        : 'Signals refreshed from your ' + (d.provider === 'microsoft' ? 'Outlook' : 'Gmail') + ' account';
- if (gmailBtn && d.provider === 'google') { gmailBtn.textContent = broken ? 'Reconnect Gmail' : 'Gmail connected'; gmailBtn.style.background = broken ? 'var(--coral)' : 'var(--green)'; if (broken) gmailBtn.onclick = connectGmail; }
+        : (d.demo ? 'Demo workspace: mailbox evidence is simulated, nothing is read from a live inbox' : 'Signals refreshed from your ' + (d.provider === 'microsoft' ? 'Outlook' : 'Gmail') + ' account');
+      if (d.demo && lbl) lbl.textContent = 'Demo mailbox (simulated)';
+ if (gmailBtn && d.provider === 'google') { gmailBtn.textContent = broken ? 'Reconnect Gmail' : (d.demo ? 'Demo mailbox' : 'Gmail connected'); gmailBtn.style.background = broken ? 'var(--coral)' : 'var(--green)'; if (broken) gmailBtn.onclick = connectGmail; }
  if (outlookBtn && d.provider === 'microsoft') { outlookBtn.textContent = 'Outlook connected'; outlookBtn.style.background = 'var(--green)'; }
     }
     // Also update SAM tab label
     var samLbl = document.getElementById('samGmailLabel'); var samSub = document.getElementById('samGmailSub');
     if (d.connected) {
  if (samLbl) samLbl.textContent = (d.provider === 'microsoft' ? 'Outlook' : 'Gmail') + (d.healthy === false ? ' needs reconnecting' : ' connected');
-      if (samSub) samSub.textContent = d.healthy === false ? (d.reason || 'Reconnect under Settings.') : 'Signals refreshed · ' + esc(d.email);
+      if (samSub) samSub.textContent = d.healthy === false ? (d.reason || 'Reconnect under Settings.') : (d.demo ? 'Demo workspace: mailbox evidence is simulated' : 'Signals refreshed · ' + esc(d.email));
+      if (d.demo && samLbl) samLbl.textContent = 'Demo mailbox';
     }
   } catch(e) {}
 
@@ -2875,6 +2904,7 @@ function renderIvrResults(outputId) {
   };
 
   var html = picker;
+  if (data.demo) html += '<div style="font-size:11px;color:var(--gold);background:rgba(var(--c-accent-rgb),0.10);border:1px solid rgba(var(--c-accent-rgb),0.30);border-radius:3px;padding:5px 9px;margin-bottom:10px">Demo workspace: evidence below is simulated, not read from a live mailbox</div>';
   html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px">';
   html += mkBox('All tasks', s.total || 0, 'var(--text)', 'all');
   html += mkBox('Verified', s.verified || 0, 'var(--green)', 'verified');
