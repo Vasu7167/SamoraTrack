@@ -799,7 +799,7 @@ function launchApp() {
       // syncDown failed — still hide the badge and keep local data visible
       hideSplash(true);   // do not hold the logo open on a failed sync
       var badge = document.getElementById('global-sync-badge');
- if (badge) { badge.textContent = 'Offline — showing local data'; setTimeout(function(){ badge.style.opacity='0'; setTimeout(function(){badge.remove();},400); }, 2000); }
+ if (badge) { badge.textContent = 'Offline: showing local data'; setTimeout(function(){ badge.style.opacity='0'; setTimeout(function(){badge.remove();},400); }, 2000); }
     });
   }
 }
@@ -3597,6 +3597,37 @@ function setSamSubTab(tab) {
 var _briefLoadedDate = '';
 var _BRIEF_CACHE_KEY = 'samora_brief_cache';
 
+// Honest labels for why today's brief could not be generated. The server
+// sends cache_reason (quota, key_invalid, model_unavailable, ...). Before
+// 2026-09-30 every cached brief was labelled "Gemini quota reached", which hid
+// a month of non-quota failures.
+function _briefFailText(reason, status) {
+  switch (reason) {
+    case 'quota':                 return 'Gemini quota reached';
+    case 'key_invalid':           return 'The Gemini API key is invalid or expired';
+    case 'access_denied':         return 'Gemini refused access for this API key';
+    case 'model_unavailable':     return 'The configured Gemini model is unavailable';
+    case 'grounding_unavailable': return 'Google Search grounding is not available on this key';
+    case 'blocked':               return 'Gemini declined to write this brief';
+    case 'truncated':             return 'Gemini’s reply was cut off';
+    case 'empty':                 return 'Gemini returned an empty reply';
+    case 'network':               return 'Could not reach Gemini';
+    case 'not_configured':        return 'Gemini is not set up for your organisation';
+    case 'legacy':                return 'SAM could not refresh today’s brief';
+    default:                      return 'SAM could not generate today’s brief' + (status ? ' (Gemini error ' + status + ')' : '');
+  }
+}
+function _briefDateLabel(ymd) {
+  var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(ymd || ''));
+  if (!m) return 'an earlier day';
+  var mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m[2] - 1];
+  return (+m[3]) + ' ' + mon + ' ' + m[1];
+}
+function _briefBanner(reason, ymd, status) {
+  return '<div style="font-size:11px;color:var(--amber);margin-top:8px;padding:4px 8px;background:rgba(var(--c-accent-rgb),0.1);border-radius:2px">' + '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> ' +
+    esc(_briefFailText(reason, status) + ': showing your brief from ' + _briefDateLabel(ymd)) + '</div>';
+}
+
 async function loadSamBrief(force) {
   var todayKey2 = new Date().toISOString().split('T')[0];
   if (!force && _briefLoadedDate === todayKey2) return;
@@ -3611,25 +3642,28 @@ async function loadSamBrief(force) {
       body: JSON.stringify({ action:'generate_daily_brief', tz: Intl.DateTimeFormat().resolvedOptions().timeZone })
     });
     var d = await r.json();
-    if (!d.ok && (d.error||'').toLowerCase().includes('quota')) {
+    // ANY failure (not only quota) falls back to the last brief this device
+    // saw, labelled with what actually went wrong.
+    if (!d.ok) {
+      var why = d.reason || ((d.error||'').toLowerCase().indexOf('quota') !== -1 ? 'quota' : 'unknown');
       var cached = localStorage.getItem(_BRIEF_CACHE_KEY);
       if (cached) {
         try {
           var c = JSON.parse(cached);
-          out.innerHTML = renderBriefHtml(c.brief, c.brief_structured) +
-            '<div style="font-size:11px;color:var(--amber);margin-top:8px;padding:4px 8px;background:rgba(var(--c-accent-rgb),0.1);border-radius:2px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> Gemini quota reached — showing brief from ' + esc(c.date||'earlier') + '</div>';
+          out.innerHTML = renderBriefHtml(c.brief, c.brief_structured) + _briefBanner(why, c.date, d.status);
           return;
         } catch(e2) {}
       }
-      out.innerHTML = '<div style="font-size:12px;color:var(--amber)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> Gemini quota reached for today. Brief will refresh tomorrow.</div>';
+      out.innerHTML = '<div style="font-size:12px;color:var(--amber)">' + '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> ' + esc(_briefFailText(why, d.status)) + ' ' + esc(why === 'quota' ? 'The brief will refresh when the quota resets.' : 'No earlier brief is saved on this device yet.') + '</div>';
       return;
     }
-    if (!d.ok) { out.innerHTML = '<div style="font-size:12px;color:var(--text3)">'+esc(d.error||'Brief unavailable')+'</div>'; return; }
     if (d.daily_limit && force) showToast('SAM brief refreshes once per day: showing today’s brief');
     _briefLoadedDate = todayKey2;
     if (!d.cached) { try { localStorage.setItem(_BRIEF_CACHE_KEY, JSON.stringify({ brief: d.brief, brief_structured: d.brief_structured, date: todayKey2 })); } catch(e) {} }
+    // A same-day cached brief (daily_limit) is the normal once-a-day path, not
+    // a failure, so it gets no warning. Only a genuinely stale brief does.
     out.innerHTML = renderBriefHtml(d.brief, d.brief_structured) +
-      (d.cached ? '<div style="font-size:11px;color:var(--amber);margin-top:8px;padding:4px 8px;background:rgba(var(--c-accent-rgb),0.1);border-radius:2px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> Gemini quota reached — showing last brief from ' + esc(d.cached_date||'earlier') + '</div>' : '');
+      ((d.cached && !d.daily_limit) ? _briefBanner(d.cache_reason || 'legacy', d.cached_date, d.cache_reason_status) : '');
   } catch(e) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: '+esc(e.message)+'</div>'; }
 }
 
@@ -8651,12 +8685,12 @@ async function refreshIntelligence() {
   // Build a status banner reflecting what actually happened in each path.
   var banners = '';
   if (samData && samData.ok && samData.count > 0) {
-    banners += '<div style="background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.25);border-radius:var(--radius);padding:10px 14px;margin-bottom:8px;font-size:12px;color:var(--text2)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> <strong style="color:var(--green)">SAM Intelligence</strong> \u2014 ' + samData.count + ' account' + (samData.count>1?'s':'') + ' scanned (no AI quota used)</div>';
+    banners += '<div style="background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.25);border-radius:var(--radius);padding:10px 14px;margin-bottom:8px;font-size:12px;color:var(--text2)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> <strong style="color:var(--green)">SAM Intelligence</strong>: ' + samData.count + ' account' + (samData.count>1?'s':'') + ' scanned (no AI quota used)</div>';
   }
   if (aiData && aiData.geminiQuotaExhausted && aiData.message) {
-    banners += '<div style="background:rgba(var(--c-accent-rgb),0.1);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 14px;margin-bottom:8px;font-size:12px;color:var(--text2);line-height:1.6">⏳ <strong style="color:var(--gold)">AI Tool Signals limited</strong> \u2014 ' + esc(aiData.message) + '</div>';
+    banners += '<div style="background:rgba(var(--c-accent-rgb),0.1);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 14px;margin-bottom:8px;font-size:12px;color:var(--text2);line-height:1.6">⏳ <strong style="color:var(--gold)">AI Tool Signals limited</strong>: ' + esc(aiData.message) + '</div>';
   } else if (aiData && aiData.ok && aiData.processed > 0) {
-    banners += '<div style="background:rgba(var(--c-accent-rgb),0.08);border:1px solid rgba(var(--c-accent-rgb),0.25);border-radius:var(--radius);padding:10px 14px;margin-bottom:8px;font-size:12px;color:var(--text2)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 8.5h10v9H7zM10 12.5v1M14 12.5v1M12 5v3.5M9.5 17.5v3M14.5 17.5v3M4.5 11.5v3M19.5 11.5v3"/></svg> <strong style="color:var(--gold)">AI Tool Signals</strong> \u2014 ' + aiData.processed + ' meeting' + (aiData.processed>1?'s':'') + ' analysed</div>';
+    banners += '<div style="background:rgba(var(--c-accent-rgb),0.08);border:1px solid rgba(var(--c-accent-rgb),0.25);border-radius:var(--radius);padding:10px 14px;margin-bottom:8px;font-size:12px;color:var(--text2)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 8.5h10v9H7zM10 12.5v1M14 12.5v1M12 5v3.5M9.5 17.5v3M14.5 17.5v3M4.5 11.5v3M19.5 11.5v3"/></svg> <strong style="color:var(--gold)">AI Tool Signals</strong>: ' + aiData.processed + ' meeting' + (aiData.processed>1?'s':'') + ' analysed</div>';
   }
   if (banners && feed) {
     var bannerWrap = document.createElement('div');
