@@ -744,8 +744,28 @@ function hideSplash(force) {
   setTimeout(function(){ el.classList.remove('on'); }, 450);
 }
 
+// ── Used days (adoption, never billing) ──────────────────────────────────────
+// Marks today as a day this person used SamoraOS, once per India-time day,
+// on launch and whenever the app comes back to the foreground. Fire and
+// forget: a failed mark must never get in the way of the app.
+function _markActiveToday() {
+  try {
+    if (!currentUser || !currentUser.token || !SB_URL || !SB_KEY) return;
+    var day = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    var key = 'samora-active-' + currentUser.id;
+    try { if (localStorage.getItem(key) === day) return; } catch (_e) {}
+    fetch(SB_URL + '/rest/v1/rpc/mark_active', {
+      method: 'POST',
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + currentUser.token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_source: 'app' })
+    }).then(function (r) { if (r.ok) { try { localStorage.setItem(key, day); } catch (_e) {} } }).catch(function () {});
+  } catch (_e) {}
+}
+document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') _markActiveToday(); });
+
 function launchApp() {
   showSplash('Loading your pipeline, SAMpaigns and signals…');
+  _markActiveToday();
   showScreen('appScreen');
   const role = profile?.role || 'member';
   _applyRoleChrome();
