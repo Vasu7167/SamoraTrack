@@ -3,7 +3,7 @@ let SB_KEY = localStorage.getItem('dt-sb-key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6I
 let API_KEY = localStorage.getItem('dt-api-key') || '';
 var _userHabits = null;
 // Cache buster — update this string on every deploy to purge stale service worker cache
-var APP_VERSION = '20260908-02';
+var APP_VERSION = '20261002-01';
 (function() {
   if (localStorage.getItem('app-sw-version') !== APP_VERSION && 'serviceWorker' in navigator) {
     navigator.serviceWorker.getRegistrations().then(function(regs) {
@@ -1490,7 +1490,14 @@ function renderYouPanel() {
   const av = document.getElementById('youAvatar'); if (av) av.textContent = initials;
   const em = document.getElementById('youEmailDisplay'); if (em) em.textContent = email;
   const rp = document.getElementById('youRolePill'); if (rp) { rp.textContent = (profile?.role||'').replace('_',' '); rp.className = 'role-pill rp-'+(profile?.role||''); }
-  const op = document.getElementById('youOrgPill'); if (op) op.textContent = profile?.org_code || profile?.org_name || '';
+  const op = document.getElementById('youOrgPill'); if (op) { op.textContent = profile?.org_name || profile?.org_code || ''; op.style.display = op.textContent ? '' : 'none'; }
+  const nm = document.getElementById('youNameDisplay');
+  if (nm) {
+    var full = (currentUser && currentUser.user_metadata && currentUser.user_metadata.full_name) || profile?.full_name || profile?.name || '';
+    if (!full && email) full = email.split('@')[0].replace(/[._-]+/g, ' ').replace(/\d+/g, '').trim().replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+    nm.textContent = full || 'Your account';
+    if (av && full) { var w = full.trim().split(/\s+/); av.textContent = ((w[0] || '')[0] + ((w[1] || '')[0] || (w[0] || '')[1] || '')).toUpperCase(); }
+  }
   const mr = document.getElementById('youMomentumRow');
   if (mr) {
     const streak = calcStreak(); const momentum = calcMomentum();
@@ -1501,7 +1508,11 @@ function renderYouPanel() {
   // Re-render it here so the selected theme and size are correct whenever the
   // You tab is drawn, including after a device-theme change while on auto.
   try { renderAppearancePanel(); } catch(e) {}
-  const orgBtn = document.getElementById('orgMenuBtn'); if (orgBtn) orgBtn.style.display = _isOrgAdmin() ? '' : 'none';
+  var isAdm = _isOrgAdmin();
+  var ab = document.getElementById('youAdminBlock'); if (ab) ab.hidden = !isAdm;
+  var ap = document.getElementById('youAdminPill'); if (ap) ap.hidden = !isAdm || /admin/.test(profile?.role || '');
+  var ft = document.getElementById('youFoot'); if (ft) ft.textContent = 'SamoraOS \u00b7 version ' + APP_VERSION;
+  try { refreshInstallStatus(); } catch (e) {}
   loadMyAccounts();
 }
 async function loadSamSignals() {
@@ -1608,7 +1619,8 @@ async function handleMicrosoftCallback(code) {
     });
     var d = await r.json();
     if (d.ok) {
- showToast('Outlook connected — ' + d.email);
+ showToast('Outlook connected: ' + d.email);
+      try { refreshYouTabConnections(); } catch (_e) {}
       var sub = document.getElementById('samGmailSub');
  if (sub) sub.textContent = 'Outlook connected · ' + d.email;
  if (btn) { btn.textContent = 'Outlook connected'; btn.style.background = 'var(--green)'; }
@@ -2054,6 +2066,17 @@ async function loadEnrichmentStatus() {
   } catch(e) {}
 }
 
+// The Gmail and Outlook buttons on the You tab carry their state in
+// data-state (idle, busy, connected, broken, other) and the CSS draws it.
+// Nothing here paints colours or rewrites the button's markup.
+function _youProvider(id, state, text) {
+  var b = document.getElementById(id); if (!b) return;
+  b.setAttribute('data-state', state);
+  b.disabled = state === 'busy';
+  var s = b.querySelector('.you-provider-s'); if (s) s.textContent = text;
+  var name = id === 'youOutlookBtn' ? 'Outlook' : 'Gmail';
+  b.setAttribute('aria-label', name + ': ' + (state === 'connected' ? 'connected' : state === 'broken' ? 'needs reconnecting' : text));
+}
 async function refreshYouTabConnections() {
   // Sync connection status labels from edge function
   try {
@@ -2061,25 +2084,29 @@ async function refreshYouTabConnections() {
     var d = await r.json();
     var lbl = document.getElementById('youEmailConnLabel');
     var sub = document.getElementById('youEmailConnSub');
-    var gmailBtn = document.getElementById('youGmailBtn');
-    var outlookBtn = document.getElementById('youOutlookBtn');
+    var chip = document.getElementById('youEmailChip');
+    var setChip = function (cls, t) { if (chip) { chip.className = 'you-row-v you-chip ' + cls; chip.textContent = t; } };
     if (d.connected) {
-      var icon = d.provider === 'microsoft' ? '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> Outlook' : '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> Gmail';
+      var pname = d.provider === 'microsoft' ? 'Outlook' : 'Gmail';
       // A dead grant leaves the row in place, so "connected" alone was green
-      // while every sync failed. healthy === false is the state this screen
-      // previously could not express, and it is the one that matters.
+      // while every sync failed. healthy === false is the state that matters.
       var broken = d.healthy === false;
-      if (lbl) lbl.innerHTML = broken
-        ? '<span style="color:var(--coral)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 3.9L2.6 17.4A1.6 1.6 0 004 19.8h16a1.6 1.6 0 001.4-2.4L13.7 3.9a1.6 1.6 0 00-2.8 0z"/></svg></span> ' + icon + ' needs reconnecting — ' + esc(d.email || '')
-        : '<span style="color:var(--green)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg></span> ' + icon + ' connected — ' + esc(d.email);
+      if (lbl) lbl.textContent = d.demo ? 'Demo mailbox (simulated)' : (broken ? pname + ' needs reconnecting' : pname + ' connected');
       if (sub) sub.textContent = broken
-        // The reason, in Google's terms, not "something went wrong". Reconnecting
-        // without knowing why it died means doing it again next week.
-        ? (d.reason || 'Reconnect to resume syncing.') + ' Until then no replies, signals or coverage can be read from this mailbox.'
-        : (d.demo ? 'Demo workspace: mailbox evidence is simulated, nothing is read from a live inbox' : 'Signals refreshed from your ' + (d.provider === 'microsoft' ? 'Outlook' : 'Gmail') + ' account');
-      if (d.demo && lbl) lbl.textContent = 'Demo mailbox (simulated)';
- if (gmailBtn && d.provider === 'google') { gmailBtn.textContent = broken ? 'Reconnect Gmail' : (d.demo ? 'Demo mailbox' : 'Gmail connected'); gmailBtn.style.background = broken ? 'var(--coral)' : 'var(--green)'; if (broken) gmailBtn.onclick = connectGmail; }
- if (outlookBtn && d.provider === 'microsoft') { outlookBtn.textContent = 'Outlook connected'; outlookBtn.style.background = 'var(--green)'; }
+        ? (d.email ? d.email + '. ' : '') + (d.reason || 'Reconnect to resume syncing.') + ' Until then no replies, signals or coverage can be read from this mailbox.'
+        : (d.demo ? 'Demo workspace: mailbox evidence is simulated, nothing is read from a live inbox' : (d.email || '') + ' \u00b7 replies, calendar and signals sync from here');
+      if (lbl) lbl.setAttribute('data-state', broken ? 'broken' : 'ok');
+      var mine = d.provider === 'microsoft' ? 'youOutlookBtn' : 'youGmailBtn';
+      var other = d.provider === 'microsoft' ? 'youGmailBtn' : 'youOutlookBtn';
+      _youProvider(mine, broken ? 'broken' : 'connected', broken ? 'Reconnect' : (d.demo ? 'Demo' : 'Connected'));
+      _youProvider(other, 'other', 'Switch');
+      setChip(broken ? 'bad' : 'ok', broken ? 'Reconnect' : pname);
+    } else {
+      if (lbl) { lbl.textContent = 'Not connected'; lbl.setAttribute('data-state', 'idle'); }
+      if (sub) sub.textContent = 'Connect your work mailbox to turn on coverage checks, reply tracking, calendar sync and your SAM brief.';
+      _youProvider('youGmailBtn', 'idle', 'Connect');
+      _youProvider('youOutlookBtn', 'idle', 'Connect');
+      setChip('warn', 'Not connected');
     }
     // Also update SAM tab label
     var samLbl = document.getElementById('samGmailLabel'); var samSub = document.getElementById('samGmailSub');
@@ -2230,6 +2257,11 @@ function _maybeShowInstallBar() {
   b.classList.add('show');
 }
 function refreshInstallStatus() {
+  // The row exists for phones and tablets that are not yet running the
+  // installed app. Inside the app, or on a desktop browser, it said "already
+  // installed" or offered something nobody needs, so it is not shown at all.
+  var row = document.getElementById('youAcc-install');
+  if (row) row.style.display = (_isStandalone() || !(_isPhoneSized() || _isIOS())) ? 'none' : '';
   var st = document.getElementById('youInstallStatus');
   var btn = document.getElementById('youInstallBtn');
   if (!st || !btn) return;
@@ -2260,6 +2292,7 @@ setTimeout(function () { if (_isIOS()) _maybeShowInstallBar(); }, 2500);
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', hook); else hook();
 })();
+function _youPushChip(cls, t) { var c = document.getElementById('youPushChip'); if (c) { c.className = 'you-row-v you-chip ' + cls; c.textContent = t; } }
 async function refreshPushStatus() {
   var statusEl = document.getElementById('youPushStatus');
   var btn = document.getElementById('pushToggleBtn');
@@ -2269,12 +2302,14 @@ async function refreshPushStatus() {
   var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
   if (!_pushSupported()) {
     statusEl.innerHTML = '<span style="color:var(--text3)">Not supported on this browser</span>';
+    _youPushChip('', 'Unavailable');
     btn.style.display = 'none';
     if (hint) hint.textContent = isIOS ? 'On iPhone, open SamoraOS from the Home Screen (Share → Add to Home Screen) to enable notifications.' : '';
     return;
   }
   if (isIOS && !_isStandalone()) {
     statusEl.innerHTML = '<span style="color:var(--amber)">Install to Home Screen first</span>';
+    _youPushChip('warn', 'Install first');
     btn.style.display = 'none';
     if (hint) hint.textContent = 'On iPhone: tap Share → Add to Home Screen, then open SamoraOS from the new icon to turn on notifications.';
     return;
@@ -2287,6 +2322,7 @@ async function refreshPushStatus() {
   } catch(e) {}
   if (Notification.permission === 'denied') {
     statusEl.innerHTML = '<span style="color:var(--coral)">Blocked in browser settings</span>';
+    _youPushChip('bad', 'Blocked');
     btn.style.display = 'none';
     if (hint) hint.textContent = 'Notifications are blocked. Re-enable them for this site in your browser/site settings, then reload.';
     return;
@@ -2296,11 +2332,13 @@ async function refreshPushStatus() {
  btn.textContent = 'Turn off'; btn.style.background = 'var(--surface2)'; btn.style.color = 'var(--text2)'; btn.style.border = '1px solid var(--border2)';
     if (testBtn) testBtn.style.display = '';
     if (hint) hint.textContent = '';
+    _youPushChip('ok', 'On');
   } else {
     statusEl.innerHTML = '<span style="color:var(--text3)">Off on this device</span>';
  btn.textContent = 'Enable notifications'; btn.style.background = 'var(--gold)'; btn.style.color = 'var(--c-on-accent)'; btn.style.border = 'none';
     if (testBtn) testBtn.style.display = 'none';
     if (hint) hint.textContent = '';
+    _youPushChip('', 'Off');
   }
 }
 async function togglePushNotifications() {
@@ -2480,11 +2518,13 @@ function connectGmail() {
     const btn = document.getElementById('samGmailBtn'); const label = document.getElementById('samGmailLabel');
     if (btn) { btn.textContent = 'Connecting…'; btn.disabled = true; }
     if (label) label.textContent = 'Connecting Gmail…';
+    _youProvider('youGmailBtn', 'busy', 'Connecting');
     try {
       const r = await fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify({ action: 'connect_gmail', code: e.data.code, redirect_uri: redirectUri, email: '' }) });
       const data = await r.json();
       if (data.ok || data.success) {
- if (label) label.textContent = 'Gmail connected — ' + (data.email || '');
+ if (label) label.textContent = 'Gmail connected' + (data.email ? ': ' + data.email : '');
+        try { showToast('Gmail connected'); refreshYouTabConnections(); } catch (_e) {}
         const sub = document.getElementById('samGmailSub'); if (sub) sub.textContent = 'Signals loading…';
         if (btn) { btn.textContent = 'Refresh'; btn.disabled = false; btn.onclick = loadSamSignals; }
         loadSamSignals();
@@ -2492,6 +2532,7 @@ function connectGmail() {
     } catch(err) {
       if (label) label.textContent = 'Connection failed: ' + err.message;
       if (btn) { btn.textContent = 'Try again'; btn.disabled = false; btn.onclick = connectGmail; }
+      _youProvider('youGmailBtn', 'idle', 'Try again');
     }
   });
 }
@@ -5175,9 +5216,19 @@ function _pwShowEmail() {
 document.addEventListener('DOMContentLoaded', _pwShowEmail);
 
 function toggleYouAcc(key) {
-  if (arguments[0] === 'password') _pwShowEmail();
+  if (key === 'password') _pwShowEmail();
   var el = document.getElementById('youAcc-' + key);
-  if (el) el.classList.toggle('open');
+  if (!el) return;
+  var opening = !el.classList.contains('open');
+  document.querySelectorAll('#panel-you .you-acc.open').forEach(function (o) {
+    if (o !== el) { o.classList.remove('open'); var b = o.querySelector('.you-row'); if (b) b.setAttribute('aria-expanded', 'false'); }
+  });
+  el.classList.toggle('open', opening);
+  var btn = el.querySelector('.you-row'); if (btn) btn.setAttribute('aria-expanded', opening ? 'true' : 'false');
+  if (opening) setTimeout(function () {
+    var r = el.getBoundingClientRect();
+    if (r.top < 70 || r.top > window.innerHeight * 0.6) { try { window.scrollBy({ top: r.top - 84, behavior: 'smooth' }); } catch (e) { window.scrollBy(0, r.top - 84); } }
+  }, 60);
 }
 
 // ── Accounts CSV import (individual + admin multi-user) ──────────────────────
