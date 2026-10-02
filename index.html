@@ -1145,6 +1145,117 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
 .install-step b{flex-shrink:0;width:22px;height:22px;border-radius:50%;background:var(--surface2);color:var(--text);font-size:12px;display:flex;align-items:center;justify-content:center}
 .install-step div{font-size:13px;color:var(--text);line-height:1.45}
 .install-sheet-done{margin-top:14px;width:100%;padding:11px;border:1px solid var(--border2);border-radius:var(--r-sm,2px);background:var(--surface);color:var(--text);font-family:var(--font);font-size:13px;font-weight:var(--w-medium);cursor:pointer}
+/* ── Team & access console (2026-10-02). Scoped under .sxa, colours from the
+   host app's own tokens so it sits natively in SamoraOS and the admin panel. */
+.sxa{font-family:var(--sans,inherit);color:var(--text,#1c1a14);position:relative}
+.sxa *{box-sizing:border-box}
+.sxa-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.sxa-head-r{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.sxa-title{font-size:16px;font-weight:600;letter-spacing:.01em}
+.sxa-sub{font-size:12.5px;color:var(--text3,#7a7668);margin-top:3px;line-height:1.5;max-width:560px}
+.sxa-sub-tight{margin:0 0 8px}
+.sxa-chip{font-size:11.5px;font-weight:600;padding:4px 10px;border-radius:999px;border:1px solid var(--border2,#d8d3c4);color:var(--text2,#4a473e);white-space:nowrap}
+.sxa-chip-warn{border-color:var(--amber,#c07820);color:var(--amber,#c07820)}
+.sxa-btn{font:inherit;font-size:12.5px;font-weight:600;padding:7px 13px;border-radius:3px;border:1px solid var(--border2,#d8d3c4);background:transparent;color:var(--text,#1c1a14);cursor:pointer;white-space:nowrap}
+.sxa-btn:disabled{opacity:.45;cursor:not-allowed}
+.sxa-btn:focus-visible,.sxa-sel:focus-visible,.sxa-in:focus-visible,.sxa-tab:focus-visible,.sxa-sw:focus-visible{outline:2px solid var(--gold,#c49a2a);outline-offset:1px}
+.sxa-btn-gold{background:var(--gold,#c49a2a);border-color:var(--gold,#c49a2a);color:#18160F}
+.sxa-btn-ghost{color:var(--text2,#4a473e)}
+.sxa-btn-ghost:hover{border-color:var(--text3,#7a7668)}
+.sxa-btn-bad{background:var(--coral,#c0523f);border-color:var(--coral,#c0523f);color:#fff}
+.sxa-tabs{display:flex;gap:2px;border-bottom:1px solid var(--border,#e6e1d4);margin-bottom:14px;overflow-x:auto;scrollbar-width:none}
+.sxa-tabs::-webkit-scrollbar{display:none}
+.sxa-tab{font:inherit;font-size:13px;font-weight:500;padding:9px 12px;border:0;background:none;color:var(--text3,#7a7668);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.sxa-tab.on{color:var(--text,#1c1a14);border-bottom-color:var(--gold,#c49a2a)}
+.sxa-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.sxa-in,.sxa-sel{font:inherit;font-size:13px;color:var(--text,#1c1a14);background:var(--surface2,#f6f4ef);border:1px solid var(--border2,#d8d3c4);border-radius:3px;padding:7px 9px;min-width:0}
+.sxa-tools .sxa-in{flex:0 1 240px}
+.sxa-sel{max-width:100%}
+.sxa-sel-s{font-size:12px;padding:5px 7px;max-width:190px}
+.sxa-note{font-size:12px;color:var(--text3,#7a7668);line-height:1.5}
+.sxa-note-block{background:var(--surface2,#f6f4ef);border:1px solid var(--border,#e6e1d4);border-radius:3px;padding:9px 11px;margin-bottom:12px}
+.sxa-list{border:1px solid var(--border,#e6e1d4);border-radius:3px}
+.sxa-row{display:grid;grid-template-columns:minmax(180px,1.6fr) minmax(120px,.9fr) minmax(150px,1.2fr) 64px 84px;gap:10px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border,#e6e1d4)}
+.sxa-row:last-child{border-bottom:0}
+.sxa-row-gone{grid-template-columns:1fr auto;opacity:.75}
+.sxa-person{display:flex;align-items:center;gap:10px;min-width:0}
+.sxa-av{flex:0 0 auto;width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;background:var(--surface2,#f6f4ef);border:1px solid var(--border2,#d8d3c4);color:var(--text2,#4a473e)}
+.sxa-av-s{width:24px;height:24px;font-size:10px}
+.sxa-pw{min-width:0}
+.sxa-pn{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sxa-pe{font-size:11.5px;color:var(--text3,#7a7668);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sxa-you{font-size:10px;font-weight:700;color:var(--gold,#c49a2a);text-transform:uppercase;letter-spacing:.05em;margin-left:4px}
+.sxa-badge{font-size:10px;font-weight:700;color:var(--gold,#c49a2a);border:1px solid var(--gold,#c49a2a);border-radius:999px;padding:0 6px;margin-left:4px;vertical-align:1px}
+.sxa-cell{display:flex;flex-direction:column;gap:3px;min-width:0}
+.sxa-cell-sw{align-items:flex-start}
+.sxa-cell-act{align-items:flex-end}
+.sxa-lbl{font-size:10.5px;font-weight:600;color:var(--text3,#7a7668);text-transform:uppercase;letter-spacing:.06em}
+.sxa-list .sxa-row .sxa-lbl{display:none}
+.sxa-static{font-size:13px;color:var(--text2,#4a473e);padding:7px 0}
+.sxa-sw{appearance:none;-webkit-appearance:none;width:36px;height:20px;border-radius:999px;background:var(--border2,#d8d3c4);position:relative;cursor:pointer;transition:background .15s;margin:6px 0 0}
+.sxa-sw::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:0 1px 2px rgba(0,0,0,.25)}
+.sxa-sw:checked{background:var(--gold,#c49a2a)}
+.sxa-sw:checked::after{left:18px}
+.sxa-sw:disabled{opacity:.5;cursor:not-allowed}
+.sxa-gone{margin-top:12px;font-size:12.5px;color:var(--text3,#7a7668)}
+.sxa-gone summary{cursor:pointer;padding:6px 0}
+.sxa-empty{font-size:13px;color:var(--text3,#7a7668);padding:22px 8px;text-align:center}
+.sxa-empty-s{padding:10px 0;text-align:left}
+.sxa-err{color:var(--coral,#c0523f)}
+.sxa-sec{font-size:11px;font-weight:700;color:var(--text3,#7a7668);text-transform:uppercase;letter-spacing:.07em;margin:16px 0 8px}
+.sxa-ul{list-style:none;margin:0;padding:0 0 0 22px;border-left:1px dashed var(--border2,#d8d3c4)}
+.sxa-ul-root{padding-left:0;border-left:0}
+.sxa-node{margin:6px 0}
+.sxa-card{display:flex;align-items:center;gap:9px;padding:8px 10px;border:1px solid var(--border,#e6e1d4);border-radius:3px;background:var(--surface,transparent)}
+.sxa-card-warn{border-color:var(--amber,#c07820)}
+.sxa-card .sxa-pw{flex:1}
+.sxa-tw{width:18px;flex:0 0 18px;border:0;background:none;color:var(--text3,#7a7668);cursor:pointer;font-size:12px;padding:0}
+.sxa-tw-x{display:inline-block}
+.sxa-acc-pick{display:flex;flex-direction:column;gap:5px;max-width:420px;margin-bottom:6px}
+.sxa-acc-cols{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.sxa-acc-ul{list-style:none;margin:0;padding:0;border:1px solid var(--border,#e6e1d4);border-radius:3px}
+.sxa-acc-ul li{display:flex;align-items:center;gap:9px;padding:7px 10px;border-bottom:1px solid var(--border,#e6e1d4);font-size:13px}
+.sxa-acc-ul li:last-child{border-bottom:0}
+.sxa-li-n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.sxa-muted{color:var(--text3,#7a7668);font-weight:400}
+.sxa-why{font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:999px;border:1px solid var(--border2,#d8d3c4);color:var(--text2,#4a473e);white-space:nowrap}
+.sxa-why-org{border-color:var(--gold,#c49a2a);color:var(--gold,#c49a2a)}
+.sxa-why-team{border-color:var(--green,#4a8c5c);color:var(--green,#4a8c5c)}
+.sxa-why-shared,.sxa-why-shared_team{border-color:var(--blue,#3a6ea8);color:var(--blue,#3a6ea8)}
+.sxa-share{margin-top:18px;padding-top:4px;border-top:1px solid var(--border,#e6e1d4)}
+.sxa-share-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;margin-bottom:10px}
+.sxa-share-row .sxa-sel{max-width:220px}
+.sxa-inl{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text2,#4a473e);cursor:pointer}
+.sxa-shares{margin-top:6px}
+.sxa-log{list-style:none;margin:0;padding:0}
+.sxa-log li{display:grid;grid-template-columns:120px 1fr;gap:12px;padding:8px 0;border-bottom:1px solid var(--border,#e6e1d4);font-size:13px;line-height:1.45}
+.sxa-when{font-size:11.5px;color:var(--text3,#7a7668);padding-top:1px}
+.sxa-toast{font-family:var(--sans,inherit);position:fixed;left:50%;bottom:28px;transform:translate(-50%,16px);opacity:0;pointer-events:none;background:var(--text,#1c1a14);color:var(--bg,#fff);font-size:13px;padding:9px 16px;border-radius:3px;transition:opacity .18s,transform .18s;z-index:10001;max-width:90vw}
+.sxa-toast.show{opacity:1;transform:translate(-50%,0)}
+.sxa-toast.bad{background:var(--coral,#c0523f);color:#fff}
+.sxa-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:10000;padding:16px}
+.sxa-modal{background:var(--bg2,var(--surface,#fff));border:1px solid var(--border2,#d8d3c4);border-radius:4px;padding:20px;width:100%;max-width:460px;max-height:90vh;overflow:auto}
+.sxa-f{display:flex;flex-direction:column;gap:4px;margin-top:12px}
+.sxa-f .sxa-in,.sxa-f .sxa-sel{width:100%}
+.sxa-f2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.sxa-msg{font-size:12.5px;margin-top:10px;min-height:1px}
+.sxa-msg.bad{color:var(--coral,#c0523f)}
+.sxa-code{font-family:var(--mono,ui-monospace,monospace);font-size:15px;letter-spacing:.04em;padding:10px 12px;margin-top:10px;border:1px dashed var(--gold,#c49a2a);border-radius:3px;user-select:all}
+.sxa-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+@media (max-width:720px){
+  .sxa-row{grid-template-columns:1fr 1fr;row-gap:8px}
+  .sxa-row>.sxa-person{grid-column:1/-1}
+  .sxa-list .sxa-row .sxa-lbl{display:block}
+  .sxa-row-gone{grid-template-columns:1fr auto}
+  .sxa-row-gone>.sxa-person{grid-column:auto}
+  .sxa-cell-act{align-items:flex-start;justify-content:flex-end}
+  .sxa-acc-cols{grid-template-columns:1fr}
+  .sxa-f2{grid-template-columns:1fr}
+  .sxa-sel-s{max-width:130px}
+  .sxa-log li{grid-template-columns:1fr;gap:2px}
+  .sxa-ul{padding-left:12px}
+}
+@media (prefers-reduced-motion:reduce){.sxa-sw,.sxa-sw::after,.sxa-toast{transition:none}}
 </style>
 <script src="/js/vendor/sortable.min.js"></script>
 </head>
@@ -1836,18 +1947,11 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
 
   <!-- ── Org ── -->
   <div class="panel" id="panel-org">
-    <div class="admin-section">
-      <div class="admin-title">Organisation</div>
-      <div class="admin-card">
-        <div class="admin-card-title">Org code <span id="orgCodeBadge"></span></div>
-        <div class="admin-card-sub">Share this with new members. They paste it during sign-up to join your org.</div>
-        <div class="code-display" id="orgCodeDisplay">—</div>
-        <button class="setup-btn" onclick="copyOrgCode()">Copy code</button> </div> </div>
-    <div class="admin-section">
-      <div class="admin-title">People</div>
-      <div class="admin-card" id="peopleCard">
-        <div class="admin-card-sub">Assign roles to your team members.</div>
-        <div id="peopleList"><div class="empty"><div class="empty-icon">⏳</div>Loading…</div></div> </div> </div>
+    <!-- Team & access (2026-10-02). Replaces the org code card (sign-up by
+         code is closed), the People table and the Manager teams card. -->
+    <div class="admin-section" id="teamAccessSection">
+      <div class="admin-card" style="padding:18px 18px 16px">
+        <div id="sxaMount"><div class="empty">Loading…</div></div> </div> </div>
     <div class="admin-section" id="accountsSection">
       <div class="admin-title">Rep Accounts</div>
       <div class="admin-card">
@@ -1868,10 +1972,6 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
             <span id="parentMatchActions" style="margin-left:8px"></span> </div>
           <input type="hidden" id="newAccountParentId" value=""/> </div> </div> </div>
     <div class="admin-section" id="assignSection">
-      <div class="admin-title">Manager teams</div>
-      <div class="admin-card">
-        <div class="admin-card-sub">Assign members to managers.</div>
-        <div id="assignCard"><div class="empty"><div class="empty-icon">⏳</div>Loading…</div></div> </div>
 
     <div class="admin-section" style="margin-top:24px">
       <div class="admin-title">ICP — Ideal Customer Profile</div>
@@ -1899,7 +1999,7 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
     <div class="you-section-title">Account</div>
     <div class="you-menu">
       <button class="you-menu-item" id="orgMenuBtn" onclick="switchToOrgPanel()">
-        <span><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20.5V5.5L13 3v17.5M13 9.5h7v11M4 20.5h17M7.5 8h2M7.5 12h2M7.5 16h2M16 13h1.5M16 16.5h1.5"/></svg> Organisation &amp; team</span><span class="you-arrow">›</span> </button>
+        <span><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20.5V5.5L13 3v17.5M13 9.5h7v11M4 20.5h17M7.5 8h2M7.5 12h2M7.5 16h2M16 13h1.5M16 16.5h1.5"/></svg> Team &amp; access</span><span class="you-arrow">›</span> </button>
       <button class="you-menu-item" onclick="switchTab('settings')">
         <span><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15a3 3 0 100-6 3 3 0 000 6zM19.2 14.4a1.6 1.6 0 00.3 1.8l.1.1a2 2 0 01-2.8 2.8l-.1-.1a1.6 1.6 0 00-2.7 1.1v.2a2 2 0 01-4 0v-.1a1.6 1.6 0 00-2.8-1.1l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.6 1.6 0 00-1.1-2.7H3a2 2 0 010-4h.1a1.6 1.6 0 001.1-2.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.6 1.6 0 002.7-1.1V3a2 2 0 014 0v.1a1.6 1.6 0 002.7 1.1l.1-.1a2 2 0 112.8 2.8l-.1.1a1.6 1.6 0 001.1 2.7h.2a2 2 0 010 4h-.1a1.6 1.6 0 00-1.4 1.1z"/></svg> Settings &amp; API keys</span><span class="you-arrow">›</span> </button>
       <div class="you-acc" id="youAcc-appearance">
@@ -2105,7 +2205,9 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
 
   <!-- ── Settings ── -->
   <div class="panel" id="panel-settings">
-    <div class="admin-section">
+    <!-- Developer-era settings: hidden. They named our infrastructure to every
+         user and did nothing a customer needs (2026-10-02). -->
+    <div class="admin-section" style="display:none">
       <div class="admin-title">Anthropic API key</div>
       <div class="admin-card">
         <div class="admin-card-title">Claude AI <span id="apiBadge" class="badge-no">not set</span></div>
@@ -2113,7 +2215,7 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
         <input class="setup-input" id="apiInput" type="password" placeholder="sk-ant-…"/>
         <button class="setup-btn" onclick="saveApiKey()">Save key</button>
         <a class="setup-link" href="https://console.anthropic.com/keys" target="_blank">Get a free key →</a> </div> </div>
-    <div class="admin-section">
+    <div class="admin-section" style="display:none">
       <div class="admin-title">Cloud sync (Supabase)</div>
       <div class="admin-card">
         <div class="admin-card-title">Cross-device sync <span id="supaBadge" class="badge-no">not set</span></div>
