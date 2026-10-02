@@ -5883,7 +5883,12 @@ async function renderOrg() {
   const mount = document.getElementById('sxaMount');
   if (mount && window.SamoraAccessConsole) {
     if (window._sxaConsole && window._sxaConsole.el === mount) window._sxaConsole.load();
-    else window._sxaConsole = window.SamoraAccessConsole.mount(mount, { call: _sxaCall, onChange: _refreshOrgPeopleForAccounts });
+    else window._sxaConsole = window.SamoraAccessConsole.mount(mount, {
+      call: _sxaCall, onChange: _refreshOrgPeopleForAccounts,
+      // Rep Accounts used to sit under the console on every tab. It is now a
+      // tab of its own; the block and its handlers are reused as they are.
+      extraTabs: [{ key: 'accounts', label: 'Accounts', hostId: 'accountsSection', onShow: _refreshOrgPeopleForAccounts }]
+    });
   }
   await _refreshOrgPeopleForAccounts();
 }
@@ -14906,6 +14911,13 @@ function joinOrgCancel() {
     this.call = opts.call;
     this.orgId = opts.orgId || null;
     this.onChange = opts.onChange || function () {};
+    // Host-provided tabs: an existing block of the host page shown inside the
+    // console (the app's Rep Accounts list). { key, label, hostId, onShow }
+    this.extraTabs = opts.extraTabs || [];
+    // The Samora admin panel has its own, fuller company cards, so it turns
+    // this tab off. Both edit the same ICP object and product table.
+    this.showProfile = opts.showProfile !== false;
+    this.profile = null;
     this.tab = 'people';
     this.data = null;
     this.query = '';
@@ -14934,6 +14946,7 @@ function joinOrgCancel() {
       return;
     }
     this.data = d;
+    if (!this.pfDirty) this.profile = null;
     this.byId = {};
     var self = this;
     d.people.forEach(function (p) { self.byId[p.user_id] = p; });
@@ -14950,13 +14963,17 @@ function joinOrgCancel() {
     var active = d.people.filter(function (p) { return p.is_active; }).length;
     var full = seats.limit && seats.active >= seats.limit;
     var seatTxt = seats.limit ? (seats.active + ' of ' + seats.limit + ' seats used') : (active + ' active ' + (active === 1 ? 'person' : 'people'));
-    var tabs = [['people', 'People'], ['tree', 'Reporting lines'], ['access', 'Data access'], ['log', 'Activity']];
+    var tabs = [['people', 'People'], ['tree', 'Reporting lines'], ['access', 'Data access']];
+    this.extraTabs.forEach(function (x) { tabs.push([x.key, x.label]); });
+    if (this.showProfile) tabs.push(['profile', 'Company profile']);
+    tabs.push(['log', 'Activity']);
+    this._parkHosted();
     var self = this;
     this.el.innerHTML =
       '<div class="sxa">' +
         '<div class="sxa-head">' +
           '<div><div class="sxa-title">Team &amp; access</div>' +
-          '<div class="sxa-sub">Who is on ' + h(d.org.name || 'your organisation') + ', who they report to, and whose work they can see.</div></div>' +
+          '<div class="sxa-sub">Who is on ' + h(d.org.name || 'your organisation') + ', who they report to, whose work they can see' + (this.showProfile ? ', and who you sell to.' : '.') + '</div></div>' +
           '<div class="sxa-head-r">' +
             '<span class="sxa-chip' + (full ? ' sxa-chip-warn' : '') + '" title="' + (seats.limit ? 'Seats on your plan' : 'No seat cap set') + '">' + h(seatTxt) + '</span>' +
             '<button class="sxa-btn sxa-btn-gold" data-sxa="add"' + (full && !d.me.is_samora ? ' disabled title="All seats are in use. Remove someone first, or ask Samora for more seats."' : '') + '>+ Add person</button>' +
@@ -14970,9 +14987,37 @@ function joinOrgCancel() {
     this._renderBody();
   };
 
+  // Hosted blocks are moved INTO the console while their tab is open and
+  // parked in a hidden holder otherwise, so re-rendering the console never
+  // destroys them (their own event handlers and state survive).
+  Console.prototype._parkHosted = function () {
+    var hold = document.getElementById('sxa-hold');
+    if (!hold) { hold = document.createElement('div'); hold.id = 'sxa-hold'; hold.style.display = 'none'; document.body.appendChild(hold); }
+    var moved = this.el.querySelectorAll('[data-sxa-hosted]');
+    for (var i = 0; i < moved.length; i++) hold.appendChild(moved[i]);
+    // First time round, the host's block is still where the page put it
+    // (under the console). Take it out of the page so it only ever shows
+    // inside its own tab.
+    this.extraTabs.forEach(function (x) {
+      var host = document.getElementById(x.hostId);
+      if (host && host.parentNode !== hold && !host.closest('#sxa-body')) { host.setAttribute('data-sxa-hosted', '1'); hold.appendChild(host); }
+    });
+  };
+
   Console.prototype._renderBody = function () {
     var body = this.el.querySelector('#sxa-body');
     if (!body) return;
+    this._parkHosted();
+    var extra = this.extraTabs.filter(function (x) { return x.key === this.tab; }, this)[0];
+    if (extra) {
+      var host = document.getElementById(extra.hostId);
+      body.innerHTML = '';
+      if (host) { host.setAttribute('data-sxa-hosted', '1'); host.style.display = ''; body.appendChild(host); }
+      else body.innerHTML = '<div class="sxa-empty">Not available here.</div>';
+      if (extra.onShow) { try { extra.onShow(); } catch (e) {} }
+      return;
+    }
+    if (this.tab === 'profile') { this._renderProfile(body); return; }
     if (this.tab === 'people') body.innerHTML = this._people();
     else if (this.tab === 'tree') body.innerHTML = this._tree();
     else if (this.tab === 'access') body.innerHTML = this._access();
@@ -15024,7 +15069,17 @@ function joinOrgCancel() {
     var q = this.query, self = this, me = this.data.me.user_id;
     var match = function (p) { return !q || (who(p) + ' ' + p.email + ' ' + (ROLE_LABEL[p.role] || p.role)).toLowerCase().indexOf(q) !== -1; };
     var act = this.data.people.filter(function (p) { return p.is_active && match(p); });
-    var gone = this.data.people.filter(function (p) { return !p.is_active && match(p); });
+    // Old, removed logins of someone who is active again are not a separate
+    // person, and several removed logins of one person are one row.
+    var activeEmails = {};
+    this.data.people.forEach(function (p) { if (p.is_active) activeEmails[String(p.email).toLowerCase()] = 1; });
+    var goneSeen = {}, goneCount = {};
+    this.data.people.forEach(function (p) { if (!p.is_active) { var k = String(p.email).toLowerCase(); goneCount[k] = (goneCount[k] || 0) + 1; } });
+    var gone = this.data.people.filter(function (p) {
+      var k = String(p.email).toLowerCase();
+      if (p.is_active || activeEmails[k] || goneSeen[k] || !match(p)) return false;
+      goneSeen[k] = 1; return true;
+    });
     var row = function (p) {
       var isMe = p.user_id === me && !self.data.me.is_samora;
       var legacyAdmin = p.role === 'admin' || p.role === 'super_admin';
@@ -15094,7 +15149,8 @@ function joinOrgCancel() {
     if (!active.length) return '<div class="sxa-empty">No active people yet.</div>';
     var pid = this.accessFor;
     var acc = (d.access[pid] || { sees: {}, tier: 'self' });
-    var sees = Object.keys(acc.sees).filter(function (id) { return id !== pid && byId[id]; });
+    var sees = Object.keys(acc.sees).filter(function (id) { return id !== pid && byId[id] && byId[id].is_active; });
+    var seesRemoved = Object.keys(acc.sees).filter(function (id) { return id !== pid && byId[id] && !byId[id].is_active; }).length;
     var seenBy = active.filter(function (v) { return v.user_id !== pid && d.access[v.user_id] && d.access[v.user_id].sees[pid]; });
     var chip = function (why) { return '<span class="sxa-why sxa-why-' + why + '">' + h(WHY_LABEL[why] || why) + '</span>'; };
     var li = function (p, why) { return '<li><span class="sxa-av sxa-av-s">' + h(initials(p)) + '</span><span class="sxa-li-n">' + h(who(p)) + (p.is_active ? '' : ' <span class="sxa-muted">(removed)</span>') + '</span>' + chip(why) + '</li>'; };
@@ -15113,6 +15169,7 @@ function joinOrgCancel() {
       '<div class="sxa-acc-cols">' +
         '<div class="sxa-acc-col"><div class="sxa-sec">Can see (' + sees.length + ')</div>' +
           (sees.length ? '<ul class="sxa-acc-ul">' + sees.sort(function (a, b) { return who(byId[a]).localeCompare(who(byId[b])); }).map(function (id) { return li(byId[id], acc.sees[id]); }).join('') + '</ul>' : '<div class="sxa-empty sxa-empty-s">Only their own work.</div>') +
+          (seesRemoved ? '<div class="sxa-note" style="margin-top:6px">Plus the past work of ' + seesRemoved + ' removed ' + (seesRemoved === 1 ? 'login' : 'logins') + '.</div>' : '') +
         '</div>' +
         '<div class="sxa-acc-col"><div class="sxa-sec">Can be seen by (' + seenBy.length + ')</div>' +
           (seenBy.length ? '<ul class="sxa-acc-ul">' + seenBy.map(function (v) { return li(v, d.access[v.user_id].sees[pid]); }).join('') + '</ul>' : '<div class="sxa-empty sxa-empty-s">Nobody else yet.</div>') +
@@ -15146,6 +15203,11 @@ function joinOrgCancel() {
       if (e.action === 'person_removed') return 'removed ' + t + (x.reports_moved_up ? ' (' + x.reports_moved_up + ' moved up to their manager)' : '');
       if (e.action === 'access_shared') return 'let ' + t + ' see ' + h(x.subject_email || '') + (x.include_team ? ' and their team' : '');
       if (e.action === 'access_removed') return 'stopped ' + t + ' seeing ' + h(x.subject_email || '');
+      if (e.action === 'product_added') return 'added the product ' + h(x.product || '');
+      if (e.action === 'product_updated') return 'updated the product ' + h(x.product || '');
+      if (e.action === 'product_removed') return 'removed the product ' + h(x.product || '');
+      if (e.action === 'icp_updated') return 'updated the ideal customer profile' + (x.fields && x.fields.indexOf('target_stakeholders') !== -1 ? ', including target designations' : '');
+      if (e.action === 'test_data_removed') return 'removed test data for ' + t + (x.summary ? ': ' + h(x.summary) : '');
       if (x.role) parts.push('role ' + h(ROLE_LABEL[x.role.from] || x.role.from || 'none') + ' to ' + h(ROLE_LABEL[x.role.to] || x.role.to));
       if (x.admin) parts.push(x.admin.to ? 'turned admin on' : 'turned admin off');
       if (x.manager) parts.push('manager ' + h(x.manager.from || 'none') + ' to ' + h(x.manager.to || 'none'));
@@ -15168,6 +15230,12 @@ function joinOrgCancel() {
     else if (a === 'restore') this._restore(id);
     else if (a === 'share') this._share();
     else if (a === 'unshare') this._unshare(t.getAttribute('data-v'), t.getAttribute('data-s'));
+    else if (a === 'chip-x') this._chipRemove(t);
+    else if (a === 'pf-save') this._saveProfile();
+    else if (a === 'pf-score') this._scoreAccounts(t);
+    else if (a === 'prod-add') this._productModal(null);
+    else if (a === 'prod-edit') this._productModal(t.getAttribute('data-id'));
+    else if (a === 'prod-del') this._productRemove(t.getAttribute('data-id'));
   };
 
   Console.prototype._change = function (e) {
@@ -15215,6 +15283,173 @@ function joinOrgCancel() {
     this.toast('Restored. Their sign-in works again.');
     await this.load();
     this.onChange();
+  };
+
+
+  // ── Company profile: ICP + products ────────────────────────────────────
+  // Same object the Samora admin edits (org_settings.icp_definition) and the
+  // same product table, so whatever is saved here is what Samora sees.
+  var PF_LISTS = [
+    ['target_stakeholders', 'Designations you target', 'Who you sell to. Samora finds and ranks these people first when scouting contacts.', 'e.g. VP Sales, Head of Trade Marketing, CMO'],
+    ['target_industries', 'Industries', '', 'e.g. FMCG, Consumer Durables, Pharma'],
+    ['target_geographies', 'Geographies', '', 'e.g. India, Middle East'],
+    ['keywords', 'Keywords', 'Words that signal a good fit when they show up in an account or a conversation.', 'e.g. loyalty, counterfeit, retail execution']
+  ];
+
+  Console.prototype._renderProfile = async function (body) {
+    var self = this;
+    if (!this.profile) {
+      body.innerHTML = '<div class="sxa-empty">Loading your company profile…</div>';
+      var d;
+      try { d = await this.call('org_admin_profile_get', this._body()); } catch (e) { d = { ok: false, error: e.message }; }
+      if (this.tab !== 'profile') return;
+      if (!d || !d.ok) { body.innerHTML = '<div class="sxa-empty sxa-err">' + h((d && d.error) || 'Could not load the profile.') + '</div>'; return; }
+      this.profile = { icp: d.icp, products: d.products };
+      this.pfDirty = false;
+    }
+    var icp = this.profile.icp, prods = this.profile.products;
+    var chips = function (key) {
+      return (icp[key] || []).map(function (v, i) { return '<span class="sxa-chipv">' + h(v) + '<button data-sxa="chip-x" data-k="' + key + '" data-i="' + i + '" aria-label="Remove ' + h(v) + '">×</button></span>'; }).join('');
+    };
+    body.innerHTML =
+      '<div class="sxa-pf">' +
+        '<div class="sxa-sec" style="margin-top:4px">Ideal customer profile</div>' +
+        '<div class="sxa-note">Samora uses this to rank accounts and to decide whose details to find. The Samora team sees exactly what you save here.</div>' +
+        PF_LISTS.map(function (f) {
+          return '<div class="sxa-f"><span class="sxa-lbl">' + h(f[1]) + '</span>' +
+            '<div class="sxa-chips" data-k="' + f[0] + '">' + chips(f[0]) +
+            '<input class="sxa-chip-in" data-pf-list="' + f[0] + '" placeholder="' + h((icp[f[0]] || []).length ? 'Add another, press Enter' : f[3]) + '"/></div>' +
+            (f[2] ? '<div class="sxa-note">' + h(f[2]) + '</div>' : '') + '</div>';
+        }).join('') +
+        '<div class="sxa-f2">' +
+          '<label class="sxa-f"><span class="sxa-lbl">Company size</span><input class="sxa-in" data-pf="target_company_size" value="' + h(icp.target_company_size) + '" placeholder="e.g. 500 to 50,000 employees"/></label>' +
+          '<label class="sxa-f"><span class="sxa-lbl">Typical deal size (USD)</span><input class="sxa-in" data-pf="ideal_deal_size_usd" type="number" min="0" value="' + (icp.ideal_deal_size_usd == null ? '' : h(icp.ideal_deal_size_usd)) + '" placeholder="e.g. 50000"/></label>' +
+        '</div>' +
+        '<label class="sxa-f"><span class="sxa-lbl">The problem you solve for them</span><textarea class="sxa-in" data-pf="ideal_use_case" rows="3" placeholder="e.g. Brand protection and loyalty for consumer brands selling through distributors">' + h(icp.ideal_use_case) + '</textarea></label>' +
+        '<div class="sxa-actions" style="justify-content:flex-start">' +
+          '<button class="sxa-btn sxa-btn-gold" data-sxa="pf-save"' + (this.pfDirty ? '' : ' disabled') + '>' + (this.pfDirty ? 'Save profile' : 'Saved') + '</button>' +
+          '<button class="sxa-btn sxa-btn-ghost" data-sxa="pf-score" title="Re-scores every account against this profile">Score accounts against this profile</button>' +
+        '</div>' +
+        '<div class="sxa-sec" style="display:flex;justify-content:space-between;align-items:center"><span>Products (' + prods.length + ')</span><button class="sxa-btn sxa-btn-ghost" data-sxa="prod-add">+ Add product</button></div>' +
+        '<div class="sxa-note">What you sell. Samora maps conversations to these and drafts outreach around them, so add, rename or retire products as your offer changes.</div>' +
+        (prods.length ? '<div class="sxa-list" style="margin-top:8px">' + prods.map(function (p) {
+          return '<div class="sxa-prod"><div class="sxa-pw" style="flex:1"><div class="sxa-pn">' + h(p.name) + (p.category ? ' <span class="sxa-muted">· ' + h(p.category) + '</span>' : '') + '</div>' +
+            (p.description ? '<div class="sxa-pe sxa-wrap">' + h(p.description) + '</div>' : '') +
+            (p.keywords && p.keywords.length ? '<div class="sxa-kw">' + p.keywords.map(function (k) { return '<span>' + h(k) + '</span>'; }).join('') + '</div>' : '') + '</div>' +
+            '<div class="sxa-prod-act"><button class="sxa-btn sxa-btn-ghost" data-sxa="prod-edit" data-id="' + p.id + '">Edit</button><button class="sxa-btn sxa-btn-ghost" data-sxa="prod-del" data-id="' + p.id + '">Remove</button></div></div>';
+        }).join('') + '</div>' : '<div class="sxa-empty sxa-empty-s">No products yet. Add what you sell so Samora can match conversations to it.</div>') +
+      '</div>';
+    // inputs
+    var mark = function () { self.pfDirty = true; var b = body.querySelector('[data-sxa="pf-save"]'); if (b) { b.disabled = false; b.textContent = 'Save profile'; } };
+    body.querySelectorAll('[data-pf]').forEach(function (el) {
+      el.addEventListener('input', function () {
+        var k = el.getAttribute('data-pf');
+        self.profile.icp[k] = k === 'ideal_deal_size_usd' ? (el.value === '' ? null : Number(el.value)) : el.value;
+        mark();
+      });
+    });
+    body.querySelectorAll('[data-pf-list]').forEach(function (el) {
+      var commit = function () {
+        var k = el.getAttribute('data-pf-list'), parts = el.value.split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+        if (!parts.length) return false;
+        var list = self.profile.icp[k] = self.profile.icp[k] || [];
+        parts.forEach(function (v) { if (!list.some(function (x) { return x.toLowerCase() === v.toLowerCase(); })) list.push(v); });
+        el.value = ''; mark(); return true;
+      };
+      el.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); if (commit()) { var k = el.getAttribute('data-pf-list'); self._renderProfile(body).then(function () { var n = body.querySelector('[data-pf-list="' + k + '"]'); if (n) n.focus(); }); } }
+        else if (e.key === 'Backspace' && !el.value) { var k2 = el.getAttribute('data-pf-list'); if ((self.profile.icp[k2] || []).length) { self.profile.icp[k2].pop(); mark(); self._renderProfile(body).then(function () { var n = body.querySelector('[data-pf-list="' + k2 + '"]'); if (n) n.focus(); }); } }
+      });
+      // Deferred, so a click on Save that caused this blur still lands.
+      el.addEventListener('blur', function () { if (commit()) setTimeout(function () { if (self.tab === 'profile') self._renderProfile(body); }, 180); });
+    });
+  };
+
+  Console.prototype._chipRemove = function (btn) {
+    var k = btn.getAttribute('data-k'), i = parseInt(btn.getAttribute('data-i'), 10);
+    if (!this.profile || !this.profile.icp[k]) return;
+    this.profile.icp[k].splice(i, 1);
+    this.pfDirty = true;
+    this._renderProfile(this.el.querySelector('#sxa-body'));
+  };
+
+  Console.prototype._saveProfile = async function () {
+    // Anything typed into a list but not yet turned into a chip still counts.
+    var self = this;
+    this.el.querySelectorAll('[data-pf-list]').forEach(function (el) {
+      var k = el.getAttribute('data-pf-list'), list = self.profile.icp[k] = self.profile.icp[k] || [];
+      el.value.split(',').map(function (x) { return x.trim(); }).filter(Boolean).forEach(function (v) { if (!list.some(function (x) { return x.toLowerCase() === v.toLowerCase(); })) list.push(v); });
+      el.value = '';
+    });
+    var btn = this.el.querySelector('[data-sxa="pf-save"]');
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+    var d;
+    try { d = await this.call('org_admin_profile_save', this._body({ icp: this.profile.icp })); } catch (e) { d = { ok: false, error: e.message }; }
+    if (!d || !d.ok) { this.toast((d && d.error) || 'Could not save.', true); if (btn) { btn.disabled = false; btn.textContent = 'Save profile'; } return; }
+    this.profile.icp = d.icp;
+    this.pfDirty = false;
+    this.toast('Profile saved');
+    this._renderProfile(this.el.querySelector('#sxa-body'));
+  };
+
+  Console.prototype._scoreAccounts = async function (btn) {
+    if (this.pfDirty) { this.toast('Save the profile first, so accounts are scored against what you see here.', true); return; }
+    btn.disabled = true; var label = btn.textContent; btn.textContent = 'Scoring…';
+    var d;
+    try { d = await this.call('compute_icp_scores', {}); } catch (e) { d = { ok: false, error: e.message }; }
+    btn.disabled = false; btn.textContent = label;
+    if (!d || !d.ok) { this.toast((d && d.error) || 'Could not score accounts right now.', true); return; }
+    this.toast('Scored ' + (d.scored || 0) + ' accounts against your profile');
+  };
+
+  Console.prototype._productModal = function (id) {
+    var self = this, p = id ? this.profile.products.filter(function (x) { return x.id === id; })[0] : null;
+    var m = this._modal(
+      '<div class="sxa-title">' + (p ? 'Edit product' : 'Add a product') + '</div>' +
+      '<div class="sxa-sub">Samora matches conversations to your products and drafts outreach around them.</div>' +
+      '<label class="sxa-f"><span class="sxa-lbl">Name</span><input class="sxa-in" data-f="name" value="' + h(p ? p.name : '') + '" placeholder="e.g. Loyalty platform"/></label>' +
+      '<label class="sxa-f"><span class="sxa-lbl">Category</span><input class="sxa-in" data-f="category" value="' + h(p ? p.category : '') + '" placeholder="Optional, e.g. Core, Add-on, Services"/></label>' +
+      '<label class="sxa-f"><span class="sxa-lbl">What it does</span><textarea class="sxa-in" data-f="description" rows="3" placeholder="The problem it solves, in a sentence or two">' + h(p ? p.description : '') + '</textarea></label>' +
+      '<label class="sxa-f"><span class="sxa-lbl">Keywords</span><input class="sxa-in" data-f="keywords" value="' + h(p ? (p.keywords || []).join(', ') : '') + '" placeholder="Words buyers use about it, separated by commas"/></label>' +
+      '<div class="sxa-msg" data-f="msg"></div>' +
+      '<div class="sxa-actions"><button class="sxa-btn sxa-btn-ghost" data-f="cancel">Cancel</button><button class="sxa-btn sxa-btn-gold" data-f="go">' + (p ? 'Save' : 'Add product') + '</button></div>'
+    );
+    var q = function (k) { return m.querySelector('[data-f="' + k + '"]'); };
+    q('cancel').onclick = function () { m.remove(); };
+    q('go').onclick = async function () {
+      if (!q('name').value.trim()) { q('msg').textContent = 'Give the product a name.'; q('msg').className = 'sxa-msg bad'; return; }
+      q('go').disabled = true;
+      var body = { name: q('name').value.trim(), category: q('category').value.trim(), description: q('description').value.trim(),
+                   keywords: q('keywords').value.split(',').map(function (x) { return x.trim(); }).filter(Boolean) };
+      if (p) body.id = p.id;
+      var r;
+      try { r = await self.call('org_admin_product_save', self._body(body)); } catch (e) { r = { ok: false, error: e.message }; }
+      if (!r.ok) { q('msg').textContent = r.error || 'Could not save.'; q('msg').className = 'sxa-msg bad'; q('go').disabled = false; return; }
+      m.remove();
+      self.toast(p ? 'Product updated' : 'Product added');
+      self.profile = null;
+      self._renderBody();
+    };
+  };
+
+  Console.prototype._productRemove = function (id) {
+    var self = this, p = this.profile.products.filter(function (x) { return x.id === id; })[0];
+    if (!p) return;
+    var m = this._modal(
+      '<div class="sxa-title">Remove ' + h(p.name) + '?</div>' +
+      '<div class="sxa-sub">It stops being offered for new matching and outreach. Deals already linked to it keep their history.</div>' +
+      '<div class="sxa-actions"><button class="sxa-btn sxa-btn-ghost" data-f="cancel">Cancel</button><button class="sxa-btn sxa-btn-bad" data-f="go">Remove product</button></div>'
+    );
+    m.querySelector('[data-f="cancel"]').onclick = function () { m.remove(); };
+    m.querySelector('[data-f="go"]').onclick = async function () {
+      var r;
+      try { r = await self.call('org_admin_product_remove', self._body({ id: id })); } catch (e) { r = { ok: false, error: e.message }; }
+      m.remove();
+      if (!r.ok) { self.toast(r.error || 'Could not remove.', true); return; }
+      self.toast(p.name + ' removed');
+      self.profile = null;
+      self._renderBody();
+    };
   };
 
   // ── modals ─────────────────────────────────────────────────────────────
