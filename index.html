@@ -1272,6 +1272,209 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
 [data-sxa-hosted]>.admin-card{border:0;padding:0;background:none}
 @media (max-width:720px){.sxa-prod{flex-direction:column}.sxa-chip-in{min-width:120px}}
 @media (prefers-reduced-motion:reduce){.sxa-sw,.sxa-sw::after,.sxa-toast{transition:none}}
+
+/* You tab, glass redesign 2026-10-02 */
+/* ══ You, 2026-10-02 ═════════════════════════════════════════════════════════
+   Grouped, translucent ("glass") lists in the manner of iOS Settings: one
+   frosted card per section, rows with a tinted icon tile, a hairline inset
+   past the icon, a chevron that turns when a row opens. Only this tab and the
+   bottom bar change; the rest of the app keeps its squarer system for now.
+   Glass needs something behind it to read as glass, so the tab gets a quiet
+   gold and blue ambient wash. Everything degrades to solid surfaces when the
+   browser has no backdrop-filter or the person asks for less transparency. */
+:root{
+  --g-fill:rgba(255,255,255,.62);
+  --g-fill-strong:rgba(255,255,255,.78);
+  --g-edge:rgba(255,255,255,.75);
+  --g-line:rgba(26,26,24,.08);
+  --g-shadow:0 1px 0 rgba(255,255,255,.7) inset,0 10px 30px rgba(31,27,12,.07),0 1px 3px rgba(31,27,12,.05);
+  --g-blur:saturate(1.7) blur(22px);
+  --g-wash-a:rgba(212,175,55,.20);
+  --g-wash-b:rgba(24,95,165,.10);
+  --g-radius:16px;
+}
+[data-theme="dark"]{
+  --g-fill:rgba(33,35,41,.58);
+  --g-fill-strong:rgba(38,40,47,.78);
+  --g-edge:rgba(255,255,255,.08);
+  --g-line:rgba(255,255,255,.07);
+  --g-shadow:0 1px 0 rgba(255,255,255,.05) inset,0 12px 34px rgba(0,0,0,.45);
+  --g-wash-a:rgba(232,197,90,.13);
+  --g-wash-b:rgba(127,176,224,.08);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --g-fill:rgba(33,35,41,.58);
+    --g-fill-strong:rgba(38,40,47,.78);
+    --g-edge:rgba(255,255,255,.08);
+    --g-line:rgba(255,255,255,.07);
+    --g-shadow:0 1px 0 rgba(255,255,255,.05) inset,0 12px 34px rgba(0,0,0,.45);
+    --g-wash-a:rgba(232,197,90,.13);
+    --g-wash-b:rgba(127,176,224,.08);
+  }
+}
+
+#panel-you{position:relative;isolation:isolate}
+#panel-you::before{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:radial-gradient(900px 520px at 8% -8%,var(--g-wash-a),transparent 62%),
+             radial-gradient(760px 520px at 108% 18%,var(--g-wash-b),transparent 60%),
+             radial-gradient(700px 600px at 50% 120%,var(--g-wash-a),transparent 65%)}
+.you-wrap{max-width:640px;margin:0 auto;padding:4px 0 28px}
+
+/* Hero */
+.you-hero{position:relative;overflow:hidden;border-radius:22px;padding:20px 20px 16px;margin-bottom:22px;
+  background:linear-gradient(135deg,rgba(var(--c-accent-rgb),.22),rgba(var(--c-accent-rgb),.04) 55%),var(--g-fill);
+  -webkit-backdrop-filter:var(--g-blur);backdrop-filter:var(--g-blur);
+  border:1px solid var(--g-edge);box-shadow:var(--g-shadow)}
+.you-hero::after{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,255,255,.35),transparent 38%);opacity:.6}
+[data-theme="dark"] .you-hero::after{opacity:.12}
+.you-hero-top{display:flex;align-items:center;gap:16px;position:relative;z-index:1}
+#panel-you .you-avatar{width:64px;height:64px;flex:0 0 64px;border-radius:50%;border:0;font-size:22px;font-weight:600;letter-spacing:.02em;
+  color:var(--c-on-accent);background:linear-gradient(140deg,#F3D77A,var(--c-accent) 55%,#B8892A);
+  box-shadow:0 0 0 3px rgba(255,255,255,.65),0 6px 18px rgba(var(--c-accent-rgb),.35)}
+[data-theme="dark"] #panel-you .you-avatar{box-shadow:0 0 0 3px rgba(255,255,255,.08),0 6px 18px rgba(0,0,0,.4)}
+.you-hero-id{min-width:0}
+.you-name{font-size:19px;font-weight:650;letter-spacing:-.01em;color:var(--text);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#panel-you .you-email{font-size:13px;font-weight:400;color:var(--text2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.you-pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+#panel-you .role-pill,#panel-you .org-pill,.you-admin-pill{font-size:11px;font-weight:600;border-radius:999px;padding:3px 10px;text-transform:capitalize;letter-spacing:.01em;
+  background:var(--g-fill-strong);border:1px solid var(--g-line);color:var(--text2)}
+.you-admin-pill{color:var(--c-accent-text);border-color:rgba(var(--c-accent-rgb),.45);background:rgba(var(--c-accent-rgb),.14)}
+.you-admin-pill[hidden]{display:none}
+#panel-you .org-pill{text-transform:none}
+.you-hero .momentum-row{position:relative;z-index:1;margin:16px 0 0;padding-top:14px;border-top:1px solid var(--g-line)}
+.you-hero .momentum-row:empty{display:none}
+.you-hero .streak-badge{background:var(--g-fill-strong);border:1px solid var(--g-line);border-radius:12px}
+
+/* Sections and groups */
+.you-sec{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text3);margin:22px 16px 8px}
+.you-group{border-radius:var(--g-radius);overflow:hidden;background:var(--g-fill);
+  -webkit-backdrop-filter:var(--g-blur);backdrop-filter:var(--g-blur);
+  border:1px solid var(--g-edge);box-shadow:var(--g-shadow)}
+.you-group>*+*{box-shadow:0 -1px 0 0 var(--g-line);position:relative}
+.you-group>*+*::before{content:none}
+#youAdminBlock[hidden]{display:none}
+
+/* Rows */
+.you-row{width:100%;min-height:52px;display:flex;align-items:center;gap:13px;padding:9px 14px 9px 14px;
+  background:transparent;border:0;margin:0;color:var(--text);font-family:var(--sans);font-size:15px;text-align:left;cursor:pointer;
+  -webkit-tap-highlight-color:transparent;transition:background .18s ease}
+.you-row:hover{background:rgba(var(--c-accent-rgb),.07)}
+.you-row:active{background:rgba(var(--c-accent-rgb),.13)}
+.you-row:focus-visible{outline:2px solid var(--c-focus);outline-offset:-2px;border-radius:var(--g-radius)}
+.you-row-l{flex:1;min-width:0;font-weight:500;letter-spacing:-.005em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.you-row-v{flex:0 1 auto;min-width:0;font-size:13px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46%}
+.you-row-v:empty{display:none}
+.you-chev{flex:0 0 auto;width:8px;height:8px;border-right:2px solid var(--text3);border-bottom:2px solid var(--text3);transform:rotate(-45deg);opacity:.55;margin:0 4px 0 2px;transition:transform .25s cubic-bezier(.2,.8,.2,1)}
+.you-acc.open>.you-row .you-chev{transform:rotate(45deg)}
+.you-row-danger{justify-content:center}
+.you-row-danger .you-row-l{flex:0 1 auto;color:var(--c-risk);font-weight:600;display:inline-flex;align-items:center;gap:8px}
+
+/* Icon tiles */
+.you-ic{flex:0 0 30px;width:30px;height:30px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;color:#fff;
+  box-shadow:0 1px 0 rgba(255,255,255,.35) inset,0 1px 2px rgba(0,0,0,.12)}
+.you-ic svg{width:17px;height:17px;stroke:#fff}
+.tone-indigo{background:linear-gradient(160deg,#6D6AE8,#4B47C9)}
+.tone-graphite{background:linear-gradient(160deg,#8E8E93,#636366)}
+.tone-slate{background:linear-gradient(160deg,#7A8597,#556072)}
+.tone-gold{background:linear-gradient(160deg,#E3BE4E,#B8892A)}
+.tone-orange{background:linear-gradient(160deg,#F2A04A,#D9772A)}
+.tone-green{background:linear-gradient(160deg,#5DBB72,#3B8F50)}
+.tone-blue{background:linear-gradient(160deg,#4C8DF0,#2763C9)}
+.tone-violet{background:linear-gradient(160deg,#A57BEE,#7652C9)}
+.tone-teal{background:linear-gradient(160deg,#3CB8B0,#228A84)}
+.tone-rose{background:linear-gradient(160deg,#EE7A9A,#C9506F)}
+.tone-red{background:linear-gradient(160deg,#F06C5E,#C9443A)}
+.tone-amber{background:linear-gradient(160deg,#F5B83E,#D08D16)}
+
+/* Accordion: height animates, closed content is not focusable */
+#panel-you .you-acc{margin:0}
+#panel-you .you-acc-body{display:grid;grid-template-rows:0fr;visibility:hidden;padding:0;
+  transition:grid-template-rows .32s cubic-bezier(.2,.8,.2,1),visibility 0s linear .32s}
+#panel-you .you-acc.open>.you-acc-body{grid-template-rows:1fr;visibility:visible;transition:grid-template-rows .32s cubic-bezier(.2,.8,.2,1),visibility 0s}
+.you-acc-in{min-height:0;overflow:hidden}
+#panel-you .you-acc-in>.admin-card{background:transparent;border:0;border-radius:0;box-shadow:none;margin:0;padding:2px 16px 18px 57px}
+@media (max-width:520px){#panel-you .you-acc-in>.admin-card{padding-left:16px}}
+
+/* Controls inside rows: one radius, one height, softer edges. The inline
+   styles carry the colours; this only reshapes them. */
+#panel-you .you-acc-in button:not(.you-provider){border-radius:10px!important;min-height:36px;font-weight:600!important;transition:filter .15s ease,transform .1s ease}
+#panel-you .you-acc-in button:not(.you-provider):active{transform:scale(.98)}
+#panel-you .you-acc-in button:not(.you-provider):hover{filter:brightness(1.04)}
+#panel-you .you-acc-in input:not([type=checkbox]),#panel-you .you-acc-in textarea,#panel-you .you-acc-in select{border-radius:10px!important;background:var(--g-fill-strong)!important}
+#panel-you .you-acc-in [style*="border-radius:2px"],#panel-you .you-acc-in [style*="border-radius:3px"]{border-radius:10px!important}
+
+/* Email: provider buttons */
+.you-conn{margin-bottom:12px}
+.you-conn-state{font-size:14px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.you-conn-state::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--text3);opacity:.55;flex:none}
+.you-conn-state[data-state="ok"]::before{background:var(--c-verified);opacity:1;box-shadow:0 0 0 4px var(--c-verified-wash)}
+.you-conn-state[data-state="broken"]{color:var(--c-risk)}
+.you-conn-state[data-state="broken"]::before{background:var(--c-risk);opacity:1}
+.you-provider[data-state="busy"]{cursor:progress}
+.you-provider[data-state="busy"] .you-provider-s{opacity:.7}
+.you-provider:disabled{cursor:progress}
+.you-conn-sub{font-size:12.5px;color:var(--text3);margin-top:3px;line-height:1.5}
+.you-providers{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:520px){.you-providers{grid-template-columns:1fr}}
+.you-provider{display:flex;align-items:center;gap:11px;width:100%;padding:11px 12px;border-radius:14px;cursor:pointer;text-align:left;font-family:var(--sans);
+  background:var(--g-fill-strong);border:1px solid var(--g-line);color:var(--text);
+  box-shadow:0 1px 0 rgba(255,255,255,.6) inset,0 2px 8px rgba(0,0,0,.05);transition:transform .12s ease,box-shadow .2s ease,border-color .2s ease}
+.you-provider:hover{border-color:rgba(var(--c-accent-rgb),.55);box-shadow:0 1px 0 rgba(255,255,255,.6) inset,0 6px 18px rgba(0,0,0,.08)}
+.you-provider:active{transform:scale(.985)}
+.you-provider:focus-visible{outline:2px solid var(--c-focus);outline-offset:2px}
+.you-provider-ic{flex:0 0 36px;height:36px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;color:#fff}
+.pv-google{background:linear-gradient(160deg,#EA5A4E,#C93A2E)}
+.pv-ms{background:linear-gradient(160deg,#2E8BE6,#1666C2)}
+.you-provider-t{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.25}
+.you-provider-t b{font-size:14px;font-weight:600}
+.you-provider-t small{font-size:11.5px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.you-provider-s{flex:0 0 auto;font-size:12px;font-weight:600;padding:5px 11px;border-radius:999px;background:var(--c-accent);color:var(--c-on-accent)}
+.you-provider[data-state="connected"]{border-color:rgba(59,109,17,.35)}
+.you-provider[data-state="connected"] .you-provider-s{background:var(--c-verified-wash);color:var(--c-verified);display:inline-flex;align-items:center;gap:5px}
+.you-provider[data-state="connected"] .you-provider-s::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}
+.you-provider[data-state="broken"]{border-color:rgba(163,45,45,.4)}
+.you-provider[data-state="broken"] .you-provider-s{background:var(--c-risk);color:#fff}
+.you-provider[data-state="other"]{opacity:.72}
+.you-provider[data-state="other"] .you-provider-s{background:transparent;color:var(--text2);border:1px solid var(--g-line)}
+.you-fine{font-size:11.5px;color:var(--text3);margin-top:12px;line-height:1.5}
+
+/* Status chips on rows */
+.you-chip{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;color:var(--text3)}
+.you-chip::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--text3);opacity:.6}
+.you-chip.ok{color:var(--c-verified)}.you-chip.ok::before{background:var(--c-verified);opacity:1}
+.you-chip.bad{color:var(--c-risk)}.you-chip.bad::before{background:var(--c-risk);opacity:1}
+.you-chip.warn{color:var(--c-partial)}.you-chip.warn::before{background:var(--c-partial);opacity:1}
+
+.you-group-out{margin-top:26px}
+.you-foot{text-align:center;font-size:11.5px;color:var(--text3);margin:14px 0 6px;letter-spacing:.02em;opacity:.8}
+
+/* Bottom bar: the same glass, phones only (the desktop rail stays solid) */
+@media (max-width:899px){
+  .bottom-nav{background:var(--g-fill-strong);-webkit-backdrop-filter:var(--g-blur);backdrop-filter:var(--g-blur);
+    border-top:1px solid var(--g-line);box-shadow:0 -6px 24px rgba(0,0,0,.05)}
+}
+
+/* No glass where it cannot render, or when less transparency is asked for */
+@supports not ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){
+  .you-group,.you-hero{background:var(--surface)}
+  .bottom-nav{background:var(--surface)!important}
+}
+@media (prefers-reduced-transparency:reduce){
+  .you-group,.you-hero,.you-provider{background:var(--surface)!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+  .bottom-nav{background:var(--surface)!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+  #panel-you::before{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  #panel-you .you-acc-body,.you-chev,.you-row,.you-provider{transition:none!important}
+}
+
+/* Narrow phones: the row label wins, the hint text goes */
+@media (max-width:480px){#youAcc-ai .you-row-v{display:none}}
+/* The Today metrics chevron sat alone in the top corner of every other tab on phones */
+body[data-tab]:not([data-tab="today"]) .metric-wrap{display:none}
+
 </style>
 <script src="/js/vendor/sortable.min.js"></script>
 </head>
@@ -2007,23 +2210,33 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
 
   <!-- ── You ── -->
   <div class="panel" id="panel-you">
-    <div class="you-profile-card">
-      <div class="you-avatar" id="youAvatar"></div>
-      <div>
-        <div class="you-email" id="youEmailDisplay"></div>
-        <div style="display:flex;gap:6px;margin-top:4px">
-          <span class="role-pill" id="youRolePill"></span>
-          <span class="org-pill" id="youOrgPill"></span> </div> </div> </div>
-    <div class="momentum-row" id="youMomentumRow" style="margin-bottom:16px"></div>
-    <div class="you-section-title">Account</div>
-    <div class="you-menu">
-      <button class="you-menu-item" id="orgMenuBtn" onclick="switchToOrgPanel()">
-        <span><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20.5V5.5L13 3v17.5M13 9.5h7v11M4 20.5h17M7.5 8h2M7.5 12h2M7.5 16h2M16 13h1.5M16 16.5h1.5"/></svg> Team &amp; access</span><span class="you-arrow">›</span> </button>
-      <button class="you-menu-item" onclick="switchTab('settings')">
-        <span><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15a3 3 0 100-6 3 3 0 000 6zM19.2 14.4a1.6 1.6 0 00.3 1.8l.1.1a2 2 0 01-2.8 2.8l-.1-.1a1.6 1.6 0 00-2.7 1.1v.2a2 2 0 01-4 0v-.1a1.6 1.6 0 00-2.8-1.1l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.6 1.6 0 00-1.1-2.7H3a2 2 0 010-4h.1a1.6 1.6 0 001.1-2.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.6 1.6 0 002.7-1.1V3a2 2 0 014 0v.1a1.6 1.6 0 002.7 1.1l.1-.1a2 2 0 112.8 2.8l-.1.1a1.6 1.6 0 001.1 2.7h.2a2 2 0 010 4h-.1a1.6 1.6 0 00-1.4 1.1z"/></svg> Settings &amp; API keys</span><span class="you-arrow">›</span> </button>
+    <!-- You, redesigned 2026-10-02: grouped glass lists, one accordion open at a
+         time, every id the app reads kept as it was. -->
+    <div class="you-wrap">
+    <div class="you-hero">
+      <div class="you-hero-top">
+        <div class="you-avatar" id="youAvatar"></div>
+        <div class="you-hero-id">
+          <div class="you-name" id="youNameDisplay"></div>
+          <div class="you-email" id="youEmailDisplay"></div>
+          <div class="you-pills"><span class="role-pill" id="youRolePill"></span><span class="you-admin-pill" id="youAdminPill" hidden>Admin</span><span class="org-pill" id="youOrgPill"></span></div>
+        </div>
+      </div>
+      <div class="momentum-row" id="youMomentumRow"></div>
+    </div>
+
+    <div id="youAdminBlock" hidden>
+      <div class="you-sec">Admin</div>
+      <div class="you-group">
+      <button class="you-row" id="orgMenuBtn" onclick="switchToOrgPanel()"><span class="you-ic tone-indigo"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20.5V5.5L13 3v17.5M13 9.5h7v11M4 20.5h17M7.5 8h2M7.5 12h2M7.5 16h2M16 13h1.5M16 16.5h1.5"/></svg></span><span class="you-row-l">Team &amp; access</span><span class="you-chev" aria-hidden="true"></span></button>
+      </div>
+    </div>
+
+    <div class="you-sec">Your account</div>
+    <div class="you-group">
       <div class="you-acc" id="youAcc-appearance">
-        <button class="you-menu-item" onclick="toggleYouAcc('appearance')"><span><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg> Appearance</span><span class="you-arrow you-acc-chev">›</span></button>
-        <div class="you-acc-body">
+        <button class="you-row" onclick="toggleYouAcc('appearance')" aria-expanded="false"><span class="you-ic tone-graphite"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg></span><span class="you-row-l">Appearance</span><span class="you-chev" aria-hidden="true"></span></button>
+        <div class="you-acc-body"><div class="you-acc-in">
           <div class="admin-card" style="margin-bottom:0">
             <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:9px">Theme</div>
             <div style="display:flex;gap:10px;margin-bottom:4px">
@@ -2036,26 +2249,12 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
 
             <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 9px;padding-top:12px;border-top:1px solid var(--border)">Font size</div>
             <div style="display:flex;gap:8px" id="apprFontRow"></div>
-            <div style="font-size:11px;color:var(--text3);margin-top:8px">Scales the whole interface, not just text, so layouts stay intact.</div> </div> </div> </div> </div>
-    <div class="you-section-title" style="margin-top:16px">Workspace</div>
-    <div class="you-acc" id="youAcc-accounts">
-      <button class="you-menu-item" onclick="toggleYouAcc('accounts')"><span><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6.5h6l2 2.5h9v11h-17z"/></svg> My accounts</span><span class="you-arrow you-acc-chev">›</span></button>
-      <div class="you-acc-body">
-    <div class="admin-card" style="margin-bottom:0">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <div style="font-size:12px;color:var(--text2)">Accounts you're working — used for Coverage &amp; signal tracking</div>
-        <div style="display:flex;gap:10px">
-          <button onclick="openAccountsImport()" style="font-size:11px;color:var(--gold);background:none;border:none;cursor:pointer;font-family:var(--sans);white-space:nowrap">⇪ Import CSV</button>
-          <button onclick="toggleAddMyAccount()" style="font-size:11px;color:var(--gold);background:none;border:none;cursor:pointer;font-family:var(--sans);white-space:nowrap">+ Add account</button> </div> </div>
-      <div id="myAccountAddRow" style="display:none;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-        <input id="myAccountName" placeholder="Account name" style="flex:2;min-width:120px;background:var(--surface2);border:1px solid var(--border2);border-radius:2px;padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>
-        <input id="myAccountRegion" placeholder="Region (e.g. India)" style="flex:1;min-width:90px;background:var(--surface2);border:1px solid var(--border2);border-radius:2px;padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>
-        <input id="myAccountDomain" placeholder="domain.com" style="flex:1;min-width:90px;background:var(--surface2);border:1px solid var(--border2);border-radius:2px;padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>
-        <button onclick="addMyAccount()" style="padding:7px 12px;border-radius:2px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">Add</button> </div>
-      <div id="myAccountsList"></div> </div> </div> </div>
-    <div class="you-acc" id="youAcc-password">
-      <button class="you-menu-item" onclick="toggleYouAcc('password')"><span><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 10.5V7.5a5 5 0 0110 0v3M5.5 10.5h13v10h-13zM12 14.5v2"/></svg> Password</span><span class="you-arrow you-acc-chev">›</span></button>
-      <div class="you-acc-body">
+            <div style="font-size:11px;color:var(--text3);margin-top:8px">Scales the whole interface, not just text, so layouts stay intact.</div> </div> 
+        </div></div>
+      </div>
+      <div class="you-acc" id="youAcc-password">
+        <button class="you-row" onclick="toggleYouAcc('password')" aria-expanded="false"><span class="you-ic tone-slate"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 10.5V7.5a5 5 0 0110 0v3M5.5 10.5h13v10h-13zM12 14.5v2"/></svg></span><span class="you-row-l">Password</span><span class="you-chev" aria-hidden="true"></span></button>
+        <div class="you-acc-body"><div class="you-acc-in">
         <div class="admin-card" style="margin-bottom:0">
           <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Change the password for <strong id="pwEmail"></strong>.</div>
 
@@ -2077,60 +2276,74 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
             <span style="font-size:11px;color:var(--text3);line-height:1.5">Sign out my other devices. Leave this on unless you have a reason not to: if you are changing your password because someone else may have had access, this is the part that actually removes them.</span> </label>
 
           <button id="pwBtn" onclick="changePassword()" style="width:100%;padding:10px;border-radius:2px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:13px;font-weight:700;cursor:pointer">Change password</button>
-          <div id="pwMsg" style="font-size:11px;color:var(--text3);margin-top:8px;min-height:1em;line-height:1.5"></div> </div> </div> </div>
+          <div id="pwMsg" style="font-size:11px;color:var(--text3);margin-top:8px;min-height:1em;line-height:1.5"></div> </div> 
+        </div></div>
+      </div>
+    </div>
 
-    <div class="you-menu" style="margin-top:6px">
-      <button class="you-menu-item" onclick="openTemplateManager()">
-        <span><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.5h6v3H9zM7 5H5.5v15h13V5H17"/></svg> Task templates</span><span class="you-arrow">›</span> </button> </div>
-    <div class="you-acc" id="youAcc-habits">
-      <button class="you-menu-item" onclick="toggleYouAcc('habits')"><span><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> Daily habits</span><span class="you-arrow you-acc-chev">›</span></button>
-      <div class="you-acc-body">
-        <div class="admin-card" style="margin-bottom:0">
-          <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Auto-generate daily tasks from recurring routines — LinkedIn outreach, email batches, pipeline reviews.</div>
-          <div id="youHabitsPreview" style="font-size:12px;color:var(--text3);font-style:italic;margin-bottom:8px">No habits configured yet. Tap "Edit habits" to set up recurring activities.</div>
-          <button onclick="openHabitEditor()" style="padding:7px 14px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> Edit habits</button> </div> </div> </div>
-    <div class="you-section-title" style="margin-top:16px">Connections</div>
-    <div class="you-acc" id="youAcc-enrich">
-      <button class="you-menu-item" onclick="toggleYouAcc('enrich')"><span><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5h7.5L19 9v11.5H6zM13.5 3.5V9H19"/></svg> Enrichment providers</span><span class="you-arrow you-acc-chev">›</span></button>
-      <div class="you-acc-body">
+    <div class="you-sec">Workspace</div>
+    <div class="you-group">
+      <div class="you-acc" id="youAcc-accounts">
+        <button class="you-row" onclick="toggleYouAcc('accounts')" aria-expanded="false"><span class="you-ic tone-gold"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6.5h6l2 2.5h9v11h-17z"/></svg></span><span class="you-row-l">My accounts</span><span class="you-chev" aria-hidden="true"></span></button>
+        <div class="you-acc-body"><div class="you-acc-in">
     <div class="admin-card" style="margin-bottom:0">
-      <div style="font-size:12px;color:var(--text3);margin-bottom:12px;line-height:1.5">Connect a contact enrichment provider to auto-populate stakeholder names, titles and LinkedIn profiles from your pipeline accounts. Your personal key overrides the org-wide key.</div>
-      <div id="enrichmentUserCards">
-        <!-- Apollo -->
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border)">
-          <div style="width:28px;height:28px;border-radius:2px;background:#1a1a2e;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">Ap</div>
-          <div style="flex:1">
-            <div style="font-size:12px;font-weight:600;color:var(--text)">Apollo.io</div>
-            <div style="font-size:11px;color:var(--text3)" id="apolloUserStatus">Not connected</div> </div>
-          <button style="padding:4px 10px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:11px;cursor:pointer" id="apolloUserBtn">Connect</button> </div>
-        <!-- Lusha -->
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border)">
-          <div style="width:28px;height:28px;border-radius:2px;background:#FF6B35;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">Lu</div>
-          <div style="flex:1">
-            <div style="font-size:12px;font-weight:600;color:var(--text)">Lusha</div>
-            <div style="font-size:11px;color:var(--text3)" id="lushaUserStatus">Not connected</div> </div>
-          <button style="padding:4px 10px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:11px;cursor:pointer" id="lushaUserBtn">Connect</button> </div>
-        <!-- Hunter -->
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-          <div style="width:28px;height:28px;border-radius:2px;background:#F97316;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">Hu</div>
-          <div style="flex:1">
-            <div style="font-size:12px;font-weight:600;color:var(--text)">Hunter.io</div>
-            <div style="font-size:11px;color:var(--text3)" id="hunterUserStatus">Not connected</div> </div>
-          <button style="padding:4px 10px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:11px;cursor:pointer" id="hunterUserBtn">Connect</button> </div>
-        <!-- inline key input -->
-        <div id="enrichmentKeyInput" style="display:none;margin-top:4px">
-          <div style="display:flex;gap:8px">
-            <input type="password" id="enrichmentKeyValue" placeholder="Paste API key…" autocomplete="off"
-              style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>
-            <button onclick="saveEnrichmentKey(_enrichKeyProvider,'user')" style="padding:8px 12px;border-radius:2px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Save</button>
-            <button onclick="document.getElementById('enrichmentKeyInput').style.display='none'" style="padding:8px 10px;border-radius:2px;background:none;border:1px solid var(--border);color:var(--text3);font-family:var(--sans);font-size:12px;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button> </div>
-          <div style="font-size:11px;color:var(--text3);margin-top:4px" id="enrichmentKeyHint"></div> </div> </div> </div> </div> </div>
-    <div class="you-acc" id="youAcc-ai">
-      <button class="you-menu-item" onclick="toggleYouAcc('ai')"><span><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 8.5h10v9H7zM10 12.5v1M14 12.5v1M12 5v3.5M9.5 17.5v3M14.5 17.5v3M4.5 11.5v3M19.5 11.5v3"/></svg> Connect to AI · Claude / ChatGPT / Gemini</span><span class="you-arrow you-acc-chev">›</span></button>
-      <div class="you-acc-body">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="font-size:12px;color:var(--text2)">Accounts you work, used for coverage and signal tracking</div>
+        <div style="display:flex;gap:10px">
+          <button onclick="openAccountsImport()" style="font-size:11px;color:var(--gold);background:none;border:none;cursor:pointer;font-family:var(--sans);white-space:nowrap">⇪ Import CSV</button>
+          <button onclick="toggleAddMyAccount()" style="font-size:11px;color:var(--gold);background:none;border:none;cursor:pointer;font-family:var(--sans);white-space:nowrap">+ Add account</button> </div> </div>
+      <div id="myAccountAddRow" style="display:none;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+        <input id="myAccountName" placeholder="Account name" style="flex:2;min-width:120px;background:var(--surface2);border:1px solid var(--border2);border-radius:2px;padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>
+        <input id="myAccountRegion" placeholder="Region (e.g. India)" style="flex:1;min-width:90px;background:var(--surface2);border:1px solid var(--border2);border-radius:2px;padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>
+        <input id="myAccountDomain" placeholder="domain.com" style="flex:1;min-width:90px;background:var(--surface2);border:1px solid var(--border2);border-radius:2px;padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>
+        <button onclick="addMyAccount()" style="padding:7px 12px;border-radius:2px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">Add</button> </div>
+      <div id="myAccountsList"></div> </div> 
+        </div></div>
+      </div>
+      <button class="you-row" onclick="openTemplateManager()"><span class="you-ic tone-orange"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.5h6v3H9zM7 5H5.5v15h13V5H17"/></svg></span><span class="you-row-l">Task templates</span><span class="you-chev" aria-hidden="true"></span></button>
+      <div class="you-acc" id="youAcc-habits">
+        <button class="you-row" onclick="toggleYouAcc('habits')" aria-expanded="false"><span class="you-ic tone-green"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg></span><span class="you-row-l">Daily habits</span><span class="you-chev" aria-hidden="true"></span></button>
+        <div class="you-acc-body"><div class="you-acc-in">
+        <div class="admin-card" style="margin-bottom:0">
+          <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Auto-generate daily tasks from recurring routines: LinkedIn outreach, email batches, pipeline reviews.</div>
+          <div id="youHabitsPreview" style="font-size:12px;color:var(--text3);font-style:italic;margin-bottom:8px">No habits configured yet. Tap "Edit habits" to set up recurring activities.</div>
+          <button onclick="openHabitEditor()" style="padding:7px 14px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> Edit habits</button> </div> 
+        </div></div>
+      </div>
+    </div>
+
+    <div class="you-sec">Connections</div>
+    <div class="you-group">
+      <div class="you-acc" id="youAcc-email">
+        <button class="you-row" onclick="toggleYouAcc('email')" aria-expanded="false"><span class="you-ic tone-blue"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg></span><span class="you-row-l">Email</span><span class="you-row-v" id="youEmailChip"></span><span class="you-chev" aria-hidden="true"></span></button>
+        <div class="you-acc-body"><div class="you-acc-in">
+<div class="admin-card" style="margin-bottom:0">
+      <div class="you-conn">
+        <div class="you-conn-state" id="youEmailConnLabel">Not connected</div>
+        <div class="you-conn-sub" id="youEmailConnSub">Connect your work mailbox to turn on coverage checks, reply tracking, calendar sync and your SAM brief.</div>
+      </div>
+      <div class="you-providers">
+        <button class="you-provider" id="youGmailBtn" onclick="connectGmail()" data-state="idle">
+          <span class="you-provider-ic pv-google"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/></svg></span>
+          <span class="you-provider-t"><b>Gmail</b><small>Google Workspace</small></span>
+          <span class="you-provider-s">Connect</span>
+        </button>
+        <button class="you-provider" id="youOutlookBtn" onclick="connectOutlook()" data-state="idle">
+          <span class="you-provider-ic pv-ms"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/></svg></span>
+          <span class="you-provider-t"><b>Outlook</b><small>Microsoft 365</small></span>
+          <span class="you-provider-s">Connect</span>
+        </button>
+      </div>
+      <div class="you-fine">SamoraOS reads message headers and replies to verify activity. It never sends mail you did not ask it to send.</div>
+    </div>
+        </div></div>
+      </div>
+      <div class="you-acc" id="youAcc-ai">
+        <button class="you-row" onclick="toggleYouAcc('ai')" aria-expanded="false"><span class="you-ic tone-violet"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 8.5h10v9H7zM10 12.5v1M14 12.5v1M12 5v3.5M9.5 17.5v3M14.5 17.5v3M4.5 11.5v3M19.5 11.5v3"/></svg></span><span class="you-row-l">Connect to AI</span><span class="you-row-v">Claude, ChatGPT, Gemini</span><span class="you-chev" aria-hidden="true"></span></button>
+        <div class="you-acc-body"><div class="you-acc-in">
     <div class="admin-card" style="margin-bottom:0">
       <div id="connectorNotGenerated">
-        <div style="font-size:12px;color:var(--text3);margin-bottom:12px;line-height:1.5">Connect SamoraOS to Claude, ChatGPT or Gemini. The AI fetches your live data — you just ask questions in the native chat.</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:12px;line-height:1.5">Connect SamoraOS to Claude, ChatGPT or Gemini. The AI fetches your live data, you just ask questions in the native chat.</div>
         <button id="connectorBtn" onclick="getConnectorToken()" style="width:100%;padding:11px;border-radius:3px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:13px;font-weight:700;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.5v5M15 3.5v5M6.5 8.5h11v3a5.5 5.5 0 01-11 0zM12 17v4"/></svg> Get my connection details →</button>
         <div id="connectorStatus" style="font-size:12px;color:var(--text3);margin-top:8px"></div> </div>
       <div id="connectorGenerated" style="display:none">
@@ -2166,61 +2379,106 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
         <!-- ChatGPT -->
         <div style="background:var(--surface2);border-radius:3px;padding:14px;margin-bottom:10px">
           <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> ChatGPT (Custom GPT)</div>
-          <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Admin creates one GPT with SamoraOS connected. Share the GPT link — team clicks, uses instantly. Native ChatGPT chat, live data.</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Admin creates one GPT with SamoraOS connected. Share the GPT link: the team clicks, uses instantly. Native ChatGPT chat, live data.</div>
           <button onclick="copyGPTSetup()" style="width:100%;padding:8px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.5h6v3H9zM7 5H5.5v15h13V5H17"/></svg> Copy admin GPT setup steps</button> </div>
         <!-- Gemini -->
         <div style="background:var(--surface2);border-radius:3px;padding:14px;margin-bottom:10px">
           <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 11v5.5M12 7.8v.4"/></svg> Gemini (Gem)</div>
-          <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Create a Gem with SamoraOS built in. Share the Gem link — native Gemini chat with live pipeline access.</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Create a Gem with SamoraOS built in. Share the Gem link: native Gemini chat with live pipeline access.</div>
           <button onclick="copyGeminiSetup()" style="width:100%;padding:8px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.5h6v3H9zM7 5H5.5v15h13V5H17"/></svg> Copy admin Gemini setup steps</button> </div>
         <div id="connectorKeysPanel"></div>
         <div style="font-size:11px;color:var(--text3);text-align:center;display:flex;justify-content:space-between;gap:8px;margin-top:4px">
           <span id="connectorExpiry" style="text-align:left"></span>
-          <button onclick="getConnectorToken()" style="background:none;border:none;color:var(--text3);font-size:11px;cursor:pointer;text-decoration:underline;font-family:var(--sans);white-space:nowrap">New key</button> </div> </div> </div> </div> </div>
-    <div class="you-acc" id="youAcc-email">
-      <button class="you-menu-item" onclick="toggleYouAcc('email')"><span><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> Email connection</span><span class="you-arrow you-acc-chev">›</span></button>
-      <div class="you-acc-body">
+          <button onclick="getConnectorToken()" style="background:none;border:none;color:var(--text3);font-size:11px;cursor:pointer;text-decoration:underline;font-family:var(--sans);white-space:nowrap">New key</button> </div> </div> </div> 
+        </div></div>
+      </div>
+      <div class="you-acc" id="youAcc-enrich">
+        <button class="you-row" onclick="toggleYouAcc('enrich')" aria-expanded="false"><span class="you-ic tone-teal"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5h7.5L19 9v11.5H6zM13.5 3.5V9H19"/></svg></span><span class="you-row-l">Enrichment providers</span><span class="you-chev" aria-hidden="true"></span></button>
+        <div class="you-acc-body"><div class="you-acc-in">
     <div class="admin-card" style="margin-bottom:0">
-      <div style="margin-bottom:12px">
-        <div style="font-size:13px;font-weight:500;color:var(--text)" id="youEmailConnLabel">Not connected</div>
-        <div style="font-size:12px;color:var(--text3);margin-top:2px" id="youEmailConnSub">Connect to enable Coverage verification, IVR, calendar sync and SAM Brief</div> </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button id="youGmailBtn" onclick="connectGmail()" style="padding:7px 14px;border-radius:2px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> Connect Gmail</button>
-        <button id="youOutlookBtn" onclick="connectOutlook()" style="padding:7px 14px;border-radius:2px;background:#2563EB;border:2px solid #1D4ED8;color:#fff;font-family:var(--sans);font-size:12px;font-weight:700;cursor:pointer;box-shadow:var(--shadow-1)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> Connect Outlook</button> </div> </div> </div> </div>
-    <div class="you-acc" id="youAcc-notetaker">
-      <button class="you-menu-item" onclick="toggleYouAcc('notetaker')"><span><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5a2.8 2.8 0 00-2.8 2.8v5.4a2.8 2.8 0 005.6 0V6.3A2.8 2.8 0 0012 3.5zM5.5 11a6.5 6.5 0 0013 0M12 17.5V21"/></svg> Notetaker</span><span class="you-arrow you-acc-chev">›</span></button>
-      <div class="you-acc-body">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:12px;line-height:1.5">Connect a contact enrichment provider to auto-populate stakeholder names, titles and LinkedIn profiles from your pipeline accounts. Your personal key overrides the org-wide key.</div>
+      <div id="enrichmentUserCards">
+        <!-- Apollo -->
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border)">
+          <div style="width:28px;height:28px;border-radius:2px;background:#1a1a2e;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">Ap</div>
+          <div style="flex:1">
+            <div style="font-size:12px;font-weight:600;color:var(--text)">Apollo.io</div>
+            <div style="font-size:11px;color:var(--text3)" id="apolloUserStatus">Not connected</div> </div>
+          <button style="padding:4px 10px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:11px;cursor:pointer" id="apolloUserBtn">Connect</button> </div>
+        <!-- Lusha -->
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border)">
+          <div style="width:28px;height:28px;border-radius:2px;background:#FF6B35;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">Lu</div>
+          <div style="flex:1">
+            <div style="font-size:12px;font-weight:600;color:var(--text)">Lusha</div>
+            <div style="font-size:11px;color:var(--text3)" id="lushaUserStatus">Not connected</div> </div>
+          <button style="padding:4px 10px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:11px;cursor:pointer" id="lushaUserBtn">Connect</button> </div>
+        <!-- Hunter -->
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <div style="width:28px;height:28px;border-radius:2px;background:#F97316;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">Hu</div>
+          <div style="flex:1">
+            <div style="font-size:12px;font-weight:600;color:var(--text)">Hunter.io</div>
+            <div style="font-size:11px;color:var(--text3)" id="hunterUserStatus">Not connected</div> </div>
+          <button style="padding:4px 10px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:11px;cursor:pointer" id="hunterUserBtn">Connect</button> </div>
+        <!-- inline key input -->
+        <div id="enrichmentKeyInput" style="display:none;margin-top:4px">
+          <div style="display:flex;gap:8px">
+            <input type="password" id="enrichmentKeyValue" placeholder="Paste API key…" autocomplete="off"
+              style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>
+            <button onclick="saveEnrichmentKey(_enrichKeyProvider,'user')" style="padding:8px 12px;border-radius:2px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Save</button>
+            <button onclick="document.getElementById('enrichmentKeyInput').style.display='none'" style="padding:8px 10px;border-radius:2px;background:none;border:1px solid var(--border);color:var(--text3);font-family:var(--sans);font-size:12px;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button> </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px" id="enrichmentKeyHint"></div> </div> </div> </div> 
+        </div></div>
+      </div>
+      <div class="you-acc" id="youAcc-notetaker">
+        <button class="you-row" onclick="toggleYouAcc('notetaker')" aria-expanded="false"><span class="you-ic tone-rose"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5a2.8 2.8 0 00-2.8 2.8v5.4a2.8 2.8 0 005.6 0V6.3A2.8 2.8 0 0012 3.5zM5.5 11a6.5 6.5 0 0013 0M12 17.5V21"/></svg></span><span class="you-row-l">Notetaker</span><span class="you-chev" aria-hidden="true"></span></button>
+        <div class="you-acc-body"><div class="you-acc-in">
     <div class="admin-card" style="margin-bottom:0">
       <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Connect your personal meeting recorder for direct transcript import and richer call signals.</div>
       <div id="youNotetakerStatus" style="font-size:12px;color:var(--text3);margin-bottom:8px">No notetaker connected</div>
-      <button onclick="openNotetakerConnect()" style="padding:7px 14px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.5v5M15 3.5v5M6.5 8.5h11v3a5.5 5.5 0 01-11 0zM12 17v4"/></svg> Manage connections</button> </div> </div> </div>
-    <div class="you-acc" id="youAcc-install">
-      <button class="you-menu-item" onclick="toggleYouAcc('install'); refreshInstallStatus();"><span><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18.5h2"/></svg> Install app</span><span class="you-arrow you-acc-chev">›</span></button>
-      <div class="you-acc-body">
+      <button onclick="openNotetakerConnect()" style="padding:7px 14px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.5v5M15 3.5v5M6.5 8.5h11v3a5.5 5.5 0 01-11 0zM12 17v4"/></svg> Manage connections</button> </div> 
+        </div></div>
+      </div>
+    </div>
+
+    <div class="you-sec">This device</div>
+    <div class="you-group">
+      <div class="you-acc" id="youAcc-notifications">
+        <button class="you-row" onclick="toggleYouAcc('notifications')" aria-expanded="false"><span class="you-ic tone-red"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 10a5.5 5.5 0 0111 0c0 4.4 2 6 2 6h-15s2-1.6 2-6zM10.3 20a2 2 0 003.4 0"/></svg></span><span class="you-row-l">Notifications</span><span class="you-row-v" id="youPushChip"></span><span class="you-chev" aria-hidden="true"></span></button>
+        <div class="you-acc-body"><div class="you-acc-in">
     <div class="admin-card" style="margin-bottom:0">
-      <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Put SamoraOS on your home screen. It opens full screen like any other app, and on iPhone it is also what makes notifications work.</div>
-      <div id="youInstallStatus" style="font-size:12px;color:var(--text3);margin-bottom:10px">Checking…</div>
-      <button id="youInstallBtn" onclick="installSamoraApp()" style="padding:8px 14px;border-radius:2px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:700;cursor:pointer">Install SamoraOS</button> </div> </div> </div>
-    <div class="you-acc" id="youAcc-notifications">
-      <button class="you-menu-item" onclick="toggleYouAcc('notifications')"><span><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 10a5.5 5.5 0 0111 0c0 4.4 2 6 2 6h-15s2-1.6 2-6zM10.3 20a2 2 0 003.4 0"/></svg> Notifications</span><span class="you-arrow you-acc-chev">›</span></button>
-      <div class="you-acc-body">
-    <div class="admin-card" style="margin-bottom:0">
-      <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Get push alerts on this device for deal risks, coaching nudges and your weekly account check — even when SamoraOS is closed.</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Get push alerts on this device for deal risks, coaching nudges and your weekly account check, even when SamoraOS is closed.</div>
       <div id="youPushStatus" style="font-size:12px;color:var(--text3);margin-bottom:10px">Checking…</div>
       <button id="pushToggleBtn" onclick="togglePushNotifications()" style="padding:8px 14px;border-radius:2px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:700;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 10a5.5 5.5 0 0111 0c0 4.4 2 6 2 6h-15s2-1.6 2-6zM10.3 20a2 2 0 003.4 0"/></svg> Enable notifications</button>
       <button id="pushTestBtn" onclick="sendTestPush()" style="display:none;margin-left:8px;padding:8px 14px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Send test</button>
-      <div id="youPushHint" style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.5"></div> </div> </div> </div>
-    <div class="you-acc" id="youAcc-reminders">
-      <button class="you-menu-item" onclick="toggleYouAcc('reminders'); loadReminders();"><span>⏰ Reminders</span><span class="you-arrow you-acc-chev">›</span></button>
-      <div class="you-acc-body">
+      <div id="youPushHint" style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.5"></div> </div> 
+        </div></div>
+      </div>
+      <div class="you-acc" id="youAcc-reminders">
+        <button class="you-row" onclick="toggleYouAcc('reminders'); loadReminders();" aria-expanded="false"><span class="you-ic tone-amber"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="7.5"/><path d="M12 9.5V13l2.5 1.6M5 4.5L3 6.5M19 4.5l2 2"/></svg></span><span class="you-row-l">Reminders</span><span class="you-chev" aria-hidden="true"></span></button>
+        <div class="you-acc-body"><div class="you-acc-in">
     <div class="admin-card" style="margin-bottom:0">
       <div style="font-size:12px;color:var(--text3);margin-bottom:10px">One-off or repeating reminders, delivered as a push notification at the time you choose.</div>
       <button onclick="window._openReminder()" style="padding:8px 14px;border-radius:2px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:700;cursor:pointer;margin-bottom:12px">+ New reminder</button>
-      <div id="remindersList" style="font-size:12px;color:var(--text3)">Loading…</div> </div> </div> </div>
-    <div class="you-section-title" style="margin-top:16px">Session</div>
-    <div class="you-menu">
-      <button class="you-menu-item danger" onclick="doLogout()">
-        <span>Sign out</span><span class="you-arrow">›</span> </button> </div> </div>
+      <div id="remindersList" style="font-size:12px;color:var(--text3)">Loading…</div> </div> 
+        </div></div>
+      </div>
+      <div class="you-acc" id="youAcc-install">
+        <button class="you-row" onclick="toggleYouAcc('install'); refreshInstallStatus();" aria-expanded="false"><span class="you-ic tone-graphite"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18.5h2"/></svg></span><span class="you-row-l">Install app</span><span class="you-chev" aria-hidden="true"></span></button>
+        <div class="you-acc-body"><div class="you-acc-in">
+    <div class="admin-card" style="margin-bottom:0">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Put SamoraOS on your home screen. It opens full screen like any other app, and on iPhone it is also what makes notifications work.</div>
+      <div id="youInstallStatus" style="font-size:12px;color:var(--text3);margin-bottom:10px">Checking…</div>
+      <button id="youInstallBtn" onclick="installSamoraApp()" style="padding:8px 14px;border-radius:2px;background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:700;cursor:pointer">Install SamoraOS</button> </div> 
+        </div></div>
+      </div>
+    </div>
+
+    <div class="you-group you-group-out">
+      <button class="you-row you-row-danger" onclick="doLogout()"><span class="you-row-l"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3a2 2 0 012 2v12a2 2 0 01-2 2h-3M10 16l-4-4 4-4M6 12h10"/></svg> Sign out</span></button>
+    </div>
+    <div class="you-foot" id="youFoot">SamoraOS</div>
+    </div>
+  </div>
 
   <!-- ── Settings ── -->
   <div class="panel" id="panel-settings">
