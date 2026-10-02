@@ -1642,6 +1642,80 @@ body[data-tab]:not([data-tab="today"]) .metric-wrap{display:none}
   .app [style*="grid-template-columns:repeat(3,1fr)"],.app [style*="grid-template-columns:repeat(4,1fr)"]{grid-template-columns:repeat(2,minmax(0,1fr))!important}
 }
 
+
+/* ══ Drop 5, 2026-10-02: scroll arrows, rail identity, You setup, fixes ═════ */
+
+/* Scroll arrows. Round glass buttons on the side that has more to show. */
+.sh-btn{position:absolute;z-index:6;transform:translateY(-50%);width:28px;height:28px;padding:0;border-radius:50%;
+  display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text);
+  background:var(--g-fill-strong);border:1px solid var(--g-line);box-shadow:0 2px 8px rgba(16,18,24,.14),0 0 0 1px rgba(255,255,255,.4) inset;
+  -webkit-backdrop-filter:var(--g-blur);backdrop-filter:var(--g-blur);transition:transform .15s var(--ease),border-color .15s var(--ease)}
+.sh-btn[hidden]{display:none}
+.sh-btn:hover{border-color:rgba(var(--c-accent-rgb),.6)}
+.sh-btn:active{transform:translateY(-50%) scale(.94)}
+[data-theme="dark"] .sh-btn{box-shadow:0 2px 10px rgba(0,0,0,.5)}
+/* Text strips fade at the edge that continues */
+.sh-mask.sh-fr{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 56px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 56px),transparent)}
+.sh-mask.sh-fl{-webkit-mask-image:linear-gradient(90deg,transparent,#000 56px);mask-image:linear-gradient(90deg,transparent,#000 56px)}
+.sh-mask.sh-fl.sh-fr{-webkit-mask-image:linear-gradient(90deg,transparent,#000 56px,#000 calc(100% - 56px),transparent);mask-image:linear-gradient(90deg,transparent,#000 56px,#000 calc(100% - 56px),transparent)}
+/* The old chevron looked like a button and was not one; the arrows replace it */
+.metric-more{display:none!important}
+.today-sections{overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.today-sections::-webkit-scrollbar,.sxa-tabs::-webkit-scrollbar,.pdt-bar::-webkit-scrollbar,.cal-strip::-webkit-scrollbar{display:none}
+
+/* Team & access, Accounts: fields wrap rather than run off the screen */
+.acct-add-row{flex-wrap:wrap}
+.acct-add-row>input{min-width:0;flex:1 1 180px!important}
+.acct-add-row>button{flex:0 0 auto}
+.acct-pick-row>select{min-width:0}
+@media(max-width:600px){
+  .acct-add-row>input{flex-basis:100%!important}
+  .acct-add-row>button{flex:1 1 100%;height:40px}
+}
+
+/* Rail identity, desktop only */
+.rail-me{display:none}
+@media(min-width:900px){
+  .bottom-nav{padding-bottom:12px}
+  .rail-me:not([hidden]){display:flex;align-items:center;gap:10px;margin:auto 12px 0;padding:10px;border-radius:14px;cursor:pointer;
+    text-align:left;font-family:var(--font);background:transparent;border:1px solid transparent;transition:background .15s var(--ease),border-color .15s var(--ease)}
+  .rail-me:hover{background:rgba(127,127,127,.08);border-color:var(--g-line)}
+  .rail-me-av{width:34px;height:34px;flex:0 0 34px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+    font-size:12.5px;font-weight:650;letter-spacing:.02em;color:var(--c-on-accent);
+    background:linear-gradient(140deg,#F3D77A,var(--c-accent) 55%,#B8892A);box-shadow:0 0 0 2px rgba(255,255,255,.7),0 3px 8px rgba(var(--c-accent-rgb),.3)}
+  [data-theme="dark"] .rail-me-av{box-shadow:0 0 0 2px rgba(255,255,255,.08),0 3px 8px rgba(0,0,0,.4)}
+  .rail-me-id{display:flex;flex-direction:column;min-width:0;line-height:1.25}
+  .rail-me-n{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rail-me-o{font-size:11.5px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+}
+
+/* You: side column holds the profile and the setup checklist */
+.you-side{display:contents}
+.you-setup{display:none}
+@media(min-width:1100px){
+  .you-side{display:flex;flex-direction:column;gap:16px;position:sticky;top:24px;align-self:start}
+  .you-wrap>.you-side>.you-hero{position:static}
+  .you-setup:not([hidden]){display:block;border-radius:18px;padding:16px 14px 10px;background:var(--g-fill);border:1px solid var(--g-edge);
+    box-shadow:var(--g-shadow);-webkit-backdrop-filter:var(--g-blur);backdrop-filter:var(--g-blur)}
+  .you-setup-head{display:flex;align-items:center;gap:12px;padding:0 4px 10px}
+  .you-setup-ring{flex:none;color:var(--text)}
+  .you-setup-t{font-size:15px;font-weight:650;letter-spacing:-.01em;color:var(--text)}
+  .you-setup-s{font-size:12.5px;color:var(--text3);margin-top:1px}
+  .you-setup-list{list-style:none;margin:0;padding:0;border-top:1px solid var(--g-line)}
+  .you-setup-i{width:100%;display:flex;align-items:center;gap:10px;padding:10px 6px;background:none;border:0;border-radius:10px;cursor:pointer;
+    font-family:var(--font);font-size:13.5px;color:var(--text);text-align:left;transition:background .15s var(--ease)}
+  .you-setup-i:hover{background:rgba(127,127,127,.08)}
+  .you-setup-dot{width:20px;height:20px;flex:0 0 20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+    border:1.5px dashed var(--c-line-strong);color:#fff}
+  .you-setup-i.ok .you-setup-dot{border:0;background:var(--c-verified)}
+  .you-setup-i.ok .you-setup-l{color:var(--text2)}
+  .you-setup-i.todo .you-setup-dot{border:1.5px solid rgba(var(--c-accent-rgb),.8)}
+  .you-setup-i.todo .you-setup-l{font-weight:550}
+  .you-setup-i.wait{opacity:.55}
+  .you-setup-l{flex:1;min-width:0}
+  .you-setup-go{width:7px;height:7px;border-right:1.6px solid var(--text3);border-top:1.6px solid var(--text3);transform:rotate(45deg);margin-right:6px}
+}
+
 </style>
 <script src="/js/vendor/sortable.min.js"></script>
 </head>
@@ -1929,7 +2003,7 @@ body[data-tab]:not([data-tab="today"]) .metric-wrap{display:none}
     <div class="today-main">
     <div id="productivityBanner" style="margin-bottom:8px"></div>
     <div id="nudgeBanner" style="display:none;background:rgba(var(--c-accent-rgb),0.08);border:1px solid rgba(var(--c-accent-rgb),0.25);border-radius:var(--radius);padding:10px 14px;margin-bottom:12px"><div style="display:flex;align-items:center;justify-content:space-between"><div id="nudgeText" style="font-size:12px;color:var(--text2)"></div><button onclick="this.parentElement.parentElement.style.display='none'" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:0 0 0 8px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div></div>
-    <div style="display:flex;gap:8px;margin-bottom:8px">
+    <div class="today-sections" style="display:flex;gap:8px;margin-bottom:8px">
       <button class="today-section-btn active" id="tsb-tasks" onclick="setTodaySection('tasks')"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg> Tasks</button>
       <button class="today-section-btn" id="tsb-issues" onclick="setTodaySection('issues')"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> Issues</button>
       <button class="today-section-btn" id="tsb-wins" onclick="setTodaySection('wins')"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.8l2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 10l5.9-.8z"/></svg> Wins</button>
@@ -2343,12 +2417,12 @@ body[data-tab]:not([data-tab="today"]) .metric-wrap{display:none}
       <div class="admin-title">Rep Accounts</div>
       <div class="admin-card">
         <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Assign accounts to each rep. Coverage checks will run against these accounts only.</div>
-        <div style="display:flex;gap:8px;margin-bottom:12px">
+        <div class="acct-pick-row" style="display:flex;gap:8px;margin-bottom:12px">
           <select id="accountRepSelect" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none" onchange="loadRepAccounts()">
             <option value="">Select a rep…</option> </select> </div>
         <div id="repAccountsList" style="margin-bottom:12px"></div>
         <div id="addAccountRow" style="display:none">
-          <div style="display:flex;gap:8px;margin-bottom:6px">
+          <div class="acct-add-row" style="display:flex;gap:8px;margin-bottom:6px">
             <input id="newAccountName" placeholder="Account name (e.g. Ferrero)" style="flex:2;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none" oninput="onAccountNameInput(this.value)" onkeydown="if(event.key==='Enter')addRepAccount()"/>
             <input id="newAccountRegion" placeholder="Region (e.g. India, APAC…)" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none" onkeydown="if(event.key==='Enter')addRepAccount()"/>
             <input id="newAccountDomain" placeholder="Domain (optional)" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none" onkeydown="if(event.key==='Enter')addRepAccount()"/>
@@ -2381,6 +2455,7 @@ body[data-tab]:not([data-tab="today"]) .metric-wrap{display:none}
     <!-- You, redesigned 2026-10-02: grouped glass lists, one accordion open at a
          time, every id the app reads kept as it was. -->
     <div class="you-wrap">
+    <aside class="you-side">
     <div class="you-hero">
       <div class="you-hero-top">
         <div class="you-avatar" id="youAvatar"></div>
@@ -2393,6 +2468,8 @@ body[data-tab]:not([data-tab="today"]) .metric-wrap{display:none}
       <div class="momentum-row" id="youMomentumRow"></div>
     </div>
 
+    <div class="you-setup" id="youSetup" hidden></div>
+    </aside>
     <div class="you-main">
     <div id="youAdminBlock" hidden>
       <div class="you-sec">Admin</div>
@@ -2798,6 +2875,10 @@ body[data-tab]:not([data-tab="today"]) .metric-wrap{display:none}
     <button class="nav-btn" onclick="switchTab('you')" id="nav-you">
       <span class="nav-icon">◎</span>
       <span class="nav-label">You</span> </button> </div>
+  <button class="rail-me" id="railMe" onclick="switchTab('you')" hidden aria-label="Your profile and settings">
+    <span class="rail-me-av" id="railMeAv"></span>
+    <span class="rail-me-id"><span class="rail-me-n" id="railMeName"></span><span class="rail-me-o" id="railMeOrg"></span></span>
+  </button>
 </div>
 </div>
 <script src="/js/app.js"></script>
