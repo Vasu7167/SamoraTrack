@@ -3,7 +3,7 @@ let SB_KEY = localStorage.getItem('dt-sb-key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6I
 let API_KEY = localStorage.getItem('dt-api-key') || '';
 var _userHabits = null;
 // Cache buster — update this string on every deploy to purge stale service worker cache
-var APP_VERSION = '20261002-03';
+var APP_VERSION = '20261002-04';
 (function() {
   if (localStorage.getItem('app-sw-version') !== APP_VERSION && 'serviceWorker' in navigator) {
     navigator.serviceWorker.getRegistrations().then(function(regs) {
@@ -15279,6 +15279,8 @@ function joinOrgCancel() {
       if (e.action === 'product_removed') return 'removed the product ' + h(x.product || '');
       if (e.action === 'icp_updated') return 'updated the ideal customer profile' + (x.fields && x.fields.indexOf('target_stakeholders') !== -1 ? ', including target designations' : '');
       if (e.action === 'test_data_removed') return 'removed test data for ' + t + (x.summary ? ': ' + h(x.summary) : '');
+      if (e.action === 'accounts_exported') return 'downloaded the account list (' + (x.count || 0) + ' accounts)';
+      if (e.action === 'accounts_imported') return 'uploaded accounts: ' + (x.added || 0) + ' added, ' + (x.updated || 0) + ' updated' + (x.failed ? ', ' + x.failed + ' could not be saved' : '');
       if (x.role) parts.push('role ' + h(ROLE_LABEL[x.role.from] || x.role.from || 'none') + ' to ' + h(ROLE_LABEL[x.role.to] || x.role.to));
       if (x.admin) parts.push(x.admin.to ? 'turned admin on' : 'turned admin off');
       if (x.manager) parts.push('manager ' + h(x.manager.from || 'none') + ' to ' + h(x.manager.to || 'none'));
@@ -15769,4 +15771,130 @@ function _youGo(acc) {
     var r = el.getBoundingClientRect();
     try { window.scrollBy({ top: r.top - 84, behavior: 'smooth' }); } catch (e) { window.scrollBy(0, r.top - 84); }
   }
+}
+
+// ══ Team & access, Accounts: bulk download and upload (2026-10-02) ════════════
+// Download every account as a CSV, edit it in Excel or Sheets, upload it back.
+// Rows with an Account ID update that account, rows without one are added.
+// The server returns a plan first; nothing changes until Apply is pressed.
+var _acctBulk = null;
+var ACCT_BULK_COLS = ['Account ID', 'Account name', 'Domain', 'Region', 'Owner email', 'SDR email'];
+
+function _acctCsvCell(v) {
+  var s = String(v == null ? '' : v);
+  // Spreadsheet apps run cells that start with these as formulas
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+async function _acctBulkCall(body) {
+  var r = await fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify(body) });
+  var d = {}; try { d = await r.json(); } catch (e) {}
+  if (!r.ok && d.ok === undefined) d.ok = false;
+  return d;
+}
+async function acctBulkDownload(btn) {
+  if (btn) { btn.disabled = true; btn.dataset.t = btn.innerHTML; btn.innerHTML = 'Preparing…'; }
+  try {
+    var d = await _acctBulkCall({ action: 'org_admin_accounts_export' });
+    if (!d.ok) { showToast(d.error || 'Could not download accounts'); return; }
+    var lines = [ACCT_BULK_COLS.join(',')].concat((d.rows || []).map(function (a) {
+      return [a.id, a.name, a.domain, a.region, a.owner_email, a.sdr_email].map(_acctCsvCell).join(',');
+    }));
+    var blob = new Blob(['﻿' + lines.join('\r\n') + '\r\n'], { type: 'text/csv;charset=utf-8' });
+    var org = ((profile && (profile.org_name || profile.org_code)) || 'accounts').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = org + '-accounts-' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+    showToast((d.rows || []).length ? 'Downloaded ' + d.rows.length + ' account' + (d.rows.length === 1 ? '' : 's') : 'Downloaded an empty file with the columns to fill in');
+  } catch (e) { showToast('Download failed: ' + e.message); }
+  finally { if (btn) { btn.disabled = false; btn.innerHTML = btn.dataset.t; } }
+}
+function acctBulkUpload() {
+  var inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = '.csv,text/csv';
+  inp.onchange = function () { if (inp.files[0]) _acctBulkRead(inp.files[0]); };
+  inp.click();
+}
+async function _acctBulkRead(file) {
+  try {
+    var text = (await file.text()).replace(/^﻿/, '');
+    var rows = _parseCsv(text);
+    if (rows.length < 2) { showToast('The file has no rows under the headings'); return; }
+    var head = rows[0].map(function (h) { return String(h || '').toLowerCase().replace(/[^a-z]/g, ''); });
+    var col = function (names) { for (var i = 0; i < names.length; i++) { var k = head.indexOf(names[i]); if (k !== -1) return k; } return -1; };
+    var map = {
+      id: col(['accountid', 'id']),
+      name: col(['accountname', 'account', 'company', 'companyname', 'name']),
+      domain: col(['domain', 'website', 'url']),
+      region: col(['region', 'country', 'territory']),
+      owner: col(['owneremail', 'owner', 'accountowner', 'aeemail', 'repemail']),
+      sdr: col(['sdremail', 'sdr'])
+    };
+    if (map.name === -1 && map.id === -1) { showToast('Could not find an Account name column. Download the file first to get the headings.'); return; }
+    var body = rows.slice(1).map(function (r, i) {
+      var g = function (k) { return k >= 0 ? String(r[k] || '').trim().replace(/^'(?=[=+\-@])/, '') : ''; };
+      return { line: i + 2, id: g(map.id), name: g(map.name), domain: g(map.domain), region: g(map.region), owner_email: g(map.owner), sdr_email: g(map.sdr) };
+    }).filter(function (r) { return r.id || r.name || r.domain || r.owner_email; });
+    if (!body.length) { showToast('The file has no rows under the headings'); return; }
+    _acctBulk = { file: file.name, rows: body };
+    _acctBulkModal({ loading: true });
+    var d = await _acctBulkCall({ action: 'org_admin_accounts_import', rows: body });
+    if (!d.ok) { _acctBulkModal({ error: d.error || 'Could not read the file' }); return; }
+    _acctBulk.plan = d;
+    _acctBulkModal({ plan: d });
+  } catch (e) { showToast('Could not read the file: ' + e.message); }
+}
+function _acctBulkClose() { var m = document.getElementById('acctBulkModal'); if (m) m.remove(); }
+function _acctBulkModal(state) {
+  var m = document.getElementById('acctBulkModal');
+  if (!m) {
+    m = document.createElement('div'); m.id = 'acctBulkModal'; m.className = 'bulk-modal';
+    m.addEventListener('click', function (e) { if (e.target === m) _acctBulkClose(); });
+    document.body.appendChild(m);
+  }
+  var title = '<div class="bulk-h"><div><div class="bulk-t">Upload accounts</div><div class="bulk-s">' + esc((_acctBulk && _acctBulk.file) || '') + '</div></div>' +
+    '<button class="bulk-x" onclick="_acctBulkClose()" aria-label="Close">×</button></div>';
+  if (state.loading) { m.innerHTML = '<div class="bulk-card">' + title + '<div class="bulk-wait">Checking ' + _acctBulk.rows.length + ' row' + (_acctBulk.rows.length === 1 ? '' : 's') + ' against your team and accounts…</div></div>'; return; }
+  if (state.error) { m.innerHTML = '<div class="bulk-card">' + title + '<div class="bulk-err">' + esc(state.error) + '</div><div class="bulk-f"><button class="g-btn" onclick="_acctBulkClose()">Close</button></div></div>'; return; }
+  if (state.done) {
+    var d = state.done;
+    var msg = (d.added ? d.added + ' added' : '') + (d.added && d.updated ? ', ' : '') + (d.updated ? d.updated + ' updated' : '');
+    m.innerHTML = '<div class="bulk-card">' + title +
+      '<div class="bulk-ok"><span class="bulk-okdot"></span>' + esc(msg || 'Nothing needed changing') + '</div>' +
+      ((d.failed || []).length ? '<div class="bulk-err">' + d.failed.length + ' row' + (d.failed.length === 1 ? '' : 's') + ' could not be saved: ' + d.failed.slice(0, 5).map(function (f) { return 'line ' + f.line + ' (' + esc(f.name || '') + ')'; }).join(', ') + '</div>' : '') +
+      '<div class="bulk-f"><button class="g-btn" onclick="_acctBulkClose()">Done</button></div></div>';
+    return;
+  }
+  var p = state.plan, s = p.summary || {};
+  var chip = function (n, label, cls) { return '<span class="bulk-chip ' + cls + '"><b>' + n + '</b> ' + label + '</span>'; };
+  var rows = (p.plan || []).filter(function (r) { return r.status !== 'same'; });
+  var line = function (r) {
+    var what;
+    if (r.status === 'add') what = 'New, owner ' + esc(r.owner_email || '') + (r.owner_is_you ? ' (you, no owner in the file)' : '');
+    else if (r.status === 'update') what = r.changes.map(function (c) { return esc(c.field) + ': ' + (c.from ? esc(c.from) : '<i>blank</i>') + ' to ' + esc(c.to); }).join('; ');
+    else what = esc(r.reason || '');
+    var tag = r.status === 'add' ? 'Add' : r.status === 'update' ? 'Update' : 'Skip';
+    return '<li class="bulk-r ' + r.status + '"><span class="bulk-tag">' + tag + '</span><span class="bulk-rn"><b>' + esc(r.name || '(no name)') + '</b><small>Line ' + r.line + ' · ' + what + '</small></span></li>';
+  };
+  var todo = (s.add || 0) + (s.update || 0);
+  m.innerHTML = '<div class="bulk-card">' + title +
+    '<div class="bulk-chips">' + chip(s.add || 0, 'to add', 'add') + chip(s.update || 0, 'to update', 'update') + chip(s.same || 0, 'unchanged', 'same') + chip(s.skip || 0, 'with problems', 'skip') + '</div>' +
+    (rows.length ? '<ul class="bulk-list">' + rows.map(line).join('') + '</ul>' : '<div class="bulk-wait">Everything in the file already matches SamoraOS.</div>') +
+    (p.total > (p.plan || []).length ? '<div class="bulk-note">Showing the first ' + p.plan.length + ' of ' + p.total + ' rows.</div>' : '') +
+    '<div class="bulk-note">Blank cells leave a value as it is. Rows with problems are left out; fix them in the file and upload again.</div>' +
+    '<div class="bulk-f"><button class="g-btn" onclick="_acctBulkClose()">Cancel</button>' +
+    '<button class="g-btn bulk-go" id="acctBulkGo" ' + (todo ? '' : 'disabled') + ' onclick="_acctBulkApply()">' +
+    (todo ? (s.add ? 'Add ' + s.add : '') + (s.add && s.update ? ' and ' : '') + (s.update ? 'update ' + s.update : '') : 'Nothing to change') + '</button></div></div>';
+}
+async function _acctBulkApply() {
+  var b = document.getElementById('acctBulkGo'); if (b) { b.disabled = true; b.textContent = 'Saving…'; }
+  try {
+    var d = await _acctBulkCall({ action: 'org_admin_accounts_import', rows: _acctBulk.rows, apply: true });
+    if (!d.ok) { _acctBulkModal({ error: d.error || 'Could not save' }); return; }
+    _acctBulkModal({ done: d });
+    try { if (document.getElementById('accountRepSelect') && document.getElementById('accountRepSelect').value) loadRepAccounts(); } catch (e) {}
+    try { loadMyAccounts(); } catch (e) {}
+  } catch (e) { _acctBulkModal({ error: e.message }); }
 }
