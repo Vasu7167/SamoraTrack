@@ -3,7 +3,7 @@ let SB_KEY = localStorage.getItem('dt-sb-key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6I
 let API_KEY = localStorage.getItem('dt-api-key') || '';
 var _userHabits = null;
 // Cache buster — update this string on every deploy to purge stale service worker cache
-var APP_VERSION = '20261002-01';
+var APP_VERSION = '20261002-02';
 (function() {
   if (localStorage.getItem('app-sw-version') !== APP_VERSION && 'serviceWorker' in navigator) {
     navigator.serviceWorker.getRegistrations().then(function(regs) {
@@ -306,7 +306,7 @@ async function doAuth() {
       if (d.error || d.error_description) { showMsg(d.error_description || d.error, true); btn.disabled=false; btn.textContent='Create account'; return; }
       if (!d.access_token) { showMsg('Check your email to confirm your account, then sign in.', false); btn.disabled=false; btn.textContent='Create account'; return; }
       const signupUser = d.user || d;
-      if (!signupUser?.id) { showMsg('Signup failed — please try again.', true); btn.disabled=false; btn.textContent='Create account'; return; }
+      if (!signupUser?.id) { showMsg('Signup failed, please try again.', true); btn.disabled=false; btn.textContent='Create account'; return; }
       currentUser = { id: signupUser.id, email: signupUser.email || email, token: d.access_token, refresh_token: d.refresh_token };
       localStorage.setItem('dt-user', JSON.stringify(currentUser));
       await setupProfile(orgCode);
@@ -318,7 +318,7 @@ async function doAuth() {
       const d = await r.json();
       if (d.error || d.error_description) { showMsg(d.error_description || d.msg || 'Incorrect email or password.', true); btn.disabled=false; btn.textContent='Sign in'; return; }
       const signinUser = d.user || d;
-      if (!signinUser?.id) { showMsg('Sign in failed — please try again.', true); btn.disabled=false; btn.textContent='Sign in'; return; }
+      if (!signinUser?.id) { showMsg('Sign in failed, please try again.', true); btn.disabled=false; btn.textContent='Sign in'; return; }
       currentUser = { id: signinUser.id, email: signinUser.email || email, token: d.access_token, refresh_token: d.refresh_token };
       // Created from the admin panel with a temporary password: they choose
       // their own before anything else opens. Remembered locally so a reload
@@ -801,7 +801,7 @@ function launchApp() {
   // Sync indicator
   var syncBadge = document.createElement('div');
   syncBadge.id = 'global-sync-badge';
-  syncBadge.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border2);border-radius:3px;padding:4px 12px;font-size:11px;color:var(--text3);font-family:var(--sans);z-index:9998;opacity:0;transition:opacity 0.3s;pointer-events:none';
+  syncBadge.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-md);padding:4px 12px;font-size:11px;color:var(--text3);font-family:var(--sans);z-index:9998;opacity:0;transition:opacity 0.3s;pointer-events:none';
   syncBadge.textContent = '↻ Syncing…';
   document.body.appendChild(syncBadge);
   requestAnimationFrame(function(){ syncBadge.style.opacity='1'; });
@@ -938,7 +938,7 @@ function render() {
 function renderList(key, items) {
   const el = document.getElementById('list-' + key);
   if (!el) return;
-  const cfg = { tasks:['<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg>','No tasks yet'], issues:['<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg>','No issues logged'], wins:['<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.8l2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 10l5.9-.8z"/></svg>','No wins yet'], misses:['○','No misses — all clear!'] };
+  const cfg = { tasks:['<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg>','No tasks yet'], issues:['<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg>','No issues logged'], wins:['<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.8l2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 10l5.9-.8z"/></svg>','No wins yet'], misses:['○','No misses, all clear!'] };
   if (!items?.length) { el.innerHTML = `<div class="empty"><div class="empty-icon">${cfg[key][0]}</div>${cfg[key][1]}</div>`; return; }
   el.innerHTML = items.map((item, i) => {
     if (key === 'tasks') {
@@ -957,7 +957,7 @@ function renderList(key, items) {
       const priorityBadge = isPriority ? '<span class="priority-badge">Priority</span>' : '';
       const delegatedBadge = isDelegated ? `<span class="delegated-badge">↓ from ${item.delegatedBy.split('@')[0]}</span>` : '';
       const winTs = item.completedAt ? `<div class="item-meta">${item.fromTask?'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg> completed · ':isDelegated?'↓ delegated · ':''}${item.completedAt}</div>` : (item.fromTask ? '<div class="item-meta"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg> from completed task</div>' : '');
-      const noteHtml = item.completionNote ? `<div style="font-size:11px;color:var(--text2);background:var(--surface2);border-radius:2px;padding:4px 8px;margin-top:4px;font-style:italic"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5z"/></svg> ${esc(item.completionNote)}</div>` : '';
+      const noteHtml = item.completionNote ? `<div style="font-size:11px;color:var(--text2);background:var(--surface2);border-radius:var(--r-sm);padding:4px 8px;margin-top:4px;font-style:italic"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5z"/></svg> ${esc(item.completionNote)}</div>` : '';
       return `<div class="item win-item ${extraClass}"><div class="idot dg"></div><div style="flex:1"><div class="item-text">${esc(displayText)} ${priorityBadge}${delegatedBadge}</div>${winTs}${noteHtml}</div><button class="idel" onclick="del('wins',${i})"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>`;
     }
     if (key === 'misses') {
@@ -974,7 +974,7 @@ function renderList(key, items) {
       '</div></div>';
     }
     const issueTs = item.addedAt ? `<div class="item-meta">${item.anonymous?'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 10.5V7.5a5.5 5.5 0 0111 0v3M5 10.5h14v10H5z"/></svg> Anonymous · ':''}Logged ${item.addedAt}</div>` : (item.anonymous ? '<div class="item-meta"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 10.5V7.5a5.5 5.5 0 0111 0v3M5 10.5h14v10H5z"/></svg> Anonymous</div>' : '');
-    const anonBadge = item.anonymous ? '<span style="font-size:11px;background:rgba(var(--c-accent-rgb),0.15);color:var(--gold);border-radius:2px;padding:1px 6px;margin-left:6px;font-weight:600">Anon</span>' : '';
+    const anonBadge = item.anonymous ? '<span style="font-size:11px;background:rgba(var(--c-accent-rgb),0.15);color:var(--gold);border-radius:var(--r-sm);padding:1px 6px;margin-left:6px;font-weight:600">Anon</span>' : '';
     return `<div class="item"><div class="idot dc"></div><div style="flex:1"><div class="item-text">${esc(item.text)}${anonBadge}</div>${issueTs}</div><button class="idel" onclick="del('issues',${i})"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>`;
   }).join('');
 }
@@ -1318,7 +1318,7 @@ function renderToday() {
     const secEl = document.getElementById(s.secId);
     if (secEl) secEl.style.display = (todayActiveSection === s.key) ? '' : 'none';
     if (todayActiveSection === s.key && !items.length && listEl) {
-      const msg = { tasks:'No tasks yet — add what you need to get done today', issues:'No issues logged today', wins:'No wins yet — complete a task or log one', misses: viewDate === todayKey() ? 'No misses yet' : 'No misses on this date' };
+      const msg = { tasks:'No tasks yet, add what you need to get done today', issues:'No issues logged today', wins:'No wins yet, complete a task or log one', misses: viewDate === todayKey() ? 'No misses yet' : 'No misses on this date' };
       listEl.innerHTML = '<div class="empty-msg" style="padding:20px 0;color:var(--text3);font-size:14px;text-align:center">' + msg[s.key] + '</div>';
     }
   });
@@ -1360,11 +1360,11 @@ function renderListHTML(key, items) {
       const verifyLabels = { gmail_sent: '\u2709 Verified \u00b7 ' + (item.verifiedCount ? item.verifiedCount + ' sent' : 'sent mail'), meeting_transcript: '\ud83c\udf99 Verified \u00b7 transcript', post_meeting_followup: '\ud83d\udcc5 Post-Meeting-FollowUp-Sent', notetaker_email: '\ud83c\udf99 Verified \u00b7 ' + (notetakerNames[item.verifiedSource] ? notetakerNames[item.verifiedSource] + ' notes' : 'meeting notes') };
       // Partial bulk-send progress (e.g. 3/15 sent): shown while the task stays open.
       const progressBadge = (!item.done && item.sendProgress)
-        ? '<span style="font-size:11px;font-weight:700;color:var(--amber);background:rgba(var(--c-accent-rgb),0.12);border-radius:2px;padding:1px 6px;margin-left:6px;white-space:nowrap">\u2709 ' + esc(item.sendProgress) + ' sent</span>'
+        ? '<span style="font-size:11px;font-weight:700;color:var(--amber);background:rgba(var(--c-accent-rgb),0.12);border-radius:var(--r-sm);padding:1px 6px;margin-left:6px;white-space:nowrap">\u2709 ' + esc(item.sendProgress) + ' sent</span>'
         : '';
       const verifyBadge = (item.autoCompleted && verifyLabels[item.verifiedVia])
-        ? '<span style="font-size:11px;font-weight:700;color:var(--green);background:rgba(74,140,92,0.12);border-radius:2px;padding:1px 6px;margin-left:6px;white-space:nowrap">' + verifyLabels[item.verifiedVia] + '</span>'
-        : (item.meetingFlag ? '<span style="font-size:11px;font-weight:700;color:var(--amber);background:rgba(var(--c-accent-rgb),0.12);border-radius:2px;padding:1px 6px;margin-left:6px;white-space:nowrap">\u26a0 Meeting ' + item.meetingFlag + '</span>' : progressBadge);
+        ? '<span style="font-size:11px;font-weight:700;color:var(--green);background:rgba(74,140,92,0.12);border-radius:var(--r-sm);padding:1px 6px;margin-left:6px;white-space:nowrap">' + verifyLabels[item.verifiedVia] + '</span>'
+        : (item.meetingFlag ? '<span style="font-size:11px;font-weight:700;color:var(--amber);background:rgba(var(--c-accent-rgb),0.12);border-radius:var(--r-sm);padding:1px 6px;margin-left:6px;white-space:nowrap">\u26a0 Meeting ' + item.meetingFlag + '</span>' : progressBadge);
       const carryMeta = item.carriedFrom ? '<div class="item-meta" style="color:var(--gold)">↗ Carried from ' + fmtDate(item.carriedFrom) + (item.carryReason?' · '+item.carryReason:'') + '</div>' : (item.carriedTo ? '<div class="item-meta" style="color:var(--text3)">' + (item.rescheduled ? '⟳ Rescheduled to ' : '⟶ Moved to ') + (item.carriedToLabel||item.carriedTo) + '</div>' : '');
       // Alt-contact CTA — surfaced when an OOO reply named someone else to
       // reach in the meantime (see extractAltContact in process_ooo_mails).
@@ -1373,8 +1373,8 @@ function renderListHTML(key, items) {
       const altContactCta = (item.altContactEmail || item.altContactPhone)
         ? '<div class="item-meta" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:2px">' +
             '<span style="color:var(--text3)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6.5h6l2 2.5h9v11h-17z"/></svg> Alt contact while OOO' + (item.altContactSnippet ? ': "' + esc(item.altContactSnippet) + '"' : '') + '</span>' +
-            (item.altContactEmail ? '<a href="mailto:' + esc(item.altContactEmail) + '" style="font-size:11px;font-weight:600;color:var(--gold);text-decoration:none;border:1px solid var(--border2);border-radius:2px;padding:1px 7px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> ' + esc(item.altContactEmail) + '</a>' : '') +
-            (item.altContactPhone ? '<a href="tel:' + esc(item.altContactPhone.replace(/[^\d+]/g,'')) + '" style="font-size:11px;font-weight:600;color:var(--gold);text-decoration:none;border:1px solid var(--border2);border-radius:2px;padding:1px 7px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3.5H4.5A1.5 1.5 0 003 5c0 8.8 7.2 16 16 16a1.5 1.5 0 001.5-1.5V17l-4.5-2-2.5 2.5A15 15 0 018.5 11L11 8.5z"/></svg> ' + esc(item.altContactPhone) + '</a>' : '') +
+            (item.altContactEmail ? '<a href="mailto:' + esc(item.altContactEmail) + '" style="font-size:11px;font-weight:600;color:var(--gold);text-decoration:none;border:1px solid var(--border2);border-radius:var(--r-sm);padding:1px 7px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> ' + esc(item.altContactEmail) + '</a>' : '') +
+            (item.altContactPhone ? '<a href="tel:' + esc(item.altContactPhone.replace(/[^\d+]/g,'')) + '" style="font-size:11px;font-weight:600;color:var(--gold);text-decoration:none;border:1px solid var(--border2);border-radius:var(--r-sm);padding:1px 7px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3.5H4.5A1.5 1.5 0 003 5c0 8.8 7.2 16 16 16a1.5 1.5 0 001.5-1.5V17l-4.5-2-2.5 2.5A15 15 0 018.5 11L11 8.5z"/></svg> ' + esc(item.altContactPhone) + '</a>' : '') +
           '</div>'
         : '';
       const tsMeta = (item.addedAt ? '<div class="item-meta">' + (item.delegatedBy?'Delegated ':'Added ') + item.addedAt + (item.completedAt?' · Completed '+item.completedAt:'') + '</div>' : '') + carryMeta + altContactCta;
@@ -1409,7 +1409,7 @@ function renderListHTML(key, items) {
       '</div></div>';
     }
     const issueTs = item.addedAt ? '<div class="item-meta">' + (item.anonymous?'\uD83D\uDD12 Anonymous · ':'') + 'Logged ' + item.addedAt + '</div>' : (item.anonymous ? '<div class="item-meta">\uD83D\uDD12 Anonymous</div>' : '');
-    const anonBadge = item.anonymous ? '<span style="font-size:11px;background:rgba(var(--c-accent-rgb),0.15);color:var(--gold);border-radius:2px;padding:1px 6px;margin-left:6px;font-weight:600">Anon</span>' : '';
+    const anonBadge = item.anonymous ? '<span style="font-size:11px;background:rgba(var(--c-accent-rgb),0.15);color:var(--gold);border-radius:var(--r-sm);padding:1px 6px;margin-left:6px;font-weight:600">Anon</span>' : '';
     return '<div class="item"><div class="idot dc"></div><div style="flex:1"><div class="item-text">' + esc(item.text) + anonBadge + '</div>' + issueTs + '</div><button class="idel" onclick="delFromToday(\'issues\',' + i + ')"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>';
   }).join('');
 }
@@ -1530,7 +1530,7 @@ async function loadSamSignals() {
     const rawAnalysis = data.analysis;
     if (!signals || !signals.length) {
       if (rawAnalysis?.summary) { feed.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;font-size:14px;color:var(--text2);line-height:1.7"><div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> SAM Analysis</div>' + esc(rawAnalysis.summary) + '</div>'; }
-      else { feed.innerHTML = '<div style="text-align:center;padding:32px 20px;color:var(--text3);font-size:13px">No strong signals found — pipeline looks healthy <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg></div>'; }
+      else { feed.innerHTML = '<div style="text-align:center;padding:32px 20px;color:var(--text3);font-size:13px">No strong signals found, pipeline looks healthy <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg></div>'; }
       return;
     }
     renderSignalCards(signals);
@@ -1552,7 +1552,7 @@ function _applyDemoChip() {
   chip.id = 'demoChip';
   chip.title = 'This workspace runs on simulated activity for demonstrations';
   chip.textContent = 'Demo workspace';
-  chip.style.cssText = 'font-size:11px;font-weight:600;letter-spacing:.02em;color:var(--gold);background:rgba(var(--c-accent-rgb),0.12);border:1px solid rgba(var(--c-accent-rgb),0.35);border-radius:3px;padding:3px 10px';
+  chip.style.cssText = 'font-size:11px;font-weight:600;letter-spacing:.02em;color:var(--gold);background:rgba(var(--c-accent-rgb),0.12);border:1px solid rgba(var(--c-accent-rgb),0.35);border-radius:var(--r-md);padding:3px 10px';
   org.parentNode.insertBefore(chip, org.nextSibling);
 }
 
@@ -1660,10 +1660,10 @@ async function syncCalendarTasks(force) {
     if (row && status) {
       row.style.display = 'block';
       var btnsHtml = newTasks.map(function(t, i) {
-        return '<button data-cal-idx="'+i+'" class="cal-add-btn" style="margin:0 3px;padding:2px 7px;border-radius:3px;background:rgba(var(--c-accent-rgb),0.15);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;cursor:pointer">+'+esc(t.title.slice(0,25))+'</button>';
+        return '<button data-cal-idx="'+i+'" class="cal-add-btn" style="margin:0 3px;padding:2px 7px;border-radius:var(--r-md);background:rgba(var(--c-accent-rgb),0.15);border:1px solid var(--border2);color:var(--gold);font-family:var(--sans);font-size:11px;cursor:pointer">+'+esc(t.title.slice(0,25))+'</button>';
       }).join('');
-      status.innerHTML = '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4"/></svg> ' + newTasks.length + ' calendar event' + (newTasks.length!==1?'s':'') + ' today — ' + btnsHtml +
-        '<button id="calAddAllBtn" style="margin-left:6px;padding:2px 8px;border-radius:3px;background:var(--gold);border:none;color:var(--c-canvas);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Add all</button>';
+      status.innerHTML = '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4"/></svg> ' + newTasks.length + ' calendar event' + (newTasks.length!==1?'s':'') + ' today, ' + btnsHtml +
+        '<button id="calAddAllBtn" style="margin-left:6px;padding:2px 8px;border-radius:var(--r-md);background:var(--gold);border:none;color:var(--c-canvas);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Add all</button>';
       // Wire up listeners after HTML is inserted — no inline onclick with embedded data
       status.querySelectorAll('.cal-add-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
@@ -1873,12 +1873,12 @@ async function renderConnectorKeys() {
         var used = k.last_used_at
           ? 'last used ' + _relDays(k.last_used_at)
           : 'never used';
-        return '<div style="display:flex;align-items:center;gap:8px;padding:7px 8px;background:var(--bg);border:1px solid var(--border2);border-radius:2px;margin-bottom:4px">' +
+        return '<div style="display:flex;align-items:center;gap:8px;padding:7px 8px;background:var(--bg);border:1px solid var(--border2);border-radius:var(--r-sm);margin-bottom:4px">' +
           '<div style="flex:1;min-width:0">' +
             '<div style="font-size:11px;font-family:monospace;color:var(--text2)">' + esc(k.key_prefix) + '…</div>' +
             '<div style="font-size:11px;color:var(--text3)">' + esc(k.label || 'Key') + ' · ' + used + '</div>' +
           '</div>' +
-          '<button onclick="revokeConnectorKey(\'' + k.id + '\')" style="background:none;border:1px solid var(--border2);border-radius:2px;color:var(--text3);font-size:11px;cursor:pointer;padding:3px 8px;font-family:var(--sans)">Revoke</button>' +
+          '<button onclick="revokeConnectorKey(\'' + k.id + '\')" style="background:none;border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text3);font-size:11px;cursor:pointer;padding:3px 8px;font-family:var(--sans)">Revoke</button>' +
         '</div>';
       }).join('');
   } catch(e) { box.innerHTML = ''; }
@@ -1918,12 +1918,12 @@ function showClaudeInstallCmd(platform) {
   var step2  = document.getElementById('claudeInstallStep2');
   if (!panel) return;
   if (platform === 'mac') {
- lbl.textContent = 'Mac — paste this in Terminal (no file download, no security warning)';
+ lbl.textContent = 'Mac, paste this in Terminal (no file download, no security warning)';
     step1.innerHTML   = 'Step 1: Press <strong>Cmd + Space</strong> → type <strong>Terminal</strong> → press Enter';
     _currentInstallCmd = "python3 -c \"import json,os; p=os.path.expanduser('~/Library/Application Support/Claude/claude_desktop_config.json'); c=json.load(open(p)) if os.path.exists(p) else {}; c.setdefault('mcpServers',{})['samoratrack']={'url':'" + mcpUrl + "'}; json.dump(c,open(p,'w'),indent=2); print('Done! Restart Claude Desktop.')\"";
     step2.innerHTML   = 'Step 2: Paste the command above → press <strong>Enter</strong><br>Step 3: Quit Claude Desktop (Cmd+Q) → reopen → look for <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15a3 3 0 100-6 3 3 0 000 6zM19.2 14.4a1.6 1.6 0 00.3 1.8l.1.1a2 2 0 01-2.8 2.8l-.1-.1a1.6 1.6 0 00-2.7 1.1v.2a2 2 0 01-4 0v-.1a1.6 1.6 0 00-2.8-1.1l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.6 1.6 0 00-1.1-2.7H3a2 2 0 010-4h.1a1.6 1.6 0 001.1-2.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.6 1.6 0 002.7-1.1V3a2 2 0 014 0v.1a1.6 1.6 0 002.7 1.1l.1-.1a2 2 0 112.8 2.8l-.1.1a1.6 1.6 0 001.1 2.7h.2a2 2 0 010 4h-.1a1.6 1.6 0 00-1.4 1.1z"/></svg> in chat';
   } else {
- lbl.textContent = 'Windows — paste this in PowerShell';
+ lbl.textContent = 'Windows, paste this in PowerShell';
     step1.innerHTML   = 'Step 1: Press <strong>Win + X</strong> → click <strong>Terminal</strong> or <strong>PowerShell</strong>';
     _currentInstallCmd = '$p="$env:APPDATA\\Claude\\claude_desktop_config.json"; if(Test-Path $p){$c=Get-Content $p|ConvertFrom-Json}else{$c=[PSCustomObject]@{}}; if(!$c.mcpServers){$c|Add-Member mcpServers([PSCustomObject]@{})}; $c.mcpServers|Add-Member samoratrack @{url="' + mcpUrl + '"} -Force; $c|ConvertTo-Json -Depth 5|Set-Content $p; Write-Host "Done! Restart Claude Desktop."';
     step2.innerHTML   = 'Step 2: Paste the command → press <strong>Enter</strong><br>Step 3: Close and reopen Claude Desktop → look for <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15a3 3 0 100-6 3 3 0 000 6zM19.2 14.4a1.6 1.6 0 00.3 1.8l.1.1a2 2 0 01-2.8 2.8l-.1-.1a1.6 1.6 0 00-2.7 1.1v.2a2 2 0 01-4 0v-.1a1.6 1.6 0 00-2.8-1.1l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.6 1.6 0 00-1.1-2.7H3a2 2 0 010-4h.1a1.6 1.6 0 001.1-2.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.6 1.6 0 002.7-1.1V3a2 2 0 014 0v.1a1.6 1.6 0 002.7 1.1l.1-.1a2 2 0 112.8 2.8l-.1.1a1.6 1.6 0 001.1 2.7h.2a2 2 0 010 4h-.1a1.6 1.6 0 00-1.4 1.1z"/></svg> in chat';
@@ -2386,7 +2386,7 @@ async function sendTestPush() {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
  body:JSON.stringify({ action:'send_push', to_self:true, title:'SamoraOS', body:'Notifications are working.', url:'/' }) });
     var d = await r.json();
-    showToast(d.ok ? 'Test sent — check your notifications' : 'Test failed: ' + (d.error||''));
+    showToast(d.ok ? 'Test sent, check your notifications' : 'Test failed: ' + (d.error||''));
   } catch(e) { showToast('Test failed'); }
 }
 
@@ -2491,7 +2491,7 @@ function renderMarketSignalCard(s) {
   return '<div style="border-left:3px solid '+cfg.color+';padding:8px 10px;margin-bottom:6px;background:rgba(0,0,0,0.04);border-radius:0 6px 6px 0">' +
     '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap">' +
       (acctName ? '<span style="font-size:11px;font-weight:600;color:var(--text)">'+esc(acctName)+'</span><span style="font-size:11px;color:var(--text3)">·</span>' : '') +
-      '<span style="font-size:11px;padding:1px 7px;border-radius:3px;background:'+cfg.color+'20;color:'+cfg.color+';font-weight:600">'+cfg.icon+' '+cfg.label+'</span>' +
+      '<span style="font-size:11px;padding:1px 7px;border-radius:var(--r-md);background:'+cfg.color+'20;color:'+cfg.color+';font-weight:600">'+cfg.icon+' '+cfg.label+'</span>' +
       (s.confidence >= 80 ? '<span style="font-size:11px;color:var(--green)">High confidence</span>' : '') +
     '</div>' +
     '<div style="font-size:12px;color:var(--text);line-height:1.5">'+esc(headline.slice(0,160))+'</div>' +
@@ -2613,10 +2613,10 @@ function renderProductivityBanner(tasks) {
   const weekScore = calcWeekScore(weekDates.filter(function(d){return d.score!==null;}).map(function(d){return {date:d.date,score:d.score};}));
   let nudge = '';
   if (pending > 0) {
-    if (hour < 12) nudge = pending+' task'+(pending>1?'s':'')+' open — finish by noon for a perfect score';
-    else if (hour < 15) nudge = pending+' task'+(pending>1?'s':'')+' open — close them before 3pm';
-    else if (hour < 18) nudge = pending+' task'+(pending>1?'s':'')+' remaining — finish before 6pm';
-    else nudge = pending+' task'+(pending>1?'s':'')+' still open — complete them now';
+    if (hour < 12) nudge = pending+' task'+(pending>1?'s':'')+' open, finish by noon for a perfect score';
+    else if (hour < 15) nudge = pending+' task'+(pending>1?'s':'')+' open, close them before 3pm';
+    else if (hour < 18) nudge = pending+' task'+(pending>1?'s':'')+' remaining, finish before 6pm';
+    else nudge = pending+' task'+(pending>1?'s':'')+' still open, complete them now';
   } else if (tasks.length > 0) { nudge = 'All done! Great work today <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4h10v5a5 5 0 01-10 0zM7 6H4v1.5A3.5 3.5 0 007.5 11M17 6h3v1.5a3.5 3.5 0 01-3.5 3.5M9.5 20h5M12 14v6"/></svg>'; }
   banner.style.display = 'block';
   // Compact by default: one row (ring + label + mini week bars), everything
@@ -2632,14 +2632,14 @@ function renderProductivityBanner(tasks) {
       (nudge?'<span style="font-size:11px;color:var(--text3);font-style:italic">'+esc(nudge)+'</span>':'') + '</div>' +
     '</div>' +
     '<div style="display:flex;gap:3px;align-items:flex-end;flex-shrink:0;width:90px">' +
-      weekDates.map(function(d){ const h=d.score!==null?Math.max(3,Math.round((d.score/100)*16)):3; const bc=d.score!==null?scoreColor(d.score):'var(--surface2)'; const opacity=d.isToday?'1':'0.5'; return '<div style="flex:1;text-align:center"><div style="height:'+h+'px;background:'+bc+';border-radius:2px;opacity:'+opacity+'"></div></div>'; }).join('') +
+      weekDates.map(function(d){ const h=d.score!==null?Math.max(3,Math.round((d.score/100)*16)):3; const bc=d.score!==null?scoreColor(d.score):'var(--surface2)'; const opacity=d.isToday?'1':'0.5'; return '<div style="flex:1;text-align:center"><div style="height:'+h+'px;background:'+bc+';border-radius:var(--r-sm);opacity:'+opacity+'"></div></div>'; }).join('') +
     '</div>' +
     '<span style="font-size:11px;color:var(--text3);flex-shrink:0">'+_bnChev+'</span>' +
     '</div>' +
     '<div style="display:'+_bnOpen+';padding-top:8px;margin-top:6px;border-top:1px solid var(--border)">' +
       '<div style="display:flex;gap:12px;margin-bottom:6px"><div style="font-size:11px;color:var(--text3)">Completion <span style="color:var(--text2);font-weight:500">'+completion+'</span></div><div style="font-size:11px;color:var(--text3)">Rhythm <span style="color:var(--text2);font-weight:500">'+rhythm+'</span></div><div style="font-size:11px;color:var(--text3)">Week avg <span style="color:var(--text2);font-weight:500">'+weekScore+'</span></div></div>' +
       '<div style="display:flex;gap:4px;align-items:flex-end;margin-bottom:6px">' +
-        weekDates.map(function(d){ const h=d.score!==null?Math.max(4,Math.round((d.score/100)*22)):4; const bc=d.score!==null?scoreColor(d.score):'var(--surface2)'; const opacity=d.isToday?'1':'0.5'; return '<div style="flex:1;text-align:center"><div style="height:'+h+'px;background:'+bc+';border-radius:2px;opacity:'+opacity+';margin-bottom:2px"></div><div style="font-size:11px;color:'+(d.isToday?'var(--gold)':'var(--text3)')+'">'+d.label+'</div></div>'; }).join('') +
+        weekDates.map(function(d){ const h=d.score!==null?Math.max(4,Math.round((d.score/100)*22)):4; const bc=d.score!==null?scoreColor(d.score):'var(--surface2)'; const opacity=d.isToday?'1':'0.5'; return '<div style="flex:1;text-align:center"><div style="height:'+h+'px;background:'+bc+';border-radius:var(--r-sm);opacity:'+opacity+';margin-bottom:2px"></div><div style="font-size:11px;color:'+(d.isToday?'var(--gold)':'var(--text3)')+'">'+d.label+'</div></div>'; }).join('') +
       '</div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap"><div style="font-size:11px;color:var(--green)">● Before noon = 1.5×</div><div style="font-size:11px;color:var(--amber)">● Before 3pm = 1.2×</div><div style="font-size:11px;color:var(--text3)">● Before 6pm = 1×</div><div style="font-size:11px;color:var(--coral)">● After 6pm = 0.7×</div></div>' +
     '</div></div>';
@@ -2676,7 +2676,7 @@ async function runSamAccountSearch() {
     html += '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px;font-size:12px;color:var(--text3)">' +
       '<span><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> <b style="color:var(--text)">' + totalFound + '</b> emails sent</span>' +
       '<span>↩ <b style="color:' + (totalReplies>0?'var(--green)':'var(--text3)') + '">' + totalReplies + '</b> replies received</span>';
-    if (a.sentiment) html += '<span style="padding:2px 8px;border-radius:3px;background:rgba(0,0,0,0.1);color:'+sentimentColor+';font-weight:500">'+a.sentiment+'</span>';
+    if (a.sentiment) html += '<span style="padding:2px 8px;border-radius:var(--r-md);background:rgba(0,0,0,0.1);color:'+sentimentColor+';font-weight:500">'+a.sentiment+'</span>';
     html += '</div>';
 
     if (a.summary) html += '<div style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:14px;padding:12px 14px;background:var(--surface2);border-radius:var(--radius);border-left:3px solid var(--gold)"><div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> SAM Analysis</div>' + esc(a.summary) + '</div>';
@@ -2686,7 +2686,7 @@ async function runSamAccountSearch() {
       html += '<div style="margin-bottom:14px">';
       html += '<div style="font-size:11px;font-weight:600;color:var(--green);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">↩ Recent replies</div>';
       data.inboxThreads.slice(0,3).forEach(function(t) {
-        html += '<div style="background:rgba(74,140,92,0.06);border:1px solid rgba(74,140,92,0.2);border-radius:2px;padding:8px 12px;margin-bottom:6px">' +
+        html += '<div style="background:rgba(74,140,92,0.06);border:1px solid rgba(74,140,92,0.2);border-radius:var(--r-sm);padding:8px 12px;margin-bottom:6px">' +
           '<div style="font-size:12px;font-weight:500;color:var(--text)">' + esc(t.subject||'') + '</div>' +
           '<div style="font-size:11px;color:var(--text3);margin-top:2px">' + esc(t.from||'') + ' · ' + esc(t.date||'') + '</div>' +
         '</div>';
@@ -2699,7 +2699,7 @@ async function runSamAccountSearch() {
 
     // Pulled-in intelligence — same data the Intel tab shows for this account
     if (intel.length) {
-      html += '<div style="border:1px solid var(--border);border-radius:2px;overflow:hidden;margin-top:10px">';
+      html += '<div style="border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden;margin-top:10px">';
       html += '<div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em;padding:8px 12px;background:var(--surface2);border-bottom:1px solid var(--border)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> Account intelligence (' + intel.length + ' meeting' + (intel.length>1?'s':'') + ')</div>';
       intel.slice(0,5).forEach(function(row) {
         const sc = {positive:'var(--green)',neutral:'var(--text3)',negative:'var(--coral)'}[row.sentiment]||'var(--text3)';
@@ -2710,12 +2710,12 @@ async function runSamAccountSearch() {
             '<span style="font-size:11px;color:' + sc + '">' + esc(row.sentiment||'') + '</span>' +
           '</div>' +
           (row.summary ? '<div style="font-size:12px;color:var(--text2);line-height:1.5;margin-bottom:4px">' + esc(row.summary) + '</div>' : '') +
-          (signalCount > 0 ? '<div style="font-size:11px;color:var(--gold)">' + signalCount + ' signal' + (signalCount>1?'s':'') + ' extracted — see Intel tab for details</div>' : '') +
+          (signalCount > 0 ? '<div style="font-size:11px;color:var(--gold)">' + signalCount + ' signal' + (signalCount>1?'s':'') + ' extracted, see Intel tab for details</div>' : '') +
         '</div>';
       });
       html += '</div>';
     } else {
-      html += '<div style=\"font-size:11px;color:var(--text3);padding:8px 2px\">No extracted intelligence for this account yet — run ↻ Refresh in the Intel tab to scan meeting notes.</div>';
+      html += '<div style=\"font-size:11px;color:var(--text3);padding:8px 2px\">No extracted intelligence for this account yet, run ↻ Refresh in the Intel tab to scan meeting notes.</div>';
     }
 
     // Find this account in pipeline to link to deal Signals tab
@@ -2725,7 +2725,7 @@ async function runSamAccountSearch() {
       matchedDeal = allDeals.find(function(d) { return (d.account||'').toLowerCase().includes(query.toLowerCase()) || query.toLowerCase().includes((d.account||'').toLowerCase().split(' ')[0]); });
     }
     if (matchedDeal) {
-      html += '<button onclick="openDealDetail(\'' + esc(matchedDeal.id) + '\',\'' + esc(matchedDeal.account) + '\');setTimeout(function(){switchDealTab(\'signals\');},400)" style="width:100%;margin-top:10px;padding:9px;border-radius:2px;background:rgba(58,110,168,0.08);border:1px solid rgba(58,110,168,0.2);color:var(--blue);font-family:var(--sans);font-size:12px;font-weight:500;cursor:pointer;text-align:center"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM3.2 9.5h17.6M3.2 14.5h17.6M12 3a14 14 0 000 18 14 14 0 000-18z"/></svg> View market signals for ' + esc(matchedDeal.account) + ' →</button>';
+      html += '<button onclick="openDealDetail(\'' + esc(matchedDeal.id) + '\',\'' + esc(matchedDeal.account) + '\');setTimeout(function(){switchDealTab(\'signals\');},400)" style="width:100%;margin-top:10px;padding:9px;border-radius:var(--r-sm);background:rgba(58,110,168,0.08);border:1px solid rgba(58,110,168,0.2);color:var(--blue);font-family:var(--sans);font-size:12px;font-weight:500;cursor:pointer;text-align:center"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM3.2 9.5h17.6M3.2 14.5h17.6M12 3a14 14 0 000 18 14 14 0 000-18z"/></svg> View market signals for ' + esc(matchedDeal.account) + ' →</button>';
     }
 
     if (out) out.innerHTML = html;
@@ -2735,7 +2735,7 @@ function renderSamAlerts() {
   const alerts = document.getElementById('samAlerts'); if (!alerts) return;
   const d = dayData(viewDate);
   const incomplete = (d.tasks||[]).filter(t => !t.done);
-  if (incomplete.length > 0) alerts.innerHTML = '<div style="background:rgba(var(--c-accent-rgb),0.1);border:1px solid var(--border2);border-radius:var(--radius);padding:12px 16px;margin-bottom:8px;font-size:13px;color:var(--text2)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> <strong style="color:var(--gold)">'+incomplete.length+' task'+(incomplete.length>1?'s':'')+' pending today</strong> — log your progress in Today tab</div>';
+  if (incomplete.length > 0) alerts.innerHTML = '<div style="background:rgba(var(--c-accent-rgb),0.1);border:1px solid var(--border2);border-radius:var(--radius);padding:12px 16px;margin-bottom:8px;font-size:13px;color:var(--text2)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> <strong style="color:var(--gold)">'+incomplete.length+' task'+(incomplete.length>1?'s':'')+' pending today</strong>, log your progress in Today tab</div>';
   else alerts.innerHTML = '';
 }
 async function loadMyAccounts() {
@@ -2751,14 +2751,14 @@ async function loadMyAccounts() {
       var valueTag = hasValue
         ? '<span style="font-size:11px;color:var(--green);font-weight:500">$' + (r.deal_value_usd ? Math.round(r.deal_value_usd/1000)+'K' : r.deal_value) + '</span>'
         : '';
-      return '<div style="display:flex;align-items:center;gap:6px;padding:5px 10px;background:var(--surface2);border-radius:3px">' +
+      return '<div style="display:flex;align-items:center;gap:6px;padding:5px 10px;background:var(--surface2);border-radius:var(--r-md)">' +
         '<span style="font-size:12px;color:var(--text)">' + esc(r.account_name) + '</span>' +
-        (r.region ? '<span style="font-size:11px;color:var(--text3);background:rgba(0,0,0,0.1);border-radius:2px;padding:1px 5px">' + esc(r.region) + '</span>' : '') +
+        (r.region ? '<span style="font-size:11px;color:var(--text3);background:rgba(0,0,0,0.1);border-radius:var(--r-sm);padding:1px 5px">' + esc(r.region) + '</span>' : '') +
         valueTag +
         '<button onclick="openDealValueForm(\'' + r.id + '\',\'' + esc(r.account_name) + '\')" style="background:none;border:none;color:' + (hasValue ? 'var(--text3)' : 'var(--amber)') + ';cursor:pointer;font-size:11px;padding:0" title="' + (hasValue ? 'Edit deal value' : 'Add deal value') + '">' + (hasValue ? '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 7v10M14.8 9.3A3 3 0 0012 7.8h-.4a2.2 2.2 0 000 4.4h.8a2.2 2.2 0 010 4.4H12a3 3 0 01-2.8-1.5"/></svg>' : '+ $') + '</button>' +
         '<button onclick="openDomainManager(\'' + r.id + '\',\'' + esc(r.account_name) + '\',\'' + esc(r.domain||'') + '\',' + JSON.stringify(r.additional_domains||[]) + ')" style="background:none;border:none;color:' + (extraDomains ? 'var(--green)' : 'var(--text3)') + ';cursor:pointer;font-size:11px;padding:0" title="Manage email domains for signal matching"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM3.2 9.5h17.6M3.2 14.5h17.6M12 3a14 14 0 000 18 14 14 0 000-18z"/></svg>' + (extraDomains ? '<sup style=\'font-size:11px\'>+'+extraDomains+'</sup>' : '') + '</button>' +
         (r.sdr_user_id && r.sdr_user_id === currentUser.id && r.user_id !== currentUser.id
-          ? '<span style="font-size:11px;font-weight:700;color:var(--gold);background:rgba(var(--c-accent-rgb),0.12);border-radius:2px;padding:1px 5px" title="You are the SDR on this account">SDR</span>' : '') +
+          ? '<span style="font-size:11px;font-weight:700;color:var(--gold);background:rgba(var(--c-accent-rgb),0.12);border-radius:var(--r-sm);padding:1px 5px" title="You are the SDR on this account">SDR</span>' : '') +
         (_canAssignTeam
           ? '<button onclick="openTeamAssign(\'' + r.id + '\',\'' + esc(r.account_name) + '\',\'' + (r.user_id||'') + '\',\'' + (r.sdr_user_id||'') + '\')" style="background:none;border:none;color:' + (r.sdr_user_id ? 'var(--green)' : 'var(--text3)') + ';cursor:pointer;font-size:11px;padding:0" title="Assign AE / SDR"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM2.5 20v-1.5A4.5 4.5 0 017 14h4a4.5 4.5 0 014.5 4.5V20M16 4.3a3.5 3.5 0 010 6.4M18 14.3a4.5 4.5 0 013.5 4.2V20"/></svg></button>' : '') +
         '<button onclick="removeMyAccount(\'' + r.id + '\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:0"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>' +
@@ -2780,7 +2780,7 @@ function openDomainManager(accountId, accountName, primaryDomain, extraDomains) 
   var existing = (extraDomains || []);
   var rows = existing.map(function(d, i) {
     return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
-      '<input value="' + esc(d) + '" placeholder="e.g. in.lactalis.com" style="flex:1;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:2px;color:var(--text);font-size:13px;font-family:var(--sans);outline:none" class="dm-domain-input" />' +
+      '<input value="' + esc(d) + '" placeholder="e.g. in.lactalis.com" style="flex:1;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-size:13px;font-family:var(--sans);outline:none" class="dm-domain-input" />' +
       '<button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;padding:4px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>' +
     '</div>';
   }).join('');
@@ -2796,13 +2796,13 @@ function openDomainManager(accountId, accountName, primaryDomain, extraDomains) 
       '</div>' +
       '<button onclick="document.getElementById(\'dm-modal\').remove()" style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer;padding:4px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>' +
     '</div>' +
-    '<div style="background:var(--surface2);border-radius:2px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--text3);line-height:1.5">' +
+    '<div style="background:var(--surface2);border-radius:var(--r-sm);padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--text3);line-height:1.5">' +
       '<strong style="color:var(--text2)">How brand root matching works:</strong> SAM automatically detects that <em>in.lactalis.com</em>, <em>lactalis.fr</em> and <em>lactalis.sa</em> all belong to Lactalis by stripping the country subdomain and TLD. ' +
-      'Only add domains here if automatic matching misses them — for example when the company uses a completely different domain for a specific region.' +
+      'Only add domains here if automatic matching misses them, for example when the company uses a completely different domain for a specific region.' +
     '</div>' +
     '<div id="dm-domain-rows">' + rows + '</div>' +
-    '<button onclick="addDmRow()" style="width:100%;padding:9px;border:1px dashed var(--border2);border-radius:2px;background:none;color:var(--text3);font-size:13px;cursor:pointer;margin-bottom:14px">+ Add another domain</button>' +
-    '<button onclick="saveDomains()" style="width:100%;padding:12px;border:none;border-radius:3px;background:var(--gold);color:var(--c-canvas);font-size:14px;font-weight:700;cursor:pointer;font-family:var(--sans)">Save domains</button>' +
+    '<button onclick="addDmRow()" style="width:100%;padding:9px;border:1px dashed var(--border2);border-radius:var(--r-sm);background:none;color:var(--text3);font-size:13px;cursor:pointer;margin-bottom:14px">+ Add another domain</button>' +
+    '<button onclick="saveDomains()" style="width:100%;padding:12px;border:none;border-radius:var(--r-md);background:var(--gold);color:var(--c-canvas);font-size:14px;font-weight:700;cursor:pointer;font-family:var(--sans)">Save domains</button>' +
     '<p style="font-size:11px;color:var(--text3);text-align:center;margin-top:8px">Changes take effect on next Coverage check or SmartReach sync</p>' +
   '</div>';
   modal.addEventListener('click', function() { modal.remove(); });
@@ -2814,7 +2814,7 @@ function addDmRow() {
   if (!container) return;
   var row = document.createElement('div');
   row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:6px';
-  row.innerHTML = '<input placeholder="e.g. lactalis-international.fr" style="flex:1;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:2px;color:var(--text);font-size:13px;font-family:var(--sans);outline:none" class="dm-domain-input" />' +
+  row.innerHTML = '<input placeholder="e.g. lactalis-international.fr" style="flex:1;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-size:13px;font-family:var(--sans);outline:none" class="dm-domain-input" />' +
     '<button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;padding:4px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>';
   container.appendChild(row);
   row.querySelector('input').focus();
@@ -2891,7 +2891,7 @@ var INTEL_SOURCE_CONFIG = {
 };
 function renderSourceBadge(source) {
   var cfg = INTEL_SOURCE_CONFIG[source] || INTEL_SOURCE_CONFIG.none;
-  return '<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:' + cfg.color + ';background:rgba(0,0,0,0.12);border-radius:2px;padding:2px 7px;letter-spacing:0.02em">' + cfg.icon + ' ' + cfg.label + '</span>';
+  return '<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:' + cfg.color + ';background:rgba(0,0,0,0.12);border-radius:var(--r-sm);padding:2px 7px;letter-spacing:0.02em">' + cfg.icon + ' ' + cfg.label + '</span>';
 }
 
 var _ivrPeriod = {}, _ivrRepId = {}, _ivrData = {}, _ivrSeq = {};
@@ -2908,7 +2908,7 @@ function renderIvrPeriodPicker(outputId) {
   var active = _ivrPeriod[outputId] || 'last_week';
   var mk = function(period, label) {
     var isActive = active === period;
-    return '<button onclick="setIvrPeriod(\''+outputId+'\',\''+period+'\',this)" style="padding:4px 10px;border-radius:3px;font-size:11px;cursor:pointer;font-family:var(--sans);border:1px solid '+(isActive?'var(--gold)':'var(--border)')+';background:'+(isActive?'var(--gold)':'var(--surface2)')+';color:'+(isActive?'var(--c-canvas)':'var(--text2)')+'">'+label+'</button>';
+    return '<button onclick="setIvrPeriod(\''+outputId+'\',\''+period+'\',this)" style="padding:4px 10px;border-radius:var(--r-md);font-size:11px;cursor:pointer;font-family:var(--sans);border:1px solid '+(isActive?'var(--gold)':'var(--border)')+';background:'+(isActive?'var(--gold)':'var(--surface2)')+';color:'+(isActive?'var(--c-canvas)':'var(--text2)')+'">'+label+'</button>';
   };
   return '<div id="ivrperiod-'+outputId+'" style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px">' +
     mk('today','Today') +
@@ -2919,10 +2919,10 @@ function renderIvrPeriodPicker(outputId) {
     mk('custom','Custom ↗') +
   '</div>' +
   '<div id="ivrcustom-'+outputId+'" style="display:'+(active==='custom'?'flex':'none')+';gap:8px;align-items:center;margin-bottom:10px">' +
-    '<input type="date" id="ivrfrom-'+outputId+'" style="background:var(--surface2);border:1px solid var(--border2);border-radius:2px;padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px"/>' +
+    '<input type="date" id="ivrfrom-'+outputId+'" style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r-sm);padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px"/>' +
     '<span style="font-size:11px;color:var(--text3)">to</span>' +
-    '<input type="date" id="ivrto-'+outputId+'" style="background:var(--surface2);border:1px solid var(--border2);border-radius:2px;padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px"/>' +
-    '<button onclick="runIntentVsReality(\''+(_ivrRepId[outputId]||'')+'\',\''+outputId+'\')" style="padding:5px 12px;border-radius:2px;background:var(--gold);border:none;color:var(--c-canvas);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Apply</button>' +
+    '<input type="date" id="ivrto-'+outputId+'" style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r-sm);padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px"/>' +
+    '<button onclick="runIntentVsReality(\''+(_ivrRepId[outputId]||'')+'\',\''+outputId+'\')" style="padding:5px 12px;border-radius:var(--r-sm);background:var(--gold);border:none;color:var(--c-canvas);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Apply</button>' +
   '</div>';
 }
 var _ivrAllResults = {};
@@ -2946,21 +2946,21 @@ function renderIvrResults(outputId) {
   // ── Stat boxes — clickable to filter ─────────────────────────────────────
   var mkBox = function(label, value, color, filterKey) {
     var isActive = filter === filterKey;
-    return '<div onclick="setIvrFilter(\'' + outputId + '\',\'' + filterKey + '\')" style="background:' + (isActive ? color.replace('var(--','rgba(').replace(')',',.15)') : 'var(--surface2)') + ';border-radius:2px;padding:10px 6px;text-align:center;cursor:pointer;border:2px solid ' + (isActive ? color : 'transparent') + ';transition:all 0.15s">' +
+    return '<div onclick="setIvrFilter(\'' + outputId + '\',\'' + filterKey + '\')" style="background:' + (isActive ? color.replace('var(--','rgba(').replace(')',',.15)') : 'var(--surface2)') + ';border-radius:var(--r-sm);padding:10px 6px;text-align:center;cursor:pointer;border:2px solid ' + (isActive ? color : 'transparent') + ';transition:all 0.15s">' +
       '<div style="font-size:20px;font-weight:700;color:' + color + '">' + value + '</div>' +
       '<div style="font-size:11px;color:var(--text3);margin-top:2px">' + label + '</div>' +
     '</div>';
   };
 
   var html = picker;
-  if (data.demo) html += '<div style="font-size:11px;color:var(--gold);background:rgba(var(--c-accent-rgb),0.10);border:1px solid rgba(var(--c-accent-rgb),0.30);border-radius:3px;padding:5px 9px;margin-bottom:10px">Demo workspace: evidence below is simulated, not read from a live mailbox</div>';
+  if (data.demo) html += '<div style="font-size:11px;color:var(--gold);background:rgba(var(--c-accent-rgb),0.10);border:1px solid rgba(var(--c-accent-rgb),0.30);border-radius:var(--r-md);padding:5px 9px;margin-bottom:10px">Demo workspace: evidence below is simulated, not read from a live mailbox</div>';
   html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px">';
   html += mkBox('All tasks', s.total || 0, 'var(--text)', 'all');
   html += mkBox('Verified', s.verified || 0, 'var(--green)', 'verified');
   html += mkBox('Self-reported', s.taskDone || 0, 'var(--blue)', 'task_done');
   html += mkBox('Gaps', s.gaps || 0, 'var(--coral)', 'gap');
   html += '</div>';
-  html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><div style="flex:1;height:5px;background:var(--surface2);border-radius:2px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + barColor + ';border-radius:2px"></div></div><div style="font-size:12px;font-weight:600;color:' + barColor + '">' + pct + '% verified</div></div>';
+  html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><div style="flex:1;height:5px;background:var(--surface2);border-radius:var(--r-sm);overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + barColor + ';border-radius:var(--r-sm)"></div></div><div style="font-size:12px;font-weight:600;color:' + barColor + '">' + pct + '% verified</div></div>';
   html += '<div style="font-size:11px;color:var(--text3);margin-bottom:10px">Self-reported = marked done with no external proof (LinkedIn, WhatsApp). Not counted in verified %.</div>';
 
   // Filter results
@@ -2988,7 +2988,7 @@ function renderIvrResults(outputId) {
     internal_pending:{ icon: '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.5h6v3H9zM7 5H5.5v15h13V5H17"/></svg>', color: 'var(--text3)',  bg: 'var(--surface2)',        badge: 'Internal task · not done yet' },
     // Call / LinkedIn / WhatsApp rep-confirmed signals
     attested:        { icon: '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg>',  color: 'var(--green)',  bg: 'rgba(74,140,92,0.08)',  badge: 'Done · outcome logged (self-attested)' },
-    task_done:       { icon: '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg>',  color: 'var(--blue)',    bg: 'rgba(58,110,168,0.08)', badge: 'Marked done — no external verification (LinkedIn/WhatsApp/calls cannot be verified externally yet)' },
+    task_done:       { icon: '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg>',  color: 'var(--blue)',    bg: 'rgba(58,110,168,0.08)', badge: 'Marked done, no external verification (LinkedIn/WhatsApp/calls cannot be verified externally yet)' },
   };
 
   filtered.forEach(function(r) {
@@ -3003,7 +3003,7 @@ function renderIvrResults(outputId) {
       var raColor = ra.type === 'positive' ? 'var(--green)' : ra.type === 'ooo' ? 'var(--amber)' : ra.type === 'negative' ? 'var(--coral)' : 'var(--text3)';
       var raIcon  = ra.type === 'positive' ? '↩' : ra.type === 'ooo' ? '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4"/></svg>' : ra.type === 'negative' ? '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>' : '?';
       var raLabel = ra.type === 'positive' ? 'Positive reply' : ra.type === 'ooo' ? 'Out of office' : ra.type === 'negative' ? 'Negative / opt-out' : 'Neutral reply';
-      replyAnalysisHtml = '<div style="margin-top:5px;padding:5px 8px;background:rgba(0,0,0,0.06);border-radius:2px;display:flex;gap:6px;align-items:flex-start">' +
+      replyAnalysisHtml = '<div style="margin-top:5px;padding:5px 8px;background:rgba(0,0,0,0.06);border-radius:var(--r-sm);display:flex;gap:6px;align-items:flex-start">' +
         '<span style="font-size:11px;font-weight:700;color:' + raColor + ';flex-shrink:0">' + raIcon + ' ' + raLabel + '</span>' +
         (ra.snippet ? '<span style="font-size:11px;color:var(--text3);font-style:italic">"' + esc(ra.snippet.slice(0, 100)) + (ra.snippet.length > 100 ? '…' : '') + '"</span>' : '') +
       '</div>';
@@ -3012,17 +3012,17 @@ function renderIvrResults(outputId) {
     // Intent badge for non-obvious classifications
     var intentBadge = '';
     if (r.intent === 'internal' || r.intent === 'internal_pending') {
-      intentBadge = '<div style="font-size:11px;color:var(--text3);margin-top:3px;font-style:italic"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.5h6v3H9zM7 5H5.5v15h13V5H17"/></svg> Internal task — not externally verifiable</div>';
+      intentBadge = '<div style="font-size:11px;color:var(--text3);margin-top:3px;font-style:italic"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.5h6v3H9zM7 5H5.5v15h13V5H17"/></svg> Internal task, not externally verifiable</div>';
     } else if (r.signal === 'attested') {
       var outcomeLabels = { no_answer:'No answer', spoke_briefly:'Spoke briefly', full_conversation:'Full conversation', meeting_booked:'Meeting booked <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 16.5a4.5 4.5 0 100-9 4.5 4.5 0 000 9zM12 13a1 1 0 100-2 1 1 0 000 2z"/></svg>', not_interested:'Not interested', requests_sent:'Requests sent', connections_accepted:'Connections accepted', messages_sent:'Messages sent', replies_received:'Replies received' };
       var outcomeLabel = outcomeLabels[r.activityOutcome] || r.activityOutcome || '';
-      intentBadge = '<div style="font-size:11px;color:var(--green);margin-top:4px;font-weight:600"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> ' + esc(outcomeLabel) + (r.completionNote ? ' — "' + esc(r.completionNote.slice(0,80)) + '"' : '') + '</div>';
+      intentBadge = '<div style="font-size:11px;color:var(--green);margin-top:4px;font-weight:600"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> ' + esc(outcomeLabel) + (r.completionNote ? ', "' + esc(r.completionNote.slice(0,80)) + '"' : '') + '</div>';
     } else if (r.signal === 'task_done') {
-      intentBadge = '<div style="font-size:11px;color:var(--blue);margin-top:3px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Marked done — add outcome via "Log outcome" for stronger verification</div>';
+      intentBadge = '<div style="font-size:11px;color:var(--blue);margin-top:3px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Marked done, add outcome via "Log outcome" for stronger verification</div>';
     } else if (r.intent === 'linkedin') {
-      intentBadge = '<div style="font-size:11px;color:var(--text3);margin-top:3px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4.5 4.5 0 006.4 0l3-3a4.5 4.5 0 00-6.4-6.4l-1.5 1.5M14 10a4.5 4.5 0 00-6.4 0l-3 3a4.5 4.5 0 006.4 6.4l1.5-1.5"/></svg> LinkedIn — use close-out form to log outcome</div>';
+      intentBadge = '<div style="font-size:11px;color:var(--text3);margin-top:3px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4.5 4.5 0 006.4 0l3-3a4.5 4.5 0 00-6.4-6.4l-1.5 1.5M14 10a4.5 4.5 0 00-6.4 0l-3 3a4.5 4.5 0 006.4 6.4l1.5-1.5"/></svg> LinkedIn, use close-out form to log outcome</div>';
     } else if (r.intent === 'call') {
-      intentBadge = '<div style="font-size:11px;color:var(--text3);margin-top:3px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3.5H4.5A1.5 1.5 0 003 5c0 8.8 7.2 16 16 16a1.5 1.5 0 001.5-1.5V17l-4.5-2-2.5 2.5A15 15 0 018.5 11L11 8.5z"/></svg> Call — use close-out form to log outcome when marking done</div>';
+      intentBadge = '<div style="font-size:11px;color:var(--text3);margin-top:3px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3.5H4.5A1.5 1.5 0 003 5c0 8.8 7.2 16 16 16a1.5 1.5 0 001.5-1.5V17l-4.5-2-2.5 2.5A15 15 0 018.5 11L11 8.5z"/></svg> Call, use close-out form to log outcome when marking done</div>';
     }
 
     // Quantity mismatch display
@@ -3033,13 +3033,13 @@ function renderIvrResults(outputId) {
       var ratio = r.verificationRatio || 0;
       var qColor = ratio >= 60 ? 'var(--green)' : ratio >= 30 ? 'var(--amber)' : 'var(--coral)';
       if (r.signal === 'partial_count') {
-        quantityNote = '<div style="font-size:11px;margin-top:4px;padding:4px 8px;background:rgba(var(--c-accent-rgb),0.1);border-radius:2px;color:var(--amber)">◑ ' + found + ' of ' + claimed + ' emails found in Gmail (' + ratio + '%) — ' + (claimed - found) + ' unverified</div>';
+        quantityNote = '<div style="font-size:11px;margin-top:4px;padding:4px 8px;background:rgba(var(--c-accent-rgb),0.1);border-radius:var(--r-sm);color:var(--amber)">◑ ' + found + ' of ' + claimed + ' emails found in Gmail (' + ratio + '%), ' + (claimed - found) + ' unverified</div>';
       } else if (found > 0) {
         quantityNote = '<div style="font-size:11px;color:var(--text3);margin-top:3px">' + found + '/' + claimed + ' emails verified in Gmail</div>';
       }
     }
 
-    var noSourceNote = sig === 'no_source' ? '<div style="font-size:11px;color:var(--text3);margin-top:4px;font-style:italic">Completed — log the outcome when marking done for a self-attested signal</div>' : '';
+    var noSourceNote = sig === 'no_source' ? '<div style="font-size:11px;color:var(--text3);margin-top:4px;font-style:italic">Completed, log the outcome when marking done for a self-attested signal</div>' : '';
 
     html += '<div style="border-left:3px solid ' + cfg.color + ';padding:9px 12px;margin-bottom:5px;background:' + cfg.bg + ';border-radius:0 7px 7px 0">' +
       '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">' +
@@ -3177,16 +3177,16 @@ function renderCoveragePeriodPicker(outputId) {
   const active = _coveragePeriod[outputId] || 'week';
   const mk = function(period, label) {
     const isActive = active === period;
-    return '<button onclick="setCoveragePeriod(\''+outputId+'\',\''+period+'\',this)" style="padding:4px 10px;border-radius:3px;font-size:11px;cursor:pointer;font-family:var(--sans);border:1px solid '+(isActive?'var(--gold)':'var(--border)')+';background:'+(isActive?'var(--gold)':'var(--surface2)')+';color:'+(isActive?'var(--c-canvas)':'var(--text2)')+'">'+label+'</button>';
+    return '<button onclick="setCoveragePeriod(\''+outputId+'\',\''+period+'\',this)" style="padding:4px 10px;border-radius:var(--r-md);font-size:11px;cursor:pointer;font-family:var(--sans);border:1px solid '+(isActive?'var(--gold)':'var(--border)')+';background:'+(isActive?'var(--gold)':'var(--surface2)')+';color:'+(isActive?'var(--c-canvas)':'var(--text2)')+'">'+label+'</button>';
   };
   return '<div id="covperiod-'+outputId+'" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">' +
     mk('today','Today') + mk('week','This week') + mk('month','This month') + mk('custom','Custom range') +
     '</div>' +
     '<div id="covcustom-'+outputId+'" style="display:'+(active==='custom'?'flex':'none')+';gap:8px;align-items:center;margin-bottom:10px">' +
-      '<input type="date" id="covfrom-'+outputId+'" style="background:var(--surface2);border:1px solid var(--border2);border-radius:2px;padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px"/>' +
+      '<input type="date" id="covfrom-'+outputId+'" style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r-sm);padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px"/>' +
       '<span style="font-size:11px;color:var(--text3)">to</span>' +
-      '<input type="date" id="covto-'+outputId+'" style="background:var(--surface2);border:1px solid var(--border2);border-radius:2px;padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px"/>' +
-      '<button onclick="runCoverageCheck(\''+(_coverageRepId[outputId]||'')+'\',\''+(_coverageRepEmail[outputId]||'')+'\',\''+outputId+'\')" style="padding:5px 12px;border-radius:2px;background:var(--gold);border:none;color:var(--c-canvas);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Apply</button>' +
+      '<input type="date" id="covto-'+outputId+'" style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r-sm);padding:5px 8px;color:var(--text);font-family:var(--sans);font-size:12px"/>' +
+      '<button onclick="runCoverageCheck(\''+(_coverageRepId[outputId]||'')+'\',\''+(_coverageRepEmail[outputId]||'')+'\',\''+outputId+'\')" style="padding:5px 12px;border-radius:var(--r-sm);background:var(--gold);border:none;color:var(--c-canvas);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer">Apply</button>' +
     '</div>';
 }
 
@@ -3226,19 +3226,19 @@ var CHANNEL_ICON_CONFIG = {
 function renderChannelBadges(channels) {
   var parts = [];
   if (channels.email.sent > 0 || channels.email.replies > 0) {
-    parts.push('<span title="Email" style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--text2);background:rgba(0,0,0,0.08);border-radius:2px;padding:2px 6px">' + CHANNEL_ICON_CONFIG.email + ' ' + channels.email.sent + (channels.email.replies>0?'/'+channels.email.replies+'\u21a9':'') + '</span>');
+    parts.push('<span title="Email" style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--text2);background:rgba(0,0,0,0.08);border-radius:var(--r-sm);padding:2px 6px">' + CHANNEL_ICON_CONFIG.email + ' ' + channels.email.sent + (channels.email.replies>0?'/'+channels.email.replies+'\u21a9':'') + '</span>');
   }
   if (channels.calendar.meetings > 0) {
-    parts.push('<span title="Calendar meetings" style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--text2);background:rgba(0,0,0,0.08);border-radius:2px;padding:2px 6px">' + CHANNEL_ICON_CONFIG.calendar + ' ' + channels.calendar.meetings + '</span>');
+    parts.push('<span title="Calendar meetings" style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--text2);background:rgba(0,0,0,0.08);border-radius:var(--r-sm);padding:2px 6px">' + CHANNEL_ICON_CONFIG.calendar + ' ' + channels.calendar.meetings + '</span>');
   }
   if (channels.notetaker.count > 0) {
-    parts.push('<span title="Notetaker" style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--text2);background:rgba(0,0,0,0.08);border-radius:2px;padding:2px 6px">' + CHANNEL_ICON_CONFIG.notetaker + ' ' + channels.notetaker.count + '</span>');
+    parts.push('<span title="Notetaker" style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--text2);background:rgba(0,0,0,0.08);border-radius:var(--r-sm);padding:2px 6px">' + CHANNEL_ICON_CONFIG.notetaker + ' ' + channels.notetaker.count + '</span>');
   }
   // Future channels — shown greyed-out as "not connected" rather than
   // omitted, so it's visible these exist as a roadmap, not forgotten.
   ['call','whatsapp','linkedin'].forEach(function(ch) {
     if (!channels[ch].integrated) {
-      parts.push('<span title="' + ch + ' \u2014 no integration yet" style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--text3);opacity:0.4;background:rgba(0,0,0,0.05);border-radius:2px;padding:2px 6px">' + CHANNEL_ICON_CONFIG[ch] + '</span>');
+      parts.push('<span title="' + ch + ' \u2014 no integration yet" style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--text3);opacity:0.4;background:rgba(0,0,0,0.05);border-radius:var(--r-sm);padding:2px 6px">' + CHANNEL_ICON_CONFIG[ch] + '</span>');
     }
   });
   return parts.join(' ');
@@ -3264,10 +3264,10 @@ async function runSamIntelligence(repId, repEmail, resultElId) {
   if (intelData && intelData.ok && intelData.accounts?.length) {
     const sc = intelData.stageCounts || {};
     html += '<div style="margin-bottom:12px">';
-    html += '<div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> SAM Intelligence — Deal Pipeline</div>';
+    html += '<div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> SAM Intelligence, Deal Pipeline</div>';
     html += '<div style="display:flex;gap:6px;margin-bottom:10px">';
     [{stage:'commercial',icon:'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 00-3-3L5 17v3z"/></svg>',color:'var(--green)',label:'Commercial'},{stage:'value_prop',icon:'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 11v5.5M12 7.8v.4"/></svg>',color:'var(--gold)',label:'Value Prop'},{stage:'prospective',icon:'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg>',color:'var(--text2)',label:'Prospective'}].forEach(function(s) {
-      html += '<div style="flex:1;background:rgba(0,0,0,0.06);border-radius:2px;padding:6px;text-align:center"><div style="font-size:16px;font-weight:600;color:'+s.color+'">'+(sc[s.stage]||0)+'</div><div style="font-size:11px;color:var(--text3)">'+s.icon+' '+s.label+'</div></div>';
+      html += '<div style="flex:1;background:rgba(0,0,0,0.06);border-radius:var(--r-sm);padding:6px;text-align:center"><div style="font-size:16px;font-weight:600;color:'+s.color+'">'+(sc[s.stage]||0)+'</div><div style="font-size:11px;color:var(--text3)">'+s.icon+' '+s.label+'</div></div>';
     });
     html += '</div>';
     ['commercial','value_prop','prospective'].forEach(function(stage) {
@@ -3292,8 +3292,8 @@ async function runSamIntelligence(repId, repEmail, resultElId) {
           html += '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin:6px 0 3px 0">' + esc(grp.parentName) + '</div>';
         }
         grp.accounts.forEach(function(a) {
-          var stalenessBadge = a.staleness==='cold'?'<span style="font-size:11px;font-weight:700;color:var(--coral);background:rgba(192,82,63,0.12);border-radius:2px;padding:1px 5px;margin-left:4px">\u2744 COLD</span>':a.staleness==='stale'?'<span style="font-size:11px;color:var(--amber);margin-left:4px">STALE</span>':'';
-          var regionBadge = a.region ? '<span style="font-size:11px;color:var(--text3);background:rgba(0,0,0,0.06);border-radius:2px;padding:1px 6px;margin-left:4px">' + esc(a.region) + '</span>' : '';
+          var stalenessBadge = a.staleness==='cold'?'<span style="font-size:11px;font-weight:700;color:var(--coral);background:rgba(192,82,63,0.12);border-radius:var(--r-sm);padding:1px 5px;margin-left:4px">\u2744 COLD</span>':a.staleness==='stale'?'<span style="font-size:11px;color:var(--amber);margin-left:4px">STALE</span>':'';
+          var regionBadge = a.region ? '<span style="font-size:11px;color:var(--text3);background:rgba(0,0,0,0.06);border-radius:var(--r-sm);padding:1px 6px;margin-left:4px">' + esc(a.region) + '</span>' : '';
           var indent = (grp.accounts.length > 1 && grp.parentName) ? 'margin-left:10px;border-left-width:2px;' : '';
           html += '<div style="border-left:3px solid '+cfg.color+';'+indent+'padding:6px 10px;margin-bottom:4px;background:rgba(0,0,0,0.04);border-radius:0 6px 6px 0">' +
             '<div style="font-size:12px;font-weight:600;color:var(--text)">'+cfg.icon+' '+esc(a.account)+regionBadge+stalenessBadge+'</div>' +
@@ -3312,14 +3312,14 @@ async function runSamIntelligence(repId, repEmail, resultElId) {
   if (samData && samData.connected && samData.signals?.length) {
     html += '<div style="margin-top:4px"><div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Recent email signals</div>';
     samData.signals.slice(0, 5).forEach(function(s) {
-      html += '<div style="background:var(--surface2);border-radius:2px;padding:7px 10px;margin-bottom:4px"><div style="font-size:12px;font-weight:500;color:var(--text)">'+esc(s.account||'')+'</div><div style="font-size:11px;color:var(--text3);margin-top:2px">'+esc(s.subject||s.snippet||'')+'</div></div>';
+      html += '<div style="background:var(--surface2);border-radius:var(--r-sm);padding:7px 10px;margin-bottom:4px"><div style="font-size:12px;font-weight:500;color:var(--text)">'+esc(s.account||'')+'</div><div style="font-size:11px;color:var(--text3);margin-top:2px">'+esc(s.subject||s.snippet||'')+'</div></div>';
     });
     html += '</div>';
   } else if (samData && !samData.connected) {
     html += '<div style="font-size:12px;color:var(--text3)">Gmail not connected for this rep</div>';
   }
 
-  if (!html) html = '<div style="font-size:12px;color:var(--text3);padding:8px 0">No signals found — add accounts in Org → Rep Accounts</div>';
+  if (!html) html = '<div style="font-size:12px;color:var(--text3);padding:8px 0">No signals found, add accounts in Org → Rep Accounts</div>';
   out.innerHTML = html;
 }
 
@@ -3409,7 +3409,7 @@ function _renderSampaignAnalyticsBlock(d, opts) {
   if (s.no_response !== undefined) tiles.push({ label: 'No reply', val: s.no_response, color: 'var(--text3)', filter: 'no_response' });
   tiles.push({ label: 'Dead', val: s.bounced||0, color: 'var(--coral)', sub: s.sent>0?Math.round((s.bounced||0)/s.sent*100)+'% of sent':'no longer working', filter: 'dead' });
 
-  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:12px 14px;margin-bottom:10px">' +
+  html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;margin-bottom:10px">' +
     '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">' +
  esc(opts.title||'SAMpaign Analytics') +
       (d.synced_at ? '<span style="font-weight:400;margin-left:8px">Last sync: '+new Date(d.synced_at).toLocaleDateString()+'</span>' : '') +
@@ -3426,7 +3426,7 @@ function _renderSampaignAnalyticsBlock(d, opts) {
         var interactive = clickable && hasRows;
         return '<div' +
           (interactive ? ' onclick="setSampaignStatusFilter(\''+esc(opts.campaignId)+'\','+(t.filter?'\''+t.filter+'\'':'null')+')"' : '') +
-          ' style="background:'+(isActive?'var(--surface2)':'var(--surface)')+';border-radius:2px;padding:10px;text-align:center;' +
+          ' style="background:'+(isActive?'var(--surface2)':'var(--surface)')+';border-radius:var(--r-sm);padding:10px;text-align:center;' +
             'border:1px solid '+(isActive?color:'transparent')+';' +
             (interactive?'cursor:pointer;':'') +
             (clickable && !hasRows?'opacity:0.55;':'') + '"' +
@@ -3445,10 +3445,10 @@ function _renderSampaignAnalyticsBlock(d, opts) {
     '<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">' +
       '<div style="font-size:11px;color:var(--text3);margin-bottom:6px">'+bm.open_rate.label+' · '+bm.reply_rate.label+'</div>' +
       '<div style="display:flex;gap:4px;height:6px">' +
-        '<div style="flex:'+s.replied+';background:var(--green);border-radius:2px" title="Replied"></div>' +
-        '<div style="flex:'+(s.opened-s.replied)+';background:var(--amber);border-radius:2px" title="Opened, not replied"></div>' +
-        '<div style="flex:'+(s.sent-s.opened-(s.bounced||0))+';background:var(--border2);border-radius:2px" title="Sent, not opened"></div>' +
-        '<div style="flex:'+(s.bounced||0)+';background:var(--coral);opacity:0.5;border-radius:2px" title="Bounced"></div>' +
+        '<div style="flex:'+s.replied+';background:var(--green);border-radius:var(--r-sm)" title="Replied"></div>' +
+        '<div style="flex:'+(s.opened-s.replied)+';background:var(--amber);border-radius:var(--r-sm)" title="Opened, not replied"></div>' +
+        '<div style="flex:'+(s.sent-s.opened-(s.bounced||0))+';background:var(--border2);border-radius:var(--r-sm)" title="Sent, not opened"></div>' +
+        '<div style="flex:'+(s.bounced||0)+';background:var(--coral);opacity:0.5;border-radius:var(--r-sm)" title="Bounced"></div>' +
       '</div>' +
       '<div style="display:flex;gap:10px;margin-top:4px">' +
         '<span style="font-size:11px;color:var(--green)">■ Replied</span>' +
@@ -3461,7 +3461,7 @@ function _renderSampaignAnalyticsBlock(d, opts) {
 
   // ── Hot signals (replied prospects) ───────────────────────────────────
   if (d.hot_signals && d.hot_signals.length) {
-    html += '<div style="background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.25);border-radius:3px;padding:12px 14px;margin-bottom:10px">' +
+    html += '<div style="background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.25);border-radius:var(--r-md);padding:12px 14px;margin-bottom:10px">' +
       '<div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5s5.5 4.3 5.5 9a5.5 5.5 0 01-11 0c0-2 1-3.4 1-3.4s.6 1.6 1.8 1.6c1.6 0 1.4-3.4 2.7-7.2z"/></svg> Replied prospects ('+d.hot_signals.length+') · Act now</div>' +
       d.hot_signals.map(function(h) {
         return '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-top:1px solid rgba(74,140,92,0.15)">' +
@@ -3474,7 +3474,7 @@ function _renderSampaignAnalyticsBlock(d, opts) {
             '<div style="font-size:11px;color:var(--text3);margin-top:1px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> '+esc(h.campaign_name||'')+(h.opens?' · '+h.opens+' opens':'')+'</div>' +
           '</div>' +
           '<div style="text-align:right;flex-shrink:0">' +
-            '<span style="font-size:11px;font-weight:700;color:var(--green);background:rgba(74,140,92,0.12);border-radius:2px;padding:3px 8px">↩ Replied</span>' +
+            '<span style="font-size:11px;font-weight:700;color:var(--green);background:rgba(74,140,92,0.12);border-radius:var(--r-sm);padding:3px 8px">↩ Replied</span>' +
             (h.account_id ? '' : '<div style="font-size:11px;color:var(--amber);margin-top:3px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> Not linked to account</div>') +
           '</div>' +
         '</div>';
@@ -3484,7 +3484,7 @@ function _renderSampaignAnalyticsBlock(d, opts) {
 
   // ── By rep table ──────────────────────────────────────────────────────
   if (d.by_rep && d.by_rep.length) {
-    html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:12px 14px;margin-bottom:10px">' +
+    html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;margin-bottom:10px">' +
       '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 11.5a4 4 0 100-8 4 4 0 000 8zM4.5 20.5v-1A5.5 5.5 0 0110 14h4a5.5 5.5 0 015.5 5.5v1"/></svg> By rep</div>' +
       '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
       '<thead><tr style="border-bottom:1px solid var(--border)">' +
@@ -3512,7 +3512,7 @@ function _renderSampaignAnalyticsBlock(d, opts) {
 
     // ── By account ────────────────────────────────────────────────────────
     if (d.by_account && d.by_account.length) {
-      html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:12px 14px;margin-bottom:10px">' +
+      html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;margin-bottom:10px">' +
         '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20.5V5.5L13 3v17.5M13 9.5h7v11M4 20.5h17M7.5 8h2M7.5 12h2M7.5 16h2M16 13h1.5M16 16.5h1.5"/></svg> By account</div>';
 
       d.by_account.forEach(function(acct) {
@@ -3528,14 +3528,14 @@ function _renderSampaignAnalyticsBlock(d, opts) {
               '<div style="font-size:11px;color:var(--text3);margin-top:2px">'+acct.contacts+' contact'+(acct.contacts!==1?'s':'')+' · '+(acct.campaigns||[]).slice(0,2).join(', ')+'</div>' +
               // Collision flag — active deal found for this domain
               (acct.collision && !acct.collision.is_same_user ?
-                '<div style="display:inline-flex;align-items:center;gap:4px;margin-top:4px;padding:3px 8px;background:rgba(var(--c-accent-rgb),0.12);border:1px solid rgba(var(--c-accent-rgb),0.25);border-radius:2px">' +
+                '<div style="display:inline-flex;align-items:center;gap:4px;margin-top:4px;padding:3px 8px;background:rgba(var(--c-accent-rgb),0.12);border:1px solid rgba(var(--c-accent-rgb),0.25);border-radius:var(--r-sm)">' +
                 '<span style="font-size:11px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg></span>' +
                 '<span style="font-size:11px;color:var(--amber);font-weight:500">Active deal: <strong>' + esc(acct.collision.deal_name) + '</strong>' +
                 (acct.collision.deal_value ? ' ' + esc(acct.collision.deal_value) : '') +
-                ' · AE: ' + esc(acct.collision.ae) + ' — coordinate before outreach</span>' +
+                ' · AE: ' + esc(acct.collision.ae) + ', coordinate before outreach</span>' +
                 '</div>' : '') +
               (acct.collision && acct.collision.is_same_user ?
-                '<div style="font-size:11px;color:var(--green);margin-top:3px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Your own deal — sequences aligned</div>' : '') +
+                '<div style="font-size:11px;color:var(--green);margin-top:3px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Your own deal, sequences aligned</div>' : '') +
             '</div>' +
             '<div style="display:flex;gap:10px;text-align:center">' +
               '<div><div style="font-size:13px;font-weight:600;color:var(--text)">'+acct.sent+'</div><div style="font-size:11px;color:var(--text3)">sent</div></div>' +
@@ -3548,8 +3548,8 @@ function _renderSampaignAnalyticsBlock(d, opts) {
           (acct.contacts_detail && acct.contacts_detail.length ?
             '<div style="margin-top:6px;padding-left:12px">' +
             acct.contacts_detail.slice(0,4).map(function(c) {
-              var badge = c.bounced ? '<span style="font-size:11px;font-weight:700;color:var(--coral);background:rgba(212,90,90,0.12);border-radius:2px;padding:1px 5px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5a7.5 7.5 0 00-4 13.9V20h8v-2.6A7.5 7.5 0 0012 3.5zM9.5 12a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM14.5 12a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg> dead</span>'
-                        : c.replied ? '<span style="font-size:11px;font-weight:700;color:var(--green);background:rgba(74,140,92,0.12);border-radius:2px;padding:1px 5px">↩ replied</span>'
+              var badge = c.bounced ? '<span style="font-size:11px;font-weight:700;color:var(--coral);background:rgba(212,90,90,0.12);border-radius:var(--r-sm);padding:1px 5px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5a7.5 7.5 0 00-4 13.9V20h8v-2.6A7.5 7.5 0 0012 3.5zM9.5 12a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM14.5 12a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg> dead</span>'
+                        : c.replied ? '<span style="font-size:11px;font-weight:700;color:var(--green);background:rgba(74,140,92,0.12);border-radius:var(--r-sm);padding:1px 5px">↩ replied</span>'
                         : c.opened ? '<span style="font-size:11px;color:var(--amber)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12zM12 15a3 3 0 100-6 3 3 0 000 6z"/></svg> opened'+(c.opens>1?' ×'+c.opens:'')+'</span>'
                         : '<span style="font-size:11px;color:var(--text3)">sent</span>';
               return '<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:11px;color:var(--text2)">' +
@@ -3567,7 +3567,7 @@ function _renderSampaignAnalyticsBlock(d, opts) {
     // (per-contact bounce receipts). Until then this section is simply absent
     // rather than showing a broken/empty box — honest empty state.
     if (d.dead_contacts && d.dead_contacts.length) {
-      html += '<div style="background:rgba(212,90,90,0.06);border:1px solid rgba(212,90,90,0.2);border-radius:3px;padding:12px 14px;margin-bottom:10px">' +
+      html += '<div style="background:rgba(212,90,90,0.06);border:1px solid rgba(212,90,90,0.2);border-radius:var(--r-md);padding:12px 14px;margin-bottom:10px">' +
         '<div style="font-size:11px;font-weight:700;color:var(--coral);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5a7.5 7.5 0 00-4 13.9V20h8v-2.6A7.5 7.5 0 0012 3.5zM9.5 12a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM14.5 12a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg> Dead contacts ('+d.dead_contacts.length+') · bounced, no longer working</div>' +
         d.dead_contacts.map(function(c) {
           return '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-top:1px solid rgba(212,90,90,0.12)">' +
@@ -3575,7 +3575,7 @@ function _renderSampaignAnalyticsBlock(d, opts) {
               '<div style="font-size:12px;font-weight:600;color:var(--text)">'+esc(c.name||c.email||'Unknown')+'</div>' +
               '<div style="font-size:11px;color:var(--text3)">'+esc(c.company||c.account_name||'')+(c.campaign_name?' · <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> '+esc(c.campaign_name):'')+'</div>' +
             '</div>' +
-            '<span style="font-size:11px;font-weight:700;color:var(--coral);background:rgba(212,90,90,0.12);border-radius:2px;padding:3px 8px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5a7.5 7.5 0 00-4 13.9V20h8v-2.6A7.5 7.5 0 0012 3.5zM9.5 12a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM14.5 12a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg> dead</span>' +
+            '<span style="font-size:11px;font-weight:700;color:var(--coral);background:rgba(212,90,90,0.12);border-radius:var(--r-sm);padding:3px 8px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5a7.5 7.5 0 00-4 13.9V20h8v-2.6A7.5 7.5 0 0012 3.5zM9.5 12a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM14.5 12a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg> dead</span>' +
           '</div>';
         }).join('') +
       '</div>';
@@ -3583,7 +3583,7 @@ function _renderSampaignAnalyticsBlock(d, opts) {
 
     // ── By SAMpaign ───────────────────────────────────────────────────────
     if (d.by_campaign && d.by_campaign.length) {
-      html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:12px 14px;margin-bottom:10px">' +
+      html += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;margin-bottom:10px">' +
         '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> By SAMpaign (sorted by reply rate)</div>' +
         d.by_campaign.map(function(c) {
           var bar = c.sent > 0 ? Math.max(4, Math.round(c.open_rate / 100 * 100)) : 4;
@@ -3597,7 +3597,7 @@ function _renderSampaignAnalyticsBlock(d, opts) {
                 '<span style="color:'+rc+';font-weight:600">'+c.reply_rate+'% reply</span>' +
               '</div>' +
             '</div>' +
-            '<div style="height:4px;background:var(--surface);border-radius:2px;overflow:hidden;display:flex">' +
+            '<div style="height:4px;background:var(--surface);border-radius:var(--r-sm);overflow:hidden;display:flex">' +
               '<div style="width:'+Math.round(c.reply_rate/Math.max(c.open_rate||1,1)*bar)+'%;background:var(--green)"></div>' +
               '<div style="width:'+Math.round((1-c.reply_rate/Math.max(c.open_rate||1,1))*bar)+'%;background:var(--amber)"></div>' +
             '</div>' +
@@ -3643,7 +3643,7 @@ async function loadSequencingStats() {
       html += '<div style="font-size:11px;color:var(--coral)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> Manual: ' + esc(manualD.error||'Failed to load') + '</div>';
     }
 
-    out.innerHTML = html || '<div style="font-size:12px;color:var(--text3)">No SAMpaign data yet — sync a sequencing tool or upload contacts to a manual SAMpaign above.</div>';
+    out.innerHTML = html || '<div style="font-size:12px;color:var(--text3)">No SAMpaign data yet, sync a sequencing tool or upload contacts to a manual SAMpaign above.</div>';
 
   } catch(e) {
     if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: '+esc(e.message)+'</div>';
@@ -3723,7 +3723,7 @@ function _briefDateLabel(ymd) {
   return (+m[3]) + ' ' + mon + ' ' + m[1];
 }
 function _briefBanner(reason, ymd, status) {
-  return '<div style="font-size:11px;color:var(--amber);margin-top:8px;padding:4px 8px;background:rgba(var(--c-accent-rgb),0.1);border-radius:2px">' + '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> ' +
+  return '<div style="font-size:11px;color:var(--amber);margin-top:8px;padding:4px 8px;background:rgba(var(--c-accent-rgb),0.1);border-radius:var(--r-sm)">' + '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> ' +
     esc(_briefFailText(reason, status) + ': showing your brief from ' + _briefDateLabel(ymd)) + '</div>';
 }
 
@@ -3811,8 +3811,8 @@ function renderBriefHtml(brief, brief_structured) {
       html += '<div style="margin-bottom:12px"><div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V4M4 20h16M8 17V11M12.5 17V7.5M17 17v-4"/></svg> Top 3 accounts today</div>';
       topAccts.slice(0, 3).forEach(function (a) {
         var sc = a.score >= 60 ? 'var(--green)' : a.score >= 35 ? 'var(--amber)' : 'var(--text3)';
-        html += '<div style="padding:8px 10px;background:rgba(0,0,0,0.04);border-radius:2px;margin-bottom:5px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:3px"><span style="font-size:12px;font-weight:600;color:var(--text)">' + esc(a.name) + '</span>';
-        if (a.score) html += '<span style="font-size:11px;font-weight:700;color:' + sc + ';background:' + sc + '18;padding:1px 6px;border-radius:2px">' + a.score + '</span>';
+        html += '<div style="padding:8px 10px;background:rgba(0,0,0,0.04);border-radius:var(--r-sm);margin-bottom:5px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:3px"><span style="font-size:12px;font-weight:600;color:var(--text)">' + esc(a.name) + '</span>';
+        if (a.score) html += '<span style="font-size:11px;font-weight:700;color:' + sc + ';background:' + sc + '18;padding:1px 6px;border-radius:var(--r-sm)">' + a.score + '</span>';
         html += '</div>';
         if (a.reason) html += '<div style="font-size:11px;color:var(--text3);margin-bottom:3px">' + esc(a.reason) + '</div>';
         if (a.action) html += '<div style="font-size:11px;font-weight:600;color:var(--gold)">→ ' + esc(a.action) + '</div>';
@@ -3822,7 +3822,7 @@ function renderBriefHtml(brief, brief_structured) {
     }
     if (obj.calendar_prep && obj.calendar_prep !== 'null') html += '<div style="margin-bottom:10px"><div style="font-size:11px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4"/></svg> Calendar prep</div><div style="font-size:12px;color:var(--text2);line-height:1.5">' + esc(obj.calendar_prep) + '</div></div>';
     if (obj.coaching_signal) html += '<div style="margin-bottom:10px"><div style="font-size:11px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> Coaching</div><div style="font-size:12px;color:var(--text2);line-height:1.5">' + esc(obj.coaching_signal) + '</div></div>';
-    if (obj.priority_before_noon) html += '<div style="padding:8px 12px;background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);border-radius:2px"><div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:3px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 16.5a4.5 4.5 0 100-9 4.5 4.5 0 000 9zM12 13a1 1 0 100-2 1 1 0 000 2z"/></svg> Priority before noon</div><div style="font-size:12px;font-weight:600;color:var(--text)">' + esc(obj.priority_before_noon) + '</div></div>';
+    if (obj.priority_before_noon) html += '<div style="padding:8px 12px;background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);border-radius:var(--r-sm)"><div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:3px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 16.5a4.5 4.5 0 100-9 4.5 4.5 0 000 9zM12 13a1 1 0 100-2 1 1 0 000 2z"/></svg> Priority before noon</div><div style="font-size:12px;font-weight:600;color:var(--text)">' + esc(obj.priority_before_noon) + '</div></div>';
     return html;
   }
   // Never dump raw JSON at the user. If it still looks like JSON we could not
@@ -3834,7 +3834,7 @@ function renderBriefHtml(brief, brief_structured) {
     }
     return '<div style="font-size:12px;color:var(--text2);white-space:pre-wrap;line-height:1.7">' + esc(brief) + '</div>';
   }
-  return '<div style="font-size:12px;color:var(--text3)">Brief could not be generated — run Scan channels first to build pipeline context.</div>';
+  return '<div style="font-size:12px;color:var(--text3)">Brief could not be generated, run Scan channels first to build pipeline context.</div>';
 }
 
 // ── Sales Habits ──────────────────────────────────────────────────────────────
@@ -3914,7 +3914,7 @@ function _updateHabitsPreview() {
   if (!prev) return;
   var activeCount = (_userHabits || []).filter(function(h) { return h.active; }).length;
   prev.textContent = activeCount > 0
-    ? activeCount + ' active habit' + (activeCount !== 1 ? 's' : '') + ' — auto-generating tasks daily'
+    ? activeCount + ' active habit' + (activeCount !== 1 ? 's' : '') + ', auto-generating tasks daily'
     : 'No habits configured yet. Tap "Edit habits" to set up recurring activities.';
 }
 
@@ -3959,12 +3959,12 @@ function openHabitEditor() {
   var habitRows = habits.map(function(h, i) {
     var dayBtns = [1,2,3,4,5,6,0].map(function(dow) {
       var active = (h.days||[]).includes(dow);
-      return '<button onclick="toggleHabitDay('+i+','+dow+')" style="width:28px;height:24px;border-radius:2px;border:1px solid var(--border);background:'+(active?'var(--gold)':'transparent')+';color:'+(active?'var(--c-canvas)':'var(--text3)')+';font-size:11px;cursor:pointer;font-family:var(--sans)">'+DAY_NAMES[dow]+'</button>';
+      return '<button onclick="toggleHabitDay('+i+','+dow+')" style="width:28px;height:24px;border-radius:var(--r-sm);border:1px solid var(--border);background:'+(active?'var(--gold)':'transparent')+';color:'+(active?'var(--c-canvas)':'var(--text3)')+';font-size:11px;cursor:pointer;font-family:var(--sans)">'+DAY_NAMES[dow]+'</button>';
     }).join('');
-    return '<div style="padding:12px;background:var(--surface2);border-radius:3px;margin-bottom:8px">' +
+    return '<div style="padding:12px;background:var(--surface2);border-radius:var(--r-md);margin-bottom:8px">' +
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
         '<span style="font-size:20px">'+(CHANNEL_ICONS[h.channel]||'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15a3 3 0 100-6 3 3 0 000 6zM19.2 14.4a1.6 1.6 0 00.3 1.8l.1.1a2 2 0 01-2.8 2.8l-.1-.1a1.6 1.6 0 00-2.7 1.1v.2a2 2 0 01-4 0v-.1a1.6 1.6 0 00-2.8-1.1l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.6 1.6 0 00-1.1-2.7H3a2 2 0 010-4h.1a1.6 1.6 0 001.1-2.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.6 1.6 0 002.7-1.1V3a2 2 0 014 0v.1a1.6 1.6 0 002.7 1.1l.1-.1a2 2 0 112.8 2.8l-.1.1a1.6 1.6 0 001.1 2.7h.2a2 2 0 010 4h-.1a1.6 1.6 0 00-1.4 1.1z"/></svg>')+'</span>' +
-        '<input value="'+esc(h.title)+'" onchange="_userHabits['+i+'].title=this.value" style="flex:1;padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>' +
+        '<input value="'+esc(h.title)+'" onchange="_userHabits['+i+'].title=this.value" style="flex:1;padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>' +
         (h.from_calendar || h.pushed_to_calendar
           ? '<span title="Lives on your calendar" style="font-size:12px;flex-shrink:0"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4"/></svg><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg></span>'
           : '<button onclick="pushHabitToCalendar('+i+')" title="Create a recurring calendar event from this habit" style="background:none;border:none;color:var(--gold);cursor:pointer;font-size:12px;padding:2px;flex-shrink:0"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4"/></svg>↗</button>') +
@@ -3972,13 +3972,13 @@ function openHabitEditor() {
       '</div>' +
       '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">'+dayBtns+'</div>' +
       '<div style="display:flex;gap:8px">' +
-        '<select onchange="_userHabits['+i+'].channel=this.value" style="flex:1;padding:5px;background:var(--bg);border:1px solid var(--border);border-radius:2px;color:var(--text);font-size:12px;outline:none">' +
+        '<select onchange="_userHabits['+i+'].channel=this.value" style="flex:1;padding:5px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-size:12px;outline:none">' +
           ['email','linkedin','call','whatsapp','other'].map(function(c){return '<option value="'+c+'"'+(h.channel===c?' selected':'')+'>'+(CHANNEL_ICONS[c]||'')+'  '+c+'</option>';}).join('') +
         '</select>' +
-        '<select onchange="_userHabits['+i+'].start_time=this.value;_userHabits['+i+'].time_of_day=_timeOfDayFromStart(this.value)" style="flex:1;padding:5px;background:var(--bg);border:1px solid var(--border);border-radius:2px;color:var(--text);font-size:12px;outline:none">' +
+        '<select onchange="_userHabits['+i+'].start_time=this.value;_userHabits['+i+'].time_of_day=_timeOfDayFromStart(this.value)" style="flex:1;padding:5px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-size:12px;outline:none">' +
           HABIT_TIME_SLOTS.map(function(t){return '<option value="'+t+'"'+(h.start_time===t?' selected':'')+'>'+t+'</option>';}).join('') +
         '</select>' +
-        '<input type="number" value="'+h.duration_mins+'" min="5" max="240" onchange="_userHabits['+i+'].duration_mins=parseInt(this.value)" style="width:56px;padding:5px;background:var(--bg);border:1px solid var(--border);border-radius:2px;color:var(--text);font-size:12px;outline:none" placeholder="mins"/>' +
+        '<input type="number" value="'+h.duration_mins+'" min="5" max="240" onchange="_userHabits['+i+'].duration_mins=parseInt(this.value)" style="width:56px;padding:5px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-size:12px;outline:none" placeholder="mins"/>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -3992,10 +3992,10 @@ function openHabitEditor() {
     _renderHabitSuggestions() +
     '<div id="habit-rows">'+habitRows+'</div>' +
     '<div style="display:flex;gap:8px;margin-bottom:12px">' +
-      '<button onclick="addHabit()" style="flex:1;padding:9px;border:1px dashed var(--border2);border-radius:2px;background:none;color:var(--text3);font-size:13px;cursor:pointer">+ Add habit</button>' +
-      '<button onclick="detectCalendarHabits()" id="detectHabitsBtn" style="flex:1;padding:9px;border:1px dashed var(--gold);border-radius:2px;background:none;color:var(--gold);font-size:13px;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4"/></svg> Detect from calendar</button>' +
+      '<button onclick="addHabit()" style="flex:1;padding:9px;border:1px dashed var(--border2);border-radius:var(--r-sm);background:none;color:var(--text3);font-size:13px;cursor:pointer">+ Add habit</button>' +
+      '<button onclick="detectCalendarHabits()" id="detectHabitsBtn" style="flex:1;padding:9px;border:1px dashed var(--gold);border-radius:var(--r-sm);background:none;color:var(--gold);font-size:13px;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4"/></svg> Detect from calendar</button>' +
     '</div>' +
-    '<button onclick="saveHabits()" style="width:100%;padding:12px;border:none;border-radius:3px;background:var(--gold);color:var(--c-canvas);font-size:14px;font-weight:700;cursor:pointer;font-family:var(--sans)">Save habits</button>' +
+    '<button onclick="saveHabits()" style="width:100%;padding:12px;border:none;border-radius:var(--r-md);background:var(--gold);color:var(--c-canvas);font-size:14px;font-weight:700;cursor:pointer;font-family:var(--sans)">Save habits</button>' +
   '</div>';
   modal.addEventListener('click', function() { modal.remove(); });
   document.body.appendChild(modal);
@@ -4009,11 +4009,11 @@ function _renderHabitSuggestions() {
   var h = '<div style="margin-bottom:12px"><div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4"/></svg> Detected from your calendar</div>';
   _habitSuggestions.forEach(function(s, i) {
     var dayLbl = (s.days||[]).map(function(d){ return DAY_NAMES[d]; }).join('·');
-    h += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(var(--c-accent-rgb),0.07);border:1px solid rgba(var(--c-accent-rgb),0.2);border-radius:2px;margin-bottom:5px">';
+    h += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(var(--c-accent-rgb),0.07);border:1px solid rgba(var(--c-accent-rgb),0.2);border-radius:var(--r-sm);margin-bottom:5px">';
     h += '<span style="font-size:13px">'+(CHANNEL_ICONS[s.channel]||'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4"/></svg>')+'</span>';
     h += '<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(s.title)+'</div>';
     h += '<div style="font-size:11px;color:var(--text3)">'+dayLbl+' · '+esc(s.start_time||'')+' · '+s.duration_mins+'m · seen '+s.occurrences+'×'+(s.is_recurring_series?' · recurring series':'')+'</div></div>';
-    h += '<button onclick="addSuggestedHabit('+i+')" style="padding:4px 10px;border-radius:2px;background:var(--gold);border:none;color:var(--c-canvas);font-size:11px;font-weight:700;cursor:pointer;font-family:var(--sans);flex-shrink:0">+ Add</button>';
+    h += '<button onclick="addSuggestedHabit('+i+')" style="padding:4px 10px;border-radius:var(--r-sm);background:var(--gold);border:none;color:var(--c-canvas);font-size:11px;font-weight:700;cursor:pointer;font-family:var(--sans);flex-shrink:0">+ Add</button>';
     h += '<button onclick="_habitSuggestions.splice('+i+',1);openHabitEditor()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;padding:0 2px;flex-shrink:0"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>';
     h += '</div>';
   });
@@ -4058,7 +4058,7 @@ async function pushHabitToCalendar(i) {
     h.pushed_to_calendar = true;
     fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
       body: JSON.stringify({ action:'save_habits', habits:_userHabits }) }).catch(function(){});
- showToast('Recurring event created — first on ' + (d.first_occurrence||'next matching day'));
+ showToast('Recurring event created, first on ' + (d.first_occurrence||'next matching day'));
     openHabitEditor();
   } catch(e) { showToast('Error: ' + e.message); }
 }
@@ -4100,7 +4100,7 @@ async function loadTimeAnalytics() {
     var d = await r.json();
     if (!d.ok) { out.innerHTML = '<div style="font-size:12px;color:var(--coral)">'+esc(d.error||'Failed')+'</div>'; return; }
 
-    var html = '<div style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:12px 14px">' +
+    var html = '<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px">' +
       '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 7v5.2l3.2 2"/></svg> How you spent your time · last 30 days</div>' +
       '<div style="display:flex;gap:12px;margin-bottom:12px">' +
         '<div style="text-align:center"><div style="font-size:20px;font-weight:700;color:var(--text)">'+d.customer_hours+'h</div><div style="font-size:11px;color:var(--text3)">Customer</div></div>' +
@@ -4110,7 +4110,7 @@ async function loadTimeAnalytics() {
 
     // Mismatches — the most useful part
     if (d.mismatches.over_invested.length || d.mismatches.under_invested.length) {
-      html += '<div style="padding:8px 10px;border-radius:2px;margin-bottom:10px;background:rgba(var(--c-accent-rgb),0.08)">';
+      html += '<div style="padding:8px 10px;border-radius:var(--r-sm);margin-bottom:10px;background:rgba(var(--c-accent-rgb),0.08)">';
       if (d.mismatches.under_invested.length) html += '<div style="font-size:11px;color:var(--green);margin-bottom:3px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5s5.5 4.3 5.5 9a5.5 5.5 0 01-11 0c0-2 1-3.4 1-3.4s.6 1.6 1.8 1.6c1.6 0 1.4-3.4 2.7-7.2z"/></svg> Hot accounts you\'re under-investing in: <strong>'+d.mismatches.under_invested.join(', ')+'</strong></div>';
       if (d.mismatches.over_invested.length) html += '<div style="font-size:11px;color:var(--amber)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> Cold accounts consuming your time: <strong>'+d.mismatches.over_invested.join(', ')+'</strong></div>';
       html += '</div>';
@@ -4131,8 +4131,8 @@ async function loadTimeAnalytics() {
             '<span style="font-size:12px;color:var(--text2);font-weight:500">'+a.hours+'h</span>' +
           '</div>' +
         '</div>' +
-        '<div style="height:5px;background:var(--surface);border-radius:2px;overflow:hidden">' +
-          '<div style="height:100%;width:'+pct+'%;background:'+(a.mismatch==='over_invested'?'var(--amber)':a.mismatch==='under_invested'?'var(--green)':'var(--gold)')+';border-radius:2px"></div>' +
+        '<div style="height:5px;background:var(--surface);border-radius:var(--r-sm);overflow:hidden">' +
+          '<div style="height:100%;width:'+pct+'%;background:'+(a.mismatch==='over_invested'?'var(--amber)':a.mismatch==='under_invested'?'var(--green)':'var(--gold)')+';border-radius:var(--r-sm)"></div>' +
         '</div>' +
       '</div>';
     }).join('');
@@ -4152,9 +4152,9 @@ async function scanNotetakerEmails() {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'scan_notetaker_emails', days:30}) });
     var d = await r.json();
     if (!d.ok) { if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral)">'+esc(d.error||'Scan failed')+'</div>'; return; }
-    if (out) out.innerHTML = '<div style="background:var(--surface2);border-radius:2px;padding:10px 12px;margin-top:6px">' +
+    if (out) out.innerHTML = '<div style="background:var(--surface2);border-radius:var(--r-sm);padding:10px 12px;margin-top:6px">' +
       '<div style="font-size:11px;font-weight:600;color:var(--gold);margin-bottom:4px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> Email scan complete · '+d.processed+'/'+d.scanned+' notes extracted</div>' +
-      '<div style="font-size:11px;color:var(--text3)">Works with Fireflies, Fathom, Otter, Grain, tl;dv, Gong — any tool that emails you. Zero extra config needed.</div>' +
+      '<div style="font-size:11px;color:var(--text3)">Works with Fireflies, Fathom, Otter, Grain, tl;dv, Gong, any tool that emails you. Zero extra config needed.</div>' +
       (d.titles&&d.titles.length?'<div style="font-size:11px;color:var(--text2);margin-top:4px">'+d.titles.slice(0,3).map(function(t){return esc(t)}).join(' · ')+'</div>':'') +
     '</div>';
   } catch(e) { if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: '+esc(e.message)+'</div>'; }
@@ -4174,18 +4174,18 @@ async function openNotetakerConnect() {
 
   var connList = existingConns.map(function(c) {
     var provIcons = { fireflies:'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5s5.5 4.3 5.5 9a5.5 5.5 0 01-11 0c0-2 1-3.4 1-3.4s.6 1.6 1.8 1.6c1.6 0 1.4-3.4 2.7-7.2z"/></svg>', read_ai:'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12zM12 15a3 3 0 100-6 3 3 0 000 6z"/></svg>', fathom:'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg>', otter:'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg>', grain:'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg>', gong:'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 16.5a4.5 4.5 0 100-9 4.5 4.5 0 000 9zM12 13a1 1 0 100-2 1 1 0 000 2z"/></svg>' };
-    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--surface2);border-radius:2px;margin-bottom:6px">' +
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--surface2);border-radius:var(--r-sm);margin-bottom:6px">' +
       '<div><span style="font-size:14px">'+(provIcons[c.provider]||'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.5v5M15 3.5v5M6.5 8.5h11v3a5.5 5.5 0 01-11 0zM12 17v4"/></svg>')+'</span> <strong style="font-size:13px">'+esc(c.provider)+'</strong>'+(c.provider_email?' <span style="font-size:11px;color:var(--text3)">'+esc(c.provider_email)+'</span>':'')+'</div>' +
-      '<button onclick="disconnectNotetaker(\''+esc(c.provider)+'\')" style="background:none;border:1px solid var(--border);border-radius:2px;padding:4px 10px;font-size:11px;color:var(--coral);cursor:pointer;font-family:var(--sans)">Disconnect</button>' +
+      '<button onclick="disconnectNotetaker(\''+esc(c.provider)+'\')" style="background:none;border:1px solid var(--border);border-radius:var(--r-sm);padding:4px 10px;font-size:11px;color:var(--coral);cursor:pointer;font-family:var(--sans)">Disconnect</button>' +
     '</div>';
   }).join('');
 
   var providers = [
     { id:'fireflies', name:'Fireflies.ai', icon:'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5s5.5 4.3 5.5 9a5.5 5.5 0 01-11 0c0-2 1-3.4 1-3.4s.6 1.6 1.8 1.6c1.6 0 1.4-3.4 2.7-7.2z"/></svg>', help:'Settings → Integrations → API → Generate key', available:true },
     { id:'read_ai',   name:'Read.ai',      icon:'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12zM12 15a3 3 0 100-6 3 3 0 000 6z"/></svg>', help:'app.read.ai → Settings → API → Get access token', available:true },
-    { id:'fathom',    name:'Fathom',       icon:'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg>', help:'Coming soon — use email scanning for now', available:false },
-    { id:'otter',     name:'Otter.ai',     icon:'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg>', help:'Coming soon — use email scanning for now', available:false },
-    { id:'grain',     name:'Grain',        icon:'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg>', help:'Coming soon — use email scanning for now', available:false },
+    { id:'fathom',    name:'Fathom',       icon:'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg>', help:'Coming soon, use email scanning for now', available:false },
+    { id:'otter',     name:'Otter.ai',     icon:'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg>', help:'Coming soon, use email scanning for now', available:false },
+    { id:'grain',     name:'Grain',        icon:'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg>', help:'Coming soon, use email scanning for now', available:false },
   ].filter(function(p) { return !existingConns.some(function(c){return c.provider===p.id;}); });
 
   var modal = document.createElement('div');
@@ -4195,15 +4195,15 @@ async function openNotetakerConnect() {
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
       '<div>' +
         '<div style="font-size:14px;font-weight:700;color:var(--text)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.5v5M15 3.5v5M6.5 8.5h11v3a5.5 5.5 0 01-11 0zM12 17v4"/></svg> Connect your notetaker</div>' +
-        '<div style="font-size:12px;color:var(--text3);margin-top:2px">Your personal connection — independent of your org. Direct API gives full transcripts + richer signals.</div>' +
+        '<div style="font-size:12px;color:var(--text3);margin-top:2px">Your personal connection, independent of your org. Direct API gives full transcripts + richer signals.</div>' +
       '</div>' +
       '<button onclick="document.getElementById(\'notetaker-connect-modal\').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>' +
     '</div>' +
 
     // Email scan note — always available
-    '<div style="background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);border-radius:2px;padding:10px 12px;margin-bottom:14px">' +
-      '<div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:3px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> Email scanning always works — zero config</div>' +
-      '<div style="font-size:11px;color:var(--text3)">Fireflies, Fathom, Otter, Grain, tl;dv, Gong, Avoma — if it emails you a meeting summary, Samora parses it automatically. Use "Scan call emails" in SAM Intelligence. Direct API connection gives full transcripts with higher signal quality.</div>' +
+    '<div style="background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);border-radius:var(--r-sm);padding:10px 12px;margin-bottom:14px">' +
+      '<div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:3px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> Email scanning always works, zero config</div>' +
+      '<div style="font-size:11px;color:var(--text3)">Fireflies, Fathom, Otter, Grain, tl;dv, Gong, Avoma, if it emails you a meeting summary, Samora parses it automatically. Use "Scan call emails" in SAM Intelligence. Direct API connection gives full transcripts with higher signal quality.</div>' +
     '</div>' +
 
     (existingConns.length ? '<div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:8px">CONNECTED</div>' + connList : '') +
@@ -4211,14 +4211,14 @@ async function openNotetakerConnect() {
     (providers.length ? '<div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:10px">ADD CONNECTION</div>' +
     providers.map(function(p) {
       var available = p.available;
-      return '<div style="padding:12px;background:var(--surface2);border-radius:3px;margin-bottom:8px">' +
+      return '<div style="padding:12px;background:var(--surface2);border-radius:var(--r-md);margin-bottom:8px">' +
         '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px">'+p.icon+' '+p.name+(available?'':' <span style="font-size:11px;color:var(--text3)">(coming)</span>')+'</div>' +
         (available ? '<div style="font-size:11px;color:var(--text3);margin-bottom:8px">'+p.help+'</div>' +
         '<div style="display:flex;gap:8px">' +
-          '<input id="nt-key-'+p.id+'" type="password" placeholder="API key / access token" style="flex:1;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:2px;color:var(--text);font-size:13px;font-family:var(--sans);outline:none"/>' +
-          '<input id="nt-email-'+p.id+'" type="email" placeholder="Your email at '+p.name+'" style="flex:1;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:2px;color:var(--text);font-size:13px;font-family:var(--sans);outline:none"/>' +
+          '<input id="nt-key-'+p.id+'" type="password" placeholder="API key / access token" style="flex:1;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-size:13px;font-family:var(--sans);outline:none"/>' +
+          '<input id="nt-email-'+p.id+'" type="email" placeholder="Your email at '+p.name+'" style="flex:1;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-size:13px;font-family:var(--sans);outline:none"/>' +
         '</div>' +
-        '<button onclick="connectNotetaker(\''+p.id+'\')" style="width:100%;margin-top:8px;padding:9px;border:none;border-radius:2px;background:var(--gold);color:var(--c-canvas);font-size:13px;font-weight:700;cursor:pointer;font-family:var(--sans)">Connect '+p.name+'</button>'
+        '<button onclick="connectNotetaker(\''+p.id+'\')" style="width:100%;margin-top:8px;padding:9px;border:none;border-radius:var(--r-sm);background:var(--gold);color:var(--c-canvas);font-size:13px;font-weight:700;cursor:pointer;font-family:var(--sans)">Connect '+p.name+'</button>'
         : '<div style="font-size:11px;color:var(--text3)">'+p.help+'</div>') +
       '</div>';
     }).join('') : '') +
@@ -4234,7 +4234,7 @@ async function connectNotetaker(provider) {
   try {
     await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'save_user_connection', provider, api_key:apiKey, provider_email:email||null}) });
     document.getElementById('notetaker-connect-modal')?.remove();
- showToast(''+provider+' connected — click "Sync calls" to pull transcripts');
+ showToast(''+provider+' connected, click "Sync calls" to pull transcripts');
   } catch(e) { alert('Error: '+e.message); }
 }
 
@@ -4256,7 +4256,7 @@ async function syncNotetaker() {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'sync_notetaker'}) });
     var d = await r.json();
     if (!d.ok) { if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> '+esc(d.error||'Sync failed')+'</div>'; return; }
-    var html = '<div style="background:var(--surface2);border-radius:2px;padding:10px 12px;margin-top:6px">' +
+    var html = '<div style="background:var(--surface2);border-radius:var(--r-sm);padding:10px 12px;margin-top:6px">' +
       '<div style="font-size:11px;font-weight:600;color:var(--gold);margin-bottom:6px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5a2.8 2.8 0 00-2.8 2.8v5.4a2.8 2.8 0 005.6 0V6.3A2.8 2.8 0 0012 3.5zM5.5 11a6.5 6.5 0 0013 0M12 17.5V21"/></svg> '+esc(d.provider)+' synced · '+d.transcripts_analysed+'/'+d.transcripts_found+' transcripts analysed via Gemini</div>' +
       '<div style="font-size:11px;color:var(--text3)">Full transcript → exact quotes, budget signals, action items, signal score updates. Signals visible in Intelligence tab.</div>' +
       (d.errors&&d.errors.length?'<div style="font-size:11px;color:var(--amber);margin-top:4px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> '+d.errors.length+' partial errors</div>':'') +
@@ -4276,10 +4276,10 @@ async function retagSeqChannels() {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'retag_seq_channels'}) });
     var d = await r.json();
     if (!d.ok) { if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral)">'+esc(d.error||'Failed')+'</div>'; return; }
-    if (out) out.innerHTML = '<div style="background:var(--surface2);border-radius:2px;padding:10px 12px">' +
+    if (out) out.innerHTML = '<div style="background:var(--surface2);border-radius:var(--r-sm);padding:10px 12px">' +
       '<div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:4px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 21V3.5M5.5 4.5h12l-2.5 4 2.5 4h-12"/></svg> Channel tags fixed</div>' +
       '<div style="font-size:11px;color:var(--text3)">Scanned '+d.total+' signals · retagged '+d.retagged+' as call/LinkedIn/WhatsApp based on campaign names</div>' +
-      (d.retagged > 0 ? '<div style="font-size:11px;color:var(--text3);margin-top:4px">Run Coverage again to see updated verification</div>' : '<div style="font-size:11px;color:var(--text3);margin-top:4px">All signals already correctly tagged. If calls still show unverified — campaign name doesn\'t contain call keywords. Rename the campaign in SmartReach to include "Call" or "Phone".</div>') +
+      (d.retagged > 0 ? '<div style="font-size:11px;color:var(--text3);margin-top:4px">Run Coverage again to see updated verification</div>' : '<div style="font-size:11px;color:var(--text3);margin-top:4px">All signals already correctly tagged. If calls still show unverified, campaign name doesn\'t contain call keywords. Rename the campaign in SmartReach to include "Call" or "Phone".</div>') +
     '</div>';
   } catch(e) { if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: '+esc(e.message)+'</div>'; }
  if (btn) { btn.textContent = 'Fix channel tags'; btn.disabled = false; }
@@ -4375,7 +4375,7 @@ async function syncSequencing() {
       return;
     }
 
-    var html = '<div style="background:var(--surface2);border-radius:2px;padding:10px 12px;margin-top:6px">' +
+    var html = '<div style="background:var(--surface2);border-radius:var(--r-sm);padding:10px 12px;margin-top:6px">' +
       '<div style="font-size:11px;font-weight:600;color:var(--green);margin-bottom:6px">↺ ' + esc(d.provider) + ' synced successfully</div>' +
       '<div style="display:flex;gap:12px;flex-wrap:wrap">' +
         '<span style="font-size:12px;color:var(--text2)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> ' + (d.campaigns_fetched || 0) + ' SAMpaigns</span>' +
@@ -4420,7 +4420,7 @@ async function runExternalSignals(repId, resultElId) {
     var totalSignals = data.totalSignalsDetected || 0;
 
     if (!totalSignals) {
-      out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">No buying signals found across ' + data.accountsScanned + ' accounts. Try again later — signals refresh as news breaks.</div>';
+      out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">No buying signals found across ' + data.accountsScanned + ' accounts. Try again later, signals refresh as news breaks.</div>';
       if (btn) { btn.textContent = '\ud83c\udf10 Market signals'; btn.disabled = false; }
       return;
     }
@@ -4429,7 +4429,7 @@ async function runExternalSignals(repId, resultElId) {
 
     results.forEach(function(r) {
       if (!r.signalsDetected) return;
-      html += '<div style="font-size:11px;font-weight:600;color:var(--text);margin-top:8px;margin-bottom:4px">' + esc(r.account) + (r.region ? ' <span style="font-size:11px;color:var(--text3);background:rgba(0,0,0,0.08);border-radius:2px;padding:1px 5px">' + esc(r.region) + '</span>' : '') + ' <span style="font-size:11px;color:var(--text3);font-weight:400">\u2014 ' + r.signalsDetected + ' signals</span></div>';
+      html += '<div style="font-size:11px;font-weight:600;color:var(--text);margin-top:8px;margin-bottom:4px">' + esc(r.account) + (r.region ? ' <span style="font-size:11px;color:var(--text3);background:rgba(0,0,0,0.08);border-radius:var(--r-sm);padding:1px 5px">' + esc(r.region) + '</span>' : '') + ' <span style="font-size:11px;color:var(--text3);font-weight:400">\u2014 ' + r.signalsDetected + ' signals</span></div>';
     });
 
     // Load signals from DB and render full content grouped by account
@@ -4510,7 +4510,7 @@ async function processOooMails() {
         var d2 = new Date(t.taskDate);
         return d2.toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short' }) + ' (' + esc(t.senderName) + ')';
       }).join(', ');
-      status.innerHTML = '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> ' + d.tasksCreated.length + ' OOO follow-up task' + (d.tasksCreated.length!==1?'s':'') + ' created — <strong>' + dateList + '</strong>';
+      status.innerHTML = '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> ' + d.tasksCreated.length + ' OOO follow-up task' + (d.tasksCreated.length!==1?'s':'') + ' created, <strong>' + dateList + '</strong>';
       row.style.display = 'block';
       if (dismiss) dismiss.addEventListener('click', function(){ row.style.display='none'; });
     }
@@ -4800,7 +4800,7 @@ async function autoCompleteTasks(silent) {
       save(today2); render();
     }
     if (count > 0) {
- showToast('Auto-completed ' + count + ' task' + (count!==1?'s':'') + (autoLog.length ? ' — ' + autoLog[0].replace(/<[^>]+>/g,'').slice(0,40) : ''));
+ showToast('Auto-completed ' + count + ' task' + (count!==1?'s':'') + (autoLog.length ? ', ' + autoLog[0].replace(/<[^>]+>/g,'').slice(0,40) : ''));
     } else if (!silent) {
       showToast('No new evidence found for open tasks');
     }
@@ -4843,7 +4843,7 @@ async function runLocalIntelligence(repId, resultElId) {
     let html = '<div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">';
     ['commercial','value_prop','prospective'].forEach(function(stage) {
       const cfg = DEAL_STAGE_CONFIG[stage];
-      html += '<div style="flex:1;min-width:90px;background:rgba(0,0,0,0.06);border-radius:2px;padding:8px;text-align:center">' +
+      html += '<div style="flex:1;min-width:90px;background:rgba(0,0,0,0.06);border-radius:var(--r-sm);padding:8px;text-align:center">' +
         '<div style="font-size:20px;font-weight:600;color:' + cfg.color + '">' + (sc[stage]||0) + '</div>' +
         '<div style="font-size:11px;color:var(--text3)">' + cfg.icon + ' ' + cfg.label + '</div>' +
       '</div>';
@@ -4874,9 +4874,9 @@ async function runLocalIntelligence(repId, resultElId) {
           html += '<div style="font-size:11px;color:var(--text3);font-weight:600;margin:6px 0 3px 4px;text-transform:uppercase;letter-spacing:0.04em">' + esc(parentLabel) + '</div>';
         }
         grp.accounts.forEach(function(a) {
-          const stalenessBadge = a.staleness === 'cold' ? '<span style="font-size:11px;font-weight:700;color:var(--coral);background:rgba(192,82,63,0.12);border-radius:2px;padding:1px 6px;margin-left:6px">\u2744 COLD</span>'
-            : a.staleness === 'stale' ? '<span style="font-size:11px;font-weight:700;color:var(--amber);background:rgba(var(--c-accent-rgb),0.12);border-radius:2px;padding:1px 6px;margin-left:6px">STALE</span>' : '';
-          const regionBadge = a.region ? '<span style="font-size:11px;color:var(--text3);background:rgba(0,0,0,0.06);border-radius:2px;padding:1px 6px;margin-left:5px">' + esc(a.region) + '</span>' : '';
+          const stalenessBadge = a.staleness === 'cold' ? '<span style="font-size:11px;font-weight:700;color:var(--coral);background:rgba(192,82,63,0.12);border-radius:var(--r-sm);padding:1px 6px;margin-left:6px">\u2744 COLD</span>'
+            : a.staleness === 'stale' ? '<span style="font-size:11px;font-weight:700;color:var(--amber);background:rgba(var(--c-accent-rgb),0.12);border-radius:var(--r-sm);padding:1px 6px;margin-left:6px">STALE</span>' : '';
+          const regionBadge = a.region ? '<span style="font-size:11px;color:var(--text3);background:rgba(0,0,0,0.06);border-radius:var(--r-sm);padding:1px 6px;margin-left:5px">' + esc(a.region) + '</span>' : '';
           const indent = grp.accounts.length > 1 ? 'margin-left:10px;border-left-width:2px;' : '';
           html += '<div style="border-left:3px solid ' + cfg.color + ';' + indent + 'padding:8px 12px;margin-bottom:6px;background:rgba(0,0,0,0.04);border-radius:0 6px 6px 0">' +
             '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap">' +
@@ -4906,8 +4906,8 @@ async function runCoverageCheck(repId, repEmail, resultElId) {
     const r = await fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify({ action: 'account_coverage', rep_user_id: isManager?targetId:null, date_from: from, date_to: to }) });
     const data = await r.json();
     const picker = renderCoveragePeriodPicker(outputId);
-    if (data.scopeError) { out.innerHTML = picker + '<div style="font-size:12px;color:var(--coral);padding:8px 0"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 10.5V7.5a5.5 5.5 0 0111 0v3M5 10.5h14v10H5z"/></svg> ' + esc(data.error || 'Gmail permissions need to be re-granted — reconnect Gmail.') + '</div>'; if (btn){btn.textContent='Check today';btn.disabled=false;} return; }
-    if (data.reconnectNeeded) { out.innerHTML = picker + '<div style="font-size:12px;color:var(--coral);padding:8px 0"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> ' + esc(data.error || 'Gmail connection expired — reconnect Gmail.') + '</div>'; if (btn){btn.textContent='Check today';btn.disabled=false;} return; }
+    if (data.scopeError) { out.innerHTML = picker + '<div style="font-size:12px;color:var(--coral);padding:8px 0"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 10.5V7.5a5.5 5.5 0 0111 0v3M5 10.5h14v10H5z"/></svg> ' + esc(data.error || 'Gmail permissions need to be re-granted, reconnect Gmail.') + '</div>'; if (btn){btn.textContent='Check today';btn.disabled=false;} return; }
+    if (data.reconnectNeeded) { out.innerHTML = picker + '<div style="font-size:12px;color:var(--coral);padding:8px 0"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> ' + esc(data.error || 'Gmail connection expired, reconnect Gmail.') + '</div>'; if (btn){btn.textContent='Check today';btn.disabled=false;} return; }
     if (!data.connected) {
       var covErrMsg = data.error && data.error !== 'Gmail not connected' ? data.error : ('Gmail not connected'+(isManager?' for this rep':''));
       var covErrColor = data.error && data.error === 'Unauthorized' ? 'var(--coral)' : 'var(--text3)';
@@ -4923,13 +4923,13 @@ async function runCoverageCheck(repId, repEmail, resultElId) {
     }
     const pct = s.coverageRate||0; const barColor = pct>=80?'var(--green)':pct>=50?'var(--amber)':'var(--coral)';
     let html = picker;
-    html += '<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="color:var(--text2)">'+s.coveredAccounts+'/'+s.totalAccounts+' accounts reached · '+s.totalLogged+' logged · '+s.totalVerified+' verified</span><span style="color:'+barColor+';font-weight:600">'+pct+'%</span></div><div style="height:5px;background:var(--surface2);border-radius:2px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+barColor+';border-radius:2px;transition:width 0.4s"></div></div></div>';
+    html += '<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="color:var(--text2)">'+s.coveredAccounts+'/'+s.totalAccounts+' accounts reached · '+s.totalLogged+' logged · '+s.totalVerified+' verified</span><span style="color:'+barColor+';font-weight:600">'+pct+'%</span></div><div style="height:5px;background:var(--surface2);border-radius:var(--r-sm);overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+barColor+';border-radius:var(--r-sm);transition:width 0.4s"></div></div></div>';
 
     if (data.hasSeqData) {
-      html += '<div style="font-size:11px;color:var(--green);background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);border-radius:2px;padding:5px 10px;margin-bottom:10px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> SmartReach signals loaded — calls, LinkedIn and WhatsApp verified where data exists</div>';
+      html += '<div style="font-size:11px;color:var(--green);background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);border-radius:var(--r-sm);padding:5px 10px;margin-bottom:10px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> SmartReach signals loaded, calls, LinkedIn and WhatsApp verified where data exists</div>';
     }
 
-    html += '<div style="margin-bottom:12px;border:1px solid var(--border);border-radius:2px;overflow:hidden">';
+    html += '<div style="margin-bottom:12px;border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden">';
     html += '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;padding:8px 12px;background:var(--surface2);border-bottom:1px solid var(--border)">Outreach by account</div>';
     html += '<table style="width:100%;border-collapse:collapse;font-size:12px">';
     html += '<thead><tr style="background:var(--surface2)">' +
@@ -5003,7 +5003,7 @@ async function runCoverageCheck(repId, repEmail, resultElId) {
           h += '<span style="color:var(--text3)">'+b.logged+' lgd</span>';
         }
         if (b.seqNotDateAccurate && b.seqVerified > 0) {
-          h += '<br><span style="font-size:11px;color:var(--text3)" title="Seq shows '+b.seqVerified+' total — excluded from today count (no per-event timestamp)">SR: '+b.seqVerified+' lifetime</span>';
+          h += '<br><span style="font-size:11px;color:var(--text3)" title="Seq shows '+b.seqVerified+' total, excluded from today count (no per-event timestamp)">SR: '+b.seqVerified+' lifetime</span>';
         }
         return h;
       };
@@ -5029,11 +5029,11 @@ async function runCoverageCheck(repId, repEmail, resultElId) {
 
       var signal, sigColor, sigTitle;
       if (replies > 0) {
-        signal='<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5s5.5 4.3 5.5 9a5.5 5.5 0 01-11 0c0-2 1-3.4 1-3.4s.6 1.6 1.8 1.6c1.6 0 1.4-3.4 2.7-7.2z"/></svg>'; sigColor='var(--green)'; sigTitle='Prospect responded — pursue now';
+        signal='<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5s5.5 4.3 5.5 9a5.5 5.5 0 01-11 0c0-2 1-3.4 1-3.4s.6 1.6 1.8 1.6c1.6 0 1.4-3.4 2.7-7.2z"/></svg>'; sigColor='var(--green)'; sigTitle='Prospect responded, pursue now';
       } else if (emailOpens > 0 && totalVerifiedTouches > 0) {
-        signal='<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12zM12 15a3 3 0 100-6 3 3 0 000 6z"/></svg>'; sigColor='var(--amber)'; sigTitle='Opening but not replying — try a different hook or switch channel';
+        signal='<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12zM12 15a3 3 0 100-6 3 3 0 000 6z"/></svg>'; sigColor='var(--amber)'; sigTitle='Opening but not replying, try a different hook or switch channel';
       } else if (totalVerifiedTouches > 0 && channels >= 2) {
-        signal='<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg>'; sigColor='var(--blue)'; sigTitle='Multichannel — good coverage, keep at it';
+        signal='<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg>'; sigColor='var(--blue)'; sigTitle='Multichannel, good coverage, keep at it';
       } else if (totalVerifiedTouches > 0) {
         signal='<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5s6 6.4 6 10.2a6 6 0 11-12 0C6 9.9 12 3.5 12 3.5z"/></svg>'; sigColor='var(--text3)'; sigTitle='Verified outreach, no engagement signal yet';
       } else if (totalLoggedTouches > 0) {
@@ -5044,11 +5044,11 @@ async function runCoverageCheck(repId, repEmail, resultElId) {
 
       // Per-account action hint
       var accountHint = '';
-      if (signal === '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5s5.5 4.3 5.5 9a5.5 5.5 0 01-11 0c0-2 1-3.4 1-3.4s.6 1.6 1.8 1.6c1.6 0 1.4-3.4 2.7-7.2z"/></svg>')  accountHint = 'Hot — follow up today';
-      else if (signal === '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12zM12 15a3 3 0 100-6 3 3 0 000 6z"/></svg>') accountHint = 'Opening — change your hook or call';
-      else if (signal === '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg>') accountHint = 'Multichannel — stay consistent';
-      else if (signal === '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5s6 6.4 6 10.2a6 6 0 11-12 0C6 9.9 12 3.5 12 3.5z"/></svg>') accountHint = 'No engagement — try a different channel';
-      else if (signal === '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.5h6v3H9zM7 5H5.5v15h13V5H17"/></svg>') accountHint = 'Unverified — sync SmartReach for accuracy';
+      if (signal === '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5s5.5 4.3 5.5 9a5.5 5.5 0 01-11 0c0-2 1-3.4 1-3.4s.6 1.6 1.8 1.6c1.6 0 1.4-3.4 2.7-7.2z"/></svg>')  accountHint = 'Hot, follow up today';
+      else if (signal === '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12zM12 15a3 3 0 100-6 3 3 0 000 6z"/></svg>') accountHint = 'Opening, change your hook or call';
+      else if (signal === '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg>') accountHint = 'Multichannel, stay consistent';
+      else if (signal === '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5s6 6.4 6 10.2a6 6 0 11-12 0C6 9.9 12 3.5 12 3.5z"/></svg>') accountHint = 'No engagement, try a different channel';
+      else if (signal === '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.5h6v3H9zM7 5H5.5v15h13V5H17"/></svg>') accountHint = 'Unverified, sync SmartReach for accuracy';
 
       var campaignTag = g.campaigns ? '<div style="font-size:11px;color:var(--text3);margin-top:1px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> '+esc(g.campaigns.slice(0,45))+'</div>' : '';
 
@@ -5093,7 +5093,7 @@ async function runCoverageCheck(repId, repEmail, resultElId) {
       };
     });
 
-    html += '<div id="cov-coaching-'+outputId+'" style="background:var(--surface);border:1px solid var(--border2);border-radius:2px;padding:12px 14px">';
+    html += '<div id="cov-coaching-'+outputId+'" style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-sm);padding:12px 14px">';
     html += '<div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> Coaching</div>';
     html += '<div style="font-size:12px;color:var(--text3)">Analysing outreach quality…</div>';
     html += '</div>';
@@ -5142,9 +5142,9 @@ async function getCoverageCoaching(grid, outputId, repEmail) {
   var prompt = dataContext +
     '\nYou are a sharp B2B sales coach. Provide coaching in exactly 4 sections. Keep each bullet to one punchy sentence. Name specific accounts. No preamble.\n\n' +
     '1. WHAT\'S WORKING (max 2 bullets)\n' +
-    '2. WHAT TO FIX NOW (max 3 bullets — specific, actionable, account-level)\n' +
-    '3. THIS WEEK\'S PRIORITY (1 sentence — the single most important action)\n' +
-    '4. FORECAST (2 sentences — given current activity, what outcome should the rep realistically expect? Be honest but constructive. Address "will my inputs lead to results?")\n\n' +
+    '2. WHAT TO FIX NOW (max 3 bullets, specific, actionable, account-level)\n' +
+    '3. THIS WEEK\'S PRIORITY (1 sentence, the single most important action)\n' +
+    '4. FORECAST (2 sentences, given current activity, what outcome should the rep realistically expect? Be honest but constructive. Address "will my inputs lead to results?")\n\n' +
     'Be direct. Use sales language, not corporate speak. Do not pad with pleasantries.';
 
   try {
@@ -5170,7 +5170,7 @@ async function getCoverageCoaching(grid, outputId, repEmail) {
       { key: 'FORECAST',             color: 'var(--blue)',  icon: '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg>' }
     ];
 
-    var rendered = '<div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> Coaching — '+esc(repEmail?repEmail.split('@')[0]:'you')+'</div>';
+    var rendered = '<div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> Coaching, '+esc(repEmail?repEmail.split('@')[0]:'you')+'</div>';
 
     // Also render quick stats row
     rendered += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border)">' +
@@ -5282,13 +5282,13 @@ function _renderAcctImportModal() {
   var m = document.createElement('div');
   m.id = 'acct-import-modal';
   m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px';
-  var inputStyle = 'width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:2px;padding:5px 7px;color:var(--text);font-family:var(--sans);font-size:11px;outline:none';
-  var h = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;max-width:680px;width:100%;max-height:85vh;display:flex;flex-direction:column;overflow:hidden">';
+  var inputStyle = 'width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r-sm);padding:5px 7px;color:var(--text);font-family:var(--sans);font-size:11px;outline:none';
+  var h = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-md);max-width:680px;width:100%;max-height:85vh;display:flex;flex-direction:column;overflow:hidden">';
   h += '<div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">';
   h += '<img src="icons/icon-48.png" style="width:16px;height:16px;border-radius:50%"/>';
-  h += '<span style="font-size:13px;font-weight:600;color:var(--text);flex:1">Import ' + _acctImportRows.length + ' accounts — review & edit</span>';
+  h += '<span style="font-size:13px;font-weight:600;color:var(--text);flex:1">Import ' + _acctImportRows.length + ' accounts, review & edit</span>';
   h += '<button onclick="document.getElementById(\'acct-import-modal\').remove()" style="background:none;border:none;color:var(--text3);font-size:14px;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>';
-  h += '<div style="padding:10px 16px;font-size:11px;color:var(--text3)">Fill in anything the CRM export missed — domain powers email matching, region powers pipeline breakdowns.' + (isAdmin ? ' Rows with an owner email are assigned to that user; blank = you.' : ' All accounts will be assigned to you.') + '</div>';
+  h += '<div style="padding:10px 16px;font-size:11px;color:var(--text3)">Fill in anything the CRM export missed, domain powers email matching, region powers pipeline breakdowns.' + (isAdmin ? ' Rows with an owner email are assigned to that user; blank = you.' : ' All accounts will be assigned to you.') + '</div>';
   h += '<div style="flex:1;overflow-y:auto;padding:0 16px 10px"><table style="width:100%;border-collapse:collapse;font-size:11px">';
   h += '<tr style="color:var(--text3);text-align:left"><th style="padding:4px 6px;font-weight:600">Account *</th><th style="padding:4px 6px;font-weight:600">Domain</th><th style="padding:4px 6px;font-weight:600">Region</th>' + (isAdmin ? '<th style="padding:4px 6px;font-weight:600">Owner email</th>' : '') + '</tr>';
   _acctImportRows.forEach(function(r, i) {
@@ -5301,8 +5301,8 @@ function _renderAcctImportModal() {
   });
   h += '</table></div>';
   h += '<div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end">';
-  h += '<button onclick="document.getElementById(\'acct-import-modal\').remove()" style="padding:8px 14px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer">Cancel</button>';
-  h += '<button id="acctImportGo" onclick="submitAccountsImport()" style="padding:8px 18px;border-radius:2px;background:var(--gold);border:none;color:var(--c-canvas);font-family:var(--sans);font-size:12px;font-weight:700;cursor:pointer">Import accounts</button>';
+  h += '<button onclick="document.getElementById(\'acct-import-modal\').remove()" style="padding:8px 14px;border-radius:var(--r-sm);background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer">Cancel</button>';
+  h += '<button id="acctImportGo" onclick="submitAccountsImport()" style="padding:8px 18px;border-radius:var(--r-sm);background:var(--gold);border:none;color:var(--c-canvas);font-family:var(--sans);font-size:12px;font-weight:700;cursor:pointer">Import accounts</button>';
   h += '</div></div>';
   m.innerHTML = h;
   document.body.appendChild(m);
@@ -5325,7 +5325,7 @@ async function submitAccountsImport() {
     if (!d.ok) { showToast(d.error || 'Import failed'); if (btn) { btn.textContent = 'Import accounts'; btn.disabled = false; } return; }
     document.getElementById('acct-import-modal')?.remove();
     var msg = '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Imported ' + d.created + ' account' + (d.created!==1?'s':'') + (d.skipped ? ' · ' + d.skipped + ' already existed' : '');
-    if (d.unmapped_owner_emails && d.unmapped_owner_emails.length) msg += ' · ' + d.unmapped_owner_emails.length + ' owner email(s) not found — assigned to you';
+    if (d.unmapped_owner_emails && d.unmapped_owner_emails.length) msg += ' · ' + d.unmapped_owner_emails.length + ' owner email(s) not found, assigned to you';
     showToast(msg);
     if (typeof loadMyAccounts === 'function') loadMyAccounts();
   } catch(e) { showToast('Error: ' + e.message); if (btn) { btn.textContent = 'Import accounts'; btn.disabled = false; } }
@@ -5359,7 +5359,7 @@ async function renderTeam() {
   const selectedDate = (teamDateEl && teamDateEl.value) ? teamDateEl.value : todayKey();
   tl.innerHTML = '<div class="empty"><div class="empty-icon">⏳</div>Loading team data…</div>';
   if (!SB_URL || !SB_KEY) { tl.innerHTML = '<div class="empty"><div class="empty-icon"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM3.2 9.5h17.6M3.2 14.5h17.6M12 3a14 14 0 000 18 14 14 0 000-18z"/></svg></div>Set up Supabase in Settings to see team data.</div>'; return; }
-  if (!currentUser?.token) { tl.innerHTML = '<div class="empty"><div class="empty-icon"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 10.5V7.5a5.5 5.5 0 0111 0v3M5 10.5h14v10H5z"/></svg></div>Session expired — please sign out and sign back in.</div>'; return; }
+  if (!currentUser?.token) { tl.innerHTML = '<div class="empty"><div class="empty-icon"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 10.5V7.5a5.5 5.5 0 0111 0v3M5 10.5h14v10H5z"/></svg></div>Session expired, please sign out and sign back in.</div>'; return; }
   try {
     let q;
     const seeAll = ['super_admin','admin','director','executive'].includes(profile?.role);
@@ -5415,7 +5415,7 @@ function renderMemberDetail(d, memberId, memberEmail) {
     // completionNote may be on the win directly (new saves) or on the matching task (pre-fix saves)
     const matchingTask = (d.tasks||[]).find(function(t){ return t.text===it.text && t.completionNote; });
     const noteText = it.completionNote || (matchingTask && matchingTask.completionNote) || '';
-    const note = noteText ? '<div style="font-size:11px;color:var(--text2);background:var(--surface2);border-radius:2px;padding:3px 8px;margin-top:4px;font-style:italic"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5z"/></svg> '+esc(noteText)+'</div>' : '';
+    const note = noteText ? '<div style="font-size:11px;color:var(--text2);background:var(--surface2);border-radius:var(--r-sm);padding:3px 8px;margin-top:4px;font-style:italic"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5z"/></svg> '+esc(noteText)+'</div>' : '';
     return '<div class="det-item"><span class="di-dot" style="background:var(--green)"></span><div style="flex:1"><span>'+esc(displayTxt)+'</span>'+ts+note+'</div></div>';
   }).join('') : '<div class="m-empty">None logged</div>') + '</div>';
   const delegateSection = canDelegate ? '<div class="det-sec"><div class="det-lbl">Delegate a task</div><div style="display:flex;gap:8px;margin-top:6px"><input class="setup-input" style="margin-bottom:0;font-size:12px;padding:7px 10px" id="delegate-input-' + memberId + '" placeholder="Task to delegate (min 25 chars)…" maxlength="300"/><button class="setup-btn" style="padding:7px 14px;font-size:12px;white-space:nowrap" onclick="delegateTask(\'' + memberId + '\',\'' + memberEmail + '\')">Send ↗</button></div></div>' : '';
@@ -5510,7 +5510,7 @@ async function runManagerSearch() {
 
     // Per-rep coverage breakdown
     if (reps.length) {
-      html += '<div style="border:1px solid var(--border);border-radius:2px;overflow:hidden;margin-bottom:12px">';
+      html += '<div style="border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden;margin-bottom:12px">';
       html += '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;padding:8px 12px;background:var(--surface2);border-bottom:1px solid var(--border)">Coverage by rep</div>';
       reps.forEach(function(r) {
         if (!r.connected) {
@@ -5531,7 +5531,7 @@ async function runManagerSearch() {
 
     // Pulled-in intelligence (same data the Intel tab shows for this account)
     if (intel.length) {
-      html += '<div style="border:1px solid var(--border);border-radius:2px;overflow:hidden">';
+      html += '<div style="border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden">';
       html += '<div style="font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em;padding:8px 12px;background:var(--surface2);border-bottom:1px solid var(--border)">\u26a1 Account intelligence (' + intel.length + ' meeting' + (intel.length>1?'s':'') + ')</div>';
       intel.slice(0,5).forEach(function(row) {
         const sentimentColor = {positive:'var(--green)',neutral:'var(--text3)',negative:'var(--coral)'}[row.sentiment]||'var(--text3)';
@@ -5609,8 +5609,8 @@ function showNudgeBanner(tasks) {
   const hour = new Date().getHours(); const pending = (tasks||[]).filter(function(t){return !t.done;}).length;
   if (pending === 0 || hour < 9) { banner.style.display = 'none'; return; }
   let msg = '';
-  if (hour >= 11 && hour < 13) msg = '⏰ Almost noon — ' + pending + ' task' + (pending>1?'s':'') + ' still open. Finish before 12 for max rhythm score.';
-  else if (hour >= 16 && hour < 18) msg = '⏰ Last push — ' + pending + ' task' + (pending>1?'s':'') + ' to go. Complete before 6pm to stay on track.';
+  if (hour >= 11 && hour < 13) msg = '⏰ Almost noon, ' + pending + ' task' + (pending>1?'s':'') + ' still open. Finish before 12 for max rhythm score.';
+  else if (hour >= 16 && hour < 18) msg = '⏰ Last push, ' + pending + ' task' + (pending>1?'s':'') + ' to go. Complete before 6pm to stay on track.';
   if (msg) { text.textContent = msg; banner.style.display = 'block'; } else banner.style.display = 'none';
 }
 
@@ -5664,11 +5664,11 @@ async function loadExecDashboard() {
     [{label:'Org Score',value:avgScore,suffix:'',color:scoreColor(avgScore),sub:scoreLabel(avgScore)},{label:'Completion',value:orgCompletionRate,suffix:'%',color:orgCompletionRate>=70?'var(--green)':orgCompletionRate>=50?'var(--amber)':'var(--coral)',sub:totalDone+'/'+totalTasks+' tasks done'},{label:'Wins',value:totalWins,suffix:'',color:totalWins>0?'var(--green)':'var(--text3)',sub:totalWins>0?'Across team':'None logged yet'},{label:'Issues',value:totalIssues,suffix:'',color:totalIssues>0?'var(--coral)':'var(--text3)',sub:totalIssues>0?'Flagged today':'All clear'}].forEach(function(k){html+='<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px"><div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">'+k.label+'</div><div style="font-size:26px;font-weight:500;color:'+k.color+';line-height:1;margin-bottom:4px">'+k.value+k.suffix+'</div><div style="font-size:11px;color:var(--text3)">'+k.sub+'</div></div>';});
     html+='</div>';
     html+='<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-bottom:12px"><div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px">Team scores</div>';
-    repData.slice().sort(function(a,b){return b.score-a.score;}).forEach(function(r){const bc=scoreColor(r.score);const w=r.tasks>0?r.score:0;html+='<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="font-size:12px;color:var(--text2)">'+esc(r.email.split('@')[0])+'</span><span style="font-size:12px;font-weight:600;color:'+bc+'">'+( r.tasks>0?r.score:'—')+'</span></div><div style="height:4px;background:var(--surface2);border-radius:2px;overflow:hidden"><div style="height:100%;width:'+w+'%;background:'+bc+';border-radius:2px;transition:width 0.5s"></div></div></div>';});
+    repData.slice().sort(function(a,b){return b.score-a.score;}).forEach(function(r){const bc=scoreColor(r.score);const w=r.tasks>0?r.score:0;html+='<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="font-size:12px;color:var(--text2)">'+esc(r.email.split('@')[0])+'</span><span style="font-size:12px;font-weight:600;color:'+bc+'">'+( r.tasks>0?r.score:'—')+'</span></div><div style="height:4px;background:var(--surface2);border-radius:var(--r-sm);overflow:hidden"><div style="height:100%;width:'+w+'%;background:'+bc+';border-radius:var(--r-sm);transition:width 0.5s"></div></div></div>';});
     html+='</div>';
     if (atRisk.length||noActivity.length||totalIssues>0) {
       html+='<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-bottom:12px"><div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Priorities & Risks</div>';
-      if (atRisk.length) { html+='<div style="border-left:3px solid var(--coral);padding:8px 12px;background:var(--coral-lt);border-radius:0 6px 6px 0;margin-bottom:8px"><div style="font-size:12px;font-weight:500;color:var(--coral);margin-bottom:4px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> Low score ('+atRisk.length+')</div>'+atRisk.map(function(r){return '<div style="font-size:12px;color:var(--text2)">'+esc(r.email.split('@')[0])+' — score '+r.score+' · '+r.pending+' tasks pending</div>';}).join('')+'</div>'; }
+      if (atRisk.length) { html+='<div style="border-left:3px solid var(--coral);padding:8px 12px;background:var(--coral-lt);border-radius:0 6px 6px 0;margin-bottom:8px"><div style="font-size:12px;font-weight:500;color:var(--coral);margin-bottom:4px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> Low score ('+atRisk.length+')</div>'+atRisk.map(function(r){return '<div style="font-size:12px;color:var(--text2)">'+esc(r.email.split('@')[0])+', score '+r.score+' · '+r.pending+' tasks pending</div>';}).join('')+'</div>'; }
       if (noActivity.length) { html+='<div style="border-left:3px solid var(--amber);padding:8px 12px;background:var(--amber-lt);border-radius:0 6px 6px 0;margin-bottom:8px"><div style="font-size:12px;font-weight:500;color:var(--amber)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> No tasks logged ('+noActivity.length+')</div>'+noActivity.map(function(r){return '<div style="font-size:12px;color:var(--text2)">'+esc(r.email.split('@')[0])+'</div>';}).join('')+'</div>'; }
       html+='</div>';
     }
@@ -5684,11 +5684,11 @@ async function loadExecDashboard() {
         var displayText = w.text?.startsWith('*') ? w.text.slice(1).trim() : (w.text || '');
         var ts = w.completedAt || w.addedAt || '';
         var note = w.completionNote || '';
-        html += '<div style="padding:10px 12px;background:var(--bg);border-radius:2px;margin-bottom:6px;border-left:3px solid var(--green)">' +
+        html += '<div style="padding:10px 12px;background:var(--bg);border-radius:var(--r-sm);margin-bottom:6px;border-left:3px solid var(--green)">' +
           '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">' +
             '<div style="flex:1">' +
               '<div style="font-size:13px;color:var(--text);font-weight:500">'+esc(displayText)+'</div>' +
-              (note ? '<div style="font-size:12px;color:var(--text2);margin-top:4px;font-style:italic;background:var(--surface2);border-radius:2px;padding:4px 8px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5z"/></svg> '+esc(note)+'</div>' : '') +
+              (note ? '<div style="font-size:12px;color:var(--text2);margin-top:4px;font-style:italic;background:var(--surface2);border-radius:var(--r-sm);padding:4px 8px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5z"/></svg> '+esc(note)+'</div>' : '') +
             '</div>' +
             '<div style="text-align:right;flex-shrink:0">' +
               '<div style="font-size:11px;color:var(--green);font-weight:600">'+esc(repName)+'</div>' +
@@ -5701,12 +5701,12 @@ async function loadExecDashboard() {
     }
 
     html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-top:12px">' +
-      '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4"/></svg> Org — relevant meetings booked</div>' +
+      '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4"/></svg> Org, relevant meetings booked</div>' +
       '<div id="meetingsKpiOrg">Loading…</div>' +
     '</div>';
 
     html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-top:12px">' +
-      '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> Live feed — org-wide</div>' +
+      '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> Live feed, org-wide</div>' +
       '<div id="teamFeedList">Loading…</div>' +
     '</div>';
 
@@ -5730,15 +5730,15 @@ function _feedTimeAgo(iso) {
   return Math.round(diffHr / 24) + 'd ago';
 }
 function _renderFeedEntries(entries) {
-  if (!entries.length) return '<div style="font-size:12px;color:var(--text3);padding:8px 0">Nothing yet — wins and milestones will show up here as they happen.</div>';
+  if (!entries.length) return '<div style="font-size:12px;color:var(--text3);padding:8px 0">Nothing yet, wins and milestones will show up here as they happen.</div>';
   return entries.map(function(f) {
     var icon = FEED_EVENT_ICON[f.event_type] || '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg>';
     var reactionChips = FEED_EMOJIS.map(function(e) {
       var count = (f.reactions && f.reactions[e]) || 0;
       var mine = f.my_reaction === e;
-      return '<button onclick="reactToFeed(\'' + f.id + '\',\'' + e + '\')" style="border:1px solid ' + (mine ? 'var(--gold)' : 'var(--border)') + ';background:' + (mine ? 'rgba(184,134,11,0.12)' : 'var(--surface2)') + ';border-radius:3px;padding:2px 8px;font-size:11px;cursor:pointer;margin-right:4px">' + e + (count ? ' ' + count : '') + '</button>';
+      return '<button onclick="reactToFeed(\'' + f.id + '\',\'' + e + '\')" style="border:1px solid ' + (mine ? 'var(--gold)' : 'var(--border)') + ';background:' + (mine ? 'rgba(184,134,11,0.12)' : 'var(--surface2)') + ';border-radius:var(--r-md);padding:2px 8px;font-size:11px;cursor:pointer;margin-right:4px">' + e + (count ? ' ' + count : '') + '</button>';
     }).join('');
-    return '<div style="padding:10px 12px;background:var(--bg);border-radius:2px;margin-bottom:8px;border-left:3px solid var(--gold)">' +
+    return '<div style="padding:10px 12px;background:var(--bg);border-radius:var(--r-sm);margin-bottom:8px;border-left:3px solid var(--gold)">' +
       '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:4px">' +
         '<div style="font-size:13px;color:var(--text);font-weight:500">' + icon + ' ' + esc(f.title) + '</div>' +
         '<div style="font-size:11px;color:var(--text3);white-space:nowrap">' + _feedTimeAgo(f.created_at) + '</div>' +
@@ -5811,7 +5811,7 @@ function _renderMeetingsReceipts(meetings, limit) {
   if (!list.length) return '<div style="font-size:11px;color:var(--text3);padding:4px 0">No qualifying meetings in this window.</div>';
   return list.map(function(m){
     return '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);padding:3px 0;border-bottom:1px solid var(--border)">' +
-      '<span>' + esc(m.account_name) + ' — ' + esc(m.title||'').slice(0,40) + '</span><span>' + esc(m.date) + '</span></div>';
+      '<span>' + esc(m.account_name) + ', ' + esc(m.title||'').slice(0,40) + '</span><span>' + esc(m.date) + '</span></div>';
   }).join('');
 }
 let _repMeetCache = {};
@@ -5844,7 +5844,7 @@ async function loadMeetingsKpiSelf(days) {
     if (!d.ok) { el.innerHTML = d.connected === false ? '<div style="font-size:12px;color:var(--text3)">Connect email to track meetings booked.</div>' : '<div style="font-size:12px;color:var(--coral)">Could not load.</div>'; return; }
     var periodBtns = [7,30,90].map(function(p){
       var active = p === _meetingsKpiSelfDays;
-      return '<button onclick="loadMeetingsKpiSelf(' + p + ')" style="padding:3px 10px;border-radius:3px;border:1px solid ' + (active?'var(--gold)':'var(--border)') + ';background:' + (active?'rgba(184,134,11,0.12)':'var(--surface2)') + ';color:var(--text2);font-size:11px;cursor:pointer;margin-left:4px">' + p + 'd</button>';
+      return '<button onclick="loadMeetingsKpiSelf(' + p + ')" style="padding:3px 10px;border-radius:var(--r-md);border:1px solid ' + (active?'var(--gold)':'var(--border)') + ';background:' + (active?'rgba(184,134,11,0.12)':'var(--surface2)') + ';color:var(--text2);font-size:11px;cursor:pointer;margin-left:4px">' + p + 'd</button>';
     }).join('');
     var list = _renderMeetingsReceipts(d.meetings, 8);
     el.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px">' +
@@ -5870,7 +5870,7 @@ async function loadMeetingsKpiTeam(days) {
     if (!d.ok) { el.innerHTML = ''; return; }
     var periodBtns = [7,30,90].map(function(p){
       var active = p === _meetingsKpiTeamDays;
-      return '<button onclick="loadMeetingsKpiTeam(' + p + ')" style="padding:3px 10px;border-radius:3px;border:1px solid ' + (active?'var(--gold)':'var(--border)') + ';background:' + (active?'rgba(184,134,11,0.12)':'var(--surface2)') + ';color:var(--text2);font-size:11px;cursor:pointer;margin-left:4px">' + p + 'd</button>';
+      return '<button onclick="loadMeetingsKpiTeam(' + p + ')" style="padding:3px 10px;border-radius:var(--r-md);border:1px solid ' + (active?'var(--gold)':'var(--border)') + ';background:' + (active?'rgba(184,134,11,0.12)':'var(--surface2)') + ';color:var(--text2);font-size:11px;cursor:pointer;margin-left:4px">' + p + 'd</button>';
     }).join('');
     var rows = (d.byRep||[]).map(function(r2){
       var rid = 'repMeet_team_' + r2.user_id;
@@ -5883,7 +5883,7 @@ async function loadMeetingsKpiTeam(days) {
     }).join('');
     el.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:14px 16px">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
-        '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4"/></svg> Team — relevant meetings booked</div>' +
+        '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4"/></svg> Team, relevant meetings booked</div>' +
         '<div>' + periodBtns + '</div>' +
       '</div>' +
       '<div style="font-size:26px;font-weight:700;color:var(--gold);margin-bottom:8px">' + (d.total||0) + '</div>' +
@@ -5982,7 +5982,7 @@ async function loadRepAccounts() {
   try {
     const rows = await sbGet('org_accounts?user_id=eq.' + repId + '&org_id=eq.' + profile.org_id + '&select=id,account_name,domain&order=account_name');
     if (!rows || !rows.length) { list.innerHTML = '<div style="font-size:12px;color:var(--text3);font-style:italic">No accounts assigned yet</div>'; return; }
-    list.innerHTML = rows.map(r => '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--surface2);border-radius:2px;margin-bottom:5px"><div><div style="font-size:13px;color:var(--text)">' + esc(r.account_name) + '</div>' + (r.domain?'<div style="font-size:11px;color:var(--text3)">'+esc(r.domain)+'</div>':'') + '</div><button onclick="removeRepAccount(\''+r.id+'\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>').join('');
+    list.innerHTML = rows.map(r => '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--surface2);border-radius:var(--r-sm);margin-bottom:5px"><div><div style="font-size:13px;color:var(--text)">' + esc(r.account_name) + '</div>' + (r.domain?'<div style="font-size:11px;color:var(--text3)">'+esc(r.domain)+'</div>':'') + '</div><button onclick="removeRepAccount(\''+r.id+'\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>').join('');
   } catch(e) { list.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: ' + esc(e.message) + '</div>'; }
 }
 var _accountNameTimer = null;
@@ -6014,10 +6014,10 @@ async function onAccountNameInput(val) {
       const branchList = existingBranches.filter(function(m) { return m.region && m.region !== 'Global'; }).map(function(m) { return m.region; }).join(' · ');
 
       document.getElementById('parentMatchText').textContent =
-        '"' + parent.account_name + '" already exists' + (branchList ? ' — existing branches: ' + branchList : '') + '. Add as branch?';
+        '"' + parent.account_name + '" already exists' + (branchList ? ', existing branches: ' + branchList : '') + '. Add as branch?';
       document.getElementById('parentMatchActions').innerHTML =
-        '<button onclick="setParentMatch(\'' + parent.id + '\',\'' + parent.account_name.replace(/'/g,"\\'") + '\')" style="padding:3px 10px;border-radius:3px;background:var(--gold2);border:none;color:var(--c-canvas);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;margin-right:6px">Yes, add as branch</button>' +
-        '<button onclick="clearParentMatch()" style="padding:3px 10px;border-radius:3px;background:transparent;border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);font-size:11px;cursor:pointer">No, standalone</button>';
+        '<button onclick="setParentMatch(\'' + parent.id + '\',\'' + parent.account_name.replace(/'/g,"\\'") + '\')" style="padding:3px 10px;border-radius:var(--r-md);background:var(--gold2);border:none;color:var(--c-canvas);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;margin-right:6px">Yes, add as branch</button>' +
+        '<button onclick="clearParentMatch()" style="padding:3px 10px;border-radius:var(--r-md);background:transparent;border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);font-size:11px;cursor:pointer">No, standalone</button>';
       suggestion.style.display = 'block';
     } catch(e) { /* non-fatal — just don't show suggestion */ }
   }, 400);
@@ -6097,7 +6097,7 @@ function renderSettings() {
   document.getElementById('apiBadge').className = API_KEY ? 'badge-ok' : 'badge-no';
  document.getElementById('supaBadge').textContent = (SB_URL && SB_KEY) ? 'connected' : 'not set';
   document.getElementById('supaBadge').className = (SB_URL && SB_KEY) ? 'badge-ok' : 'badge-no';
-  if (API_KEY) document.getElementById('apiInput').placeholder = '••••• (saved — paste to update)';
+  if (API_KEY) document.getElementById('apiInput').placeholder = '••••• (saved, paste to update)';
   if (SB_URL) document.getElementById('supaUrl').value = SB_URL;
 }
 function saveApiKey() { const v = document.getElementById('apiInput').value.trim(); if (!v) return; API_KEY = v; localStorage.setItem('dt-api-key', v); document.getElementById('apiInput').value = ''; renderSettings(); alert('API key saved!'); }
@@ -6137,7 +6137,7 @@ async function runReview() {
   renderSummary();
   const pd = getPeriodData(); const pct = pd.totalTasks ? Math.round(pd.doneTasks/pd.totalTasks*100) : 0;
   const periodLabel = reviewPeriod==='daily' ? fmtDate(viewDate) : reviewPeriod==='weekly' ? 'this week' : 'this month';
-  const fallback = `<strong>${reviewPeriod.charAt(0).toUpperCase()+reviewPeriod.slice(1)} summary — ${periodLabel}</strong><br><br><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg> ${pd.totalTasks} tasks, ${pd.doneTasks} done (${pct}%)<br><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> ${pd.totalIssues} issues<br><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.8l2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 10l5.9-.8z"/></svg> ${pd.totalWins} wins<br>○ ${pd.totalMisses} misses`;
+  const fallback = `<strong>${reviewPeriod.charAt(0).toUpperCase()+reviewPeriod.slice(1)} summary, ${periodLabel}</strong><br><br><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg> ${pd.totalTasks} tasks, ${pd.doneTasks} done (${pct}%)<br><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> ${pd.totalIssues} issues<br><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.8l2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 10l5.9-.8z"/></svg> ${pd.totalWins} wins<br>○ ${pd.totalMisses} misses`;
   if (!API_KEY) { body.innerHTML = fallback + '<br><br><em style="color:var(--text3)">Add your Anthropic key in Settings for AI insights.</em>'; return; }
   if (!pd.totalTasks && !pd.totalIssues && !pd.totalWins) { body.textContent = 'Nothing logged for this period yet.'; return; }
   body.innerHTML = '<div class="ldots"><span></span><span></span><span></span></div>';
@@ -6243,7 +6243,7 @@ function _apprPreview(dark) {
   const line  = dark ? '#2C2F36' : '#E8E2D8';
   const text  = dark ? '#E8E4DE' : '#2A2620';
   const muted = dark ? '#6E7178' : '#B8B0A4';
-  return '<svg viewBox="0 0 84 116" style="width:100%;max-width:84px;height:auto;display:block;margin:0 auto;border-radius:2px">' +
+  return '<svg viewBox="0 0 84 116" style="width:100%;max-width:84px;height:auto;display:block;margin:0 auto;border-radius:var(--r-sm)">' +
     '<rect width="84" height="116" rx="8" fill="'+bg+'"/>' +
     '<rect x="7" y="8" width="30" height="4" rx="2" fill="'+text+'"/>' +
     '<circle cx="74" cy="10" r="4" fill="#C8961E"/>' +
@@ -6272,7 +6272,7 @@ function renderAppearancePanel() {
   const cardStyle = (isDarkCard) => {
     const on = auto ? false : (isDarkCard === dark);
     const following = auto && (isDarkCard === dark);
-    return 'flex:1;cursor:pointer;border-radius:3px;padding:10px;text-align:center;' +
+    return 'flex:1;cursor:pointer;border-radius:var(--r-md);padding:10px;text-align:center;' +
       'border:2px solid ' + (on ? 'var(--gold)' : (following ? 'rgba(var(--c-accent-rgb),0.35)' : 'var(--border2)')) + ';' +
       'background:' + (on ? 'rgba(var(--c-accent-rgb),0.08)' : 'transparent') + ';';
   };
@@ -6297,7 +6297,7 @@ function renderAppearancePanel() {
   if (row) {
     row.innerHTML = APPR_SCALES.map(function(s) {
       const on = Math.abs(a.scale - s.value) < 0.001;
-      return '<div onclick="setAppearanceScale('+s.value+')" style="flex:1;cursor:pointer;text-align:center;padding:14px 6px;border-radius:3px;' +
+      return '<div onclick="setAppearanceScale('+s.value+')" style="flex:1;cursor:pointer;text-align:center;padding:14px 6px;border-radius:var(--r-md);' +
         'border:2px solid '+(on?'var(--gold)':'var(--border2)')+';background:'+(on?'rgba(var(--c-accent-rgb),0.08)':'transparent')+'">' +
         '<div style="font-size:'+s.px+'px;font-weight:600;color:var(--text);line-height:1">Aa</div>' +
         '<div style="font-size:11px;color:var(--text3);margin-top:7px">'+s.label+'</div>' +
@@ -6464,7 +6464,7 @@ function shareTasksMenu() {
 
   overlay.innerHTML =
     '<div style="background:var(--bg);border-top:1px solid var(--border2);border-radius:var(--radius-lg) var(--radius-lg) 0 0;width:100%;max-width:480px;padding:0 0 24px 0;animation:slideUp 0.25s ease">' +
-      '<div style="width:40px;height:4px;background:var(--border2);border-radius:2px;margin:12px auto 16px"></div>' +
+      '<div style="width:40px;height:4px;background:var(--border2);border-radius:var(--r-sm);margin:12px auto 16px"></div>' +
       '<div style="padding:0 20px">' +
         '<div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px">Share today\'s priorities</div>' +
         '<div style="font-size:12px;color:var(--text3);margin-bottom:20px">' + dateStr + ' · ' + (buildTasksText()?.split('\n').filter(function(l){return l.match(/^\d+\./);}).length || 0) + ' tasks</div>' +
@@ -6481,7 +6481,7 @@ function shareTasksMenu() {
 
         '<button onclick="copyTaskText()" id="copy-tasks-btn" style="width:100%;padding:13px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:var(--sans);font-size:14px;font-weight:500;cursor:pointer;margin-bottom:16px;text-align:left;display:flex;align-items:center;gap:12px">' +
           '<span style="font-size:20px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.5h6v3H9zM7 5H5.5v15h13V5H17"/></svg></span>' +
-          '<div><div style="font-weight:600">Copy to clipboard</div><div style="font-size:12px;color:var(--text3);font-weight:400">Paste anywhere — Slack, Teams, SMS</div></div>' +
+          '<div><div style="font-weight:600">Copy to clipboard</div><div style="font-size:12px;color:var(--text3);font-weight:400">Paste anywhere, Slack, Teams, SMS</div></div>' +
         '</button>' +
 
         '<button onclick="document.getElementById(\'share-menu-popup\').remove()" style="width:100%;padding:11px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text3);font-family:var(--sans);font-size:13px;cursor:pointer">Cancel</button>' +
@@ -6533,7 +6533,7 @@ function renderTemplateList() {
   const templates = getTemplates(); const list = document.getElementById('tmplList'); const count = document.getElementById('tmplCount');
   count.textContent = templates.length ? `(${templates.length})` : '';
   if (!templates.length) { list.innerHTML = '<div style="font-size:13px;color:var(--text3);font-style:italic;padding:8px 0">No template tasks yet. Add some above.</div>'; return; }
-  list.innerHTML = templates.map((t, i) => `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface2);border-radius:2px;margin-bottom:6px"><input type="checkbox" id="tmpl-chk-${i}" checked style="accent-color:var(--gold);width:16px;height:16px;flex-shrink:0"><input type="text" value="${esc(t)}" id="tmpl-txt-${i}" style="flex:1;background:transparent;border:none;outline:none;color:var(--text);font-family:var(--font);font-size:13px" onchange="updateTemplateTask(${i}, this.value)"/><button onclick="deleteTemplateTask(${i})" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;flex-shrink:0"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>`).join('');
+  list.innerHTML = templates.map((t, i) => `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface2);border-radius:var(--r-sm);margin-bottom:6px"><input type="checkbox" id="tmpl-chk-${i}" checked style="accent-color:var(--gold);width:16px;height:16px;flex-shrink:0"><input type="text" value="${esc(t)}" id="tmpl-txt-${i}" style="flex:1;background:transparent;border:none;outline:none;color:var(--text);font-family:var(--font);font-size:13px" onchange="updateTemplateTask(${i}, this.value)"/><button onclick="deleteTemplateTask(${i})" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;flex-shrink:0"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>`).join('');
 }
 function addTemplateTask() { const inp = document.getElementById('tmplInput'); const text = inp.value.trim(); const hint = document.getElementById('tmplHint'); if (text.length < 25) { hint.style.display='block'; inp.focus(); return; } hint.style.display='none'; const templates = getTemplates(); templates.push(text); saveTemplates(templates); inp.value = ''; renderTemplateList(); }
 function updateTemplateTask(i, newVal) { const templates = getTemplates(); if (newVal.trim().length >= 25) templates[i] = newVal.trim(); saveTemplates(templates); }
@@ -6577,7 +6577,7 @@ function openCarryForward(missIdx, taskText, taskKey, taskIdx) {
   const nextMon=new Date();const daysToMon=(8-nextMon.getDay())%7||7;nextMon.setDate(nextMon.getDate()+daysToMon);
   const fmt=d=>d.toISOString().split('T')[0]; const lbl=d=>d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
   const quickDays=document.getElementById('carryFwdQuickDays');
-  quickDays.innerHTML=[{label:'Tomorrow · '+lbl(tomorrow),val:fmt(tomorrow)},{label:lbl(dayAfter),val:fmt(dayAfter)},{label:'Next Mon · '+lbl(nextMon),val:fmt(nextMon)}].map(opt=>'<button onclick="selectCarryDate(\''+opt.val+'\')" id="cfq-'+opt.val+'" style="padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:2px;color:var(--text2);font-family:var(--font);font-size:12px;cursor:pointer;white-space:nowrap">'+opt.label+'</button>').join('');
+  quickDays.innerHTML=[{label:'Tomorrow · '+lbl(tomorrow),val:fmt(tomorrow)},{label:lbl(dayAfter),val:fmt(dayAfter)},{label:'Next Mon · '+lbl(nextMon),val:fmt(nextMon)}].map(opt=>'<button onclick="selectCarryDate(\''+opt.val+'\')" id="cfq-'+opt.val+'" style="padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text2);font-family:var(--font);font-size:12px;cursor:pointer;white-space:nowrap">'+opt.label+'</button>').join('');
   document.getElementById('carryFwdDate').value=fmt(tomorrow); selectCarryDate(fmt(tomorrow));
   document.getElementById('carryFwdModal').style.display='flex';
   setTimeout(()=>document.getElementById('carryFwdReason').focus(),200);
@@ -6612,7 +6612,7 @@ function showToast(msg) {
     // modals opened FROM those overlays 100000 (scout profile), toast 100001.
     // A toast fired while anything is open must always be visible, since it
     // is often the only report of whether the action worked.
-    t.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surface);border:1px solid var(--gold);padding:10px 18px;border-radius:3px;font-size:13px;color:var(--text);z-index:100001;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;white-space:nowrap;font-family:var(--sans);box-shadow:var(--shadow-2)';
+    t.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surface);border:1px solid var(--gold);padding:10px 18px;border-radius:var(--r-md);font-size:13px;color:var(--text);z-index:100001;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;white-space:nowrap;font-family:var(--sans);box-shadow:var(--shadow-2)';
     document.body.appendChild(t);
   }
   t.textContent = msg;
@@ -6662,7 +6662,7 @@ function renderByStreamChart(deals, fmtUsd) {
     return { label: e[0], val: e[1].val, verified: e[1].verified, partial: e[1].partial };
   });
   var maxVal = Math.max.apply(null, rows.map(function(r) { return r.val; }));
-  if (!rows.length) return '<div style="font-size:12px;color:var(--text3);padding:16px 0">No revenue stream data — save deals with stream breakdowns to see this view.</div>';
+  if (!rows.length) return '<div style="font-size:12px;color:var(--text3);padding:16px 0">No revenue stream data, save deals with stream breakdowns to see this view.</div>';
   return '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Pipeline by revenue stream</div>' +
     mkBars(rows, maxVal, fmtUsd);
 }
@@ -6791,7 +6791,7 @@ async function _renderWeeklyCheckPane(deal, forceRefresh) {
     d = await r.json();
   } catch(e) { d = null; }
   if (!d || (!d.ok && !d.going_right)) {
-    body.innerHTML = '<div style="padding:20px 0;text-align:center;font-size:12px;color:var(--text3)">Couldn\'t load the weekly check.<br><button onclick="_renderWeeklyCheckPane(_currentDealDetail.deal, true)" style="margin-top:8px;font-size:11px;padding:5px 12px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--gold);cursor:pointer;font-family:var(--sans)">↻ Try again</button></div>';
+    body.innerHTML = '<div style="padding:20px 0;text-align:center;font-size:12px;color:var(--text3)">Couldn\'t load the weekly check.<br><button onclick="_renderWeeklyCheckPane(_currentDealDetail.deal, true)" style="margin-top:8px;font-size:11px;padding:5px 12px;border-radius:var(--r-sm);background:var(--surface2);border:1px solid var(--border2);color:var(--gold);cursor:pointer;font-family:var(--sans)">↻ Try again</button></div>';
     return;
   }
   var h = d.header || {};
@@ -6806,8 +6806,8 @@ async function _renderWeeklyCheckPane(deal, forceRefresh) {
 
   // Verdict + vitals
   html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">' +
-    '<span style="font-size:12px;font-weight:700;color:'+verdictCfg.color+';background:'+verdictCfg.bg+';border-radius:2px;padding:4px 10px">'+verdictCfg.icon+' '+verdictCfg.label+'</span>' +
-    (d.cached ? '<span style="font-size:11px;color:var(--text3);background:var(--surface2);border-radius:2px;padding:2px 6px">cached</span>' : '') +
+    '<span style="font-size:12px;font-weight:700;color:'+verdictCfg.color+';background:'+verdictCfg.bg+';border-radius:var(--r-sm);padding:4px 10px">'+verdictCfg.icon+' '+verdictCfg.label+'</span>' +
+    (d.cached ? '<span style="font-size:11px;color:var(--text3);background:var(--surface2);border-radius:var(--r-sm);padding:2px 6px">cached</span>' : '') +
     '</div>';
 
   var vitals = [];
@@ -6819,7 +6819,7 @@ async function _renderWeeklyCheckPane(deal, forceRefresh) {
   vitals.push(['Last touch', h.days_since_contact != null ? h.days_since_contact + 'd ago' : 'never']);
   if (d.momentum && d.momentum.signal_delta_7d != null) vitals.push(['7d momentum', (d.momentum.signal_delta_7d>=0?'+':'') + d.momentum.signal_delta_7d]);
   html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">' + vitals.map(function(v){
-    return '<div style="flex:1;min-width:72px;background:var(--surface2);border-radius:2px;padding:7px 8px;text-align:center"><div style="font-size:13px;font-weight:600;color:var(--text)">'+esc(v[1])+'</div><div style="font-size:11px;color:var(--text3)">'+esc(v[0])+'</div></div>';
+    return '<div style="flex:1;min-width:72px;background:var(--surface2);border-radius:var(--r-sm);padding:7px 8px;text-align:center"><div style="font-size:13px;font-weight:600;color:var(--text)">'+esc(v[1])+'</div><div style="font-size:11px;color:var(--text3)">'+esc(v[0])+'</div></div>';
   }).join('') + '</div>';
 
   var section = function(title, color, items, render) {
@@ -6844,7 +6844,7 @@ async function _renderWeeklyCheckPane(deal, forceRefresh) {
   if (d.do_this_week && d.do_this_week.length) {
     html += '<div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.06em;margin:14px 0 8px">→ Do this week</div>';
     html += d.do_this_week.map(function(t, i){
-      return '<div style="display:flex;gap:8px;align-items:flex-start;background:rgba(var(--c-accent-rgb),0.06);border:1px solid rgba(var(--c-accent-rgb),0.2);border-radius:2px;padding:8px 10px;margin-bottom:6px">' +
+      return '<div style="display:flex;gap:8px;align-items:flex-start;background:rgba(var(--c-accent-rgb),0.06);border:1px solid rgba(var(--c-accent-rgb),0.2);border-radius:var(--r-sm);padding:8px 10px;margin-bottom:6px">' +
         '<span style="font-size:11px;font-weight:700;color:var(--gold);flex-shrink:0">'+(i+1)+'.</span>' +
         '<div><div style="font-size:12px;font-weight:600;color:var(--text)">'+esc(t.action)+'</div>' +
         '<div style="font-size:11px;color:var(--text3);margin-top:2px">'+esc(t.why)+'</div></div></div>';
@@ -6894,7 +6894,7 @@ async function loadCoachingAlerts() {
       if (_openDrill === 'alerts') { _openDrill = null; toggleMetricDrill('alerts'); }
     } catch(_e) {}
     if (!alerts.length) {
-      if (panel) panel.innerHTML = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="font-size:11px;color:var(--text3)">No active alerts</span><button onclick="runCoachingAlerts()" style="font-size:11px;padding:2px 8px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);cursor:pointer">↻ Check now</button></div>';
+      if (panel) panel.innerHTML = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="font-size:11px;color:var(--text3)">No active alerts</span><button onclick="runCoachingAlerts()" style="font-size:11px;padding:2px 8px;border-radius:var(--r-sm);background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);cursor:pointer">↻ Check now</button></div>';
       return;
     }
     var sevColor = {high:'var(--coral)', medium:'var(--amber)', low:'var(--blue)'};
@@ -6904,10 +6904,10 @@ async function loadCoachingAlerts() {
     var highCount = alerts.filter(function(a){ return a.severity === 'high'; }).length;
     var bodyOpen = !!window._alertsPanelOpen;
     var html = '<div style="margin-bottom:6px">';
-    html += '<div onclick="window._alertsPanelOpen=!window._alertsPanelOpen;loadCoachingAlerts()" style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:var(--surface2);border-radius:2px;cursor:pointer;user-select:none;margin-bottom:' + (bodyOpen ? '5px' : '0') + '">';
+    html += '<div onclick="window._alertsPanelOpen=!window._alertsPanelOpen;loadCoachingAlerts()" style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:var(--surface2);border-radius:var(--r-sm);cursor:pointer;user-select:none;margin-bottom:' + (bodyOpen ? '5px' : '0') + '">';
     html += '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> ' + alerts.length + ' alert' + (alerts.length!==1?'s':'') + (highCount ? ' · <span style="color:var(--coral)">' + highCount + ' high</span>' : '') + '</div>';
     html += '<div style="display:flex;align-items:center;gap:8px">';
-    html += '<button onclick="event.stopPropagation();runCoachingAlerts()" style="font-size:11px;padding:1px 7px;border-radius:2px;background:var(--surface);border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);cursor:pointer">↻</button>';
+    html += '<button onclick="event.stopPropagation();runCoachingAlerts()" style="font-size:11px;padding:1px 7px;border-radius:var(--r-sm);background:var(--surface);border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);cursor:pointer">↻</button>';
     html += '<span style="font-size:11px;color:var(--text3)">' + (bodyOpen ? '▴' : '▾') + '</span>';
     html += '</div></div>';
     html += '<div style="display:' + (bodyOpen ? 'block' : 'none') + '">';
@@ -7051,7 +7051,7 @@ async function _renderSignalsPane(deal, forceRefresh, _retried) {
     var _broken = !d || d.error || (!d.verdict && !(d.signals && d.signals.length) && !(d.regional_signals && d.regional_signals.length) && !d.summary && !d.company_industry);
     if (_broken && !_retried) { return _renderSignalsPane(deal, true, true); }
     if (_broken) {
-      body.innerHTML = '<div style="padding:20px 0;text-align:center;font-size:12px;color:var(--text3)">Couldn\'t load signals right now.<br><button onclick="_renderSignalsPane(_currentDealDetail.deal, true)" style="margin-top:8px;font-size:11px;padding:5px 12px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--gold);cursor:pointer;font-family:var(--sans)">↻ Try again</button></div>';
+      body.innerHTML = '<div style="padding:20px 0;text-align:center;font-size:12px;color:var(--text3)">Couldn\'t load signals right now.<br><button onclick="_renderSignalsPane(_currentDealDetail.deal, true)" style="margin-top:8px;font-size:11px;padding:5px 12px;border-radius:var(--r-sm);background:var(--surface2);border:1px solid var(--border2);color:var(--gold);cursor:pointer;font-family:var(--sans)">↻ Try again</button></div>';
       return;
     }
     var html = '';
@@ -7064,8 +7064,8 @@ async function _renderSignalsPane(deal, forceRefresh, _retried) {
       var isFreshShare = cachedAtMs && (Date.now() - cachedAtMs) < 24*3600*1000;
       var cachedLbl = d.cached_at ? new Date(d.cached_at).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : 'earlier';
       html += isFreshShare
-        ? '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;color:var(--text3);margin-bottom:10px;padding:4px 8px;background:var(--surface2);border-radius:2px"><span><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6.5h6l2 2.5h9v11h-17z"/></svg> Shared team fetch from ' + esc(cachedLbl) + ', saved AI quota</span><button onclick="_renderSignalsPane(_currentDealDetail.deal, true)" style="background:none;border:none;color:var(--gold);cursor:pointer;font-size:11px;font-family:var(--sans);padding:0;flex-shrink:0">↻ Refresh live</button></div>'
-        : '<div style="font-size:11px;color:var(--amber);margin-bottom:10px;padding:4px 8px;background:rgba(var(--c-accent-rgb),0.1);border-radius:2px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> Live refresh unavailable (AI quota): showing signals from ' + esc(cachedLbl) + '</div>';
+        ? '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;color:var(--text3);margin-bottom:10px;padding:4px 8px;background:var(--surface2);border-radius:var(--r-sm)"><span><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6.5h6l2 2.5h9v11h-17z"/></svg> Shared team fetch from ' + esc(cachedLbl) + ', saved AI quota</span><button onclick="_renderSignalsPane(_currentDealDetail.deal, true)" style="background:none;border:none;color:var(--gold);cursor:pointer;font-size:11px;font-family:var(--sans);padding:0;flex-shrink:0">↻ Refresh live</button></div>'
+        : '<div style="font-size:11px;color:var(--amber);margin-bottom:10px;padding:4px 8px;background:rgba(var(--c-accent-rgb),0.1);border-radius:var(--r-sm)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> Live refresh unavailable (AI quota): showing signals from ' + esc(cachedLbl) + '</div>';
     }
 
     function renderSignalCards(signals) {
@@ -7073,13 +7073,13 @@ async function _renderSignalsPane(deal, forceRefresh, _retried) {
       var h = '';
       signals.forEach(function(s) {
         var col = sigColors[s.signal] || 'var(--border)';
-        h += '<div style="background:var(--bg);border-radius:2px;padding:9px 11px;margin-bottom:6px;border-left:3px solid '+col+'">';
+        h += '<div style="background:var(--bg);border-radius:var(--r-sm);padding:9px 11px;margin-bottom:6px;border-left:3px solid '+col+'">';
         h += '<div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:3px">';
         h += '<span style="font-size:13px;flex-shrink:0">'+(typeIcons[s.type]||'<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 21V3.5M5.5 4.5h12l-2.5 4 2.5 4h-12"/></svg>')+'</span>';
         h += '<div style="flex:1"><div style="font-size:12px;font-weight:500;color:var(--text)">'+esc(s.title||'')+'</div>';
         if (s.date||s.source) h += '<div style="font-size:11px;color:var(--text3);margin-top:1px">'+(s.date?esc(s.date):'')+(s.date&&s.source?' · ':'')+esc(s.source||'')+'</div>';
         h += '</div>';
-        h += '<span style="font-size:11px;padding:2px 6px;border-radius:2px;background:'+col+'22;color:'+col+';flex-shrink:0">'+esc(s.signal||'')+'</span>';
+        h += '<span style="font-size:11px;padding:2px 6px;border-radius:var(--r-sm);background:'+col+'22;color:'+col+';flex-shrink:0">'+esc(s.signal||'')+'</span>';
         h += '</div>';
         if (s.detail) h += '<div style="font-size:11px;color:var(--text2);line-height:1.5;margin-bottom:3px">'+esc(s.detail)+'</div>';
         if (s.why_it_matters) h += '<div style="font-size:11px;color:var(--amber);font-style:italic"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 11v5.5M12 7.8v.4"/></svg> '+esc(s.why_it_matters)+'</div>';
@@ -7092,7 +7092,7 @@ async function _renderSignalsPane(deal, forceRefresh, _retried) {
     if (d.verdict) {
       var vp = d.verdict.split('|'), vl = vp[0]||'', vr = vp[1]||'';
       var vc = vl.includes('Approach') ? 'var(--green)' : vl.includes('Deprioritise') ? 'var(--coral)' : 'var(--amber)';
-      html += '<div style="border-radius:3px;border:1px solid '+vc+';background:'+vc+'18;padding:10px 14px;margin-bottom:12px">';
+      html += '<div style="border-radius:var(--r-md);border:1px solid '+vc+';background:'+vc+'18;padding:10px 14px;margin-bottom:12px">';
       html += '<div style="font-size:11px;font-weight:700;color:'+vc+';text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">'+esc(vl)+'</div>';
       if (vr) html += '<div style="font-size:12px;color:var(--text2)">'+esc(vr)+'</div>';
       html += '</div>';
@@ -7100,10 +7100,10 @@ async function _renderSignalsPane(deal, forceRefresh, _retried) {
 
     // Company meta + tech stack
     var meta = [d.company_industry, d.company_size, d.company_funding].filter(Boolean);
-    if (meta.length) html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">'+meta.map(function(m){return '<span style="font-size:11px;background:var(--surface2);border-radius:2px;padding:2px 8px">'+esc(m)+'</span>';}).join('')+'</div>';
+    if (meta.length) html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">'+meta.map(function(m){return '<span style="font-size:11px;background:var(--surface2);border-radius:var(--r-sm);padding:2px 8px">'+esc(m)+'</span>';}).join('')+'</div>';
     if (d.company_technologies && d.company_technologies.length) {
       html += '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">';
-      d.company_technologies.forEach(function(t){ html += '<span style="font-size:11px;background:rgba(58,110,168,0.1);color:var(--blue);border-radius:2px;padding:2px 6px">'+esc(String(t))+'</span>'; });
+      d.company_technologies.forEach(function(t){ html += '<span style="font-size:11px;background:rgba(58,110,168,0.1);color:var(--blue);border-radius:var(--r-sm);padding:2px 6px">'+esc(String(t))+'</span>'; });
       html += '</div>';
     }
 
@@ -7116,7 +7116,7 @@ async function _renderSignalsPane(deal, forceRefresh, _retried) {
         var trendRaw = s.metadata && s.metadata.topicTrend;
         var trend = (!isNaN(parseInt(trendRaw))) ? parseInt(trendRaw) : 0;
         var col = score >= 70 ? 'var(--green)' : score >= 40 ? 'var(--amber)' : 'var(--text3)';
-        html += '<span style="font-size:11px;padding:3px 9px;border-radius:2px;background:var(--surface2);border-left:3px solid '+col+'">';
+        html += '<span style="font-size:11px;padding:3px 9px;border-radius:var(--r-sm);background:var(--surface2);border-left:3px solid '+col+'">';
         html += esc(s.topicName||'') + ' <span style="color:'+col+'">'+score+'</span>';
         if (trend !== 0) html += ' <span style="color:'+(trend>0?'var(--green)':'var(--coral)')+';">'+(trend>0?'↑':'↓')+Math.abs(trend)+'</span>';
         html += '</span>';
@@ -7129,7 +7129,7 @@ async function _renderSignalsPane(deal, forceRefresh, _retried) {
       return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;margin-top:4px">'
         + '<span style="font-size:11px;font-weight:700;color:var(--text3);font-style:italic">'+numeral+'</span>'
         + '<span style="font-size:12px;font-weight:600;color:var(--text)">'+label+'</span>'
-        + (count ? '<span style="font-size:11px;background:var(--surface2);border-radius:2px;padding:1px 6px;color:var(--text3)">'+count+' signals</span>' : '')
+        + (count ? '<span style="font-size:11px;background:var(--surface2);border-radius:var(--r-sm);padding:1px 6px;color:var(--text3)">'+count+' signals</span>' : '')
         + '</div>';
     }
 
@@ -7145,7 +7145,7 @@ async function _renderSignalsPane(deal, forceRefresh, _retried) {
     var showCountry  = countryLabel && countryLabel.toLowerCase() !== regionLabel.toLowerCase();
 
     // ── I. Global ───────────────────────────────────────────────────────────
-    html += '<div style="background:var(--surface2);border-radius:3px;padding:12px;margin-bottom:10px">';
+    html += '<div style="background:var(--surface2);border-radius:var(--r-md);padding:12px;margin-bottom:10px">';
     html += sectionHead('I.', 'Global', globalSigs.length);
     if (globalSum) {
       var sumStyle = globalSum.startsWith('AI parse error') || globalSum.startsWith('Signal fetch') ? 'color:var(--coral)' : 'color:var(--text2)';
@@ -7155,7 +7155,7 @@ async function _renderSignalsPane(deal, forceRefresh, _retried) {
     html += '</div>';
 
     // ── II. Regional ────────────────────────────────────────────────────────
-    html += '<div style="background:var(--surface2);border-radius:3px;padding:12px;margin-bottom:10px">';
+    html += '<div style="background:var(--surface2);border-radius:var(--r-md);padding:12px;margin-bottom:10px">';
     html += sectionHead('II.', regionLabel, regionalSigs.length);
     if (regionalSum) html += '<div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:10px">'+esc(regionalSum)+'</div>';
     html += renderSignalCards(regionalSigs);
@@ -7163,7 +7163,7 @@ async function _renderSignalsPane(deal, forceRefresh, _retried) {
 
     // ── III. Country — only if different from region ────────────────────────
     if (showCountry) {
-      html += '<div style="background:var(--surface2);border-radius:3px;padding:12px;margin-bottom:10px">';
+      html += '<div style="background:var(--surface2);border-radius:var(--r-md);padding:12px;margin-bottom:10px">';
       html += sectionHead('III.', countryLabel, countrySigs.length);
       if (countrySum) html += '<div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:10px">'+esc(countrySum)+'</div>';
       html += renderSignalCards(countrySigs);
@@ -7194,28 +7194,28 @@ function _buildDealOverviewHTML(deal) {
   var fmtUsd = function(v) { return !v ? '—' : v>=1e6 ? '$'+(v/1e6).toFixed(1)+'M' : '$'+Math.round(v/1e3)+'K'; };
   var rows = [['Deal value', fmtUsd(deal.deal_value_usd)],['Weighted', fmtUsd(deal.weighted_value_usd)],['Signal score', deal.signal_score!=null ? deal.signal_score+' / 100' : '—'],['Expected close', deal.expected_close||'—'],['Probability', deal.close_probability ? deal.close_probability+'%':'—'],['Rep', (deal.rep_email||'').split('@')[0]||'—'],['Region', deal.region||'—'],['ICP score', deal.icp_score!=null ? deal.icp_score+' / 100':'Not scored']];
   var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">';
-  rows.forEach(function(r){ html += '<div style="background:var(--surface2);border-radius:2px;padding:9px 11px"><div style="font-size:11px;color:var(--text3);margin-bottom:2px">'+r[0]+'</div><div style="font-size:14px;font-weight:500;color:var(--text)">'+esc(String(r[1]))+'</div></div>'; });
+  rows.forEach(function(r){ html += '<div style="background:var(--surface2);border-radius:var(--r-sm);padding:9px 11px"><div style="font-size:11px;color:var(--text3);margin-bottom:2px">'+r[0]+'</div><div style="font-size:14px;font-weight:500;color:var(--text)">'+esc(String(r[1]))+'</div></div>'; });
   html += '</div>';
   // SDR attribution row
-  html += '<div style="background:var(--surface2);border-radius:2px;padding:8px 12px;margin-bottom:10px;display:flex;align-items:center;gap:8px">';
+  html += '<div style="background:var(--surface2);border-radius:var(--r-sm);padding:8px 12px;margin-bottom:10px;display:flex;align-items:center;gap:8px">';
   html += '<span style="font-size:11px;color:var(--text3);flex-shrink:0"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 16.5a4.5 4.5 0 100-9 4.5 4.5 0 000 9zM12 13a1 1 0 100-2 1 1 0 000 2z"/></svg> Sourced by</span>';
   if (deal.originated_by_name) {
     html += '<span style="font-size:12px;font-weight:500;color:var(--text)">'+esc(deal.originated_by_name)+'</span>';
     if (deal.converted_from_sequence) html += '<span style="font-size:11px;color:var(--text3)"> · via '+esc(deal.converted_from_sequence)+'</span>';
     html += '<button onclick="clearDealAttribution(\''+esc(deal.id)+'\')" style="margin-left:auto;font-size:11px;background:none;border:none;color:var(--text3);cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>';
   } else {
-    html += '<button onclick="showAttributionPicker(\''+esc(deal.id)+'\')" style="font-size:11px;padding:2px 10px;border-radius:2px;background:none;border:1px dashed var(--border2);color:var(--text3);font-family:var(--sans);cursor:pointer">+ Tag SDR origin</button>';
+    html += '<button onclick="showAttributionPicker(\''+esc(deal.id)+'\')" style="font-size:11px;padding:2px 10px;border-radius:var(--r-sm);background:none;border:1px dashed var(--border2);color:var(--text3);font-family:var(--sans);cursor:pointer">+ Tag SDR origin</button>';
   }
   html += '</div>';
   html += '<div style="display:flex;gap:8px;margin-bottom:10px">';
-  html += '<button onclick="switchDealTab(\'stakeholders\')" style="flex:1;padding:9px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM2.5 20v-1.5A4.5 4.5 0 017 14h4a4.5 4.5 0 014.5 4.5V20M16 4.3a3.5 3.5 0 010 6.4M18 14.3a4.5 4.5 0 013.5 4.2V20"/></svg> Stakeholders</button>';
-  html += '<button onclick="switchDealTab(\'meddpicc\')" style="flex:1;padding:9px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 16.5a4.5 4.5 0 100-9 4.5 4.5 0 000 9zM12 13a1 1 0 100-2 1 1 0 000 2z"/></svg> MEDDPICC</button>';
-  html += '<button onclick="switchDealTab(\'signals\')" style="flex:1;padding:9px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM3.2 9.5h17.6M3.2 14.5h17.6M12 3a14 14 0 000 18 14 14 0 000-18z"/></svg> Signals</button>';
-  html += '<button onclick="openCloseDeal(\''+esc(deal.id)+'\',\''+esc(deal.account)+'\')" style="flex:1;padding:9px;border-radius:2px;background:none;border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);font-size:12px;cursor:pointer">Close deal</button>';
+  html += '<button onclick="switchDealTab(\'stakeholders\')" style="flex:1;padding:9px;border-radius:var(--r-sm);background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM2.5 20v-1.5A4.5 4.5 0 017 14h4a4.5 4.5 0 014.5 4.5V20M16 4.3a3.5 3.5 0 010 6.4M18 14.3a4.5 4.5 0 013.5 4.2V20"/></svg> Stakeholders</button>';
+  html += '<button onclick="switchDealTab(\'meddpicc\')" style="flex:1;padding:9px;border-radius:var(--r-sm);background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 16.5a4.5 4.5 0 100-9 4.5 4.5 0 000 9zM12 13a1 1 0 100-2 1 1 0 000 2z"/></svg> MEDDPICC</button>';
+  html += '<button onclick="switchDealTab(\'signals\')" style="flex:1;padding:9px;border-radius:var(--r-sm);background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM3.2 9.5h17.6M3.2 14.5h17.6M12 3a14 14 0 000 18 14 14 0 000-18z"/></svg> Signals</button>';
+  html += '<button onclick="openCloseDeal(\''+esc(deal.id)+'\',\''+esc(deal.account)+'\')" style="flex:1;padding:9px;border-radius:var(--r-sm);background:none;border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);font-size:12px;cursor:pointer">Close deal</button>';
   html += '</div>';
   // Company LinkedIn URL field
   var liUrl = deal.company_linkedin_url || '';
-  html += '<div style="background:var(--surface2);border-radius:2px;padding:9px 12px;display:flex;align-items:center;gap:8px">';
+  html += '<div style="background:var(--surface2);border-radius:var(--r-sm);padding:9px 12px;display:flex;align-items:center;gap:8px">';
   html += '<svg width="13" height="13" viewBox="0 0 24 24" fill="#0A66C2"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>';
   html += '<input type="url" id="dealLinkedInInput" value="' + esc(liUrl) + '" placeholder="linkedin.com/company/ferrero" onblur="saveCompanyLinkedIn(\'' + esc(deal.id) + '\',this.value)" style="flex:1;background:none;border:none;outline:none;font-family:var(--sans);font-size:12px;color:var(--text);min-width:0"/>';
   if (liUrl) html += '<a href="' + esc(liUrl) + '" target="_blank" style="font-size:11px;color:#0A66C2;white-space:nowrap">Open ↗</a>';
@@ -7225,7 +7225,7 @@ function _buildDealOverviewHTML(deal) {
 
 // ── Samora Intel button: branded entry point for stakeholder insights ────────
 function _samoraIntelBtn(onclickStr, compact) {
-  return '<button onclick="' + onclickStr + '" title="Samora Intelligence: how to work with them" style="display:inline-flex;align-items:center;gap:5px;background:rgba(var(--c-accent-rgb),0.12);border:1px solid rgba(var(--c-accent-rgb),0.35);border-radius:3px;padding:' + (compact ? '2px 8px' : '6px 12px') + ';cursor:pointer;flex-shrink:0">'
+  return '<button onclick="' + onclickStr + '" title="Samora Intelligence: how to work with them" style="display:inline-flex;align-items:center;gap:5px;background:rgba(var(--c-accent-rgb),0.12);border:1px solid rgba(var(--c-accent-rgb),0.35);border-radius:var(--r-md);padding:' + (compact ? '2px 8px' : '6px 12px') + ';cursor:pointer;flex-shrink:0">'
     + '<img src="icons/icon-48.png" alt="" style="width:' + (compact ? 12 : 16) + 'px;height:' + (compact ? 12 : 16) + 'px;border-radius:50%"/>'
     + '<span style="font-size:' + (compact ? 9 : 10) + 'px;font-weight:700;letter-spacing:.08em;color:var(--gold);text-transform:uppercase;font-family:var(--sans)">Samora Intel</span>'
     + '</button>';
@@ -7241,7 +7241,7 @@ function openMeetingInsights(idx) {
   var rows = roster.map(function(s, i) {
     var initials = (s.full_name || '?').split(' ').map(function(w){ return w[0] || ''; }).slice(0,2).join('').toUpperCase();
     var insLbl = s.insight && s.insight.label
-      ? '<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:3px;background:rgba(var(--c-accent-rgb),0.12);color:var(--gold)">' + esc(s.insight.label) + '</span>'
+      ? '<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:var(--r-md);background:rgba(var(--c-accent-rgb),0.12);color:var(--gold)">' + esc(s.insight.label) + '</span>'
       : '<span style="font-size:11px;color:var(--text3)">Not assessed yet, tap to read</span>';
     var click = s.id ? 'openStakeholderInsight(\'' + esc(s.id) + '\',\'' + esc(s.full_name||'') + '\')' : '';
     return '<div onclick="' + click + '" style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--border);cursor:' + (s.id ? 'pointer' : 'default') + '">' +
@@ -7301,14 +7301,14 @@ async function openStakeholderInsight(stakeholderId, name, opts) {
     if (d.style) {
       var confLbl = d.style.confidence === 'high' ? 'high confidence' : d.style.confidence === 'moderate' ? 'moderate confidence' : 'early read';
       h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">' +
-        '<span style="font-size:13px;font-weight:700;padding:3px 10px;border-radius:3px;background:rgba(var(--c-accent-rgb),0.12);color:var(--gold)">' + esc(d.style.label) + '</span>' +
+        '<span style="font-size:13px;font-weight:700;padding:3px 10px;border-radius:var(--r-md);background:rgba(var(--c-accent-rgb),0.12);color:var(--gold)">' + esc(d.style.label) + '</span>' +
         '<span style="font-size:11px;color:var(--text3)">' + confLbl + ' · ' + d.style.messages_scanned + ' messages</span>' +
         '<span onclick="var el=document.getElementById(\'stk-receipts\');el.style.display=el.style.display===\'none\'?\'block\':\'none\'" style="font-size:11px;color:var(--gold);cursor:pointer;text-decoration:underline dotted">why?</span>' +
       '</div>';
-      h += '<div id="stk-receipts" style="display:none;background:var(--surface2);border-radius:2px;padding:8px 10px;margin-bottom:8px">' +
+      h += '<div id="stk-receipts" style="display:none;background:var(--surface2);border-radius:var(--r-sm);padding:8px 10px;margin-bottom:8px">' +
         (d.style.receipts||[]).map(function(rc){ return '<div style="font-size:11px;color:var(--text2);padding:2px 0">· ' + esc(rc) + '</div>'; }).join('') + '</div>';
     } else if (d.archetype) {
-      h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="font-size:13px;font-weight:700;padding:3px 10px;border-radius:3px;background:var(--surface2);color:var(--text2)">' + esc(d.archetype.label) + '</span>' +
+      h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="font-size:13px;font-weight:700;padding:3px 10px;border-radius:var(--r-md);background:var(--surface2);color:var(--text2)">' + esc(d.archetype.label) + '</span>' +
         '<span style="font-size:11px;color:var(--text3)">based on their role: style not assessed yet (too few messages)</span></div>';
     } else {
       h += '<div style="font-size:12px;color:var(--text3);padding:8px 0">' + esc(d.empty_reason || 'Not enough information yet.') + '</div>';
@@ -7331,7 +7331,7 @@ async function openStakeholderInsight(stakeholderId, name, opts) {
       d.web.bullets.forEach(function(b) { h += '<div style="display:flex;gap:7px;padding:4px 0;font-size:12px;color:var(--text2)"><span style="flex-shrink:0"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15zM16 16l5 5"/></svg></span><span>' + esc(b) + '</span></div>'; });
       h += '<div style="font-size:11px;color:var(--amber);margin-top:4px">' + esc(d.web.label||'') + '</div>';
     } else if (!d.web) {
-      h += '<button onclick="openStakeholderInsight(\'' + esc(stakeholderId) + '\',\'' + esc(name) + '\',{web:true})" style="width:100%;margin-top:12px;padding:8px;border-radius:2px;background:none;border:1px dashed var(--border2);color:var(--text3);font-family:var(--sans);font-size:11px;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15zM16 16l5 5"/></svg> Check public footprint (uses AI: one search, shared with team)</button>';
+      h += '<button onclick="openStakeholderInsight(\'' + esc(stakeholderId) + '\',\'' + esc(name) + '\',{web:true})" style="width:100%;margin-top:12px;padding:8px;border-radius:var(--r-sm);background:none;border:1px dashed var(--border2);color:var(--text3);font-family:var(--sans);font-size:11px;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15zM16 16l5 5"/></svg> Check public footprint (uses AI: one search, shared with team)</button>';
     }
     h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:8px;border-top:1px solid var(--border)">' +
       '<span style="font-size:11px;color:var(--text3)">' + (d.cached ? '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6.5h6l2 2.5h9v11h-17z"/></svg> Shared team read from ' + esc((d.computed_at||'').slice(0,10)) : 'Computed just now') + '</span>' +
@@ -7381,14 +7381,14 @@ async function openSampaignContactInsight(contactId, name, opts) {
     if (d.style) {
       var confLbl = d.style.confidence === 'high' ? 'high confidence' : d.style.confidence === 'moderate' ? 'moderate confidence' : 'early read';
       h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">' +
-        '<span style="font-size:13px;font-weight:700;padding:3px 10px;border-radius:3px;background:rgba(var(--c-accent-rgb),0.12);color:var(--gold)">' + esc(d.style.label) + '</span>' +
+        '<span style="font-size:13px;font-weight:700;padding:3px 10px;border-radius:var(--r-md);background:rgba(var(--c-accent-rgb),0.12);color:var(--gold)">' + esc(d.style.label) + '</span>' +
         '<span style="font-size:11px;color:var(--text3)">' + confLbl + ' · ' + d.style.messages_scanned + ' messages</span>' +
         '<span onclick="var el=document.getElementById(\'spc-receipts\');el.style.display=el.style.display===\'none\'?\'block\':\'none\'" style="font-size:11px;color:var(--gold);cursor:pointer;text-decoration:underline dotted">why?</span>' +
       '</div>';
-      h += '<div id="spc-receipts" style="display:none;background:var(--surface2);border-radius:2px;padding:8px 10px;margin-bottom:8px">' +
+      h += '<div id="spc-receipts" style="display:none;background:var(--surface2);border-radius:var(--r-sm);padding:8px 10px;margin-bottom:8px">' +
         (d.style.receipts||[]).map(function(rc){ return '<div style="font-size:11px;color:var(--text2);padding:2px 0">· ' + esc(rc) + '</div>'; }).join('') + '</div>';
     } else if (d.archetype) {
-      h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="font-size:13px;font-weight:700;padding:3px 10px;border-radius:3px;background:var(--surface2);color:var(--text2)">' + esc(d.archetype.label) + '</span>' +
+      h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="font-size:13px;font-weight:700;padding:3px 10px;border-radius:var(--r-md);background:var(--surface2);color:var(--text2)">' + esc(d.archetype.label) + '</span>' +
         '<span style="font-size:11px;color:var(--text3)">based on their title: style not assessed yet (too few messages)</span></div>';
     } else {
       h += '<div style="font-size:12px;color:var(--text3);padding:8px 0">' + esc(d.empty_reason || 'Not enough information yet.') + '</div>';
@@ -7411,10 +7411,10 @@ async function openSampaignContactInsight(contactId, name, opts) {
       d.web.bullets.forEach(function(b) { h += '<div style="display:flex;gap:7px;padding:4px 0;font-size:12px;color:var(--text2)"><span style="flex-shrink:0"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15zM16 16l5 5"/></svg></span><span>' + esc(b) + '</span></div>'; });
       h += '<div style="font-size:11px;color:var(--amber);margin-top:4px">' + esc(d.web.label||'') + '</div>';
     } else if (!d.web) {
-      h += '<button onclick="openSampaignContactInsight(\'' + esc(contactId) + '\',\'' + esc(name) + '\',{web:true})" style="width:100%;margin-top:12px;padding:8px;border-radius:2px;background:none;border:1px dashed var(--border2);color:var(--text3);font-family:var(--sans);font-size:11px;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15zM16 16l5 5"/></svg> Check public footprint (uses AI: one search, shared with team)</button>';
+      h += '<button onclick="openSampaignContactInsight(\'' + esc(contactId) + '\',\'' + esc(name) + '\',{web:true})" style="width:100%;margin-top:12px;padding:8px;border-radius:var(--r-sm);background:none;border:1px dashed var(--border2);color:var(--text3);font-family:var(--sans);font-size:11px;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15zM16 16l5 5"/></svg> Check public footprint (uses AI: one search, shared with team)</button>';
     }
     if ((d.tips && d.tips.length) || (d.web && d.web.bullets && d.web.bullets.length)) {
-      h += '<button id="spc-copy-btn" onclick="_copySampaignInsight(\'' + esc(contactId) + '\')" style="width:100%;margin-top:10px;padding:8px;border-radius:2px;background:rgba(74,158,255,0.08);border:1px solid rgba(74,158,255,0.3);color:var(--blue);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.5h6v3H9zM7 5H5.5v15h13V5H17"/></svg> Copy for email draft</button>';
+      h += '<button id="spc-copy-btn" onclick="_copySampaignInsight(\'' + esc(contactId) + '\')" style="width:100%;margin-top:10px;padding:8px;border-radius:var(--r-sm);background:rgba(74,158,255,0.08);border:1px solid rgba(74,158,255,0.3);color:var(--blue);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.5h6v3H9zM7 5H5.5v15h13V5H17"/></svg> Copy for email draft</button>';
     }
     h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:8px;border-top:1px solid var(--border)">' +
       '<span style="font-size:11px;color:var(--text3)">' + (d.cached ? '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6.5h6l2 2.5h9v11h-17z"/></svg> Shared team read from ' + esc((d.computed_at||'').slice(0,10)) : 'Computed just now') + '</span>' +
@@ -7460,8 +7460,8 @@ function _stkRowHtml(s) {
   }
   var liHref = s.linkedin_url ? s.linkedin_url : ('https://www.linkedin.com/search/results/people/?keywords=' + encodeURIComponent(s.full_name || ''));
   var liOpacity = s.linkedin_url ? (isNR ? '0.4' : '1') : (isNR ? '0.2' : '0.35');
-  var roleHtml = (s.meddpicc_role && s.meddpicc_role !== 'not_relevant') ? '<span style="font-size:11px;padding:1px 6px;border-radius:2px;background:' + (roleBgs[s.meddpicc_role] || 'rgba(0,0,0,0.06)') + ';color:var(--text2);margin-left:4px">' + esc(roleLabels[s.meddpicc_role] || s.meddpicc_role) + '</span>' : '';
-  var deptChip = s.department ? '<span style="font-size:11px;color:var(--text3);background:var(--surface2);border-radius:2px;padding:1px 6px;margin-left:4px">' + esc(s.department) + '</span>' : '';
+  var roleHtml = (s.meddpicc_role && s.meddpicc_role !== 'not_relevant') ? '<span style="font-size:11px;padding:1px 6px;border-radius:var(--r-sm);background:' + (roleBgs[s.meddpicc_role] || 'rgba(0,0,0,0.06)') + ';color:var(--text2);margin-left:4px">' + esc(roleLabels[s.meddpicc_role] || s.meddpicc_role) + '</span>' : '';
+  var deptChip = s.department ? '<span style="font-size:11px;color:var(--text3);background:var(--surface2);border-radius:var(--r-sm);padding:1px 6px;margin-left:4px">' + esc(s.department) + '</span>' : '';
   var html = '<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border);opacity:' + (isNR ? '0.45' : '1') + '">';
   html += '<div style="width:34px;height:34px;border-radius:50%;background:var(--surface2);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--text2);flex-shrink:0">' + esc(initials) + '</div>';
   html += '<div style="flex:1;min-width:0">';
@@ -7477,7 +7477,7 @@ function _stkRowHtml(s) {
   html += '<span style="font-size:11px;color:' + recencyColor + '"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> ' + recencyStr + '</span>';
   if (s.contact_count > 0) html += '<span style="font-size:11px;color:var(--text3)">' + s.contact_count + ' emails</span>';
   html += '</div></div>';
-  html += '<select onchange="saveStakeholderRole(\'' + s.id + '\',this.value)" style="font-size:11px;padding:3px 6px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);flex-shrink:0">';
+  html += '<select onchange="saveStakeholderRole(\'' + s.id + '\',this.value)" style="font-size:11px;padding:3px 6px;border-radius:var(--r-sm);background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);flex-shrink:0">';
   ['','champion','economic_buyer','decision_maker','influencer','blocker','end_user','not_relevant'].forEach(function(rv){
     html += '<option value="' + rv + '"' + (s.meddpicc_role === rv ? ' selected' : '') + '>' + (rv ? (roleLabels[rv] || rv) : 'Set role…') + '</option>';
   });
@@ -7534,12 +7534,12 @@ function _renderStakeholdersPane(stakeholders, deal) {
 
   var dealId = deal && deal.id || '';
   if (_stkTab === 'active') {
-    html += '<button onclick="enrichDeal(\'' + esc(dealId) + '\',\'' + esc(deal && deal.account || '') + '\')" id="enrichDealBtn" style="width:100%;margin-top:12px;padding:10px;border-radius:2px;background:var(--surface2);border:1px dashed var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer">' + _samoraIntelLabel('Find &amp; enrich contacts from activity') + '</button>';
+    html += '<button onclick="enrichDeal(\'' + esc(dealId) + '\',\'' + esc(deal && deal.account || '') + '\')" id="enrichDealBtn" style="width:100%;margin-top:12px;padding:10px;border-radius:var(--r-sm);background:var(--surface2);border:1px dashed var(--border2);color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer">' + _samoraIntelLabel('Find &amp; enrich contacts from activity') + '</button>';
     html += '<div id="enrichDealStatus" style="font-size:11px;color:var(--text3);margin-top:6px"></div>';
-    html += '<button onclick="syncActiveStakeholders(\'' + esc(dealId) + '\')" id="syncActiveBtn" style="width:100%;margin-top:6px;padding:8px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);font-size:11px;cursor:pointer">↻ Sync recent contacts from Gmail &amp; calendar</button>';
+    html += '<button onclick="syncActiveStakeholders(\'' + esc(dealId) + '\')" id="syncActiveBtn" style="width:100%;margin-top:6px;padding:8px;border-radius:var(--r-sm);background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);font-size:11px;cursor:pointer">↻ Sync recent contacts from Gmail &amp; calendar</button>';
     html += '<div id="stkAutoSyncNote" style="font-size:11px;color:var(--text3);margin-top:6px"></div>';
   } else {
-    html += '<button onclick="scoutStakeholders(\'' + esc(dealId) + '\')" id="scoutBtn" style="width:100%;margin-top:12px;padding:10px;border-radius:2px;background:rgba(var(--c-accent-rgb),0.08);border:1px solid rgba(var(--c-accent-rgb),0.4);color:var(--gold);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">' + _samoraIntelLabel('Scout stakeholders for this account') + '</button>';
+    html += '<button onclick="scoutStakeholders(\'' + esc(dealId) + '\')" id="scoutBtn" style="width:100%;margin-top:12px;padding:10px;border-radius:var(--r-sm);background:rgba(var(--c-accent-rgb),0.08);border:1px solid rgba(var(--c-accent-rgb),0.4);color:var(--gold);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">' + _samoraIntelLabel('Scout stakeholders for this account') + '</button>';
     html += '<div id="scoutStatus" style="font-size:11px;color:var(--text3);margin-top:6px"></div>';
     html += '<div onclick="openScoutProfile(\'' + esc(dealId) + '\')" style="font-size:11px;color:var(--text3);text-align:center;margin-top:8px;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 16.5a4.5 4.5 0 100-9 4.5 4.5 0 000 9zM12 13a1 1 0 100-2 1 1 0 000 2z"/></svg> Who to hunt (job titles &amp; targets)</div>';
   }
@@ -7662,9 +7662,9 @@ async function openScoutProfile(accountId) {
   var usingAcct = !!acctP;                 // per-account override exists → edit that
   var cur = acctP || orgP;
   var chip = function(group, val, on) {
-    return '<label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:5px 10px;border-radius:3px;border:1px solid ' + (on?'var(--gold)':'var(--border2)') + ';background:' + (on?'rgba(var(--c-accent-rgb),0.08)':'transparent') + ';color:' + (on?'var(--gold)':'var(--text2)') + ';cursor:pointer;margin:0 6px 6px 0"><input type="checkbox" data-group="' + group + '" value="' + val + '"' + (on?' checked':'') + ' style="margin:0">' + val + '</label>';
+    return '<label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:5px 10px;border-radius:var(--r-md);border:1px solid ' + (on?'var(--gold)':'var(--border2)') + ';background:' + (on?'rgba(var(--c-accent-rgb),0.08)':'transparent') + ';color:' + (on?'var(--gold)':'var(--text2)') + ';cursor:pointer;margin:0 6px 6px 0"><input type="checkbox" data-group="' + group + '" value="' + val + '"' + (on?' checked':'') + ' style="margin:0">' + val + '</label>';
   };
-  var inputStyle = 'width:100%;padding:9px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:2px;color:var(--text);font-size:13px;font-family:var(--sans);outline:none';
+  var inputStyle = 'width:100%;padding:9px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-size:13px;font-family:var(--sans);outline:none';
   var modal = document.createElement('div');
   modal.id = 'scout-profile-modal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10000;display:flex;align-items:flex-end;justify-content:center';
@@ -7680,7 +7680,7 @@ async function openScoutProfile(accountId) {
     '<div style="margin-bottom:14px">' + _SCOUT_SENIORITIES.map(function(x){ return chip('sen', x, (cur.seniorities||[]).indexOf(x) !== -1); }).join('') + '</div>' +
     '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Locations (optional, comma separated)</div>' +
     '<input id="scout-locs" value="' + esc((cur.locations||[]).join(', ')) + '" placeholder="e.g. Italy, Europe" style="' + inputStyle + ';margin-bottom:16px"/>' +
-    '<button onclick="saveScoutProfile()" style="width:100%;padding:12px;border:none;border-radius:3px;background:var(--gold);color:var(--c-canvas);font-size:14px;font-weight:700;cursor:pointer;font-family:var(--sans)">Save</button>' +
+    '<button onclick="saveScoutProfile()" style="width:100%;padding:12px;border:none;border-radius:var(--r-md);background:var(--gold);color:var(--c-canvas);font-size:14px;font-weight:700;cursor:pointer;font-family:var(--sans)">Save</button>' +
   '</div>';
   modal.addEventListener('click', function(){ modal.remove(); });
   document.body.appendChild(modal);
@@ -7723,7 +7723,7 @@ function _renderMeddpiccPane(m, deal) {
   // Auto-infer button — rules-based, reads from call transcripts, no AI needed
   var autoInferBtn = '<div style="margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">' +
     '<div style="font-size:11px;color:var(--text3)">Edit fields or auto-fill from call transcripts</div>' +
-    '<button onclick="inferMeddpiccFromTranscripts(\'' + esc(deal.id) + '\').then(function(d){if(d&&d.ok){_loadDealDetailData(\'' + esc(deal.id) + '\',{id:\'' + esc(deal.id) + '\',account:\'' + esc(deal.account) + '\'})}})" style="padding:5px 10px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:11px;cursor:pointer">' + _samoraIntelLabel('Auto-fill from calls') + '</button>' +
+    '<button onclick="inferMeddpiccFromTranscripts(\'' + esc(deal.id) + '\').then(function(d){if(d&&d.ok){_loadDealDetailData(\'' + esc(deal.id) + '\',{id:\'' + esc(deal.id) + '\',account:\'' + esc(deal.account) + '\'})}})" style="padding:5px 10px;border-radius:var(--r-sm);background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:11px;cursor:pointer">' + _samoraIntelLabel('Auto-fill from calls') + '</button>' +
   '</div>';
   var fields = [
     {key:'metrics',letter:'M',label:'Metrics',valKey:'metrics_value',hint:'What measurable outcome does the buyer want?'},
@@ -7740,23 +7740,23 @@ function _renderMeddpiccPane(m, deal) {
   fields.forEach(function(f) {
     var status = m ? (m[f.key+'_status']||'unknown') : 'unknown';
     var value  = m ? (m[f.valKey]||'') : '';
-    html += '<div style="background:var(--surface2);border-radius:2px;padding:10px 12px;margin-bottom:7px">' +
+    html += '<div style="background:var(--surface2);border-radius:var(--r-sm);padding:10px 12px;margin-bottom:7px">' +
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
         '<span style="font-size:11px;color:var(--text3);font-weight:700;min-width:14px">'+f.letter+'</span>' +
         '<span style="font-size:12px;font-weight:500;color:var(--text);flex:1">'+f.label+'</span>' +
-        '<select onchange="saveMeddpiccField(\''+deal.id+'\',\''+f.key+'_status\',this.value)" style="font-size:11px;padding:2px 5px;border-radius:2px;background:var(--surface);border:1px solid var(--border2);color:'+statusColors[status]+';font-family:var(--sans)">' +
+        '<select onchange="saveMeddpiccField(\''+deal.id+'\',\''+f.key+'_status\',this.value)" style="font-size:11px;padding:2px 5px;border-radius:var(--r-sm);background:var(--surface);border:1px solid var(--border2);color:'+statusColors[status]+';font-family:var(--sans)">' +
           ['unknown','confirmed','partial','missing'].map(function(o){ return '<option value="'+o+'"'+(status===o?' selected':'')+' style="color:var(--text)">'+o+'</option>'; }).join('') +
         '</select>' +
       '</div>' +
       '<input type="text" id="mf-'+f.valKey+'" value="'+esc(value)+'" placeholder="'+esc(f.hint)+'" ' +
         'oninput="_meddpiccChanged(\'' + deal.id + '\')" ' +
         'onblur="saveMeddpiccField(\'' + deal.id + '\',\'' + f.valKey + '\',this.value)" ' +
-        'style="width:100%;padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none"/>' +
+        'style="width:100%;padding:6px 8px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-family:var(--sans);font-size:12px;outline:none"/>' +
     '</div>';
   });
   // Save All button + status indicator
   html += '<div style="margin-top:12px;display:flex;align-items:center;gap:8px">';
-  html += '<button id="meddpiccSaveBtn" onclick="_saveAllMeddpicc(\''+deal.id+'\')" style="padding:9px 18px;border-radius:2px;background:var(--gold);border:none;color:var(--c-canvas);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Save changes</button>';
+  html += '<button id="meddpiccSaveBtn" onclick="_saveAllMeddpicc(\''+deal.id+'\')" style="padding:9px 18px;border-radius:var(--r-sm);background:var(--gold);border:none;color:var(--c-canvas);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Save changes</button>';
   html += '<span id="meddpiccSaveStatus" style="font-size:11px;color:var(--text3)"></span>';
   html += '</div>';
   body.innerHTML = html;
@@ -7850,7 +7850,7 @@ function _mergeNotifRules(saved) {
   return base;
 }
 function _chk(id, on) { return '<input type="checkbox" id="'+id+'"'+(on?' checked':'')+' style="width:16px;height:16px;accent-color:var(--gold);cursor:pointer">'; }
-function _num(id, val, w) { return '<input type="number" id="'+id+'" value="'+(val==null?'':val)+'" style="width:'+(w||48)+'px;padding:5px 6px;background:var(--surface2);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none">'; }
+function _num(id, val, w) { return '<input type="number" id="'+id+'" value="'+(val==null?'':val)+'" style="width:'+(w||48)+'px;padding:5px 6px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-family:var(--sans);font-size:12px;outline:none">'; }
 function renderNotificationRules(cfg) {
   var host = document.getElementById('notifRulesForm'); if (!host) return;
   var days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -7878,11 +7878,11 @@ function renderNotificationRules(cfg) {
   h += '<div style="padding:12px 0">' +
     '<label style="display:flex;align-items:center;gap:10px;cursor:pointer">' + _chk('nr-digest', cfg.weekly_digest.enabled) +
     '<span style="font-size:13px;font-weight:600;color:var(--text)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> Weekly digest</span></label>' +
-    '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:11px;color:var(--text3)">Send on <select id="nr-digest-day" style="padding:5px 6px;background:var(--surface2);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:var(--sans);font-size:12px">'+days.map(function(d,i){return '<option value="'+i+'"'+(i===cfg.weekly_digest.day?' selected':'')+'>'+d+'</option>';}).join('')+'</select> at '+_num('nr-digest-hour', cfg.weekly_digest.hour)+' :00</div></div>';
+    '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:11px;color:var(--text3)">Send on <select id="nr-digest-day" style="padding:5px 6px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-family:var(--sans);font-size:12px">'+days.map(function(d,i){return '<option value="'+i+'"'+(i===cfg.weekly_digest.day?' selected':'')+'>'+d+'</option>';}).join('')+'</select> at '+_num('nr-digest-hour', cfg.weekly_digest.hour)+' :00</div></div>';
   // Save
   h += '<div style="display:flex;gap:8px;margin-top:14px;align-items:center">' +
-    '<button onclick="saveNotificationRules()" style="padding:8px 16px;border-radius:2px;background:var(--gold);border:none;color:var(--c-canvas);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Save rules</button>' +
-    '<button onclick="renderNotificationRules(NOTIFICATION_RULE_DEFAULTS)" style="padding:8px 12px;border-radius:2px;background:none;border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);font-size:12px;cursor:pointer">Reset to default</button>' +
+    '<button onclick="saveNotificationRules()" style="padding:8px 16px;border-radius:var(--r-sm);background:var(--gold);border:none;color:var(--c-canvas);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Save rules</button>' +
+    '<button onclick="renderNotificationRules(NOTIFICATION_RULE_DEFAULTS)" style="padding:8px 12px;border-radius:var(--r-sm);background:none;border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);font-size:12px;cursor:pointer">Reset to default</button>' +
     '<span id="nr-status" style="font-size:12px;color:var(--text3)"></span></div>';
   host.innerHTML = h;
 }
@@ -7957,13 +7957,13 @@ async function loadMeetingPrep() {
     if (!meetings.length) {
       // Calendar events exist but none matched pipeline accounts — show light hint
       container.style.display = 'block';
-      container.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:6px 10px;background:var(--surface2);border-radius:2px;margin-bottom:4px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4"/></svg> ' + d.meetings.length + ' meeting' + (d.meetings.length!==1?'s':'') + ' today — none matched pipeline accounts by attendee or name</div>';
+      container.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:6px 10px;background:var(--surface2);border-radius:var(--r-sm);margin-bottom:4px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4"/></svg> ' + d.meetings.length + ' meeting' + (d.meetings.length!==1?'s':'') + ' today, none matched pipeline accounts by attendee or name</div>';
       return;
     }
 
     var html = '<div style="margin-bottom:12px">';
     // Collapsible header — collapsed by default to save screen space
-    html += '<div onclick="_toggleMeetingPrepList()" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 12px;background:var(--surface2);border:1px solid var(--border2);border-radius:2px;user-select:none">';
+    html += '<div onclick="_toggleMeetingPrepList()" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 12px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r-sm);user-select:none">';
     html += '<span style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;flex:1"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4"/></svg> Today\'s meetings · ' + meetings.length + '</span>';
     html += '<span id="meetingPrepChevron" style="font-size:11px;color:var(--text3)">▸</span>';
     html += '</div>';
@@ -7982,7 +7982,7 @@ async function loadMeetingPrep() {
         window._mtgRosters = window._mtgRosters || [];
         _rosterIdx = window._mtgRosters.push(m.stakeholders_attending) - 1;
       }
-      html += '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;padding:9px 12px;margin-bottom:6px;cursor:pointer" onclick="_togglePrepDetail(\'' + esc(m.account_id||'') + '\')">';
+      html += '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-md);padding:9px 12px;margin-bottom:6px;cursor:pointer" onclick="_togglePrepDetail(\'' + esc(m.account_id||'') + '\')">';
       // Header row: name/time left, Samora Intel + health right (uses the free space)
       html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">';
       html += '<span style="font-size:13px;flex-shrink:0"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4"/></svg></span>';
@@ -7991,7 +7991,7 @@ async function loadMeetingPrep() {
       html += '<div style="font-size:11px;color:var(--text3)">' + esc(m.title) + (time ? ' · ' + time : '') + '</div>';
       html += '</div>';
       if (_rosterIdx >= 0) html += _samoraIntelBtn('event.stopPropagation();openMeetingInsights(' + _rosterIdx + ')', true);
-      if (hScore) html += '<span style="font-size:11px;padding:2px 7px;border-radius:2px;background:'+hColor+'18;color:'+hColor+'" title="Deal health">H:' + hScore + '</span>';
+      if (hScore) html += '<span style="font-size:11px;padding:2px 7px;border-radius:var(--r-sm);background:'+hColor+'18;color:'+hColor+'" title="Deal health">H:' + hScore + '</span>';
       html += '</div>';
 
       // Talking points (MEDDPICC gaps)
@@ -7999,7 +7999,7 @@ async function loadMeetingPrep() {
         html += '<div style="font-size:11px;color:var(--text3);margin-bottom:5px;font-weight:500">Discuss in this meeting:</div>';
         html += '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:5px">';
         m.talking_points.forEach(function(tp) {
-          html += '<span style="font-size:11px;padding:2px 8px;border-radius:2px;background:rgba(var(--c-accent-rgb),0.1);color:var(--gold)">→ ' + esc(tp) + '</span>';
+          html += '<span style="font-size:11px;padding:2px 8px;border-radius:var(--r-sm);background:rgba(var(--c-accent-rgb),0.1);color:var(--gold)">→ ' + esc(tp) + '</span>';
         });
         html += '</div>';
       }
@@ -8016,7 +8016,7 @@ async function loadMeetingPrep() {
       if (m.last_email) {
         html += '<div style="font-size:11px;color:var(--text3);border-top:1px solid var(--border);margin-top:6px;padding-top:5px">';
         html += '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6h17v12h-17zM3.5 6.5l8.5 6 8.5-6"/></svg> Last: <em>' + esc(m.last_email.subject||'') + '</em>';
-        if (m.last_email.snippet) html += ' — ' + esc(m.last_email.snippet.slice(0,80)) + '…';
+        if (m.last_email.snippet) html += ', ' + esc(m.last_email.snippet.slice(0,80)) + '…';
         html += '</div>';
       }
 
@@ -8069,22 +8069,22 @@ async function loadForecastPanel() {
     var html = '<div style="margin-bottom:14px">';
     html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
     html += '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V4M4 20h16M8 17V11M12.5 17V7.5M17 17v-4"/></svg> Forecast</div>';
-    html += '<button onclick="loadForecastPanel()" style="font-size:11px;padding:2px 8px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);cursor:pointer">↻ Refresh</button>';
+    html += '<button onclick="loadForecastPanel()" style="font-size:11px;padding:2px 8px;border-radius:var(--r-sm);background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);cursor:pointer">↻ Refresh</button>';
     html += '</div>';
 
     // KPI row
     html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px">';
-    html += '<div style="background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);border-radius:2px;padding:9px 10px"><div style="font-size:11px;color:var(--green);font-weight:600;margin-bottom:2px">Verified</div><div style="font-size:16px;font-weight:600;color:var(--text)">' + fmt(d.verified) + '</div>' + (d.trend ? '<div style="font-size:11px">' + trend(d.trend.verifiedChange) + ' vs last wk</div>' : '') + '</div>';
-    html += '<div style="background:rgba(var(--c-accent-rgb),0.08);border:1px solid rgba(var(--c-accent-rgb),0.2);border-radius:2px;padding:9px 10px"><div style="font-size:11px;color:var(--amber);font-weight:600;margin-bottom:2px">Nurture</div><div style="font-size:16px;font-weight:600;color:var(--text)">' + fmt(d.nurture) + '</div><div style="font-size:11px;color:var(--text3)">' + (d.buckets&&d.buckets.nurture?d.buckets.nurture.length:0) + ' deals</div></div>';
-    html += '<div style="background:rgba(192,82,63,0.08);border:1px solid rgba(192,82,63,0.2);border-radius:2px;padding:9px 10px"><div style="font-size:11px;color:var(--coral);font-weight:600;margin-bottom:2px">At risk</div><div style="font-size:16px;font-weight:600;color:var(--text)">' + fmt(d.atRisk) + '</div>' + (d.trend ? '<div style="font-size:11px">' + trend(d.trend.atRiskChange) + ' vs last wk</div>' : '') + '</div>';
+    html += '<div style="background:rgba(74,140,92,0.08);border:1px solid rgba(74,140,92,0.2);border-radius:var(--r-sm);padding:9px 10px"><div style="font-size:11px;color:var(--green);font-weight:600;margin-bottom:2px">Verified</div><div style="font-size:16px;font-weight:600;color:var(--text)">' + fmt(d.verified) + '</div>' + (d.trend ? '<div style="font-size:11px">' + trend(d.trend.verifiedChange) + ' vs last wk</div>' : '') + '</div>';
+    html += '<div style="background:rgba(var(--c-accent-rgb),0.08);border:1px solid rgba(var(--c-accent-rgb),0.2);border-radius:var(--r-sm);padding:9px 10px"><div style="font-size:11px;color:var(--amber);font-weight:600;margin-bottom:2px">Nurture</div><div style="font-size:16px;font-weight:600;color:var(--text)">' + fmt(d.nurture) + '</div><div style="font-size:11px;color:var(--text3)">' + (d.buckets&&d.buckets.nurture?d.buckets.nurture.length:0) + ' deals</div></div>';
+    html += '<div style="background:rgba(192,82,63,0.08);border:1px solid rgba(192,82,63,0.2);border-radius:var(--r-sm);padding:9px 10px"><div style="font-size:11px;color:var(--coral);font-weight:600;margin-bottom:2px">At risk</div><div style="font-size:16px;font-weight:600;color:var(--text)">' + fmt(d.atRisk) + '</div>' + (d.trend ? '<div style="font-size:11px">' + trend(d.trend.atRiskChange) + ' vs last wk</div>' : '') + '</div>';
     html += '</div>';
 
     // Won / Lost MTD
     if (d.wonMtd || d.lostMtd) {
       html += '<div style="display:flex;gap:6px;margin-bottom:10px">';
-      html += '<div style="flex:1;background:var(--surface2);border-radius:2px;padding:8px 10px"><div style="font-size:11px;color:var(--text3);margin-bottom:1px">Won MTD</div><div style="font-size:14px;font-weight:600;color:var(--green)">' + fmt(d.wonMtd) + '</div></div>';
-      html += '<div style="flex:1;background:var(--surface2);border-radius:2px;padding:8px 10px"><div style="font-size:11px;color:var(--text3);margin-bottom:1px">Lost MTD</div><div style="font-size:14px;font-weight:600;color:var(--coral)">' + fmt(d.lostMtd) + '</div></div>';
-      html += '<div style="flex:1;background:var(--surface2);border-radius:2px;padding:8px 10px"><div style="font-size:11px;color:var(--text3);margin-bottom:1px">Pipeline</div><div style="font-size:14px;font-weight:600;color:var(--text)">' + fmt(d.total_pipeline) + '</div></div>';
+      html += '<div style="flex:1;background:var(--surface2);border-radius:var(--r-sm);padding:8px 10px"><div style="font-size:11px;color:var(--text3);margin-bottom:1px">Won MTD</div><div style="font-size:14px;font-weight:600;color:var(--green)">' + fmt(d.wonMtd) + '</div></div>';
+      html += '<div style="flex:1;background:var(--surface2);border-radius:var(--r-sm);padding:8px 10px"><div style="font-size:11px;color:var(--text3);margin-bottom:1px">Lost MTD</div><div style="font-size:14px;font-weight:600;color:var(--coral)">' + fmt(d.lostMtd) + '</div></div>';
+      html += '<div style="flex:1;background:var(--surface2);border-radius:var(--r-sm);padding:8px 10px"><div style="font-size:11px;color:var(--text3);margin-bottom:1px">Pipeline</div><div style="font-size:14px;font-weight:600;color:var(--text)">' + fmt(d.total_pipeline) + '</div></div>';
       html += '</div>';
     }
 
@@ -8098,7 +8098,7 @@ async function loadForecastPanel() {
         html += '<div style="font-size:11px;color:var(--text3)">' + esc(deal.rep) + (deal.region?' · '+esc(deal.region):'') + '</div></div>';
         html += '<div style="text-align:right;flex-shrink:0"><div style="font-size:12px;font-weight:500;color:var(--text)">' + fmt(deal.value) + '</div>';
         html += '<div style="font-size:11px;color:' + (deal.daysToClose<=3?'var(--coral)':'var(--text3)') + '">' + deal.daysToClose + 'd</div></div>';
-        html += '<span style="font-size:11px;padding:1px 6px;border-radius:2px;background:'+hc+'18;color:'+hc+'">H:' + (deal.health||'-') + '</span>';
+        html += '<span style="font-size:11px;padding:1px 6px;border-radius:var(--r-sm);background:'+hc+'18;color:'+hc+'">H:' + (deal.health||'-') + '</span>';
         html += '</div>';
       });
     }
@@ -8135,21 +8135,21 @@ async function openTeamAssign(accountId, accountName, currentAe, currentSdr) {
   panel.id = 'teamAssignPanel';
   panel.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:99999;display:flex;align-items:center;justify-content:center';
   var memberOpts = function(selected, roleFilter) {
-    return '<option value="">— None —</option>' + (_orgMembers||[]).filter(function(m){ return !roleFilter || roleFilter.includes(m.role) || !m.role; }).map(function(m) {
+    return '<option value="">None</option>' + (_orgMembers||[]).filter(function(m){ return !roleFilter || roleFilter.includes(m.role) || !m.role; }).map(function(m) {
       var name = m.display_name || (m.email||'').split('@')[0];
       return '<option value="' + esc(m.user_id) + '"' + (m.user_id === selected ? ' selected' : '') + '>' + esc(name) + ' (' + esc(m.role||'member') + ')</option>';
     }).join('');
   };
-  var html = '<div style="background:var(--bg);border-radius:3px;padding:20px;width:320px;max-width:90vw" onclick="event.stopPropagation()">';
+  var html = '<div style="background:var(--bg);border-radius:var(--r-md);padding:20px;width:320px;max-width:90vw" onclick="event.stopPropagation()">';
   html += '<div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM2.5 20v-1.5A4.5 4.5 0 017 14h4a4.5 4.5 0 014.5 4.5V20M16 4.3a3.5 3.5 0 010 6.4M18 14.3a4.5 4.5 0 013.5 4.2V20"/></svg> Assign team</div>';
-  html += '<div style="font-size:12px;color:var(--text3);margin-bottom:14px">' + esc(accountName) + ' — AE and SDR share this one account record, so both always see the same data.</div>';
+  html += '<div style="font-size:12px;color:var(--text3);margin-bottom:14px">' + esc(accountName) + ', AE and SDR share this one account record, so both always see the same data.</div>';
   html += '<div style="margin-bottom:12px"><div style="font-size:11px;color:var(--text3);margin-bottom:5px">AE / Owner <span style="opacity:.7">(None = you own it)</span></div>';
-  html += '<select id="taAeSelect" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none">' + memberOpts(currentAe, null) + '</select></div>';
+  html += '<select id="taAeSelect" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-family:var(--sans);font-size:13px;outline:none">' + memberOpts(currentAe, null) + '</select></div>';
   html += '<div style="margin-bottom:14px"><div style="font-size:11px;color:var(--text3);margin-bottom:5px">SDR</div>';
-  html += '<select id="taSdrSelect" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none">' + memberOpts(currentSdr, null) + '</select></div>';
+  html += '<select id="taSdrSelect" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-family:var(--sans);font-size:13px;outline:none">' + memberOpts(currentSdr, null) + '</select></div>';
   html += '<div style="display:flex;gap:8px">';
-  html += '<button onclick="saveTeamAssign(\'' + esc(accountId) + '\')" style="flex:1;padding:9px;border-radius:2px;background:var(--gold);border:none;color:var(--c-canvas);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Save</button>';
-  html += '<button onclick="document.getElementById(\'teamAssignPanel\').remove()" style="padding:9px 14px;border-radius:2px;background:none;border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);font-size:12px;cursor:pointer">Cancel</button>';
+  html += '<button onclick="saveTeamAssign(\'' + esc(accountId) + '\')" style="flex:1;padding:9px;border-radius:var(--r-sm);background:var(--gold);border:none;color:var(--c-canvas);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Save</button>';
+  html += '<button onclick="document.getElementById(\'teamAssignPanel\').remove()" style="padding:9px 14px;border-radius:var(--r-sm);background:none;border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);font-size:12px;cursor:pointer">Cancel</button>';
   html += '</div></div>';
   panel.innerHTML = html;
   panel.addEventListener('click', function(e) { if (e.target === panel) panel.remove(); });
@@ -8185,13 +8185,13 @@ async function showAttributionPicker(dealId) {
   var panel = document.createElement('div');
   panel.id = 'attributionPickerPanel';
   panel.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:99999;display:flex;align-items:center;justify-content:center';
-  var html = '<div style="background:var(--bg);border-radius:3px;padding:20px;width:320px;max-width:90vw" onclick="event.stopPropagation()">';
+  var html = '<div style="background:var(--bg);border-radius:var(--r-md);padding:20px;width:320px;max-width:90vw" onclick="event.stopPropagation()">';
   html += '<div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px">Tag SDR origin</div>';
   html += '<div style="font-size:12px;color:var(--text3);margin-bottom:14px">Who sourced this deal? This is used for SDR attribution in pipeline reporting.</div>';
   html += '<div style="margin-bottom:12px">';
   html += '<div style="font-size:11px;color:var(--text3);margin-bottom:5px">Select SDR</div>';
-  html += '<select id="attrSdrSelect" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none">';
-  html += '<option value="">— Select team member —</option>';
+  html += '<select id="attrSdrSelect" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-family:var(--sans);font-size:13px;outline:none">';
+  html += '<option value="">Select team member</option>';
   (_orgMembers || []).forEach(function(m) {
     var name = m.display_name || (m.email||'').split('@')[0];
     html += '<option value="' + esc(m.user_id) + '">' + esc(name) + ' (' + esc(m.role||'') + ')</option>';
@@ -8199,11 +8199,11 @@ async function showAttributionPicker(dealId) {
   html += '</select></div>';
   html += '<div style="margin-bottom:14px">';
   html += '<div style="font-size:11px;color:var(--text3);margin-bottom:5px">Sequence / campaign (optional)</div>';
-  html += '<input type="text" id="attrSeqInput" placeholder="e.g. Ferrero EMEA Q3 sequence" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;box-sizing:border-box"/>';
+  html += '<input type="text" id="attrSeqInput" placeholder="e.g. Ferrero EMEA Q3 sequence" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-family:var(--sans);font-size:13px;outline:none;box-sizing:border-box"/>';
   html += '</div>';
   html += '<div style="display:flex;gap:8px">';
-  html += '<button onclick="saveAttribution(\'' + esc(dealId) + '\')" style="flex:1;padding:9px;border-radius:2px;background:var(--gold);border:none;color:var(--c-canvas);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Save</button>';
-  html += '<button onclick="document.getElementById(\'attributionPickerPanel\').remove()" style="padding:9px 14px;border-radius:2px;background:none;border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);font-size:12px;cursor:pointer">Cancel</button>';
+  html += '<button onclick="saveAttribution(\'' + esc(dealId) + '\')" style="flex:1;padding:9px;border-radius:var(--r-sm);background:var(--gold);border:none;color:var(--c-canvas);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Save</button>';
+  html += '<button onclick="document.getElementById(\'attributionPickerPanel\').remove()" style="padding:9px 14px;border-radius:var(--r-sm);background:none;border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);font-size:12px;cursor:pointer">Cancel</button>';
   html += '</div></div>';
   panel.innerHTML = html;
   panel.addEventListener('click', function(e) { if (e.target === panel) panel.remove(); });
@@ -8300,7 +8300,7 @@ function _samoraIntelLabel(text) {
   return '<span style="display:inline-flex;align-items:center;gap:7px;justify-content:center;flex-wrap:wrap">'
     + '<img src="icons/icon-48.png" alt="Samora" style="width:16px;height:16px;border-radius:50%;flex-shrink:0"/>'
     + '<span>' + text + '</span>'
-    + '<span style="font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--gold);text-transform:uppercase;background:rgba(var(--c-accent-rgb),0.12);padding:2px 6px;border-radius:2px;flex-shrink:0">Samora Intelligence</span>'
+    + '<span style="font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--gold);text-transform:uppercase;background:rgba(var(--c-accent-rgb),0.12);padding:2px 6px;border-radius:var(--r-sm);flex-shrink:0">Samora Intelligence</span>'
     + '</span>';
 }
 
@@ -8321,16 +8321,16 @@ async function enrichDeal(accountId, accountName) {
   if (btn) { btn.innerHTML = _samoraIntelLabel('Find contacts from Gmail &amp; SmartReach activity'); btn.disabled = false; }
 
   // Step 2: show confirmation panel so human can verify domain before searching
-  var confirmHtml = '<div style="margin-top:10px;background:var(--surface2);border-radius:3px;padding:12px">' +
+  var confirmHtml = '<div style="margin-top:10px;background:var(--surface2);border-radius:var(--r-md);padding:12px">' +
     '<div style="font-size:12px;font-weight:500;color:var(--text);margin-bottom:4px">Confirm company domain</div>' +
     '<div style="font-size:11px;color:var(--text3);margin-bottom:8px">We\'ll scan Gmail and SmartReach for emails linked to this domain, scoped to this deal\'s keywords.</div>' +
     '<div style="display:flex;gap:8px;align-items:center">' +
       '<input type="text" id="enrichDomainInput" value="' + esc(domain) + '" placeholder="e.g. ferrero.com"' +
-        ' style="flex:1;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>' +
+        ' style="flex:1;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>' +
       '<button onclick="_runEnrich(\'' + esc(accountId) + '\',\'' + esc(accountName) + '\')" ' +
-        'style="padding:8px 14px;border-radius:2px;background:var(--gold);border:none;color:var(--c-canvas);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Search</button>' +
+        'style="padding:8px 14px;border-radius:var(--r-sm);background:var(--gold);border:none;color:var(--c-canvas);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Search</button>' +
       '<button onclick="this.parentElement.parentElement.remove()" ' +
-        'style="padding:8px 10px;border-radius:2px;background:none;border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);font-size:12px;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>' +
+        'style="padding:8px 10px;border-radius:var(--r-sm);background:none;border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);font-size:12px;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>' +
     '</div>' +
     '<div id="enrichRunStatus" style="font-size:11px;color:var(--text3);margin-top:6px"></div>' +
   '</div>';
@@ -8403,7 +8403,7 @@ document.addEventListener('click', function(e) {
   }
 });
 
-function showCFToast(msg){let t=document.getElementById('cf-toast');if(!t){t=document.createElement('div');t.id='cf-toast';t.style.cssText='position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surface);border:1px solid var(--gold);padding:10px 18px;border-radius:2px;font-size:13px;color:var(--text);z-index:9998;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap;font-family:var(--font)';document.body.appendChild(t);}t.textContent=msg;requestAnimationFrame(()=>{t.style.opacity='1';t.style.transform='translateX(-50%) translateY(0)';});clearTimeout(t._timer);t._timer=setTimeout(()=>{t.style.opacity='0';t.style.transform='translateX(-50%) translateY(10px)';},3000);}
+function showCFToast(msg){let t=document.getElementById('cf-toast');if(!t){t=document.createElement('div');t.id='cf-toast';t.style.cssText='position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surface);border:1px solid var(--gold);padding:10px 18px;border-radius:var(--r-sm);font-size:13px;color:var(--text);z-index:9998;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap;font-family:var(--font)';document.body.appendChild(t);}t.textContent=msg;requestAnimationFrame(()=>{t.style.opacity='1';t.style.transform='translateX(-50%) translateY(0)';});clearTimeout(t._timer);t._timer=setTimeout(()=>{t.style.opacity='0';t.style.transform='translateX(-50%) translateY(10px)';},3000);}
 document.addEventListener('click',e=>{const m=document.getElementById('carryFwdModal');if(m&&e.target===m)closeCarryForward();});
 
 // ══ SIGN-IN ORBITAL ════════════════════════════════════════════════════════
@@ -8755,7 +8755,7 @@ function showUpdateBanner() {
   if (document.getElementById('st-update-banner')) return;
   const b = document.createElement('div');
   b.id = 'st-update-banner';
-  b.innerHTML = '<div style="position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--c-surface);border:1px solid var(--c-accent);padding:.65rem 1rem;border-radius:2px;display:flex;align-items:center;gap:.85rem;font-family:var(--font);font-size:13px;color:#D6CFC4;z-index:9999;box-shadow:var(--shadow-2);white-space:nowrap;animation:fadeIn .3s ease"><span><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg> New version ready</span><button onclick="window.location.reload(true)" style="background:var(--c-accent);color:var(--c-canvas);border:none;padding:.28rem .75rem;border-radius:2px;cursor:pointer;font-size:12px;font-weight:500;font-family:var(--font)">Update</button><button onclick="document.getElementById(\'st-update-banner\').remove()" style="background:none;border:none;color:#78716C;cursor:pointer;font-size:14px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>';
+  b.innerHTML = '<div style="position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--c-surface);border:1px solid var(--c-accent);padding:.65rem 1rem;border-radius:var(--r-sm);display:flex;align-items:center;gap:.85rem;font-family:var(--font);font-size:13px;color:#D6CFC4;z-index:9999;box-shadow:var(--shadow-2);white-space:nowrap;animation:fadeIn .3s ease"><span><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg> New version ready</span><button onclick="window.location.reload(true)" style="background:var(--c-accent);color:var(--c-canvas);border:none;padding:.28rem .75rem;border-radius:var(--r-sm);cursor:pointer;font-size:12px;font-weight:500;font-family:var(--font)">Update</button><button onclick="document.getElementById(\'st-update-banner\').remove()" style="background:none;border:none;color:#78716C;cursor:pointer;font-size:14px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>';
   document.body.appendChild(b);
   setTimeout(() => { if (b.parentNode) b.remove(); }, 12000);
 }
@@ -8863,7 +8863,7 @@ function renderIntelDebug(data) {
     if (d.dbReadError) parts.push('<span style="color:var(--coral)">DB read failed: ' + esc(JSON.stringify(d.dbReadError)) + '</span>');
     if (d.gmailApiError) parts.push('<span style="color:var(--coral)">Gmail API error: ' + esc(JSON.stringify(d.gmailApiError)) + '</span>');
     if (d.subject) parts.push('subject: "' + esc(d.subject) + '"');
-    return '<div style="background:var(--surface2);border-radius:2px;padding:10px 14px;margin-bottom:8px;text-align:left">' +
+    return '<div style="background:var(--surface2);border-radius:var(--r-sm);padding:10px 14px;margin-bottom:8px;text-align:left">' +
       '<div style="font-size:13px;font-weight:600;color:var(--text)">' + esc(d.account || '') + '</div>' +
       '<div style="font-size:12px;color:var(--text3);margin-top:4px;line-height:1.6">' + parts.join('<br>') + '</div>' +
     '</div>';
@@ -9038,7 +9038,7 @@ function renderWinLossChart(data, fmtUsd) {
   if (total > 0) {
     var wonPct = Math.round(wonVal / total * 100);
     html += '<div style="margin-bottom:16px">' +
-      '<div style="display:flex;height:14px;border-radius:2px;overflow:hidden;margin-bottom:4px">' +
+      '<div style="display:flex;height:14px;border-radius:var(--r-sm);overflow:hidden;margin-bottom:4px">' +
         '<div style="width:'+wonPct+'%;background:var(--green)"></div>' +
         '<div style="flex:1;background:var(--coral)"></div>' +
       '</div>' +
@@ -9075,7 +9075,7 @@ function renderWinLossChart(data, fmtUsd) {
 }
 
 function kpi(label, val, color) {
-  return '<div style="flex:1;background:var(--surface2);border-radius:3px;padding:10px;text-align:center">' +
+  return '<div style="flex:1;background:var(--surface2);border-radius:var(--r-md);padding:10px;text-align:center">' +
     '<div style="font-size:20px;font-weight:700;color:'+(color||'var(--text)')+'">'+val+'</div>' +
     '<div style="font-size:11px;color:var(--text3);margin-top:2px">'+label+'</div></div>';
 }
@@ -9093,14 +9093,14 @@ function mkBars(rows, maxVal, fmtUsd) {
       var verPct = r.val > 0 ? r.verified / r.val * pct : 0;
       var parPct = r.val > 0 ? (r.partial || 0) / r.val * pct : 0;
       var unvPct = Math.max(0, pct - verPct - parPct);
-      barHtml = '<div style="flex:1;height:10px;background:rgba(0,0,0,0.1);border-radius:2px;overflow:hidden;display:flex">' +
+      barHtml = '<div style="flex:1;height:10px;background:rgba(0,0,0,0.1);border-radius:var(--r-sm);overflow:hidden;display:flex">' +
         (verPct>0?'<div style="height:100%;width:'+verPct+'%;background:#4A8C5C"></div>':'') +
         (parPct>0?'<div style="height:100%;width:'+parPct+'%;background:#A07824"></div>':'') +
         (unvPct>0?'<div style="height:100%;width:'+unvPct+'%;background:#888780"></div>':'') +
       '</div>';
     } else {
-      barHtml = '<div style="flex:1;height:10px;background:rgba(0,0,0,0.1);border-radius:2px;overflow:hidden">' +
-        '<div style="height:100%;width:'+pct+'%;background:'+color+';border-radius:2px"></div>' +
+      barHtml = '<div style="flex:1;height:10px;background:rgba(0,0,0,0.1);border-radius:var(--r-sm);overflow:hidden">' +
+        '<div style="height:100%;width:'+pct+'%;background:'+color+';border-radius:var(--r-sm)"></div>' +
       '</div>';
     }
     return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:9px">' +
@@ -9115,19 +9115,19 @@ function mkBars(rows, maxVal, fmtUsd) {
 // ── Role header card wrapper ──────────────────────────────────────────────
 function mkRoleCard(roleLabel, roleColor, title, subtitle, content) {
   var cardId = 'rolecard-' + Math.random().toString(36).slice(2,7);
-  return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;overflow:hidden;margin-bottom:10px" id="'+cardId+'">' +
+  return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-md);overflow:hidden;margin-bottom:10px" id="'+cardId+'">' +
     '<div style="padding:16px 18px 12px;border-bottom:1px solid var(--border)">' +
       '<div style="display:flex;align-items:flex-start;justify-content:space-between">' +
         '<div>' +
           '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
-            '<span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:3px;background:'+roleColor+';color:#fff">'+esc(roleLabel)+'</span>' +
+            '<span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:var(--r-md);background:'+roleColor+';color:#fff">'+esc(roleLabel)+'</span>' +
           '</div>' +
           '<div style="font-size:16px;font-weight:700;color:var(--text)">'+esc(title)+'</div>' +
           '<div style="font-size:12px;color:var(--text3);font-style:italic;margin-top:2px">'+esc(subtitle)+'</div>' +
         '</div>' +
         '<div style="position:relative">' +
-          '<button onclick="togglePipelineCardMenu(\''+cardId+'\')" style="font-size:20px;color:var(--text3);cursor:pointer;padding:4px 8px;background:none;border:none;border-radius:2px;line-height:1" title="Options">&#8943;</button>' +
-          '<div id="menu-'+cardId+'" style="display:none;position:absolute;right:0;top:28px;background:var(--bg);border:1px solid var(--border2);border-radius:2px;box-shadow:var(--shadow-2);z-index:99;min-width:160px;padding:4px 0">' +
+          '<button onclick="togglePipelineCardMenu(\''+cardId+'\')" style="font-size:20px;color:var(--text3);cursor:pointer;padding:4px 8px;background:none;border:none;border-radius:var(--r-sm);line-height:1" title="Options">&#8943;</button>' +
+          '<div id="menu-'+cardId+'" style="display:none;position:absolute;right:0;top:28px;background:var(--bg);border:1px solid var(--border2);border-radius:var(--r-sm);box-shadow:var(--shadow-2);z-index:99;min-width:160px;padding:4px 0">' +
             '<button onclick="switchTab(\'pipeline\')" style="width:100%;text-align:left;padding:8px 14px;font-size:13px;color:var(--text);background:none;border:none;cursor:pointer;font-family:var(--sans)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V4M4 20h16M8 17V11M12.5 17V7.5M17 17v-4"/></svg> View pipeline</button>' +
             '<button onclick="setPipelineDashTab(\'attention\')" style="width:100%;text-align:left;padding:8px 14px;font-size:13px;color:var(--text);background:none;border:none;cursor:pointer;font-family:var(--sans)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> Needs attention</button>' +
             '<button onclick="setPipelineDashTab(\'byRegion\')" style="width:100%;text-align:left;padding:8px 14px;font-size:13px;color:var(--text);background:none;border:none;cursor:pointer;font-family:var(--sans)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM3.2 9.5h17.6M3.2 14.5h17.6M12 3a14 14 0 000 18 14 14 0 000-18z"/></svg> By region</button>' +
@@ -9153,7 +9153,7 @@ function togglePipelineCardMenu(cardId) {
 }
 
 function mkMetricCard(label, value, sub, color) {
-  return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:14px 16px">' +
+  return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:14px 16px">' +
     '<div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;font-weight:600">'+esc(label)+'</div>' +
     '<div style="font-size:26px;font-weight:700;color:'+(color||'var(--text)')+'">'+value+'</div>' +
     (sub ? '<div style="font-size:11px;color:var(--text3);margin-top:3px">'+esc(sub)+'</div>' : '') +
@@ -9212,13 +9212,13 @@ function renderRepInsights(data, deals, fmtUsd) {
   inner += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
 
   if (productRows.length) {
-    inner += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:14px 16px">' +
+    inner += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:14px 16px">' +
       '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:12px">Pipeline by product</div>' +
       mkBars(productRows, maxP, fmtUsd) +
     '</div>';
   }
 
-  inner += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:14px 16px">' +
+  inner += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:14px 16px">' +
     '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px">Action items</div>' +
     actionItems.slice(0,5).map(function(a){return mkAlertRow(a.dot,a.text);}).join('') +
   '</div>';
@@ -9271,18 +9271,18 @@ function renderManagerInsights(data, deals, fmtUsd) {
   var inner = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">';
 
   // Rep bars
-  inner += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:14px 16px">' +
+  inner += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:14px 16px">' +
     '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:12px">Pipeline by rep</div>' +
     (repRows.length ? mkBars(repRows, maxR, fmtUsd) : '<div style="font-size:12px;color:var(--text3)">No deal data yet</div>') +
     '<div style="display:flex;gap:10px;margin-top:8px;border-top:1px solid var(--border);padding-top:8px">' +
-      '<div style="display:flex;align-items:center;gap:4px"><div style="width:8px;height:8px;border-radius:2px;background:#4A8C5C"></div><span style="font-size:11px;color:var(--text3)">Verified</span></div>' +
-      '<div style="display:flex;align-items:center;gap:4px"><div style="width:8px;height:8px;border-radius:2px;background:#A07824"></div><span style="font-size:11px;color:var(--text3)">Partial</span></div>' +
-      '<div style="display:flex;align-items:center;gap:4px"><div style="width:8px;height:8px;border-radius:2px;background:#888780"></div><span style="font-size:11px;color:var(--text3)">Unverified</span></div>' +
+      '<div style="display:flex;align-items:center;gap:4px"><div style="width:8px;height:8px;border-radius:var(--r-sm);background:#4A8C5C"></div><span style="font-size:11px;color:var(--text3)">Verified</span></div>' +
+      '<div style="display:flex;align-items:center;gap:4px"><div style="width:8px;height:8px;border-radius:var(--r-sm);background:#A07824"></div><span style="font-size:11px;color:var(--text3)">Partial</span></div>' +
+      '<div style="display:flex;align-items:center;gap:4px"><div style="width:8px;height:8px;border-radius:var(--r-sm);background:#888780"></div><span style="font-size:11px;color:var(--text3)">Unverified</span></div>' +
     '</div>' +
   '</div>';
 
   // Coverage gaps
-  inner += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:14px 16px">' +
+  inner += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:14px 16px">' +
     '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px">Coverage gaps</div>' +
     gaps.slice(0,5).map(function(g){return mkAlertRow(g.dot,g.text);}).join('') +
   '</div>';
@@ -9291,10 +9291,10 @@ function renderManagerInsights(data, deals, fmtUsd) {
 
   // Bottom metrics
   inner += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
-    '<div style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:14px 16px">' +
+    '<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:14px 16px">' +
       '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px">Verified pipeline (team)</div>' +
       '<div style="font-size:26px;font-weight:700;color:var(--green)">'+fmtUsd(verifiedVal)+'</div>' +
-      '<div style="height:6px;background:rgba(0,0,0,0.15);border-radius:2px;margin:8px 0;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+pctColor+';border-radius:2px"></div></div>' +
+      '<div style="height:6px;background:rgba(0,0,0,0.15);border-radius:var(--r-sm);margin:8px 0;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+pctColor+';border-radius:var(--r-sm)"></div></div>' +
       '<div style="font-size:11px;color:var(--text3)">'+pct+'% of total \u2014 target: 60%</div>' +
     '</div>' +
     mkMetricCard('Deals at risk', atRisk.length.toString(), 'Past close date or going cold', atRisk.length>0?'var(--coral)':'var(--green)') +
@@ -9317,14 +9317,14 @@ function renderDirectorInsights(data, deals, fmtUsd) {
 
   var inner = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">';
 
-  inner += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:14px 16px">' +
+  inner += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:14px 16px">' +
     '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:12px">Pipeline by region</div>' +
     (regionRows.length ? mkBars(regionRows, maxR, fmtUsd) : '<div style="font-size:12px;color:var(--text3)">No regional data</div>') +
   '</div>';
 
   var alerts = weakRegions.map(function(r){return {dot:'var(--coral)',text:esc(r.region)+' \u2014 '+fmtUsd(r.total_usd)+' with no verified deals'};});
   if (!alerts.length) alerts.push({dot:'var(--green)',text:'\u2705 All regions have verified pipeline'});
-  inner += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:14px 16px">' +
+  inner += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:14px 16px">' +
     '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px">Regional risk signals</div>' +
     alerts.map(function(a){return mkAlertRow(a.dot,a.text);}).join('') +
   '</div>';
@@ -9363,7 +9363,7 @@ function renderExecInsights(data, deals, fmtUsd) {
   inner += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
 
   if (productRows.length) {
-    inner += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:14px 16px">' +
+    inner += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:14px 16px">' +
       '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:12px">Product line performance</div>' +
       mkBars(productRows, maxP, fmtUsd) +
     '</div>';
@@ -9380,7 +9380,7 @@ function renderExecInsights(data, deals, fmtUsd) {
   if (atRisk.length) risks.push({dot:'var(--coral)',text:atRisk.length+' deal'+(atRisk.length>1?'s':'')+' past close date \u2014 need exec review'});
   if (!risks.length) risks.push({dot:'var(--green)',text:'\u2705 No critical pipeline risks detected'});
 
-  inner += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:14px 16px">' +
+  inner += '<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:14px 16px">' +
     '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px">Top risk signals</div>' +
     risks.slice(0,5).map(function(r){return mkAlertRow(r.dot,r.text);}).join('') +
   '</div>';
@@ -9405,9 +9405,9 @@ function renderAttentionPanel(deals, data, fmtUsd) {
     alerts.push({dot:'var(--amber)',text:esc(r.region)+' \u2014 '+fmtUsd(r.total_usd)+' pipeline with zero verified deals'});
   });
   if (!alerts.length)
-    return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;padding:20px;text-align:center;color:var(--green);font-size:14px;font-weight:600">\u2705 No immediate attention items \u2014 pipeline looks healthy.</div>';
+    return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-md);padding:20px;text-align:center;color:var(--green);font-size:14px;font-weight:600">\u2705 No immediate attention items \u2014 pipeline looks healthy.</div>';
 
-  return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;overflow:hidden">' +
+  return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-md);overflow:hidden">' +
     '<div style="padding:14px 18px;border-bottom:1px solid var(--border)">' +
       '<div style="font-size:14px;font-weight:700;color:var(--text)">Action items</div>' +
       '<div style="font-size:12px;color:var(--text3);font-style:italic">'+alerts.length+' items need your attention</div>' +
@@ -9514,20 +9514,20 @@ function _renderCrmAudit() {
     no_evidence:   { col:'var(--coral)', label:'No evidence',  icon:'∅' },
     not_in_samora: { col:'var(--text3)', label:'Not tracked',  icon:'—' }
   };
-  var html = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;padding:14px">';
+  var html = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-md);padding:14px">';
   // Branded header
   html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">';
   html += '<img src="icons/icon-48.png" alt="Samora" style="width:18px;height:18px;border-radius:50%"/>';
   html += '<span style="font-size:13px;font-weight:600;color:var(--text)">CRM Verification Report</span>';
-  html += '<span style="font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--gold);text-transform:uppercase;background:rgba(var(--c-accent-rgb),0.12);padding:2px 6px;border-radius:2px">Samora Intelligence</span>';
+  html += '<span style="font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--gold);text-transform:uppercase;background:rgba(var(--c-accent-rgb),0.12);padding:2px 6px;border-radius:var(--r-sm)">Samora Intelligence</span>';
   html += '<span style="flex:1"></span>';
-  html += '<button onclick="exportCrmEnriched()" style="padding:4px 12px;border-radius:3px;background:var(--gold);border:none;color:var(--c-canvas);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5v11M7.5 10.5l4.5 4.5 4.5-4.5M4.5 19.5h15"/></svg> Export enriched CSV</button>';
-  html += '<button onclick="_crmAudit=null;document.getElementById(\'crmAuditSection\').innerHTML=\'\'" style="padding:4px 8px;border-radius:3px;background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-size:11px;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>';
+  html += '<button onclick="exportCrmEnriched()" style="padding:4px 12px;border-radius:var(--r-md);background:var(--gold);border:none;color:var(--c-canvas);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5v11M7.5 10.5l4.5 4.5 4.5-4.5M4.5 19.5h15"/></svg> Export enriched CSV</button>';
+  html += '<button onclick="_crmAudit=null;document.getElementById(\'crmAuditSection\').innerHTML=\'\'" style="padding:4px 8px;border-radius:var(--r-md);background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-size:11px;cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>';
   html += '</div>';
   // The headline — CRM says vs reality
   html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">';
   var chip = function(num, label, col) {
-    return '<div style="flex:1;min-width:90px;background:var(--surface2);border-radius:2px;padding:8px 10px;text-align:center"><div style="font-size:16px;font-weight:700;color:' + col + '">' + num + '</div><div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">' + label + '</div></div>';
+    return '<div style="flex:1;min-width:90px;background:var(--surface2);border-radius:var(--r-sm);padding:8px 10px;text-align:center"><div style="font-size:16px;font-weight:700;color:' + col + '">' + num + '</div><div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">' + label + '</div></div>';
   };
   html += chip(s.total_rows, 'CRM deals', 'var(--text)');
   html += chip(s.verified, 'Verified ≤14d', 'var(--green)');
@@ -9536,7 +9536,7 @@ function _renderCrmAudit() {
   html += chip(s.trust_pct + '%', 'Pipeline you can trust', s.trust_pct >= 60 ? 'var(--green)' : 'var(--coral)');
   html += '</div>';
   if (s.deals_with_optimism_gap > 0) {
-    html += '<div style="font-size:12px;color:var(--text2);background:rgba(192,82,63,0.08);border-left:3px solid var(--coral);border-radius:0 6px 6px 0;padding:8px 12px;margin-bottom:12px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7l6 6 4-4 8 8M15 17h6v-6"/></svg> <strong>' + s.deals_with_optimism_gap + ' deal' + (s.deals_with_optimism_gap!==1?'s':'') + '</strong> show CRM activity more recent than any verified evidence — average gap <strong>' + s.avg_optimism_gap_days + ' days</strong>. This is the difference between what was logged and what actually happened.</div>';
+    html += '<div style="font-size:12px;color:var(--text2);background:rgba(192,82,63,0.08);border-left:3px solid var(--coral);border-radius:0 6px 6px 0;padding:8px 12px;margin-bottom:12px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7l6 6 4-4 8 8M15 17h6v-6"/></svg> <strong>' + s.deals_with_optimism_gap + ' deal' + (s.deals_with_optimism_gap!==1?'s':'') + '</strong> show CRM activity more recent than any verified evidence, average gap <strong>' + s.avg_optimism_gap_days + ' days</strong>. This is the difference between what was logged and what actually happened.</div>';
   }
   // Table
   html += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">';
@@ -9592,14 +9592,14 @@ async function loadSdrPanel() {
     var d = await r.json();
     if (!d.ok) { panel.innerHTML = ''; return; }
     var chip = function(num, label, col) {
-      return '<div style="flex:1;min-width:80px;background:var(--surface2);border-radius:3px;padding:10px;text-align:center"><div style="font-size:20px;font-weight:700;color:'+(col||'var(--text)')+'">'+num+'</div><div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-top:2px">'+label+'</div></div>';
+      return '<div style="flex:1;min-width:80px;background:var(--surface2);border-radius:var(--r-md);padding:10px;text-align:center"><div style="font-size:20px;font-weight:700;color:'+(col||'var(--text)')+'">'+num+'</div><div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-top:2px">'+label+'</div></div>';
     };
     var pipeK = d.pipeline_generated_usd >= 1000000 ? '$'+(d.pipeline_generated_usd/1000000).toFixed(1)+'M' : '$'+Math.round(d.pipeline_generated_usd/1000)+'K';
-    var html = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;padding:14px;margin-bottom:14px">';
+    var html = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-md);padding:14px;margin-bottom:14px">';
     html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">';
     html += '<img src="icons/icon-48.png" style="width:16px;height:16px;border-radius:50%"/>';
     html += '<span style="font-size:13px;font-weight:600;color:var(--text);flex:1">Pipeline Generation · last 30 days</span>';
-    html += '<span style="font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--gold);text-transform:uppercase;background:rgba(var(--c-accent-rgb),0.12);padding:2px 6px;border-radius:2px">SDR</span>';
+    html += '<span style="font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--gold);text-transform:uppercase;background:rgba(var(--c-accent-rgb),0.12);padding:2px 6px;border-radius:var(--r-sm)">SDR</span>';
     html += '</div>';
     html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">';
     html += chip(d.new_prospects, 'New stakeholders contacted', 'var(--text)');
@@ -9616,7 +9616,7 @@ async function loadSdrPanel() {
       html += '<div style="margin-top:10px;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px">↩ Newest stakeholders in discussion</div>';
       html += '<div style="display:flex;gap:5px;flex-wrap:wrap">';
       d.recent_new_engaged.forEach(function(p) {
-        html += '<span style="font-size:11px;padding:3px 9px;border-radius:2px;background:rgba(74,140,92,0.1);color:var(--green)">'+esc(p.name)+(p.company?' · '+esc(p.company):'')+'</span>';
+        html += '<span style="font-size:11px;padding:3px 9px;border-radius:var(--r-sm);background:rgba(74,140,92,0.1);color:var(--green)">'+esc(p.name)+(p.company?' · '+esc(p.company):'')+'</span>';
       });
       html += '</div>';
     }
@@ -9638,8 +9638,8 @@ function _sdrDealCard(a, kind) {
   var v = a.deal_value_usd ? (a.deal_value_usd>=1e6 ? '$'+(a.deal_value_usd/1e6).toFixed(1)+'M' : '$'+Math.round(a.deal_value_usd/1e3)+'K') : '';
   var owner = (a._owner_email||'').split('@')[0];
   var meta = [a.region?esc(a.region):'', owner?('AE: '+esc(owner)):'', v].filter(Boolean).join(' · ');
-  return '<div onclick="openSdrScout(\''+esc(a.id)+'\',\''+esc(a.account_name)+'\')" style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;padding:10px 12px;margin-bottom:6px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px">' +
-    '<div style="min-width:0"><div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(a.account_name)+(kind==='lead'?' <span style="font-size:11px;font-weight:700;color:var(--gold);background:rgba(var(--c-accent-rgb),0.12);border-radius:2px;padding:1px 5px;vertical-align:middle">MY LEAD</span>':'')+'</div>' +
+  return '<div onclick="openSdrScout(\''+esc(a.id)+'\',\''+esc(a.account_name)+'\')" style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-md);padding:10px 12px;margin-bottom:6px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px">' +
+    '<div style="min-width:0"><div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(a.account_name)+(kind==='lead'?' <span style="font-size:11px;font-weight:700;color:var(--gold);background:rgba(var(--c-accent-rgb),0.12);border-radius:var(--r-sm);padding:1px 5px;vertical-align:middle">MY LEAD</span>':'')+'</div>' +
     (meta?'<div style="font-size:11px;color:var(--text3);margin-top:2px">'+meta+'</div>':'') + '</div>' +
     '<div style="font-size:11px;color:var(--gold);flex-shrink:0;white-space:nowrap"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 16.5a4.5 4.5 0 100-9 4.5 4.5 0 000 9zM12 13a1 1 0 100-2 1 1 0 000 2z"/></svg> Scout ›</div></div>';
 }
@@ -9679,17 +9679,17 @@ async function loadSdrPlayground() {
     teamDeals.forEach(function(a){ a._owner_email = emailById[a.user_id] || ''; });
     mine.concat(teamDeals).forEach(function(a){ window._sdrDeals[a.id] = { id:a.id, account:a.account_name, deal_value_usd:a.deal_value_usd||0, stage:'prospective', region:a.region||'' }; });
 
-    var html = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;padding:14px;margin-bottom:14px">';
+    var html = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-md);padding:14px;margin-bottom:14px">';
     html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><span style="font-size:13px;font-weight:600;color:var(--text)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM15.5 8.5l-2 5-5 2 2-5z"/></svg> Lead Sourcing</span>' +
-      '<button onclick="toggleSdrLeadForm()" id="sdrNewLeadBtn" style="font-size:11px;font-weight:600;padding:5px 12px;border-radius:2px;background:var(--gold);border:none;color:var(--c-canvas);cursor:pointer;font-family:var(--sans)">+ New lead</button></div>';
+      '<button onclick="toggleSdrLeadForm()" id="sdrNewLeadBtn" style="font-size:11px;font-weight:600;padding:5px 12px;border-radius:var(--r-sm);background:var(--gold);border:none;color:var(--c-canvas);cursor:pointer;font-family:var(--sans)">+ New lead</button></div>';
     // Create-lead form (hidden by default)
-    html += '<div id="sdrLeadForm" style="display:none;background:var(--surface2);border-radius:3px;padding:10px;margin-bottom:12px">' +
+    html += '<div id="sdrLeadForm" style="display:none;background:var(--surface2);border-radius:var(--r-md);padding:10px;margin-bottom:12px">' +
       '<div style="display:flex;flex-direction:column;gap:6px">' +
-      '<input id="sdrLeadName" placeholder="Company / account name" style="padding:8px 10px;border:1px solid var(--border);border-radius:2px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
-      '<div style="display:flex;gap:6px"><input id="sdrLeadDomain" placeholder="domain.com" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:2px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
-      '<input id="sdrLeadRegion" placeholder="Region (e.g. APAC)" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:2px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/></div>' +
+      '<input id="sdrLeadName" placeholder="Company / account name" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
+      '<div style="display:flex;gap:6px"><input id="sdrLeadDomain" placeholder="domain.com" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
+      '<input id="sdrLeadRegion" placeholder="Region (e.g. APAC)" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/></div>' +
       '<div style="font-size:11px;color:var(--text3)">Domain powers contact scouting; region keeps prospects geo-consistent.</div>' +
-      '<button onclick="createSdrLead()" style="padding:9px;border:none;border-radius:2px;background:var(--gold);color:var(--c-canvas);font-size:13px;font-weight:700;cursor:pointer;font-family:var(--sans)">Create lead &amp; open</button>' +
+      '<button onclick="createSdrLead()" style="padding:9px;border:none;border-radius:var(--r-sm);background:var(--gold);color:var(--c-canvas);font-size:13px;font-weight:700;cursor:pointer;font-family:var(--sans)">Create lead &amp; open</button>' +
       '</div></div>';
     // My leads
     html += '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:4px 0 6px">My leads ('+mine.length+')</div>';
@@ -9758,14 +9758,14 @@ function openSampaignComposer(campaignId) {
       '<button onclick="document.getElementById(\'sampaign-composer-modal\').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3);padding:0"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>' +
     '</div>' +
     (sendable.length
-      ? '<div style="font-size:11px;color:var(--text2);background:var(--surface2);border-radius:2px;padding:8px 10px;margin-bottom:10px">Will queue <strong>'+sendable.length+'</strong> contact'+(sendable.length!==1?'s':'')+' who have an email and have not been contacted yet.'+(noEmail?' <span style="color:var(--gold)">'+noEmail+' skipped, no email yet.</span>':'')+'</div>'
-      : '<div style="font-size:11px;color:var(--coral);background:rgba(196,90,74,0.08);border-radius:2px;padding:8px 10px;margin-bottom:10px">No contacts are ready to send to. They need an email address and a "Not contacted" status.</div>') +
-    '<input id="sampSendSubject" placeholder="Subject" style="width:100%;box-sizing:border-box;padding:9px 11px;border-radius:2px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;margin-bottom:6px"/>' +
-    '<textarea id="sampSendBody" rows="9" placeholder="Hi {{first_name}},&#10;&#10;..." style="width:100%;box-sizing:border-box;padding:9px 11px;border-radius:2px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;resize:vertical;line-height:1.5"></textarea>' +
+      ? '<div style="font-size:11px;color:var(--text2);background:var(--surface2);border-radius:var(--r-sm);padding:8px 10px;margin-bottom:10px">Will queue <strong>'+sendable.length+'</strong> contact'+(sendable.length!==1?'s':'')+' who have an email and have not been contacted yet.'+(noEmail?' <span style="color:var(--gold)">'+noEmail+' skipped, no email yet.</span>':'')+'</div>'
+      : '<div style="font-size:11px;color:var(--coral);background:rgba(196,90,74,0.08);border-radius:var(--r-sm);padding:8px 10px;margin-bottom:10px">No contacts are ready to send to. They need an email address and a "Not contacted" status.</div>') +
+    '<input id="sampSendSubject" placeholder="Subject" style="width:100%;box-sizing:border-box;padding:9px 11px;border-radius:var(--r-sm);border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;margin-bottom:6px"/>' +
+    '<textarea id="sampSendBody" rows="9" placeholder="Hi {{first_name}},&#10;&#10;..." style="width:100%;box-sizing:border-box;padding:9px 11px;border-radius:var(--r-sm);border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;resize:vertical;line-height:1.5"></textarea>' +
     '<div style="display:flex;gap:5px;flex-wrap:wrap;margin:7px 0">' +
       '<span style="font-size:11px;color:var(--text3);align-self:center">Insert:</span>' +
       _SAMPAIGN_SEND_VARS.map(function(v){
-        return '<span onclick="_sampInsertVar(\''+v.k+'\')" title="'+esc(v.d)+'" style="cursor:pointer;font-size:11px;font-family:var(--mono,monospace);color:var(--gold);background:rgba(var(--c-accent-rgb),0.1);border:1px solid rgba(var(--c-accent-rgb),0.25);border-radius:2px;padding:3px 7px">'+esc(v.k)+'</span>';
+        return '<span onclick="_sampInsertVar(\''+v.k+'\')" title="'+esc(v.d)+'" style="cursor:pointer;font-size:11px;font-family:var(--mono,monospace);color:var(--gold);background:rgba(var(--c-accent-rgb),0.1);border:1px solid rgba(var(--c-accent-rgb),0.25);border-radius:var(--r-sm);padding:3px 7px">'+esc(v.k)+'</span>';
       }).join('') +
     '</div>' +
     '<div style="font-size:11px;color:var(--text3);margin-bottom:10px">Filled in per person at send time, so anything Enrich finds between now and then is used. A variable with no value becomes blank, never the raw {{tag}}.</div>' +
@@ -9773,7 +9773,7 @@ function openSampaignComposer(campaignId) {
     // campaign, so picking one here also fixes when it goes out.
     '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">' +
       '<span style="font-size:11px;color:var(--text3)">Wave</span>' +
-      '<select id="sampSendLaunch" onchange="_sampComposerLaunchChanged(\''+esc(campaignId)+'\')" style="padding:6px 9px;border-radius:2px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px">' +
+      '<select id="sampSendLaunch" onchange="_sampComposerLaunchChanged(\''+esc(campaignId)+'\')" style="padding:6px 9px;border-radius:var(--r-sm);border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px">' +
         (function(){
           var dates = (c.followup_dates||[]).map(function(x){ return String(x).slice(0,10); }).sort();
           var opts = '<option value="1">Initial send</option>';
@@ -9787,13 +9787,13 @@ function openSampaignComposer(campaignId) {
     '</div>' +
     '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">' +
       '<span style="font-size:11px;color:var(--text3)">Start</span>' +
-      '<input type="date" id="sampSendDate" value="'+dateKey(d)+'" style="padding:7px 9px;border-radius:2px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
-      '<input type="time" id="sampSendTime" value="09:00" style="padding:7px 9px;border-radius:2px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
+      '<input type="date" id="sampSendDate" value="'+dateKey(d)+'" style="padding:7px 9px;border-radius:var(--r-sm);border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
+      '<input type="time" id="sampSendTime" value="09:00" style="padding:7px 9px;border-radius:var(--r-sm);border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
       '<span id="sampSendWhen" style="font-size:11px;color:var(--text3)"></span>' +
     '</div>' +
     '<div id="sampSendWeekendWarn"></div>' +
     '<div id="sampSendLimit" style="margin-top:8px"></div>' +
-    '<button onclick="submitSampaignSchedule(\''+esc(campaignId)+'\')" '+(sendable.length?'':'disabled')+' style="width:100%;margin-top:10px;padding:11px;border-radius:3px;background:'+(sendable.length?'var(--green)':'var(--border2)')+';border:none;color:#fff;font-size:14px;font-weight:700;cursor:'+(sendable.length?'pointer':'not-allowed')+';font-family:var(--sans)">Prepare '+(sendable.length||0)+' email'+(sendable.length!==1?'s':'')+'</button>' +
+    '<button onclick="submitSampaignSchedule(\''+esc(campaignId)+'\')" '+(sendable.length?'':'disabled')+' style="width:100%;margin-top:10px;padding:11px;border-radius:var(--r-md);background:'+(sendable.length?'var(--green)':'var(--border2)')+';border:none;color:#fff;font-size:14px;font-weight:700;cursor:'+(sendable.length?'pointer':'not-allowed')+';font-family:var(--sans)">Prepare '+(sendable.length||0)+' email'+(sendable.length!==1?'s':'')+'</button>' +
     '<div id="sampSendQueue" style="margin-top:14px"></div>' +
   '</div>';
   m.addEventListener('click', function(){ m.remove(); });
@@ -9819,12 +9819,12 @@ async function _loadSendingLimit() {
     if (!d.ok) { box.innerHTML = ''; return; }
     var used = (d.sent_today || 0) + (d.queued_today || 0);
     var pct = d.today_limit ? Math.min(100, Math.round((used / d.today_limit) * 100)) : 0;
-    box.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;padding:9px 11px">' +
+    box.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-md);padding:9px 11px">' +
       '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap">' +
         '<span style="font-size:11px;font-weight:600;color:var(--text)">'+d.remaining_today+' of '+d.today_limit+' left to send today</span>' +
         '<span style="font-size:11px;color:var(--text3)">'+esc(d.reason||'')+'</span>' +
       '</div>' +
-      '<div style="height:4px;border-radius:2px;background:var(--border2);margin-top:6px;overflow:hidden">' +
+      '<div style="height:4px;border-radius:var(--r-sm);background:var(--border2);margin-top:6px;overflow:hidden">' +
         '<div style="height:100%;width:'+pct+'%;background:'+(pct>=100?'var(--coral)':'var(--gold)')+'"></div>' +
       '</div>' +
       // Stated plainly because both of these are things a rep would otherwise
@@ -9994,7 +9994,7 @@ function _rtBtn(id, cmd, label, title, extra) {
   return '<button type="button" title="'+title+'" onmousedown="event.preventDefault()" ' +
     'onclick="event.stopPropagation();_rtCmd(\''+esc(id)+'\',\''+cmd+'\')" ' +
     'style="min-width:26px;height:24px;padding:0 6px;border:1px solid var(--border2);background:var(--surface);color:var(--text2);' +
-    'border-radius:2px;cursor:pointer;font-family:var(--sans);font-size:11px;line-height:1;'+(extra||'')+'">'+label+'</button>';
+    'border-radius:var(--r-sm);cursor:pointer;font-family:var(--sans);font-size:11px;line-height:1;'+(extra||'')+'">'+label+'</button>';
 }
 function _rtEditor(id, html, fontSize) {
   var fs = fontSize || 12;
@@ -10008,7 +10008,7 @@ function _rtEditor(id, html, fontSize) {
       '<span style="font-size:11px;color:var(--text3);margin-left:auto">This is how it will arrive</span>' +
     '</div>' +
     '<div id="draftBody_'+esc(id)+'" contenteditable="true" onpaste="_rtPaste(event)" onclick="event.stopPropagation()" ' +
-      'style="width:100%;box-sizing:border-box;min-height:150px;padding:8px 10px;border-radius:2px;border:1px solid var(--border2);' +
+      'style="width:100%;box-sizing:border-box;min-height:150px;padding:8px 10px;border-radius:var(--r-sm);border:1px solid var(--border2);' +
       'background:var(--bg);color:var(--text);font-family:var(--sans);font-size:'+fs+'px;line-height:1.6;overflow-wrap:anywhere;outline:none">' +
       sanitizeEmailHtml(html || '') +
     '</div>';
@@ -10022,7 +10022,7 @@ function _renderSampaignDrafts(campaignId, drafts) {
   // that in the review header would be a small lie that compounds.
   var anyPersonalised = drafts.some(function(d){ return d.personalised; });
   var label = anyPersonalised ? 'personalised draft' : 'draft';
-  return '<div style="border:1px solid rgba(var(--c-accent-rgb),0.3);border-radius:3px;padding:11px;margin-bottom:10px;background:rgba(var(--c-accent-rgb),0.05)">' +
+  return '<div style="border:1px solid rgba(var(--c-accent-rgb),0.3);border-radius:var(--r-md);padding:11px;margin-bottom:10px;background:rgba(var(--c-accent-rgb),0.05)">' +
     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;flex-wrap:wrap">' +
       '<span style="font-size:11px;font-weight:700;color:var(--text)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 00-3-3L5 17v3z"/></svg> '+drafts.length+' '+label+(drafts.length!==1?'s':'')+' to review</span>' +
       '<span style="font-size:11px;color:var(--text3)">'+Object.keys(byTool).map(function(k){ return esc(k)+' · '+byTool[k]; }).join(', ')+'</span>' +
@@ -10038,10 +10038,10 @@ function _renderSampaignDrafts(campaignId, drafts) {
           (x.edited_by_human ? '<span style="font-size:11px;color:var(--green);flex-shrink:0;margin-left:auto">edited</span>' : '') +
         '</div>' +
         '<div id="draft_'+esc(x.id)+'" style="display:none;margin-top:6px">' +
-          '<input id="draftSubj_'+esc(x.id)+'" value="'+esc(x.subject||'')+'" style="width:100%;box-sizing:border-box;padding:6px 8px;border-radius:2px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:11px;margin-bottom:4px"/>' +
+          '<input id="draftSubj_'+esc(x.id)+'" value="'+esc(x.subject||'')+'" style="width:100%;box-sizing:border-box;padding:6px 8px;border-radius:var(--r-sm);border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:11px;margin-bottom:4px"/>' +
           _rtEditor(x.id, x.body || '', 11) +
           '<div style="display:flex;gap:6px;margin-top:4px">' +
-            '<button onclick="saveSampaignDraftEdit(\''+esc(campaignId)+'\',\''+esc(x.id)+'\')" style="font-size:11px;font-weight:600;padding:5px 10px;border-radius:2px;background:var(--green);border:none;color:#fff;cursor:pointer;font-family:var(--sans)">Save edit</button>' +
+            '<button onclick="saveSampaignDraftEdit(\''+esc(campaignId)+'\',\''+esc(x.id)+'\')" style="font-size:11px;font-weight:600;padding:5px 10px;border-radius:var(--r-sm);background:var(--green);border:none;color:#fff;cursor:pointer;font-family:var(--sans)">Save edit</button>' +
             '<span onclick="cancelSampaignSends(\''+esc(campaignId)+'\',\''+esc(x.id)+'\')" style="font-size:11px;color:var(--coral);cursor:pointer;align-self:center">Discard</span>' +
           '</div>' +
         '</div>' +
@@ -10102,7 +10102,7 @@ async function planSampaignDrafts(campaignId, startAt, launch) {
       'Today you can send ' + (d.today_limit || d.policy.daily_cap) + ' (' + (d.ramp_reason || 'current limit') + ').\n' +
       (d.overrode_ramp ? 'You asked for more than the suggested number, so this overrides it.\n' : '') +
       'Sending window ' + d.policy.window_start_hour + ':00-' + d.policy.window_end_hour + ':00' + (d.policy.skip_weekends ? ', weekdays only' : '') + '.\n\n' +
-      'First emails and follow-ups share the same daily number. Spreading them out protects the mailbox — sending a whole campaign at once is what gets inboxes blocked.\n\nSchedule these now?';
+      'First emails and follow-ups share the same daily number. Spreading them out protects the mailbox, sending a whole campaign at once is what gets inboxes blocked.\n\nSchedule these now?';
     if (!confirm(msg)) return;
     var r2 = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
       body: JSON.stringify({ action:'schedule_sampaign_drafts', campaign_id: campaignId, start_at: startAt || null, launch: launch || window._sampLaunch || 1 }) });
@@ -10157,12 +10157,12 @@ function _renderLaunchTabs(campaignId, byLaunch, maxLaunch) {
     else if (n > 1 && dates[n-2]) when = new Date(dates[n-2]+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'});
     else if (n > 1 && rows.some(function(x){ return x.status === 'draft'; })) when = 'not scheduled yet';
     else when = n === 1 ? '' : 'no date set';
-    out += '<span onclick="setSampLaunch(\''+esc(campaignId)+'\','+n+')" style="cursor:pointer;font-size:11px;padding:6px 11px;border-radius:2px;' +
+    out += '<span onclick="setSampLaunch(\''+esc(campaignId)+'\','+n+')" style="cursor:pointer;font-size:11px;padding:6px 11px;border-radius:var(--r-sm);' +
       'border:1px solid '+(on?'var(--gold)':'var(--border2)')+';background:'+(on?'rgba(var(--c-accent-rgb),0.09)':'transparent')+';' +
       'color:'+(rows.length?'var(--text)':'var(--text3)')+'">' +
       '<span style="font-weight:'+(on?'700':'600')+'">'+(n===1?'Initial send':'Follow-up '+(n-1))+'</span>' +
       (when ? '<span style="color:var(--text3)"> · '+esc(when)+'</span>' : '') +
-      (drafts ? '<span style="font-size:11px;font-weight:700;background:rgba(var(--c-accent-rgb),0.16);color:var(--gold);border-radius:2px;padding:1px 5px;margin-left:5px">'+drafts+' to review</span>'
+      (drafts ? '<span style="font-size:11px;font-weight:700;background:rgba(var(--c-accent-rgb),0.16);color:var(--gold);border-radius:var(--r-sm);padding:1px 5px;margin-left:5px">'+drafts+' to review</span>'
               : (rows.length ? '<span style="color:var(--text3);font-size:11px"> · '+rows.length+'</span>' : '<span style="color:var(--text3);font-size:11px"> · empty</span>')) +
     '</span>';
   }
@@ -10212,7 +10212,7 @@ async function loadSampaignSendQueue(campaignId) {
 
     if (!mine.length) {
       box.innerHTML = tabsHtml +
-        '<div style="text-align:center;padding:24px 16px;border:1px dashed var(--border2);border-radius:3px">' +
+        '<div style="text-align:center;padding:24px 16px;border:1px dashed var(--border2);border-radius:var(--r-md)">' +
           '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px">Nothing written for this wave yet</div>' +
           '<div style="font-size:11px;color:var(--text3);line-height:1.55">Use Schedule below to write it yourself, or ask Claude to draft one email per person for '+
             (window._sampLaunch === 1 ? 'the initial send' : 'follow-up ' + (window._sampLaunch - 1)) + '.</div>' +
@@ -10283,23 +10283,23 @@ async function loadSampaignSendQueue(campaignId) {
               var who = x.name || x.email || '—';
               var initial = String(who).trim().charAt(0).toUpperCase() || '?';
               return '<div class="samp-send-row" onclick="_toggleDraft(\''+esc(x.id)+'\')" ' +
-                  'style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:3px;cursor:pointer;transition:background .12s">' +
+                  'style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--r-md);cursor:pointer;transition:background .12s">' +
                   '<span style="flex-shrink:0;width:26px;height:26px;border-radius:50%;background:var(--surface);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--text3)">'+esc(initial)+'</span>' +
                   '<span style="min-width:0;flex:1">' +
                     '<span style="display:block;font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(who)+'</span>' +
                     '<span style="display:block;font-size:11px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(x.email||'')+'</span>' +
                   '</span>' +
                   '<span style="font-size:11px;color:var(--text3);white-space:nowrap;flex-shrink:0">'+(isNaN(when.getTime())?'':when.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}))+'</span>' +
-                  '<span style="font-size:11px;font-weight:700;color:'+mm.color+';background:rgba(128,128,128,0.10);border-radius:2px;padding:2px 7px;white-space:nowrap;flex-shrink:0">'+mm.label+'</span>' +
+                  '<span style="font-size:11px;font-weight:700;color:'+mm.color+';background:rgba(128,128,128,0.10);border-radius:var(--r-sm);padding:2px 7px;white-space:nowrap;flex-shrink:0">'+mm.label+'</span>' +
                   (editable ? '<span onclick="event.stopPropagation();cancelSampaignSends(\''+esc(campaignId)+'\',\''+esc(x.id)+'\')" style="cursor:pointer;color:var(--text3);font-size:13px;flex-shrink:0;padding:0 2px" title="Cancel this one"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span>' : '') +
                   '<span id="chev_'+esc(x.id)+'" style="font-size:11px;color:var(--text3);flex-shrink:0;transition:transform .15s">▾</span>' +
                 '</div>' +
                 '<div id="draft_'+esc(x.id)+'" style="display:none;padding:2px 10px 12px 46px">' +
                   (editable
-                    ? '<input id="draftSubj_'+esc(x.id)+'" value="'+esc(x.subject||'')+'" style="width:100%;box-sizing:border-box;padding:7px 9px;border-radius:2px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px;font-weight:600;margin-bottom:5px"/>' +
+                    ? '<input id="draftSubj_'+esc(x.id)+'" value="'+esc(x.subject||'')+'" style="width:100%;box-sizing:border-box;padding:7px 9px;border-radius:var(--r-sm);border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px;font-weight:600;margin-bottom:5px"/>' +
                       _rtEditor(x.id, x.body || '', 12) +
                       '<div style="display:flex;gap:9px;align-items:center;margin-top:6px">' +
-                        '<button onclick="event.stopPropagation();saveSampaignDraftEdit(\''+esc(campaignId)+'\',\''+esc(x.id)+'\')" style="font-size:11px;font-weight:600;padding:6px 13px;border-radius:2px;background:var(--green);border:none;color:#fff;cursor:pointer;font-family:var(--sans)">Save edit</button>' +
+                        '<button onclick="event.stopPropagation();saveSampaignDraftEdit(\''+esc(campaignId)+'\',\''+esc(x.id)+'\')" style="font-size:11px;font-weight:600;padding:6px 13px;border-radius:var(--r-sm);background:var(--green);border:none;color:#fff;cursor:pointer;font-family:var(--sans)">Save edit</button>' +
                         '<span style="font-size:11px;color:var(--text3)">Send time stays the same</span>' +
                       '</div>'
                     // Read-only for sent, cancelled, and for anyone who is not
@@ -10309,11 +10309,11 @@ async function loadSampaignSendQueue(campaignId) {
                       // Rendered, not escaped. A sent email shown as raw markup
                       // is unreadable, and worse, it looks like what the
                       // recipient got — which for one week it actually was.
-                      '<div style="font-size:12px;color:var(--text2);line-height:1.6;background:var(--surface);border-radius:2px;padding:10px 12px;border:1px solid var(--border);overflow-wrap:anywhere">'+sanitizeEmailHtml(x.body||'')+'</div>' +
+                      '<div style="font-size:12px;color:var(--text2);line-height:1.6;background:var(--surface);border-radius:var(--r-sm);padding:10px 12px;border:1px solid var(--border);overflow-wrap:anywhere">'+sanitizeEmailHtml(x.body||'')+'</div>' +
                       '<div style="font-size:11px;color:var(--text3);margin-top:5px">'+
                         (x.status==='sent' ? 'Already sent, read only'
                          : x.status==='cancelled' ? 'Cancelled, never sent'
-                         : !d.is_owner ? 'Read only — this is '+esc((camp.owner_email||'the owner').split('@')[0])+'’s campaign'
+                         : !d.is_owner ? 'Read only, this is '+esc((camp.owner_email||'the owner').split('@')[0])+'’s campaign'
                          : 'Read only')+'</div>') +
                 '</div>' +
                 (x.error ? '<div style="font-size:11px;color:var(--coral);padding:0 10px 8px 46px">'+esc(x.error)+'</div>' : '');
@@ -10413,7 +10413,7 @@ function _detectiveSamAvatar(size) {
 function _samoraIntelChip() {
   return '<span style="display:inline-flex;align-items:center;gap:6px">' +
     '<img src="icons/icon-48.png" alt="Samora" style="width:15px;height:15px;border-radius:50%;flex-shrink:0"/>' +
-    '<span style="font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--gold);text-transform:uppercase;background:rgba(var(--c-accent-rgb),0.12);padding:2px 6px;border-radius:2px;white-space:nowrap">Samora Intelligence</span>' +
+    '<span style="font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--gold);text-transform:uppercase;background:rgba(var(--c-accent-rgb),0.12);padding:2px 6px;border-radius:var(--r-sm);white-space:nowrap">Samora Intelligence</span>' +
   '</span>';
 }
 
@@ -10461,14 +10461,14 @@ function openDetectiveSam() {
     '</div>' +
     '<div style="font-size:11px;color:var(--text3);margin-bottom:7px">Fill in whatever you know. More detail means a better match, a company domain helps most.</div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">' +
-      '<input id="dsName" placeholder="Full name" style="padding:8px 10px;border-radius:2px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
-      '<input id="dsCompany" placeholder="Company" style="padding:8px 10px;border-radius:2px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
-      '<input id="dsDomain" placeholder="Company domain (e.g. acme.com)" style="padding:8px 10px;border-radius:2px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
-      '<input id="dsEmail" placeholder="Email (if known)" style="padding:8px 10px;border-radius:2px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
-      '<input id="dsPhone" placeholder="Phone (if known)" style="padding:8px 10px;border-radius:2px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
-      '<input id="dsLinkedin" placeholder="LinkedIn URL (if known)" style="padding:8px 10px;border-radius:2px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
+      '<input id="dsName" placeholder="Full name" style="padding:8px 10px;border-radius:var(--r-sm);border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
+      '<input id="dsCompany" placeholder="Company" style="padding:8px 10px;border-radius:var(--r-sm);border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
+      '<input id="dsDomain" placeholder="Company domain (e.g. acme.com)" style="padding:8px 10px;border-radius:var(--r-sm);border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
+      '<input id="dsEmail" placeholder="Email (if known)" style="padding:8px 10px;border-radius:var(--r-sm);border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
+      '<input id="dsPhone" placeholder="Phone (if known)" style="padding:8px 10px;border-radius:var(--r-sm);border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
+      '<input id="dsLinkedin" placeholder="LinkedIn URL (if known)" style="padding:8px 10px;border-radius:var(--r-sm);border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
     '</div>' +
-    '<button id="dsSearchBtn" onclick="runDetectiveSam()" style="width:100%;margin-top:10px;display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;border-radius:3px;background:var(--c-accent-solid);border:none;color:#2A1F0C;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--sans)">' +
+    '<button id="dsSearchBtn" onclick="runDetectiveSam()" style="width:100%;margin-top:10px;display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;border-radius:var(--r-md);background:var(--c-accent-solid);border:none;color:#2A1F0C;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--sans)">' +
       _magnifierIcon(17, '#2A1F0C') + 'Search</button>' +
     '<div id="dsResults" style="margin-top:14px"></div>' +
   '</div>';
@@ -10485,7 +10485,7 @@ var _DS_SRC_META = {
 };
 function _dsSrcChip(src, note) {
   var m = _DS_SRC_META[src] || { label: src, color: 'var(--text3)' };
-  return '<span style="font-size:11px;font-weight:600;color:'+m.color+';background:rgba(128,128,128,0.09);border-radius:2px;padding:2px 6px;white-space:nowrap" title="'+esc(note||'')+'">'+esc(m.label)+(note?' · '+esc(note):'')+'</span>';
+  return '<span style="font-size:11px;font-weight:600;color:'+m.color+';background:rgba(128,128,128,0.09);border-radius:var(--r-sm);padding:2px 6px;white-space:nowrap" title="'+esc(note||'')+'">'+esc(m.label)+(note?' · '+esc(note):'')+'</span>';
 }
 
 async function runDetectiveSam() {
@@ -10522,16 +10522,16 @@ function _renderDetectiveSamResult(d) {
   var html = '';
 
   if (!d.found) {
-    html += '<div style="background:var(--surface2);border-radius:3px;padding:14px;font-size:12px;color:var(--text2)">Nothing found on that person yet.</div>';
+    html += '<div style="background:var(--surface2);border-radius:var(--r-md);padding:14px;font-size:12px;color:var(--text2)">Nothing found on that person yet.</div>';
   } else {
-    html += '<div style="background:var(--surface2);border:1px solid var(--border2);border-radius:3px;padding:14px">' +
+    html += '<div style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r-md);padding:14px">' +
       '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">' +
         '<div style="min-width:0">' +
           '<div style="font-size:16px;font-weight:700;color:var(--text)">'+esc(p.name||'Unknown')+'</div>' +
           (p.title ? '<div style="font-size:12px;color:var(--text2);margin-top:2px">'+esc(p.title)+(p.current_org?' · '+esc(p.current_org):'')+'</div>' : (p.current_org?'<div style="font-size:12px;color:var(--text2);margin-top:2px">'+esc(p.current_org)+'</div>':'')) +
           (p.location ? '<div style="font-size:11px;color:var(--text3);margin-top:2px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 21V3.5M5.5 4.5h12l-2.5 4 2.5 4h-12"/></svg> '+esc(p.location)+'</div>' : '') +
         '</div>' +
-        (p.linkedin_url ? '<a href="'+esc(p.linkedin_url)+'" target="_blank" style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#fff;background:#0A66C2;border-radius:2px;padding:6px 10px;text-decoration:none;flex-shrink:0">in LinkedIn</a>' : '') +
+        (p.linkedin_url ? '<a href="'+esc(p.linkedin_url)+'" target="_blank" style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#fff;background:#0A66C2;border-radius:var(--r-sm);padding:6px 10px;text-decoration:none;flex-shrink:0">in LinkedIn</a>' : '') +
       '</div>';
 
     if ((d.emails||[]).length) {
@@ -10555,7 +10555,7 @@ function _renderDetectiveSamResult(d) {
     if ((p.previous_orgs||[]).length) {
       html += '<div style="margin-top:12px"><div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20.5V5.5L13 3v17.5M13 9.5h7v11M4 20.5h17M7.5 8h2M7.5 12h2M7.5 16h2M16 13h1.5M16 16.5h1.5"/></svg> Previously</div>' +
         p.previous_orgs.slice(0,6).map(function(h){
-          var yrs = [String(h.start||'').slice(0,4), String(h.end||'').slice(0,4)].filter(Boolean).join(' – ');
+          var yrs = [String(h.start||'').slice(0,4), String(h.end||'').slice(0,4)].filter(Boolean).join(', ');
           return '<div style="display:flex;align-items:baseline;gap:7px;padding:3px 0;border-top:1px solid var(--border)">' +
             '<span style="font-size:12px;color:var(--text);font-weight:600">'+esc(h.organization)+'</span>' +
             (h.title?'<span style="font-size:11px;color:var(--text3)">'+esc(h.title)+'</span>':'') +
@@ -10576,7 +10576,7 @@ function _renderDetectiveSamResult(d) {
           '<span style="font-size:11px;font-weight:700;color:var(--text)">Here is what Detective SAM would like you to know about '+esc((p.name||'them').split(' ')[0])+' before you reach out</span>' +
         '</div>' +
         d.intel.map(function(it) {
-          return '<div style="display:flex;gap:8px;align-items:flex-start;padding:6px 9px;margin-bottom:4px;background:rgba(var(--c-accent-rgb),0.07);border-radius:2px">' +
+          return '<div style="display:flex;gap:8px;align-items:flex-start;padding:6px 9px;margin-bottom:4px;background:rgba(var(--c-accent-rgb),0.07);border-radius:var(--r-sm)">' +
             '<span style="flex-shrink:0;font-size:12px">'+esc(it.icon||'•')+'</span>' +
             '<div style="min-width:0">' +
               '<div style="font-size:11px;color:var(--text);line-height:1.45">'+esc(it.text)+'</div>' +
@@ -10596,7 +10596,7 @@ function _renderDetectiveSamResult(d) {
   }
 
   (d.notes||[]).forEach(function(n){
-    html += '<div style="margin-top:8px;font-size:11px;color:var(--amber);background:rgba(212,160,74,0.08);border-radius:2px;padding:8px 10px">ⓘ '+esc(n)+'</div>';
+    html += '<div style="margin-top:8px;font-size:11px;color:var(--amber);background:rgba(212,160,74,0.08);border-radius:var(--r-sm);padding:8px 10px">ⓘ '+esc(n)+'</div>';
   });
 
   if (d.found) html += _dsActionsHtml();
@@ -10608,16 +10608,16 @@ function _dsActionsHtml() {
   var camps = window._sampaignCampaignsCache || {};
   var ids = Object.keys(camps);
   var opts = ids.map(function(id){ return '<option value="'+esc(id)+'">'+esc(camps[id].name||'SAMpaign')+'</option>'; }).join('');
-  return '<div style="margin-top:12px;background:var(--surface);border:1px solid var(--border2);border-radius:3px;padding:12px">' +
+  return '<div style="margin-top:12px;background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-md);padding:12px">' +
     '<div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:8px">What do you want to do with this?</div>' +
     (ids.length
       ? '<div style="display:flex;gap:6px;align-items:center;margin-bottom:7px">' +
-          '<select id="dsCampaignPick" style="flex:1;padding:7px 9px;border-radius:2px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px">'+opts+'</select>' +
-          '<button onclick="dsAddToSampaign()" style="font-size:11px;font-weight:600;padding:7px 12px;border-radius:2px;background:var(--green);border:none;color:#fff;cursor:pointer;font-family:var(--sans);white-space:nowrap">Add to SAMpaign</button>' +
+          '<select id="dsCampaignPick" style="flex:1;padding:7px 9px;border-radius:var(--r-sm);border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px">'+opts+'</select>' +
+          '<button onclick="dsAddToSampaign()" style="font-size:11px;font-weight:600;padding:7px 12px;border-radius:var(--r-sm);background:var(--green);border:none;color:#fff;cursor:pointer;font-family:var(--sans);white-space:nowrap">Add to SAMpaign</button>' +
         '</div>'
       : '<div style="font-size:11px;color:var(--text3);margin-bottom:7px">No SAMpaigns yet, create one to add people to it.</div>') +
     '<div style="display:flex;gap:6px;align-items:center;margin-bottom:7px">' +
-      '<input id="dsAccountSearch" placeholder="Account name to attach as stakeholder…" oninput="dsFindAccounts(this.value)" style="flex:1;padding:7px 9px;border-radius:2px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
+      '<input id="dsAccountSearch" placeholder="Account name to attach as stakeholder…" oninput="dsFindAccounts(this.value)" style="flex:1;padding:7px 9px;border-radius:var(--r-sm);border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
     '</div>' +
     '<div id="dsAccountResults"></div>' +
     '<div style="font-size:11px;color:var(--text3);margin-top:6px">Saved to an account, they are marked <strong>prospective</strong> until you have actually contacted them, so coverage and champion metrics stay honest.</div>' +
@@ -10661,7 +10661,7 @@ function dsFindAccounts(q) {
     var hits = pool.filter(function(a){ return String(a.account_name||'').toLowerCase().indexOf(needle) !== -1; }).slice(0, 5);
     if (!hits.length) { box.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:3px 0">No matching account in your pipeline.</div>'; return; }
     box.innerHTML = hits.map(function(a){
-      return '<div onclick="dsSaveStakeholder(\''+esc(a.id)+'\',\''+esc(a.account_name)+'\')" style="cursor:pointer;font-size:11px;color:var(--text);padding:5px 7px;border-radius:2px;background:var(--surface2);margin-top:3px">＋ '+esc(a.account_name)+'</div>';
+      return '<div onclick="dsSaveStakeholder(\''+esc(a.id)+'\',\''+esc(a.account_name)+'\')" style="cursor:pointer;font-size:11px;color:var(--text);padding:5px 7px;border-radius:var(--r-sm);background:var(--surface2);margin-top:3px">＋ '+esc(a.account_name)+'</div>';
     }).join('');
   }, 200);
 }
@@ -10791,11 +10791,11 @@ function _fupCalendarHtml(scope, i) {
     var dis = isPast || isDupe;
     cells += '<div' + (dis ? '' : ' onclick="_fupPick(\''+esc(scope)+'\','+i+',\''+k+'\')"') +
       ' title="'+(isDupe?'Already used by another follow-up':(isPast?'In the past':(wknd?'Weekend':'')))+'"' +
-      ' style="text-align:center;font-size:11px;padding:5px 0;border-radius:2px;background:'+bg+';color:'+col+';' +
+      ' style="text-align:center;font-size:11px;padding:5px 0;border-radius:var(--r-sm);background:'+bg+';color:'+col+';' +
         (dis ? 'opacity:0.28;' : 'cursor:pointer;') + (isSel?'font-weight:700;':'') + '">' + day + '</div>';
   }
 
-  return '<div style="margin-top:6px;padding:8px;border:1px solid var(--border2);border-radius:2px;background:var(--bg)">' +
+  return '<div style="margin-top:6px;padding:8px;border:1px solid var(--border2);border-radius:var(--r-sm);background:var(--bg)">' +
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">' +
       '<span onclick="_fupNavMonth(\''+esc(scope)+'\','+i+',-1)" style="cursor:pointer;padding:2px 7px;font-size:13px;color:var(--text3)">‹</span>' +
       '<span style="font-size:11px;font-weight:700;color:var(--text)">'+_FUP_MON[mm.m]+' '+mm.y+'</span>' +
@@ -10813,12 +10813,12 @@ function _fupRender(scope) {
   var html = '';
 
   if (!dates.length) {
-    html += '<div style="font-size:11px;color:var(--text3);padding:4px 0">No follow-ups — one send only.</div>';
+    html += '<div style="font-size:11px;color:var(--text3);padding:4px 0">No follow-ups, one send only.</div>';
   }
   dates.forEach(function(k, i) {
     var wknd = _fupIsWeekend(k);
     var open = (window._fupCalOpen === scope + ':' + i);
-    html += '<div style="border:1px solid '+(wknd?'rgba(196,90,74,0.35)':'var(--border2)')+';border-radius:2px;padding:7px 9px;background:var(--bg)">' +
+    html += '<div style="border:1px solid '+(wknd?'rgba(196,90,74,0.35)':'var(--border2)')+';border-radius:var(--r-sm);padding:7px 9px;background:var(--bg)">' +
       '<div style="display:flex;align-items:center;gap:8px">' +
         '<span style="font-size:11px;font-weight:600;color:var(--text3);min-width:74px">Follow-up '+(i+1)+'</span>' +
         '<span onclick="_fupToggleCal(\''+esc(scope)+'\','+i+')" style="flex:1;font-size:12px;font-weight:600;color:'+(wknd?'var(--coral)':'var(--text)')+';cursor:pointer">' +
@@ -10851,7 +10851,7 @@ function _fupEditorHtml(scope, initial) {
   return '<div style="display:flex;flex-direction:column;gap:6px">' +
     '<div style="display:flex;align-items:center;gap:8px">' +
       '<span style="font-size:11px;color:var(--text3)">How many follow-ups?</span>' +
-      '<select id="fupCount_'+esc(scope)+'" onchange="_fupSetCount(\''+esc(scope)+'\',this.value)" style="padding:5px 8px;border-radius:2px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px">'+opts+'</select>' +
+      '<select id="fupCount_'+esc(scope)+'" onchange="_fupSetCount(\''+esc(scope)+'\',this.value)" style="padding:5px 8px;border-radius:var(--r-sm);border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px">'+opts+'</select>' +
       '<span style="font-size:11px;color:var(--text3)">Pick the actual dates, weekends are flagged</span>' +
     '</div>' +
     '<div id="fupRows_'+esc(scope)+'" style="display:flex;flex-direction:column;gap:5px"></div>' +
@@ -10887,24 +10887,24 @@ function loadSampaignWorkspace() {
     detectiveSamCardHtml() +
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
       '<span style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">SAMpaigns</span>' +
-      '<button onclick="toggleNewSampaignForm()" id="sampaignNewBtn" style="font-size:11px;font-weight:600;padding:5px 12px;border-radius:2px;background:var(--green);border:none;color:#fff;cursor:pointer;font-family:var(--sans)">+ New SAMpaign</button>' +
+      '<button onclick="toggleNewSampaignForm()" id="sampaignNewBtn" style="font-size:11px;font-weight:600;padding:5px 12px;border-radius:var(--r-sm);background:var(--green);border:none;color:#fff;cursor:pointer;font-family:var(--sans)">+ New SAMpaign</button>' +
     '</div>' +
-    '<div id="sampaignNewForm" style="display:none;background:var(--surface2);border-radius:3px;padding:10px;margin-bottom:12px">' +
+    '<div id="sampaignNewForm" style="display:none;background:var(--surface2);border-radius:var(--r-md);padding:10px;margin-bottom:12px">' +
       '<div style="display:flex;flex-direction:column;gap:6px">' +
-      '<div style="font-size:11px;color:var(--text3)">Same as an SDR lead — a SAMpaign is anchored to a real tracked account, so contacts you upload/scout belong to it by construction.</div>' +
-      '<input id="sampaignName" placeholder="Company name (e.g. Acme Corp)" style="padding:8px 10px;border:1px solid var(--border);border-radius:2px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
-      '<input id="sampaignDomain" placeholder="Domain (e.g. acme.com)" style="padding:8px 10px;border:1px solid var(--border);border-radius:2px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
-      '<input id="sampaignRegion" placeholder="Region (optional)" style="padding:8px 10px;border:1px solid var(--border);border-radius:2px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
-      '<div style="font-size:11px;color:var(--text3)">Campaign goal / ask — what are you pitching and what do you want them to do? (used by AI drafting tools, e.g. Claude via connector)</div>' +
-      '<select id="sampaignGoalTemplate" onchange="applyGoalTemplate()" style="padding:8px 10px;border:1px solid var(--border);border-radius:2px;background:var(--surface2);color:var(--text);font-family:var(--sans);font-size:12px;display:none"></select>' +
+      '<div style="font-size:11px;color:var(--text3)">Same as an SDR lead, a SAMpaign is anchored to a real tracked account, so contacts you upload/scout belong to it by construction.</div>' +
+      '<input id="sampaignName" placeholder="Company name (e.g. Acme Corp)" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
+      '<input id="sampaignDomain" placeholder="Domain (e.g. acme.com)" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
+      '<input id="sampaignRegion" placeholder="Region (optional)" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
+      '<div style="font-size:11px;color:var(--text3)">Campaign goal / ask, what are you pitching and what do you want them to do? (used by AI drafting tools, e.g. Claude via connector)</div>' +
+      '<select id="sampaignGoalTemplate" onchange="applyGoalTemplate()" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface2);color:var(--text);font-family:var(--sans);font-size:12px;display:none"></select>' +
       '<div style="display:flex;gap:10px;align-items:center">' +
         '<a id="sampaignGoalSave" onclick="saveGoalAsTemplate()" style="font-size:11px;color:var(--gold);cursor:pointer;display:none">Save this goal for next time</a>' +
         '<a id="sampaignGoalForget" onclick="forgetGoalTemplate()" style="font-size:11px;color:var(--text3);cursor:pointer;display:none">Forget selected</a>' +
       '</div>' +
-      '<textarea id="sampaignGoal" rows="2" placeholder="e.g. Introduce our retail execution platform, get a 15-min discovery call booked with the regional sales lead" style="padding:8px 10px;border:1px solid var(--border);border-radius:2px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans);resize:vertical;height:48px"></textarea>' +
+      '<textarea id="sampaignGoal" rows="2" placeholder="e.g. Introduce our retail execution platform, get a 15-min discovery call booked with the regional sales lead" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans);resize:vertical;height:48px"></textarea>' +
       '<div style="font-size:11px;color:var(--text3)">Who is this one for? A short label so you can tell it apart later (e.g. RTM leadership, Plant heads)</div>' +
-      '<input id="sampaignFocus" maxlength="48" placeholder="Focus (e.g. RTM leadership)" style="padding:8px 10px;border:1px solid var(--border);border-radius:2px;background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
-      '<div style="font-size:11px;color:var(--text3)">Follow-up schedule — these become tasks on your own list for those days</div>' +
+      '<input id="sampaignFocus" maxlength="48" placeholder="Focus (e.g. RTM leadership)" style="padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--bg);color:var(--text);font-size:13px;font-family:var(--sans)"/>' +
+      '<div style="font-size:11px;color:var(--text3)">Follow-up schedule, these become tasks on your own list for those days</div>' +
       _fupEditorHtml('new', [_fupSuggest([])]) +
       '<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--text2)">' +
         '<label style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="sampaignAlertOoo" checked/> OOO alerts</label>' +
@@ -10917,7 +10917,7 @@ function loadSampaignWorkspace() {
       '<div id="sampaignAddRows_new"></div>' +
       '<div style="font-size:11px;color:var(--text3)">Or attach a CSV (name, email, phone, company, title)</div>' +
       '<input type="file" id="sampaignNewCsv" accept=".csv,text/csv" style="font-size:11px;color:var(--text2)"/>' +
-      '<button id="createSampaignBtn" onclick="createSampaign()" style="padding:9px;border:none;border-radius:2px;background:var(--green);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--sans)">Create SAMpaign</button>' +
+      '<button id="createSampaignBtn" onclick="createSampaign()" style="padding:9px;border:none;border-radius:var(--r-sm);background:var(--green);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--sans)">Create SAMpaign</button>' +
       '</div></div>' +
     '<div id="sampaignListToolbar"></div>' +
     '<div id="sampaignCampaignsList"><div style="font-size:12px;color:var(--text3);padding:6px 0">Loading…</div></div>';
@@ -10967,7 +10967,7 @@ async function _syncSampaignFupTasks(campaignId, campaignName, oldDates, newDate
     var d = dayData(k);
     d.tasks.push({
       id: _fupTaskId(campaignId, i + 1),
-      text: 'Follow-up ' + (i + 1) + ' — ' + (campaignName || 'SAMpaign'),
+      text: 'Follow-up ' + (i + 1) + ', ' + (campaignName || 'SAMpaign'),
       done: false,
       source: 'sampaign',
       sampaignId: campaignId,
@@ -11165,7 +11165,7 @@ async function createSampaign() {
   var domain = document.getElementById('sampaignDomain')?.value?.trim().toLowerCase().replace(/^https?:\/\//,'').replace(/\/.*$/,'');
   var region = document.getElementById('sampaignRegion')?.value?.trim() || null;
   if (!accountName) { showToast('Enter a company name'); return; }
-  if (!domain) { showToast('Enter a domain — SAMpaigns are anchored to a tracked account, same as an SDR lead'); return; }
+  if (!domain) { showToast('Enter a domain, SAMpaigns are anchored to a tracked account, same as an SDR lead'); return; }
   var campaignGoal = document.getElementById('sampaignGoal')?.value?.trim() || null;
   var followup_dates = (window._fupState['new'] || []).slice();
   var alerts_enabled = {
@@ -11333,7 +11333,7 @@ function _renderSampaignToolbar(d) {
     var picked = window._sampaignPicked || [];
     var seg = function(key, label) {
       var on = f === key;
-      return '<button onclick="setSampaignOwnerFilter(\''+key+'\')" style="padding:4px 10px;border:none;border-radius:2px;background:'+(on?'var(--surface)':'transparent')+
+      return '<button onclick="setSampaignOwnerFilter(\''+key+'\')" style="padding:4px 10px;border:none;border-radius:var(--r-sm);background:'+(on?'var(--surface)':'transparent')+
         ';color:'+(on?'var(--text)':'var(--text3)')+';font-size:11px;font-weight:'+(on?'700':'500')+';cursor:pointer;font-family:var(--sans);'+(on?'box-shadow:0 0 0 1px var(--border2)':'')+'">'+label+'</button>';
     };
     var pickLabel = f === 'pick' ? 'People (' + picked.length + ')' : 'People';
@@ -11345,11 +11345,11 @@ function _renderSampaignToolbar(d) {
         esc(lbl) + '</label>';
     }).join('');
     filter =
-      '<div style="position:relative;display:flex;align-items:center;gap:2px;background:var(--surface2);border-radius:3px;padding:2px">' +
+      '<div style="position:relative;display:flex;align-items:center;gap:2px;background:var(--surface2);border-radius:var(--r-md);padding:2px">' +
         seg('mine','Mine') + seg('all','Everyone') +
-        '<button id="sampaignPeopleBtn" onclick="toggleSampaignPeopleMenu(event)" style="padding:4px 10px;border:none;border-radius:2px;background:'+(f==='pick'?'var(--surface)':'transparent')+
+        '<button id="sampaignPeopleBtn" onclick="toggleSampaignPeopleMenu(event)" style="padding:4px 10px;border:none;border-radius:var(--r-sm);background:'+(f==='pick'?'var(--surface)':'transparent')+
           ';color:'+(f==='pick'?'var(--text)':'var(--text3)')+';font-size:11px;font-weight:'+(f==='pick'?'700':'500')+';cursor:pointer;font-family:var(--sans);'+(f==='pick'?'box-shadow:0 0 0 1px var(--border2)':'')+'">'+pickLabel+' ▾</button>' +
-        '<div id="sampaignPeopleMenu" style="display:'+(window._sampaignPeopleMenuOpen?'block':'none')+';position:absolute;right:0;top:calc(100% + 4px);z-index:50;min-width:200px;max-height:280px;overflow-y:auto;background:var(--bg);border:1px solid var(--border2);border-radius:3px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:4px 0">' +
+        '<div id="sampaignPeopleMenu" style="display:'+(window._sampaignPeopleMenuOpen?'block':'none')+';position:absolute;right:0;top:calc(100% + 4px);z-index:50;min-width:200px;max-height:280px;overflow-y:auto;background:var(--bg);border:1px solid var(--border2);border-radius:var(--r-md);box-shadow:0 10px 30px rgba(0,0,0,.18);padding:4px 0">' +
           menuRows +
         '</div>' +
       '</div>';
@@ -11440,7 +11440,7 @@ async function loadSampaignCampaigns() {
       // per meaning instead of re-reading every card.
       var pill = function(n, label, color) {
         if (!n) return '';
-        return '<span style="font-size:11px;font-weight:700;color:'+color+';background:rgba(128,128,128,0.10);border-radius:2px;padding:2px 6px;white-space:nowrap">'+n+' '+label+'</span>';
+        return '<span style="font-size:11px;font-weight:700;color:'+color+';background:rgba(128,128,128,0.10);border-radius:var(--r-sm);padding:2px 6px;white-space:nowrap">'+n+' '+label+'</span>';
       };
       var pills = [ pill(s.replied,'replied','var(--green)'), pill(s.ooo,'OOO','var(--amber)'),
                     pill(s.no_response,'no reply','var(--text3)'), pill(s.dead,'dead','var(--coral)') ].join('');
@@ -11458,7 +11458,7 @@ async function loadSampaignCampaigns() {
           ' · ' + next.count + ' contact' + (next.count !== 1 ? 's' : '') + '</span>';
       }
 
-      return '<div style="background:var(--surface2);border-radius:3px;padding:11px 13px;margin-bottom:8px">' +
+      return '<div class="g-card" style="padding:14px 16px;margin-bottom:10px">' +
         '<div onclick="openSampaignDetail(\''+esc(c.id)+'\')" style="cursor:pointer">' +
           '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">' +
             '<div style="min-width:0;display:flex;align-items:baseline;gap:9px;flex-wrap:wrap">' +
@@ -11513,10 +11513,10 @@ function toggleEditSampaignForm(campaignId) {
     var a = c.alerts_enabled || {};
     box.innerHTML =
       '<div style="display:flex;flex-direction:column;gap:8px">' +
-        '<input id="editSampaignName_'+esc(campaignId)+'" value="'+esc(c.name||'')+'" placeholder="Campaign name" style="padding:7px 10px;border-radius:2px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
-        '<textarea id="editSampaignGoal_'+esc(campaignId)+'" rows="2" placeholder="Campaign goal / ask — what are you pitching, what do you want them to do?" style="padding:7px 10px;border-radius:2px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px;resize:vertical;height:46px">'+esc(c.campaign_goal||'')+'</textarea>' +
-        '<input id="editSampaignFocus_'+esc(campaignId)+'" maxlength="48" value="'+esc(c.focus||'')+'" placeholder="Focus (e.g. RTM leadership)" style="padding:7px 10px;border-radius:2px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
-        '<div style="font-size:11px;color:var(--text3)">Follow-up schedule — moving a date moves its task too</div>' +
+        '<input id="editSampaignName_'+esc(campaignId)+'" value="'+esc(c.name||'')+'" placeholder="Campaign name" style="padding:7px 10px;border-radius:var(--r-sm);border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
+        '<textarea id="editSampaignGoal_'+esc(campaignId)+'" rows="2" placeholder="Campaign goal / ask, what are you pitching, what do you want them to do?" style="padding:7px 10px;border-radius:var(--r-sm);border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px;resize:vertical;height:46px">'+esc(c.campaign_goal||'')+'</textarea>' +
+        '<input id="editSampaignFocus_'+esc(campaignId)+'" maxlength="48" value="'+esc(c.focus||'')+'" placeholder="Focus (e.g. RTM leadership)" style="padding:7px 10px;border-radius:var(--r-sm);border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px"/>' +
+        '<div style="font-size:11px;color:var(--text3)">Follow-up schedule, moving a date moves its task too</div>' +
         _fupEditorHtml(campaignId, c.followup_dates || []) +
         '<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--text2)">' +
           '<label style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="editSampaignAlertOoo_'+esc(campaignId)+'" '+(a.ooo?'checked':'')+'/> OOO</label>' +
@@ -11525,8 +11525,8 @@ function toggleEditSampaignForm(campaignId) {
           '<label style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="editSampaignAlertDead_'+esc(campaignId)+'" '+(a.dead?'checked':'')+'/> Dead</label>' +
         '</div>' +
         '<div style="display:flex;gap:8px">' +
-          '<button onclick="saveSampaignEdit(\''+esc(campaignId)+'\')" style="flex:1;padding:7px;border-radius:2px;background:var(--gold);border:none;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Save changes</button>' +
-          '<button onclick="toggleEditSampaignForm(\''+esc(campaignId)+'\')" style="padding:7px 12px;border-radius:2px;background:none;border:1px solid var(--border2);color:var(--text3);font-size:12px;cursor:pointer">Cancel</button>' +
+          '<button onclick="saveSampaignEdit(\''+esc(campaignId)+'\')" style="flex:1;padding:7px;border-radius:var(--r-sm);background:var(--gold);border:none;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Save changes</button>' +
+          '<button onclick="toggleEditSampaignForm(\''+esc(campaignId)+'\')" style="padding:7px 12px;border-radius:var(--r-sm);background:none;border:1px solid var(--border2);color:var(--text3);font-size:12px;cursor:pointer">Cancel</button>' +
         '</div>' +
       '</div>';
     box.style.display = 'block';
@@ -11675,10 +11675,10 @@ async function openSampaignDetail(campaignId) {
       // ── Footer: actions always reachable, never scrolled past ──
       '<div style="flex-shrink:0;display:flex;justify-content:flex-end;gap:8px;padding:12px 20px;border-top:1px solid var(--border);background:var(--surface2)">' +
         (isOwner
-          ? '<button id="sampaignSyncBtn_'+esc(campaignId)+'" onclick="syncSampaignCampaign(\''+esc(campaignId)+'\')" style="font-size:12px;font-weight:600;color:var(--gold);padding:8px 16px;border-radius:2px;background:transparent;border:1px solid rgba(var(--c-accent-rgb),0.4);cursor:pointer;font-family:var(--sans)">Refresh</button>' +
-            '<button onclick="openSampaignComposer(\''+esc(campaignId)+'\')" style="font-size:12px;font-weight:600;color:#fff;padding:8px 16px;border-radius:2px;background:var(--green);border:none;cursor:pointer;font-family:var(--sans)">Schedule</button>'
+          ? '<button id="sampaignSyncBtn_'+esc(campaignId)+'" onclick="syncSampaignCampaign(\''+esc(campaignId)+'\')" style="font-size:12px;font-weight:600;color:var(--gold);padding:8px 16px;border-radius:var(--r-sm);background:transparent;border:1px solid rgba(var(--c-accent-rgb),0.4);cursor:pointer;font-family:var(--sans)">Refresh</button>' +
+            '<button onclick="openSampaignComposer(\''+esc(campaignId)+'\')" style="font-size:12px;font-weight:600;color:#fff;padding:8px 16px;border-radius:var(--r-sm);background:var(--green);border:none;cursor:pointer;font-family:var(--sans)">Schedule</button>'
           : '<span style="font-size:11px;color:var(--text3);align-self:center;margin-right:auto">Syncs from '+esc((c.owner_email||'the owner').split('@')[0])+'’s inbox, hourly</span>') +
-        '<button onclick="document.getElementById(\'sampaign-detail-overlay\').remove()" style="font-size:12px;font-weight:600;color:var(--text3);padding:8px 16px;border-radius:2px;background:transparent;border:1px solid var(--border2);cursor:pointer;font-family:var(--sans)">Close</button>' +
+        '<button onclick="document.getElementById(\'sampaign-detail-overlay\').remove()" style="font-size:12px;font-weight:600;color:var(--text3);padding:8px 16px;border-radius:var(--r-sm);background:transparent;border:1px solid var(--border2);cursor:pointer;font-family:var(--sans)">Close</button>' +
       '</div>' +
     '</div>';
   modal.addEventListener('click', function() { modal.remove(); });
@@ -11730,7 +11730,7 @@ function _renderSampTabs(campaignId) {
       'style="font-size:13px;font-weight:'+(on?'700':'500')+';padding-bottom:9px;cursor:pointer;white-space:nowrap;' +
         'border-bottom:2px solid '+(on?'var(--gold)':'transparent')+';color:'+(on?'var(--text)':'var(--text3)')+'">' +
       esc(t.label) +
-      (t.badge ? '<span style="font-size:11px;font-weight:700;background:rgba(var(--c-accent-rgb),0.16);color:var(--gold);border-radius:2px;padding:1px 6px;margin-left:5px">'+t.badge+'</span>' : '') +
+      (t.badge ? '<span style="font-size:11px;font-weight:700;background:rgba(var(--c-accent-rgb),0.16);color:var(--gold);border-radius:var(--r-sm);padding:1px 6px;margin-left:5px">'+t.badge+'</span>' : '') +
     '</span>';
   }).join('');
 }
@@ -11828,7 +11828,7 @@ async function _loadSampaignTrend(campaignId) {
       // Explains itself instead of being an empty tab. The nightly job is the
       // thing being waited on, so name it and say when.
       box.innerHTML = picker +
-        '<div style="text-align:center;padding:26px 16px;border:1px dashed var(--border2);border-radius:3px">' +
+        '<div style="text-align:center;padding:26px 16px;border:1px dashed var(--border2);border-radius:var(--r-md)">' +
           '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:5px">History starts building tonight</div>' +
           '<div style="font-size:11px;color:var(--text3);line-height:1.55">A snapshot of this campaign is recorded once a day, so the first line appears after two nights.' +
           (all.length === 1 ? '<br>One day recorded so far.' : '') + '</div>' +
@@ -11853,7 +11853,7 @@ async function _loadSampaignTrend(campaignId) {
       return v === 0 ? '' : (v > 0 ? ' +' + v : ' ' + v);
     };
 
-    box.innerHTML = picker + '<div style="background:var(--surface2);border:1px solid var(--border2);border-radius:3px;padding:11px;margin-bottom:8px">' +
+    box.innerHTML = picker + '<div style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r-md);padding:11px;margin-bottom:8px">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
         '<span style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg> Trend</span>' +
         '<span style="font-size:11px;color:var(--text3)">'+rows.length+' days · '+esc(String(first.snapshot_date).slice(5))+' to '+esc(String(last.snapshot_date).slice(5))+'</span>' +
@@ -11901,7 +11901,7 @@ async function _loadSampaignDetailPerf(campaignId, c) {
         '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
         c.followup_schedule.map(function(fs) {
           var overdue = new Date(fs.next_due) < new Date(new Date().toDateString());
-          return '<span style="font-size:11px;font-weight:600;color:'+(overdue?'var(--coral)':'var(--gold)')+';background:'+(overdue?'rgba(196,90,74,0.1)':'rgba(var(--c-accent-rgb),0.1)')+';border:1px solid '+(overdue?'rgba(196,90,74,0.25)':'rgba(var(--c-accent-rgb),0.25)')+';border-radius:2px;padding:5px 10px">Follow-up '+fs.stage+' — '+fs.count+' contact'+(fs.count!==1?'s':'')+', '+(overdue?'overdue since':'scheduled')+' '+fmt(fs.next_due)+'</span>';
+          return '<span style="font-size:11px;font-weight:600;color:'+(overdue?'var(--coral)':'var(--gold)')+';background:'+(overdue?'rgba(196,90,74,0.1)':'rgba(var(--c-accent-rgb),0.1)')+';border:1px solid '+(overdue?'rgba(196,90,74,0.25)':'rgba(var(--c-accent-rgb),0.25)')+';border-radius:var(--r-sm);padding:5px 10px">Follow-up '+fs.stage+', '+fs.count+' contact'+(fs.count!==1?'s':'')+', '+(overdue?'overdue since':'scheduled')+' '+fmt(fs.next_due)+'</span>';
         }).join('') +
         '</div>';
     }
@@ -11989,7 +11989,7 @@ function _sampMetricStrip(d, campaignId) {
     '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3)">' +
       '<span>0%</span><span>reply rate vs industry</span><span>'+good+'%</span>' +
     '</div>' +
-    '<div style="height:5px;border-radius:2px;margin-top:6px;background:linear-gradient(90deg,var(--coral),var(--amber),var(--green))"></div>' +
+    '<div style="height:5px;border-radius:var(--r-sm);margin-top:6px;background:linear-gradient(90deg,var(--coral),var(--amber),var(--green))"></div>' +
     '<div style="position:relative;height:12px">' +
       '<span style="position:absolute;left:'+pos.toFixed(1)+'%;transform:translateX(-50%);font-size:11px;color:var(--text)">▲</span>' +
     '</div>' +
@@ -12002,7 +12002,7 @@ function _sampMetricStrip(d, campaignId) {
 function _sampHotSignals(d) {
   var hot = d.hot_signals || [];
   if (!hot.length) return '';
-  return '<div style="margin-top:14px;border:1px solid rgba(74,140,92,0.3);background:rgba(74,140,92,0.07);border-radius:3px;padding:12px 14px">' +
+  return '<div style="margin-top:14px;border:1px solid rgba(74,140,92,0.3);background:rgba(74,140,92,0.07);border-radius:var(--r-md);padding:12px 14px">' +
     '<div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.06em;margin-bottom:7px">Replied · act now</div>' +
     hot.map(function(h) {
       return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0">' +
@@ -12164,20 +12164,20 @@ function _renderSampaignContacts(campaignId) {
   }
 
   html += '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">' +
-    '<label style="font-size:11px;color:var(--gold);padding:5px 10px;border-radius:2px;background:rgba(var(--c-accent-rgb),0.1);border:1px solid rgba(var(--c-accent-rgb),0.25);cursor:pointer">⇪ Upload CSV<input type="file" accept=".csv,text/csv" style="display:none" onchange="handleSampaignCsv(\''+esc(campaignId)+'\',this.files[0]);this.value=\'\'"/></label>' +
-    '<button onclick="scoutSampaignContacts(\''+esc(campaignId)+'\')" style="font-size:11px;color:var(--gold);padding:5px 10px;border-radius:2px;background:rgba(var(--c-accent-rgb),0.1);border:1px solid rgba(var(--c-accent-rgb),0.25);cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15zM16 16l5 5"/></svg> Scout more contacts</button>' +
+    '<label style="font-size:11px;color:var(--gold);padding:5px 10px;border-radius:var(--r-sm);background:rgba(var(--c-accent-rgb),0.1);border:1px solid rgba(var(--c-accent-rgb),0.25);cursor:pointer">⇪ Upload CSV<input type="file" accept=".csv,text/csv" style="display:none" onchange="handleSampaignCsv(\''+esc(campaignId)+'\',this.files[0]);this.value=\'\'"/></label>' +
+    '<button onclick="scoutSampaignContacts(\''+esc(campaignId)+'\')" style="font-size:11px;color:var(--gold);padding:5px 10px;border-radius:var(--r-sm);background:rgba(var(--c-accent-rgb),0.1);border:1px solid rgba(var(--c-accent-rgb),0.25);cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15zM16 16l5 5"/></svg> Scout more contacts</button>' +
     '<span onclick="openSampaignScoutProfile(\''+esc(campaignId)+'\')" style="font-size:11px;color:var(--text3);cursor:pointer;text-decoration:underline dotted"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 16.5a4.5 4.5 0 100-9 4.5 4.5 0 000 9zM12 13a1 1 0 100-2 1 1 0 000 2z"/></svg> Who to hunt</span>' +
-    '<button onclick="addSampaignContactRows(\''+esc(campaignId)+'\')" style="font-size:11px;color:var(--green);padding:5px 10px;border-radius:2px;background:rgba(74,140,92,0.1);border:1px solid rgba(74,140,92,0.3);cursor:pointer">＋ Add people</button>' +
+    '<button onclick="addSampaignContactRows(\''+esc(campaignId)+'\')" style="font-size:11px;color:var(--green);padding:5px 10px;border-radius:var(--r-sm);background:rgba(74,140,92,0.1);border:1px solid rgba(74,140,92,0.3);cursor:pointer">＋ Add people</button>' +
     // Always rendered, never conditional on unenriched>0. It used to vanish
     // entirely once every contact had been enriched, which reads as "the
     // button is broken" rather than "there is nothing to do" — and left no
     // way to re-run enrichment after adding people or rotating a provider.
-    '<button onclick="enrichSampaignContacts(\''+esc(campaignId)+'\')" style="font-size:11px;color:var(--blue);padding:5px 10px;border-radius:2px;background:rgba(74,158,255,0.1);border:1px solid rgba(74,158,255,0.25);cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg> Enrich'+(unenriched?' '+unenriched+' contact'+(unenriched!==1?'s':''):'')+'</button>' +
+    '<button onclick="enrichSampaignContacts(\''+esc(campaignId)+'\')" style="font-size:11px;color:var(--blue);padding:5px 10px;border-radius:var(--r-sm);background:rgba(74,158,255,0.1);border:1px solid rgba(74,158,255,0.25);cursor:pointer"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg> Enrich'+(unenriched?' '+unenriched+' contact'+(unenriched!==1?'s':''):'')+'</button>' +
     '<span style="font-size:11px;color:var(--text3)">Columns: name, email, phone, company, title (header names flexible)</span>' +
     '</div>' +
     '<div id="sampaignAddRows_'+esc(campaignId)+'"></div>';
   if (!contacts.length) {
-    html += '<div style="font-size:11px;color:var(--text3)">' + (statusFilter ? 'No contacts with status "'+esc(_sampaignStatusLabel(statusFilter))+'" in this SAMpaign.' : (_sampaignContactTab==='prospective' ? 'No prospects yet — upload a CSV or scout more contacts above.' : 'No active contacts yet — mark someone sent/opened/replied to move them here.')) + '</div>';
+    html += '<div style="font-size:11px;color:var(--text3)">' + (statusFilter ? 'No contacts with status "'+esc(_sampaignStatusLabel(statusFilter))+'" in this SAMpaign.' : (_sampaignContactTab==='prospective' ? 'No prospects yet, upload a CSV or scout more contacts above.' : 'No active contacts yet, mark someone sent/opened/replied to move them here.')) + '</div>';
   } else {
     html += contacts.map(function(c) {
       var meta = STATUS_META[c.status] || STATUS_META.not_contacted;
@@ -12191,7 +12191,7 @@ function _renderSampaignContacts(campaignId) {
         collisionLine = '<div style="font-size:11px;margin-top:2px;color:'+(c.collision.is_same_user?'var(--green)':'var(--amber)')+'">' +
           (c.collision.is_same_user
             ? '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> Your own tracked account'
-            : '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> Active deal: <strong>'+esc(c.collision.account_name)+'</strong>'+(c.collision.deal_value?' '+esc(c.collision.deal_value):'')+' · AE: '+esc(c.collision.ae)+' — coordinate before outreach') +
+            : '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> Active deal: <strong>'+esc(c.collision.account_name)+'</strong>'+(c.collision.deal_value?' '+esc(c.collision.deal_value):'')+' · AE: '+esc(c.collision.ae)+', coordinate before outreach') +
         '</div>';
       }
       // Promote to stakeholder — only once the contact has actually replied
@@ -12200,8 +12200,8 @@ function _renderSampaignContacts(campaignId) {
       var promoteBtn = '';
       if (c.status === 'replied') {
         promoteBtn = c.account_id
-          ? '<button onclick="promoteSampaignContact(\''+esc(c.id)+'\',\''+esc(campaignId)+'\')" style="font-size:11px;font-weight:600;padding:3px 8px;border-radius:2px;background:rgba(74,158,255,0.1);border:1px solid rgba(74,158,255,0.3);color:var(--blue);cursor:pointer;margin-top:3px">→ Promote to stakeholder</button>'
-          : '<div style="font-size:11px;color:var(--text3);margin-top:3px">No matching tracked account yet — link one to promote</div>';
+          ? '<button onclick="promoteSampaignContact(\''+esc(c.id)+'\',\''+esc(campaignId)+'\')" style="font-size:11px;font-weight:600;padding:3px 8px;border-radius:var(--r-sm);background:rgba(74,158,255,0.1);border:1px solid rgba(74,158,255,0.3);color:var(--blue);cursor:pointer;margin-top:3px">→ Promote to stakeholder</button>'
+          : '<div style="font-size:11px;color:var(--text3);margin-top:3px">No matching tracked account yet, link one to promote</div>';
       }
       // LinkedIn: an actual logo tag (not a text link), same icon + fallback
       // pattern as the stakeholder roster (_stkRowHtml) — full opacity when
@@ -12229,15 +12229,15 @@ function _renderSampaignContacts(campaignId) {
       // dependency), so it's there for contacts who haven't been emailed yet.
       // This is the field the earlier click-through insight modal couldn't
       // give prospects, since they have no message history to read.
-      var noteLine = c.outreach_note ? '<div style="font-size:11px;color:var(--gold);margin-top:3px;display:flex;gap:5px;align-items:flex-start;background:rgba(var(--c-accent-rgb),0.06);border-radius:2px;padding:4px 7px"><span style="flex-shrink:0"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg></span><span>'+esc(c.outreach_note)+'</span></div>' : '';
+      var noteLine = c.outreach_note ? '<div style="font-size:11px;color:var(--gold);margin-top:3px;display:flex;gap:5px;align-items:flex-start;background:rgba(var(--c-accent-rgb),0.06);border-radius:var(--r-sm);padding:4px 7px"><span style="flex-shrink:0"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg></span><span>'+esc(c.outreach_note)+'</span></div>' : '';
       var intelBtn = _samoraIntelBtn('openSampaignContactInsight(\''+esc(c.id)+'\',\''+esc(c.name||c.email||'')+'\')', true);
       // Editor is collapsed by default — most rows do not need it open, and
       // 54 always-visible textareas would bury the roster.
       var noteLen = (c.linkedin_note || '').length;
       var noteEditor = '<div id="liNote_'+esc(c.id)+'" style="display:none;margin-top:5px">' +
-          '<textarea id="liNoteText_'+esc(c.id)+'" maxlength="300" rows="3" oninput="_liNoteCount(\''+esc(c.id)+'\')" placeholder="Connection note, max 300 characters…" style="width:100%;box-sizing:border-box;padding:7px 9px;border-radius:2px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:11px;line-height:1.5;resize:vertical">'+esc(c.linkedin_note||'')+'</textarea>' +
+          '<textarea id="liNoteText_'+esc(c.id)+'" maxlength="300" rows="3" oninput="_liNoteCount(\''+esc(c.id)+'\')" placeholder="Connection note, max 300 characters…" style="width:100%;box-sizing:border-box;padding:7px 9px;border-radius:var(--r-sm);border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:11px;line-height:1.5;resize:vertical">'+esc(c.linkedin_note||'')+'</textarea>' +
           '<div style="display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap">' +
-            '<button onclick="event.stopPropagation();saveLinkedInNote(\''+esc(c.id)+'\',\''+esc(campaignId)+'\')" style="font-size:11px;font-weight:600;padding:5px 11px;border-radius:2px;background:var(--green);border:none;color:#fff;cursor:pointer;font-family:var(--sans)">Save note</button>' +
+            '<button onclick="event.stopPropagation();saveLinkedInNote(\''+esc(c.id)+'\',\''+esc(campaignId)+'\')" style="font-size:11px;font-weight:600;padding:5px 11px;border-radius:var(--r-sm);background:var(--green);border:none;color:#fff;cursor:pointer;font-family:var(--sans)">Save note</button>' +
             '<span id="liNoteCount_'+esc(c.id)+'" style="font-size:11px;color:var(--text3)">'+noteLen+' / 300</span>' +
             (c.linkedin_note_by ? '<span style="font-size:11px;color:var(--text3)">written by '+esc(c.linkedin_note_by)+'</span>' : '') +
           '</div>' +
@@ -12260,11 +12260,11 @@ function _renderSampaignContacts(campaignId) {
             // domain. Label it, never let it sit unmarked next to one the rep
             // typed in themselves.
             ? esc(c.email) + (c.email_source ? '<span style="color:var(--gold)" title="Found by '+esc(c.email_source)+(c.email_confidence!=null?', '+c.email_confidence+'% confidence':'')+', not supplied"> ◇'+(c.email_confidence!=null?' '+c.email_confidence+'%':'')+'</span>' : '')
-            : '<span style="color:var(--gold)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15zM16 16l5 5"/></svg> no email yet — run Enrich to look it up</span>') +
+            : '<span style="color:var(--gold)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15zM16 16l5 5"/></svg> no email yet, run Enrich to look it up</span>') +
           (c.company?' · '+esc(c.company):'') +
         '</div>' + titleLine + '</div>' +
         '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">' + intelBtn +
-        '<select onchange="setSampaignContactStatus(\''+esc(c.id)+'\',this.value,\''+esc(campaignId)+'\')" style="font-size:11px;font-weight:600;color:'+meta.color+';background:var(--bg);border:1px solid var(--border);border-radius:2px;padding:3px 6px">'+opts+'</select>' +
+        '<select onchange="setSampaignContactStatus(\''+esc(c.id)+'\',this.value,\''+esc(campaignId)+'\')" style="font-size:11px;font-weight:600;color:'+meta.color+';background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);padding:3px 6px">'+opts+'</select>' +
         '<span onclick="removeSampaignContact(\''+esc(c.id)+'\',\''+esc(campaignId)+'\',\''+esc(c.name||c.email||'')+'\')" style="cursor:pointer;color:var(--text3);font-size:13px;padding:0 2px" title="Remove from SAMpaign"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span>' +
         '</div></div>' + noteEditor + noteLine + collisionLine + promoteBtn +
       '</div>';
@@ -12304,7 +12304,7 @@ async function _uploadSampaignCsvFile(campaignId, file) {
     if (rows.length < 2) { showToast('CSV appears empty'); return; }
     var headers = rows[0];
     var map = _detectSampaignColumns(headers);
-    if (map.email === -1) { showToast('Could not find an email column — email is required per contact'); return; }
+    if (map.email === -1) { showToast('Could not find an email column, email is required per contact'); return; }
     var get = function(r, idx) { return idx >= 0 ? (r[idx]||'').trim() : ''; };
     var contacts = rows.slice(1).filter(function(r){ return r.join('').trim(); }).slice(0, 2000).map(function(r) {
       return { name: get(r,map.name), email: get(r,map.email), phone: get(r,map.phone), company: get(r,map.company), title: get(r,map.title) };
@@ -12405,9 +12405,9 @@ function _renderSampAddRows(campaignId, focusLast) {
   var f = function(i, field, label, req, val) {
     return '<input value="'+esc(val||'')+'" placeholder="'+esc(label)+(req?' *':'')+'" ' +
       'oninput="_sampAddRowField(\''+esc(campaignId)+'\','+i+',\''+field+'\',this.value)" ' +
-      'style="flex:1;min-width:0;padding:5px 7px;border-radius:2px;border:1px solid '+(req?'rgba(var(--c-accent-rgb),0.4)':'var(--border2)')+';background:var(--bg);color:var(--text);font-family:var(--sans);font-size:11px"/>';
+      'style="flex:1;min-width:0;padding:5px 7px;border-radius:var(--r-sm);border:1px solid '+(req?'rgba(var(--c-accent-rgb),0.4)':'var(--border2)')+';background:var(--bg);color:var(--text);font-family:var(--sans);font-size:11px"/>';
   };
-  var html = '<div style="border:1px solid var(--border2);border-radius:2px;padding:9px;margin-bottom:8px;background:var(--surface)">' +
+  var html = '<div style="border:1px solid var(--border2);border-radius:var(--r-sm);padding:9px;margin-bottom:8px;background:var(--surface)">' +
     '<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Add people manually · give a <strong style="color:var(--gold)">name or an email</strong>, the rest is optional</div>';
   rows.forEach(function(r, i) {
     // Neither name nor email is individually required — you need one of the
@@ -12420,12 +12420,12 @@ function _renderSampAddRows(campaignId, focusLast) {
         f(i,'company','Company',false,r.company) + f(i,'title','Title',false,r.title) +
         '<span onclick="_sampRemoveAddRow(\''+esc(campaignId)+'\','+i+')" style="cursor:pointer;color:var(--text3);font-size:13px;padding:0 3px;flex-shrink:0" title="Remove this row"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span>' +
       '</div>' +
-      (noEmail ? '<div style="font-size:11px;color:var(--gold);margin-top:2px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15zM16 16l5 5"/></svg> No email — Enrich will try to find it from the account domain</div>' : '') +
+      (noEmail ? '<div style="font-size:11px;color:var(--gold);margin-top:2px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15zM16 16l5 5"/></svg> No email, Enrich will try to find it from the account domain</div>' : '') +
     '</div>';
   });
   html += '<div style="display:flex;gap:8px;align-items:center;margin-top:7px">' +
       '<span onclick="_sampAddAnotherRow(\''+esc(campaignId)+'\')" style="font-size:11px;font-weight:600;color:var(--gold);cursor:pointer">+ Add another person</span>' +
-      '<button onclick="submitSampaignContactRows(\''+esc(campaignId)+'\')" style="margin-left:auto;font-size:11px;font-weight:600;padding:5px 12px;border-radius:2px;background:var(--green);border:none;color:#fff;cursor:pointer;font-family:var(--sans)">Add to SAMpaign</button>' +
+      '<button onclick="submitSampaignContactRows(\''+esc(campaignId)+'\')" style="margin-left:auto;font-size:11px;font-weight:600;padding:5px 12px;border-radius:var(--r-sm);background:var(--green);border:none;color:#fff;cursor:pointer;font-family:var(--sans)">Add to SAMpaign</button>' +
       '<span onclick="addSampaignContactRows(\''+esc(campaignId)+'\')" style="font-size:11px;color:var(--text3);cursor:pointer">Cancel</span>' +
     '</div></div>';
   box.innerHTML = html;
@@ -12519,11 +12519,11 @@ function _copyLinkedInNote(contactId) {
   if (!found || !found.linkedin_note) return;
   try {
     navigator.clipboard.writeText(found.linkedin_note);
- showToast('Note copied — paste it into the invite');
+ showToast('Note copied, paste it into the invite');
   } catch(e) {
     // Clipboard can be blocked by permissions or a non-secure context, and
     // failing silently would leave the rep pasting whatever was there before.
-    showToast('Could not copy automatically — open the note and copy it');
+    showToast('Could not copy automatically, open the note and copy it');
   }
 }
 
@@ -12565,9 +12565,9 @@ async function openSampaignScoutProfile(campaignId) {
   var usingCamp = !!campP;
   var cur = campP || orgP;
   var chip = function(group, val, on) {
-    return '<label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:5px 10px;border-radius:3px;border:1px solid ' + (on?'var(--gold)':'var(--border2)') + ';background:' + (on?'rgba(var(--c-accent-rgb),0.08)':'transparent') + ';color:' + (on?'var(--gold)':'var(--text2)') + ';cursor:pointer;margin:0 6px 6px 0"><input type="checkbox" data-group="' + group + '" value="' + val + '"' + (on?' checked':'') + ' style="margin:0">' + val + '</label>';
+    return '<label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:5px 10px;border-radius:var(--r-md);border:1px solid ' + (on?'var(--gold)':'var(--border2)') + ';background:' + (on?'rgba(var(--c-accent-rgb),0.08)':'transparent') + ';color:' + (on?'var(--gold)':'var(--text2)') + ';cursor:pointer;margin:0 6px 6px 0"><input type="checkbox" data-group="' + group + '" value="' + val + '"' + (on?' checked':'') + ' style="margin:0">' + val + '</label>';
   };
-  var inputStyle = 'width:100%;padding:9px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:2px;color:var(--text);font-size:13px;font-family:var(--sans);outline:none';
+  var inputStyle = 'width:100%;padding:9px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-size:13px;font-family:var(--sans);outline:none';
   var modal = document.createElement('div');
   modal.id = 'samp-scout-profile-modal';
   // z-index:100000 — this modal opens FROM the campaign detail overlay
@@ -12591,7 +12591,7 @@ async function openSampaignScoutProfile(campaignId) {
     '<div style="margin-bottom:14px">' + _SCOUT_SENIORITIES.map(function(x){ return chip('sen', x, (cur.seniorities||[]).indexOf(x) !== -1); }).join('') + '</div>' +
     '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Locations (optional, comma separated)</div>' +
     '<input id="samp-scout-locs" value="' + esc((cur.locations||[]).join(', ')) + '" placeholder="e.g. India, APAC" style="' + inputStyle + ';margin-bottom:16px"/>' +
-    '<button onclick="saveSampaignScoutProfile()" style="width:100%;padding:12px;border:none;border-radius:3px;background:var(--gold);color:var(--c-canvas);font-size:14px;font-weight:700;cursor:pointer;font-family:var(--sans)">Save</button>' +
+    '<button onclick="saveSampaignScoutProfile()" style="width:100%;padding:12px;border:none;border-radius:var(--r-md);background:var(--gold);color:var(--c-canvas);font-size:14px;font-weight:700;cursor:pointer;font-family:var(--sans)">Save</button>' +
   '</div>';
   modal.addEventListener('click', function(){ modal.remove(); });
   document.body.appendChild(modal);
@@ -12619,7 +12619,7 @@ async function _loadScoutSuggestions(campaignId) {
     var chipBtn = function(title, proven, count, why) {
       return '<button type="button" onclick="_addScoutTitle(' + JSON.stringify(title).replace(/"/g,'&quot;') + ')"' +
         (why ? ' title="' + esc(why) + '"' : '') +
-        ' style="font-size:11px;line-height:1.2;padding:3px 8px;margin:0 4px 4px 0;border-radius:3px;cursor:pointer;' +
+        ' style="font-size:11px;line-height:1.2;padding:3px 8px;margin:0 4px 4px 0;border-radius:var(--r-md);cursor:pointer;' +
         'font-family:var(--sans);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' +
         'border:1px solid ' + (proven ? 'var(--green)' : 'var(--border2)') + ';' +
         'background:' + (proven ? 'rgba(74,140,92,0.10)' : 'transparent') + ';' +
@@ -12636,7 +12636,7 @@ async function _loadScoutSuggestions(campaignId) {
       if (rest.length) {
         h += '<span id="samp-scout-rest" style="display:none">' + rest.map(function(t){ return chipBtn(t.title, t.replied > 0, t.replied, t.why); }).join('') + '</span>';
         h += '<button type="button" id="samp-scout-more" onclick="document.getElementById(\'samp-scout-rest\').style.display=\'inline\';this.remove()" ' +
-             'style="font-size:11px;padding:3px 8px;margin:0 4px 4px 0;border-radius:3px;border:1px dashed var(--border2);background:transparent;color:var(--text3);cursor:pointer;font-family:var(--sans)">' + rest.length + ' more</button>';
+             'style="font-size:11px;padding:3px 8px;margin:0 4px 4px 0;border-radius:var(--r-md);border:1px dashed var(--border2);background:transparent;color:var(--text3);cursor:pointer;font-family:var(--sans)">' + rest.length + ' more</button>';
       }
       h += '</div>';
     } else if (d.note) {
@@ -12720,7 +12720,7 @@ async function enrichSampaignContacts(campaignId) {
     // LinkedIn for these specific people (linkedin_found low/0, has a note
     // explaining it's a coverage limit, not a bug).
     var msg = '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg> Checked '+d.checked+', matched '+d.enriched+' via '+(d.provider||'—')+(d.linkedin_found!==undefined?', '+d.linkedin_found+' with LinkedIn':'');
-    if (d.note) msg += ' — '+d.note;
+    if (d.note) msg += ', '+d.note;
     showToast(msg);
     var r2 = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body: JSON.stringify({ action:'list_sampaign_contacts', campaign_id: campaignId }) });
     var d2 = await r2.json();
@@ -12815,7 +12815,7 @@ async function loadPipeline() {
     // Prompts
     if (promptsEl && _pipelineData.prompts?.length) {
       promptsEl.innerHTML = _pipelineData.prompts.map(function(p) {
-        return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:2px;padding:8px 12px;margin-bottom:6px;font-size:12px;color:var(--text)">' + esc(p) + '</div>';
+        return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-sm);padding:8px 12px;margin-bottom:6px;font-size:12px;color:var(--text)">' + esc(p) + '</div>';
       }).join('');
     }
 
@@ -12834,7 +12834,7 @@ function renderPipelineChart(data) {
   if (!chartEl) return;
 
   var regions = data.regionBreakdown || [];
-  if (!regions.length) { chartEl.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:16px 0;text-align:center">No pipeline data yet — add deal values to your accounts to see the chart.</div>'; return; }
+  if (!regions.length) { chartEl.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:16px 0;text-align:center">No pipeline data yet, add deal values to your accounts to see the chart.</div>'; return; }
 
   // Stage colours from org config
   var stageColors = { prospective: '#888780', value_prop: '#A07824', commercial: '#3B6D11', unknown: '#555' };
@@ -12859,10 +12859,10 @@ function renderPipelineChart(data) {
   html += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">';
   dealStages.forEach(function(s) {
     var color = stageColors[s.key] || '#888';
-    html += '<div style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:' + color + '"></div><span style="font-size:11px;color:var(--text3)">' + esc(s.label) + '</span></div>';
+    html += '<div style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:var(--r-sm);background:' + color + '"></div><span style="font-size:11px;color:var(--text3)">' + esc(s.label) + '</span></div>';
   });
   if (_pipelineView === 'combined') {
-    html += '<div style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:repeating-linear-gradient(45deg,#888,#888 1px,transparent 1px,transparent 5px);border:1px solid #888"></div><span style="font-size:11px;color:var(--text3)">Unverified (AI)</span></div>';
+    html += '<div style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:var(--r-sm);background:repeating-linear-gradient(45deg,#888,#888 1px,transparent 1px,transparent 5px);border:1px solid #888"></div><span style="font-size:11px;color:var(--text3)">Unverified (AI)</span></div>';
   }
   html += '</div>';
 
@@ -12875,7 +12875,7 @@ function renderPipelineChart(data) {
     html += '</div>';
 
     // Stacked bar
-    html += '<div style="height:22px;background:var(--surface);border-radius:2px;overflow:hidden;position:relative">';
+    html += '<div style="height:22px;background:var(--surface);border-radius:var(--r-sm);overflow:hidden;position:relative">';
 
     // For stage breakdown within the bar
     var stages = r.stages || {};
@@ -12903,7 +12903,7 @@ function renderPipelineChart(data) {
   // Closing this quarter highlight
   var cq = (data.summary || {}).closing_this_quarter_usd || 0;
   if (cq > 0) {
-    html += '<div style="margin-top:10px;padding:8px 12px;background:rgba(74,140,92,0.1);border:1px solid rgba(74,140,92,0.3);border-radius:2px;font-size:11px;color:var(--green)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4"/></svg> <strong>' + fmtUsd(cq) + '</strong> expected to close this quarter</div>';
+    html += '<div style="margin-top:10px;padding:8px 12px;background:rgba(74,140,92,0.1);border:1px solid rgba(74,140,92,0.3);border-radius:var(--r-sm);font-size:11px;color:var(--green)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4"/></svg> <strong>' + fmtUsd(cq) + '</strong> expected to close this quarter</div>';
   }
 
   chartEl.innerHTML = html;
@@ -12949,10 +12949,10 @@ function renderPipelineDeals(data) {
     var tc = tierConfig[d.tier] || tierConfig.unverified;
     var localValue = d.deal_value ? (d.deal_currency || 'USD') + ' ' + Number(d.deal_value).toLocaleString() : null;
     var scoreBar = d.signal_score != null
-      ? '<div style="display:inline-flex;align-items:center;gap:4px;margin-left:6px"><div style="width:40px;height:4px;background:var(--border2);border-radius:2px;overflow:hidden"><div style="height:100%;background:' + (d.signal_score>=60?'var(--green)':d.signal_score>=40?'var(--amber)':'var(--coral)') + ';width:' + d.signal_score + '%"></div></div><span style="font-size:11px;color:var(--text3)">' + d.signal_score + '</span></div>'
+      ? '<div style="display:inline-flex;align-items:center;gap:4px;margin-left:6px"><div style="width:40px;height:4px;background:var(--border2);border-radius:var(--r-sm);overflow:hidden"><div style="height:100%;background:' + (d.signal_score>=60?'var(--green)':d.signal_score>=40?'var(--amber)':'var(--coral)') + ';width:' + d.signal_score + '%"></div></div><span style="font-size:11px;color:var(--text3)">' + d.signal_score + '</span></div>'
       : '';
     var healthBadge = d.health_score != null
-      ? '<span onclick="event.stopPropagation();openHealthBreakdown(\'' + esc(d.id) + '\',\'' + esc(d.account) + '\')" style="font-size:11px;padding:1px 5px;border-radius:2px;margin-left:4px;cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;background:' +
+      ? '<span onclick="event.stopPropagation();openHealthBreakdown(\'' + esc(d.id) + '\',\'' + esc(d.account) + '\')" style="font-size:11px;padding:1px 5px;border-radius:var(--r-sm);margin-left:4px;cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;background:' +
         (d.health_score>=70?'rgba(74,140,92,0.15)':d.health_score>=40?'rgba(var(--c-accent-rgb),0.15)':'rgba(192,82,63,0.15)') +
         ';color:' + (d.health_score>=70?'var(--green)':d.health_score>=40?'var(--amber)':'var(--coral)') +
         '" title="Why this score? Tap for rule-level breakdown">H:' + d.health_score + '</span>'
@@ -12962,14 +12962,14 @@ function renderPipelineDeals(data) {
     var repInitials = (d.rep_email||'').split('@')[0].split(/[._]/).map(function(w){return w[0]||'';}).slice(0,2).join('').toUpperCase();
     var repBadge = repInitials ? '<span style="font-size:11px;width:18px;height:18px;border-radius:50%;background:var(--surface2);border:1px solid var(--border2);display:inline-flex;align-items:center;justify-content:center;color:var(--text3);flex-shrink:0" title="' + esc((d.rep_email||'').split('@')[0]) + '">' + repInitials + '</span>' : '';
 
-    return '<div class="deal-card-row" data-deal-id="' + esc(d.id) + '" data-deal-account="' + esc(d.account) + '" style="background:var(--surface);border:1px solid var(--border2);border-radius:2px;padding:10px 12px;margin-bottom:6px;cursor:pointer;transition:border-color 0.15s" onmouseenter="this.style.borderColor=\'var(--gold)\'" onmouseleave="this.style.borderColor=\'var(--border2)\'">' +
+    return '<div class="deal-card-row" data-deal-id="' + esc(d.id) + '" data-deal-account="' + esc(d.account) + '" style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-sm);padding:10px 12px;margin-bottom:6px;cursor:pointer;transition:border-color 0.15s" onmouseenter="this.style.borderColor=\'var(--gold)\'" onmouseleave="this.style.borderColor=\'var(--border2)\'">' +
       '<div style="display:flex;align-items:flex-start;gap:10px">' +
         '<div style="flex:1">' +
           '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">' +
             repBadge +
             '<span style="font-size:12px;font-weight:500;color:var(--text)">' + esc(d.account) + '</span>' +
-            (d.region ? '<span style="font-size:11px;color:var(--text3);background:rgba(0,0,0,0.08);border-radius:2px;padding:1px 6px">' + esc(d.region) + '</span>' : '') +
-            '<span style="font-size:11px;font-weight:600;padding:1px 7px;border-radius:3px;background:' + stageColor + '22;color:' + stageColor + '">' + esc(d.stage) + '</span>' +
+            (d.region ? '<span style="font-size:11px;color:var(--text3);background:rgba(0,0,0,0.08);border-radius:var(--r-sm);padding:1px 6px">' + esc(d.region) + '</span>' : '') +
+            '<span style="font-size:11px;font-weight:600;padding:1px 7px;border-radius:var(--r-md);background:' + stageColor + '22;color:' + stageColor + '">' + esc(d.stage) + '</span>' +
           '</div>' +
           '<div style="display:flex;align-items:center;gap:4px;margin-bottom:4px">' +
             '<span style="font-size:11px;color:' + tc.color + ';font-weight:500">' + tc.icon + ' ' + tc.label + '</span>' +
@@ -12979,7 +12979,7 @@ function renderPipelineDeals(data) {
           ((d.risks && d.risks.length)
             ? '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px">' + d.risks.map(function(rk) {
                 var rc = rk.severity === 'high' ? 'var(--coral)' : rk.severity === 'medium' ? 'var(--amber)' : 'var(--text3)';
-                return '<span onclick="event.stopPropagation();showToast(this.dataset.ev)" data-ev="' + esc((rk.evidence || '').replace(/"/g, '&quot;')) + '" title="' + esc(rk.evidence || '') + '" style="font-size:11px;font-weight:600;padding:1px 6px;border-radius:2px;border:1px solid ' + rc + ';color:' + rc + ';cursor:help">' + esc(rk.label) + '</span>';
+                return '<span onclick="event.stopPropagation();showToast(this.dataset.ev)" data-ev="' + esc((rk.evidence || '').replace(/"/g, '&quot;')) + '" title="' + esc(rk.evidence || '') + '" style="font-size:11px;font-weight:600;padding:1px 6px;border-radius:var(--r-sm);border:1px solid ' + rc + ';color:' + rc + ';cursor:help">' + esc(rk.label) + '</span>';
               }).join('') + '</div>'
             : '') +
           '<div style="font-size:11px;color:var(--text3);font-style:italic;margin-bottom:4px">' + esc(d.verification_reason || '') + '</div>' +
@@ -12988,7 +12988,7 @@ function renderPipelineDeals(data) {
             (localValue ? '<span style="font-size:11px;color:var(--text2)">Local: ' + localValue + '</span>' : '') +
  '<span class="edit-close-date-btn" data-opp-id="'+esc(d.id||'')+'" data-account="'+esc(d.account||'')+'" data-close="'+esc(d.expected_close||'')+'" style="font-size:11px;color:'+(d.expected_close?'var(--gold)':'var(--text3)')+';cursor:pointer;'+(d.expected_close?'font-weight:600':'')+'">'+( d.expected_close?''+d.expected_close:'+ Set close date')+'</span>' +
             (d.licenses_units ? '<span style="font-size:11px;color:var(--text3)">' + d.licenses_units + ' units</span>' : '') +
-            (d.icp_score != null ? '<span style="font-size:11px;font-weight:600;padding:1px 6px;border-radius:2px;background:' + (d.icp_score>=70?'rgba(74,140,92,.15)':d.icp_score>=40?'rgba(var(--c-accent-rgb),.15)':'rgba(136,135,128,.15)') + ';color:' + (d.icp_score>=70?'var(--green)':d.icp_score>=40?'var(--gold)':'var(--text3)') + '" title="ICP fit: ' + esc(d.icp_notes||'') + '">ICP ' + d.icp_score + '</span>' : '') +
+            (d.icp_score != null ? '<span style="font-size:11px;font-weight:600;padding:1px 6px;border-radius:var(--r-sm);background:' + (d.icp_score>=70?'rgba(74,140,92,.15)':d.icp_score>=40?'rgba(var(--c-accent-rgb),.15)':'rgba(136,135,128,.15)') + ';color:' + (d.icp_score>=70?'var(--green)':d.icp_score>=40?'var(--gold)':'var(--text3)') + '" title="ICP fit: ' + esc(d.icp_notes||'') + '">ICP ' + d.icp_score + '</span>' : '') +
           '</div>' +
         '</div>' +
         '<div style="text-align:right;flex-shrink:0">' +
@@ -12997,8 +12997,8 @@ function renderPipelineDeals(data) {
           '<div style="margin-top:4px;font-size:11px;color:var(--text3)">' + prob + '% → ' + fmtUsd(d.weighted_value_usd) + '</div>' +
           '<div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">' +
  '<button onclick="' + (d.tier==='verified' ? 'openDealValueForm(\''+d.id+'\',\''+esc(d.account)+'\')' : d.tier==='partial' ? 'boostSignals(\''+d.id+'\',\''+esc(d.account)+'\')' : 'openDealValueForm(\''+d.id+'\',\''+esc(d.account)+'\')') + '" style="font-size:10px;padding:3px 10px;border-radius:4px;border:1px solid ' + (d.tier==='verified'?'var(--border2)':d.tier==='partial'?'var(--amber)':'var(--green)') + ';background:transparent;color:' + (d.tier==='verified'?'var(--text3)':d.tier==='partial'?'var(--amber)':'var(--green)') + ';cursor:pointer">' + (d.tier==='verified'?'Edit':d.tier==='partial'?'Boost':'Confirm') + '</button>' +
-            '<button onclick="openAccountTimeline(\''+esc(d.id)+'\',\''+esc(d.account)+'\')" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:3px 10px;border-radius:2px;border:1px solid rgba(var(--c-accent-rgb),0.4);background:rgba(var(--c-accent-rgb),0.08);color:var(--gold);font-weight:600;cursor:pointer"><img src="icons/icon-48.png" alt="" style="width:12px;height:12px;border-radius:50%"/>Timeline</button>' +
-            '<button onclick="openCloseDeal(\''+esc(d.id)+'\',\''+esc(d.account)+'\')" style="font-size:11px;padding:3px 10px;border-radius:2px;border:1px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer">Close deal</button>' +
+            '<button onclick="openAccountTimeline(\''+esc(d.id)+'\',\''+esc(d.account)+'\')" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:3px 10px;border-radius:var(--r-sm);border:1px solid rgba(var(--c-accent-rgb),0.4);background:rgba(var(--c-accent-rgb),0.08);color:var(--gold);font-weight:600;cursor:pointer"><img src="icons/icon-48.png" alt="" style="width:12px;height:12px;border-radius:50%"/>Timeline</button>' +
+            '<button onclick="openCloseDeal(\''+esc(d.id)+'\',\''+esc(d.account)+'\')" style="font-size:11px;padding:3px 10px;border-radius:var(--r-sm);border:1px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer">Close deal</button>' +
           '</div>' +
         '</div>' +
       '</div>' +
@@ -13031,7 +13031,7 @@ function renderPipelineDeals(data) {
         return '<span style="font-size:11px;width:20px;height:20px;border-radius:50%;background:var(--surface2);border:1px solid var(--border2);display:inline-flex;align-items:center;justify-content:center;color:var(--text3);margin-left:-4px" title="' + esc((d.rep_email||'').split('@')[0]) + '">' + ini + '</span>';
       }).join('');
 
-      html += '<div style="border:1px solid var(--border2);border-radius:3px;padding:10px 12px;margin-bottom:8px;background:var(--bg)">';
+      html += '<div style="border:1px solid var(--border2);border-radius:var(--r-md);padding:10px 12px;margin-bottom:8px;background:var(--bg)">';
       // Company header row
       html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)">';
       html += '<span style="font-size:13px;font-weight:600;color:var(--text)">' + esc(group[0].account.split(/[\s]/)[0]) + '</span>';
@@ -13062,8 +13062,8 @@ async function editCloseDate(oppId, accountName, currentDate) {
   modal.innerHTML = '<div style="background:var(--bg);border-radius:3px 16px 0 0;width:100%;max-width:480px;padding:22px 20px" onclick="event.stopPropagation()">' +
  '<div style="font-size:15px;font-weight:700;margin-bottom:4px">Edit close date</div>' +
     '<div style="font-size:12px;color:var(--text3);margin-bottom:14px">' + esc(String(accountName||'')) + '</div>' +
-    '<input type="date" id="editCloseDateInput" value="' + esc(String(currentDate||'')) + '" style="width:100%;padding:11px;background:var(--surface2);border:1px solid var(--border);border-radius:3px;color:var(--text);font-family:var(--sans);font-size:14px;outline:none;margin-bottom:14px"/>' +
-    '<button id="saveCloseDateBtn" style="width:100%;padding:12px;background:var(--gold);border:none;border-radius:3px;color:var(--c-canvas);font-family:var(--sans);font-size:14px;font-weight:700;cursor:pointer">Save</button>' +
+    '<input type="date" id="editCloseDateInput" value="' + esc(String(currentDate||'')) + '" style="width:100%;padding:11px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-md);color:var(--text);font-family:var(--sans);font-size:14px;outline:none;margin-bottom:14px"/>' +
+    '<button id="saveCloseDateBtn" style="width:100%;padding:12px;background:var(--gold);border:none;border-radius:var(--r-md);color:var(--c-canvas);font-family:var(--sans);font-size:14px;font-weight:700;cursor:pointer">Save</button>' +
     '<button id="cancelCloseDateBtn" style="width:100%;padding:10px;background:none;border:none;color:var(--text3);font-family:var(--sans);font-size:13px;cursor:pointer;margin-top:4px">Cancel</button>' +
   '</div>';
   modal.addEventListener('click', function(e){ if(e.target===modal) modal.remove(); });
@@ -13097,11 +13097,11 @@ function openCloseDeal(opportunityId, accountName) {
     '</div>' +
     '<div id="cd-won-fields" style="display:none;margin-bottom:12px">' +
       '<label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">Actual close value (USD)</label>' +
-      '<input id="cd-actual-value" type="number" placeholder="e.g. 45000" style="width:100%;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:var(--sans);font-size:14px;outline:none;box-sizing:border-box"/>' +
+      '<input id="cd-actual-value" type="number" placeholder="e.g. 45000" style="width:100%;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-family:var(--sans);font-size:14px;outline:none;box-sizing:border-box"/>' +
     '</div>' +
     '<div id="cd-lost-fields" style="display:none;margin-bottom:12px">' +
       '<label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">Loss reason</label>' +
-      '<select id="cd-reason" style="width:100%;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none">' +
+      '<select id="cd-reason" style="width:100%;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-family:var(--sans);font-size:13px;outline:none">' +
         '<option value="">Select reason…</option>' +
         '<option value="price">Price / budget</option>' +
         '<option value="competitor">Lost to competitor</option>' +
@@ -13112,7 +13112,7 @@ function openCloseDeal(opportunityId, accountName) {
         '<option value="other">Other</option>' +
       '</select>' +
     '</div>' +
-    '<button onclick="confirmCloseDeal(\'' + esc(opportunityId) + '\')" style="width:100%;padding:13px;border:none;border-radius:3px;background:var(--gold);color:var(--c-canvas);font-size:14px;font-weight:700;cursor:pointer;font-family:var(--sans)">Confirm close</button>' +
+    '<button onclick="confirmCloseDeal(\'' + esc(opportunityId) + '\')" style="width:100%;padding:13px;border:none;border-radius:var(--r-md);background:var(--gold);color:var(--c-canvas);font-size:14px;font-weight:700;cursor:pointer;font-family:var(--sans)">Confirm close</button>' +
     '<button onclick="document.getElementById(\'close-deal-modal\').remove()" style="width:100%;padding:10px;border:none;background:none;color:var(--text3);font-size:13px;cursor:pointer;font-family:var(--sans);margin-top:4px">Cancel</button>' +
   '</div>';
   modal.addEventListener('click', function() { modal.remove(); });
@@ -13158,7 +13158,7 @@ async function openAccountTimeline(accountId, accountName) {
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">' +
       '<div><div style="font-size:14px;font-weight:700;color:var(--text)">Account timeline</div><div id="timeline-sub" style="font-size:12px;color:var(--text3)">' + esc(accountName) + ' · last ' + _tlDays + ' days</div></div>' +
       '<div style="display:flex;align-items:center;gap:10px">' +
-        '<span id="timeline-range" style="display:inline-flex;border:1px solid var(--border2);border-radius:2px;overflow:hidden">' + rangeBtns + '</span>' +
+        '<span id="timeline-range" style="display:inline-flex;border:1px solid var(--border2);border-radius:var(--r-sm);overflow:hidden">' + rangeBtns + '</span>' +
  '<button onclick="document.getElementById(\'timeline-modal\').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3)"></button>' +
       '</div>' +
     '</div>' +
@@ -13289,14 +13289,14 @@ function _renderTimelineIntel(acts, engagement, series, meta) {
     { label:'Activities', value: String(realTouches), sub:'meetings, mails, notes', color:'var(--text)' }
   ];
 
-  var h = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;padding:14px;margin-bottom:16px">';
+  var h = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-md);padding:14px;margin-bottom:16px">';
   h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">' +
     '<span style="font-size:13px;font-weight:700;color:' + tempColor + '">' + temp + '</span>' +
     '<span style="font-size:12px;color:var(--text3)">' + esc(tempWhy) + '</span>' +
   '</div>';
   h += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">';
   tiles.forEach(function(t) {
-    h += '<div style="background:var(--surface2);border-radius:3px;padding:9px 11px">' +
+    h += '<div style="background:var(--surface2);border-radius:var(--r-md);padding:9px 11px">' +
       '<div style="font-size:11px;color:var(--text3);margin-bottom:2px">' + t.label + '</div>' +
       '<div style="font-size:16px;font-weight:700;color:' + t.color + ';line-height:1.1">' + esc(t.value) + '</div>' +
       (t.sub ? '<div style="font-size:11px;color:var(--text3);margin-top:1px">' + esc(t.sub) + '</div>' : '') +
@@ -13329,7 +13329,7 @@ function _renderTimelineIntel(acts, engagement, series, meta) {
     var pos = Math.round(sent.positive / sentTot * 100);
     h += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border2)">' +
       '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:4px"><span>Sentiment across ' + sentTot + ' activit' + (sentTot===1?'y':'ies') + '</span><span>' + pos + '% positive</span></div>' +
-      '<div style="display:flex;height:5px;border-radius:2px;overflow:hidden;background:var(--surface2)">' +
+      '<div style="display:flex;height:5px;border-radius:var(--r-sm);overflow:hidden;background:var(--surface2)">' +
         (sent.positive ? '<div style="width:' + (sent.positive/sentTot*100) + '%;background:var(--green)"></div>' : '') +
         (sent.neutral ? '<div style="width:' + (sent.neutral/sentTot*100) + '%;background:var(--text3)"></div>' : '') +
         (sent.negative ? '<div style="width:' + (sent.negative/sentTot*100) + '%;background:var(--coral)"></div>' : '') +
@@ -13354,7 +13354,7 @@ function _renderTimelineEvents(acts) {
     var chip = '';
     if (a.delta != null && a.delta !== 0) {
       var dc = a.delta > 0 ? 'var(--green)' : 'var(--coral)';
-      chip = '<span style="font-size:11px;font-weight:700;color:' + dc + ';background:var(--surface2);padding:1px 7px;border-radius:2px;flex-shrink:0">' + (a.delta > 0 ? '+' : '') + a.delta + '</span>';
+      chip = '<span style="font-size:11px;font-weight:700;color:' + dc + ';background:var(--surface2);padding:1px 7px;border-radius:var(--r-sm);flex-shrink:0">' + (a.delta > 0 ? '+' : '') + a.delta + '</span>';
     } else if (a.impact === 'up') {
       chip = '<span style="font-size:11px;color:var(--green);flex-shrink:0" title="lifts the signal">▲</span>';
     } else if (a.impact === 'down') {
@@ -13362,7 +13362,7 @@ function _renderTimelineEvents(acts) {
     }
     return '<div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">' +
       '<div style="width:44px;flex-shrink:0;text-align:right;font-size:11px;color:var(--text3);padding-top:3px">' + esc(fmt(a.date)) + '</div>' +
-      '<div style="width:3px;flex-shrink:0;background:' + col + ';border-radius:2px"></div>' +
+      '<div style="width:3px;flex-shrink:0;background:' + col + ';border-radius:var(--r-sm)"></div>' +
       '<div style="flex:1;min-width:0">' +
         '<div style="display:flex;align-items:center;gap:7px">' +
           '<span style="font-size:12px;font-weight:600;color:var(--text);flex:1;min-width:0">' + esc(a.title || '') + '</span>' +
@@ -13371,7 +13371,7 @@ function _renderTimelineEvents(acts) {
         (a.body ? '<div style="font-size:11px;color:var(--text3);margin-top:2px">' + esc(a.body.slice(0,120)) + '</div>' : '') +
         (a.why ? '<div style="margin-top:3px">' +
           '<span onclick="toggleIntelDrill(\'' + wid + '\')" style="font-size:11px;color:var(--gold);cursor:pointer;user-select:none">why?</span>' +
-          '<div id="' + wid + '" style="display:none;font-size:11px;color:var(--text2);line-height:1.5;margin-top:4px;padding:8px 10px;background:var(--surface2);border-radius:2px">' + esc(a.why) + '</div>' +
+          '<div id="' + wid + '" style="display:none;font-size:11px;color:var(--text2);line-height:1.5;margin-top:4px;padding:8px 10px;background:var(--surface2);border-radius:var(--r-sm)">' + esc(a.why) + '</div>' +
         '</div>' : '') +
       '</div>' +
     '</div>';
@@ -13425,7 +13425,7 @@ async function openHealthBreakdown(accountId, accountName) {
           '<span style="font-size:12px;font-weight:600;color:var(--text)">' + esc(c.label || c.key || '') + (hasFormula ? ' <span style="font-weight:400;color:var(--text3)">· weight ' + maxPts + '%</span>' : '') + '</span>' +
           '<span style="font-size:12px;font-weight:700;color:' + barColor + '">' + (hasFormula ? pts + ' / ' + maxPts : strengthWord) + '</span>' +
         '</div>' +
-        '<div style="height:4px;background:var(--border2);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:' + pct + '%;background:' + barColor + '"></div></div>' +
+        '<div style="height:4px;background:var(--border2);border-radius:var(--r-sm);overflow:hidden;margin-bottom:5px"><div style="height:100%;width:' + pct + '%;background:' + barColor + '"></div></div>' +
         (c.raw ? '<div style="font-size:11px;color:var(--text2)">' + esc(c.raw) + '</div>' : '') +
         (c.evidence ? '<div style="font-size:11px;color:var(--text3);margin-top:2px">Evidence: ' + esc(c.evidence) + (c.evidence_date ? ' · ' + esc(new Date(c.evidence_date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})) : '') + '</div>' : '') +
       '</div>';
@@ -13472,7 +13472,7 @@ async function saveIcpDefinition() {
     var d = await r.json();
     if (d.ok) {
       if (badge) badge.style.display = 'inline';
-      if (status) status.textContent = 'Saved — click "Score accounts now" to update ICP scores.';
+      if (status) status.textContent = 'Saved, click "Score accounts now" to update ICP scores.';
       showToast('ICP definition saved');
     } else { showToast('Error: ' + (d.error || 'Save failed')); }
   } catch(e) { showToast('Error: ' + e.message); }
@@ -13601,13 +13601,13 @@ function renderDealModal() {
   function streamRow(s, si, gi, canRemove) {
     var type = getType(s.name);
     var tc = TYPE_C[type] || '#888';
-    var badge = type ? '<span style="display:inline-block;font-size:11px;font-weight:700;padding:3px 8px;border-radius:2px;background:'+tc+'18;color:'+tc+';white-space:nowrap">'+type.replace('one_time','One-time')+'</span>' : '';
-    return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:10px 12px;margin-bottom:8px">' +
+    var badge = type ? '<span style="display:inline-block;font-size:11px;font-weight:700;padding:3px 8px;border-radius:var(--r-sm);background:'+tc+'18;color:'+tc+';white-space:nowrap">'+type.replace('one_time','One-time')+'</span>' : '';
+    return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 12px;margin-bottom:8px">' +
 
       // Line 1: stream selector + badge + remove button
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
         '<select onchange="_dealGroups['+gi+'].streams['+si+'].name=this.value;renderDealModal()" '+
-          'style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:2px;padding:9px 10px;'+
+          'style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);padding:9px 10px;'+
           'color:var(--text);font-family:var(--sans);font-size:13px;outline:none">' +
           streamOpts(s.name) +
         '</select>' +
@@ -13620,10 +13620,10 @@ function renderDealModal() {
       '<div style="display:flex;gap:8px;margin-bottom:8px">' +
         '<input type="number" placeholder="Amount" value="'+(s.amount||'')+'" '+
           'oninput="_dealGroups['+gi+'].streams['+si+'].amount=this.value;updateDealTotal()" '+
-          'style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:2px;'+
+          'style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);'+
           'padding:9px 12px;color:var(--text);font-family:var(--sans);font-size:14px;outline:none;text-align:right;font-weight:600"/>' +
         '<select onchange="_dealGroups['+gi+'].streams['+si+'].currency=this.value" '+
-          'style="width:75px;flex-shrink:0;background:var(--surface2);border:1px solid var(--border);border-radius:2px;'+
+          'style="width:75px;flex-shrink:0;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);'+
           'padding:9px 6px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none">' +
           CCY.map(function(c){return '<option'+(s.currency===c?' selected':'')+'>'+c+'</option>';}).join('') +
         '</select>' +
@@ -13634,7 +13634,7 @@ function renderDealModal() {
         '<div style="font-size:11px;color:var(--text3);flex-shrink:0">Units / licenses / outlets</div>' +
         '<input type="number" placeholder="e.g. 500" value="'+(s.units||'')+'" '+
           'oninput="_dealGroups['+gi+'].streams['+si+'].units=this.value" '+
-          'style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:2px;'+
+          'style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);'+
           'padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;text-align:right"/>' +
         '<div style="font-size:11px;color:var(--text3);flex-shrink:0">optional</div>' +
       '</div>' +
@@ -13648,19 +13648,19 @@ function renderDealModal() {
       _orgProducts.map(function(p){
         return '<option value="'+p.id+'"'+(g.productId===p.id?' selected':'')+'>'+esc(p.name)+(p.category?' \u00b7 '+esc(p.category):'')+' </option>';
       }).join('') +
-      (_orgProducts.length===0?'<option value="__none">No products — log as general deal</option>':'');
+      (_orgProducts.length===0?'<option value="__none">No products, log as general deal</option>':'');
 
-    return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;padding:14px 16px;margin-bottom:10px">' +
+    return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-md);padding:14px 16px;margin-bottom:10px">' +
       // Product selector header
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">' +
         '<select onchange="_dealGroups['+gi+'].productId=this.value" '+
-          'style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:2px;'+
+          'style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);'+
           'padding:9px 12px;color:var(--text);font-family:var(--sans);font-size:14px;font-weight:600;outline:none">' +
           prodOpts +
         '</select>' +
         (gTotal>0 ? '<span style="font-size:14px;font-weight:700;color:var(--gold);flex-shrink:0">'+fmt(gTotal)+'</span>' : '') +
         (_dealGroups.length>1 ? '<button onclick="_dealGroups.splice('+gi+',1);renderDealModal()" '+
-          'style="flex-shrink:0;background:none;border:none;border-radius:2px;color:var(--coral);cursor:pointer;font-size:12px;padding:4px 0">Remove</button>' : '') +
+          'style="flex-shrink:0;background:none;border:none;border-radius:var(--r-sm);color:var(--coral);cursor:pointer;font-size:12px;padding:4px 0">Remove</button>' : '') +
       '</div>' +
       // Stream rows
       g.streams.map(function(s,si){ return streamRow(s, si, gi, g.streams.length>1); }).join('') +
@@ -13689,7 +13689,7 @@ function renderDealModal() {
 
       // ── Header ──
       '<div style="position:sticky;top:0;background:var(--bg);z-index:1;padding:14px 20px;border-bottom:1px solid var(--border)">' +
-        '<div style="width:36px;height:4px;background:var(--border2);border-radius:2px;margin:0 auto 12px"></div>' +
+        '<div style="width:36px;height:4px;background:var(--border2);border-radius:var(--r-sm);margin:0 auto 12px"></div>' +
         '<div style="display:flex;align-items:flex-start;justify-content:space-between">' +
           '<div>' +
             '<div style="font-size:20px;font-weight:700;color:var(--text)">\uD83D\uDCB0 '+esc(_dealAccountName)+'</div>' +
@@ -13708,11 +13708,11 @@ function renderDealModal() {
           'Offerings in discussion ('+_dealGroups.length+')</div>' +
         _dealGroups.map(groupBlock).join('') +
         '<button onclick="_dealGroups.push({productId:\'\',streams:[{name:\'\',amount:\'\',currency:\'USD\',units:\'\'}]});renderDealModal()" '+
-          'style="width:100%;padding:11px;background:transparent;border:1.5px dashed var(--border2);border-radius:3px;'+
+          'style="width:100%;padding:11px;background:transparent;border:1.5px dashed var(--border2);border-radius:var(--r-md);'+
           'color:var(--gold);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">+ Add another offering</button>' +
 
         // ── Total ──
-        '<div style="background:var(--surface);border:1px solid var(--border);border-radius:3px;padding:14px 16px;margin-bottom:16px">' +
+        '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:14px 16px;margin-bottom:16px">' +
           (breakdown || '') +
           '<div style="'+(breakdown?'border-top:1px solid var(--border);margin-top:8px;padding-top:8px;':'')+
             'display:flex;justify-content:space-between;align-items:center">' +
@@ -13728,22 +13728,22 @@ function renderDealModal() {
         '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">Deal details</div>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">' +
           '<div><div style="font-size:11px;color:var(--text3);margin-bottom:5px">Expected close</div>'+
-            '<input id="dv-close" type="date" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/></div>' +
+            '<input id="dv-close" type="date" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-md);padding:10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/></div>' +
           '<div><div style="font-size:11px;color:var(--text3);margin-bottom:5px">Deal type</div>'+
-            '<select id="dv-type" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none">'+
+            '<select id="dv-type" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-md);padding:10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none">'+
               ['new_business','expansion','renewal','upsell'].map(function(t){return '<option value="'+t+'">'+t.replace('_',' ')+'</option>';}).join('')+
             '</select></div>' +
         '</div>' +
 
         // ── Probability note ──
-        '<div style="background:var(--surface2);border-radius:3px;padding:10px 14px;margin-bottom:18px;display:flex;gap:10px">' +
+        '<div style="background:var(--surface2);border-radius:var(--r-md);padding:10px 14px;margin-bottom:18px;display:flex;gap:10px">' +
           '<span style="font-size:20px">\uD83E\uDDE0</span>' +
           '<div style="font-size:12px;color:var(--text3)"><strong style="color:var(--text2)">Close probability</strong> is auto-derived from stage + conversation signals each time you scan channels.</div>' +
         '</div>' +
 
         // ── Save ──
         '<button onclick="saveDealValue()" '+
-          'style="width:100%;padding:14px;background:var(--gold);border:none;border-radius:3px;'+
+          'style="width:100%;padding:14px;background:var(--gold);border:none;border-radius:var(--r-md);'+
           'color:var(--c-canvas);font-family:var(--sans);font-size:14px;font-weight:700;cursor:pointer">Save opportunities</button>' +
         '<div id="dv-status" style="font-size:12px;margin-top:10px;text-align:center"></div>' +
 
@@ -13862,7 +13862,7 @@ async function loadRelationshipCoverage() {
     ];
     h += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:6px">';
     tiles.forEach(function(t) {
-      h += '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;padding:11px 13px">' +
+      h += '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-md);padding:11px 13px">' +
         '<div style="font-size:11px;color:var(--text3);margin-bottom:3px">' + t.label + '</div>' +
         '<div style="font-size:20px;font-weight:600;color:' + t.color + ';line-height:1.1">' + t.value + '</div>' +
         '<div style="font-size:11px;color:var(--text3);margin-top:2px">' + t.sub + '</div>' +
@@ -13953,7 +13953,7 @@ async function loadVelocityForecast() {
     h += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:6px">';
     tiles.forEach(function(t) {
       var clickable = (t.key === 'atrisk' && (f.at_risk_deals||[]).length) || (t.key === 'happy' && (f.happy_ears_deals||[]).length);
-      h += '<div ' + (clickable ? 'onclick="_toggleFcDrill(\'' + t.key + '\')" style="cursor:pointer;' : 'style="') + 'background:var(--surface);border:1px solid var(--border2);border-radius:3px;padding:11px 13px">' +
+      h += '<div ' + (clickable ? 'onclick="_toggleFcDrill(\'' + t.key + '\')" style="cursor:pointer;' : 'style="') + 'background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-md);padding:11px 13px">' +
         '<div style="font-size:11px;color:var(--text3);margin-bottom:3px">' + t.label + (clickable ? ' <span style="color:var(--text3);font-size:11px">tap</span>' : '') + '</div>' +
         '<div style="font-size:20px;font-weight:600;color:' + t.color + ';line-height:1.1">' + t.value + '</div>' +
         '<div style="font-size:11px;color:var(--text3);margin-top:2px">' + esc(t.sub) + '</div>' +
@@ -13963,7 +13963,7 @@ async function loadVelocityForecast() {
 
     // At-risk drill (hidden): which dollars, and why.
     var drill = function(key, deals, label) {
-      var x = '<div id="fcDrill-' + key + '" style="display:none;background:var(--surface);border:1px solid var(--border2);border-radius:3px;padding:10px 12px;margin-bottom:6px">';
+      var x = '<div id="fcDrill-' + key + '" style="display:none;background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-md);padding:10px 12px;margin-bottom:6px">';
       x += '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">' + label + '</div>';
       deals.forEach(function(dl) {
         x += '<div onclick="openAccountTimeline(\'' + esc(dl.account_id) + '\',\'' + esc(dl.name||'') + '\')" style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--border);cursor:pointer">' +
@@ -14048,7 +14048,7 @@ async function loadIntelConsole() {
       { label:'Single-threaded', value: String(st.single_threaded||0), sub:'one active contact', color: st.single_threaded ? 'var(--amber)' : 'var(--green)' }
     ];
     var tile = function(c) {
-      return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;padding:10px 12px">' +
+      return '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-md);padding:10px 12px">' +
         '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">' + c.label + '</div>' +
         '<div style="font-size:20px;font-weight:600;color:' + c.color + ';line-height:1.1">' + esc(c.value) + '</div>' +
         '<div style="font-size:11px;color:var(--text3);margin-top:2px">' + esc(c.sub) + '</div>' +
@@ -14082,7 +14082,7 @@ async function loadIntelConsole() {
     // ── For your awareness: medium/low severity, collapsed by default ─────
     if (forAwareness.length) {
       var awareOpen = !!window._intelAwareOpen;
-      h += '<div onclick="window._intelAwareOpen=!window._intelAwareOpen;loadIntelConsole()" style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:var(--surface2);border-radius:2px;cursor:pointer;user-select:none;margin:10px 0 ' + (awareOpen ? '5px' : '0') + '">' +
+      h += '<div onclick="window._intelAwareOpen=!window._intelAwareOpen;loadIntelConsole()" style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:var(--surface2);border-radius:var(--r-sm);cursor:pointer;user-select:none;margin:10px 0 ' + (awareOpen ? '5px' : '0') + '">' +
         '<span style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">For your awareness · ' + forAwareness.length + '</span>' +
         '<span style="font-size:11px;color:var(--text3)">' + (awareOpen ? '▴' : '▾') + '</span>' +
       '</div>';
@@ -14124,13 +14124,13 @@ async function _loadIntelCoachingRollup() {
     var h = '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:2px 0 8px">Your team, ' + d.total_alerts + ' open alert' + (d.total_alerts!==1?'s':'') + '</div>';
     h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:6px">';
     d.reps.slice(0, 8).forEach(function(rep) {
-      h += '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;padding:12px 14px">';
+      h += '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-md);padding:12px 14px">';
       h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border2)">';
       h += '<span style="font-size:12px;font-weight:700;color:var(--text)">' + esc(rep.name) + '</span>';
       h += '<div style="display:flex;gap:4px">';
-      if (rep.high) h += '<span style="font-size:11px;font-weight:700;color:var(--coral);background:var(--coral-lt);padding:2px 7px;border-radius:2px">' + rep.high + ' high</span>';
-      if (rep.medium) h += '<span style="font-size:11px;font-weight:700;color:var(--amber);background:var(--amber-lt);padding:2px 7px;border-radius:2px">' + rep.medium + ' med</span>';
-      if (!rep.high && !rep.medium && rep.low) h += '<span style="font-size:11px;font-weight:700;color:var(--text3);background:rgba(150,150,150,0.1);padding:2px 7px;border-radius:2px">' + rep.low + ' low</span>';
+      if (rep.high) h += '<span style="font-size:11px;font-weight:700;color:var(--coral);background:var(--coral-lt);padding:2px 7px;border-radius:var(--r-sm)">' + rep.high + ' high</span>';
+      if (rep.medium) h += '<span style="font-size:11px;font-weight:700;color:var(--amber);background:var(--amber-lt);padding:2px 7px;border-radius:var(--r-sm)">' + rep.medium + ' med</span>';
+      if (!rep.high && !rep.medium && rep.low) h += '<span style="font-size:11px;font-weight:700;color:var(--text3);background:rgba(150,150,150,0.1);padding:2px 7px;border-radius:var(--r-sm)">' + rep.low + ' low</span>';
       h += '</div></div>';
       if (!rep.alerts || !rep.alerts.length) {
         h += '<div style="font-size:11px;color:var(--text3);font-style:italic">No open alerts</div>';
@@ -14166,7 +14166,7 @@ async function _loadIntelAttention() {
     var under = d.by_account.filter(function(a){ return a.mismatch === 'under_invested'; }).slice(0, 3);
     if (!over.length && !under.length) return;
     var col = function(title, icon, rows, accent, tone) {
-      var c = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;padding:12px 14px;flex:1;min-width:200px">';
+      var c = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-md);padding:12px 14px;flex:1;min-width:200px">';
       c += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:9px;padding-bottom:8px;border-bottom:1px solid var(--border2)">' +
         '<span style="font-size:14px;line-height:1">' + icon + '</span>' +
         '<span style="font-size:11px;font-weight:700;color:var(--text2)">' + title + '</span>' +
@@ -14179,7 +14179,7 @@ async function _loadIntelAttention() {
           c += '<div style="display:flex;align-items:center;gap:8px">' +
             '<span style="width:6px;height:6px;border-radius:50%;background:' + accent + ';flex-shrink:0"></span>' +
             '<span style="font-size:11px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(a.account_name) + '</span>' +
-            '<span style="font-size:11px;font-weight:600;color:' + accent + ';background:' + tone + ';padding:2px 7px;border-radius:2px;white-space:nowrap">' + a.hours + 'h · sig ' + (a.signal_score != null ? a.signal_score : '–') + '</span>' +
+            '<span style="font-size:11px;font-weight:600;color:' + accent + ';background:' + tone + ';padding:2px 7px;border-radius:var(--r-sm);white-space:nowrap">' + a.hours + 'h · sig ' + (a.signal_score != null ? a.signal_score : '–') + '</span>' +
           '</div>';
         });
         c += '</div>';
@@ -14340,13 +14340,13 @@ function renderIntelFeed() {
   ];
   var h = '<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px">' +
     '<span style="font-size:16px;font-weight:600;color:var(--text)">Signal intelligence</span>' +
-    '<span style="display:inline-flex;border:1px solid var(--border2);border-radius:2px;overflow:hidden;font-size:12px">' +
+    '<span style="display:inline-flex;border:1px solid var(--border2);border-radius:var(--r-sm);overflow:hidden;font-size:12px">' +
       '<span id="intel-lens-theme" onclick="setIntelLens(\'theme\')" style="padding:4px 12px;cursor:pointer;background:' + (_intelLens==='theme'?'var(--surface)':'transparent') + ';color:' + (_intelLens==='theme'?'var(--text)':'var(--text3)') + '">By theme</span>' +
       '<span id="intel-lens-account" onclick="setIntelLens(\'account\')" style="padding:4px 12px;cursor:pointer;background:' + (_intelLens==='account'?'var(--surface)':'transparent') + ';color:' + (_intelLens==='account'?'var(--text)':'var(--text3)') + '">By account</span>' +
     '</span></div>';
   h += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px">';
   tiles.forEach(function(t) {
-    h += '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;padding:11px 13px">' +
+    h += '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-md);padding:11px 13px">' +
       '<div style="font-size:11px;color:var(--text3);margin-bottom:3px">' + t.label + '</div>' +
       '<div style="font-size:20px;font-weight:600;color:' + t.color + ';line-height:1.1">' + t.value + '</div>' +
       '<div style="font-size:11px;color:var(--text3);margin-top:2px">' + t.sub + '</div>' +
@@ -14375,7 +14375,7 @@ function _renderIntelThemeLens(flat, junk) {
   if (!active.length) {
     h += '<div style="font-size:12px;color:var(--text3);font-style:italic;padding:4px 0 10px">No conversation signals in this window.</div>';
   }
-  h += '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;overflow:hidden;margin-bottom:8px">';
+  h += '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-md);overflow:hidden;margin-bottom:8px">';
   active.forEach(function(b, i) {
     var rid = 'intel-theme-' + b.cat.key;
     var samN = b.sigs.filter(function(s){ return s._source === 'sam'; }).length;
@@ -14387,7 +14387,7 @@ function _renderIntelThemeLens(flat, junk) {
         '<span style="flex:1;min-width:0;font-size:14px;font-weight:600;color:var(--text)">' + b.cat.label + '</span>' +
         (samN ? '<span style="font-size:11px;color:var(--gold);font-weight:600">' + samN + ' SAM</span>' : '') +
         '<span style="font-size:16px;font-weight:600;color:var(--text);min-width:26px;text-align:right">' + b.count + '</span>' +
-        '<span style="font-size:11px;font-weight:700;color:' + deltaCol + ';background:var(--surface2);padding:2px 8px;border-radius:3px;min-width:34px;text-align:center">' + deltaTxt + '</span>' +
+        '<span style="font-size:11px;font-weight:700;color:' + deltaCol + ';background:var(--surface2);padding:2px 8px;border-radius:var(--r-md);min-width:34px;text-align:center">' + deltaTxt + '</span>' +
         '<span id="chevron-' + rid + '" style="font-size:16px;color:var(--text3)">›</span>' +
       '</div>' +
       '<div id="' + rid + '" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border2)">' + _renderThemeReceipts(b.sigs) + '</div>' +
@@ -14399,7 +14399,7 @@ function _renderIntelThemeLens(flat, junk) {
     h += '<div style="font-size:11px;color:var(--text3);margin-bottom:8px">Quiet this month: ' + quiet.map(function(b){ return b.cat.label.toLowerCase(); }).join(', ') + '</div>';
   }
   if (junk.length) {
-    h += '<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;background:var(--surface2);border-radius:3px;opacity:.9">' +
+    h += '<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;background:var(--surface2);border-radius:var(--r-md);opacity:.9">' +
       '<span style="font-size:14px;flex-shrink:0">⏳</span>' +
       '<span style="flex:1;font-size:12px;color:var(--text3)">Auto-detected: staleness</span>' +
       '<span style="font-size:11px;color:var(--text3)">' + junk.length + ' accounts, system-derived, not a talking point</span>' +
@@ -14452,9 +14452,9 @@ function _renderIntelAccountLens(byAccount) {
     var sm = sentMap[x.domSent] || sentMap.neutral;
     var initials = (a.name || '?').replace(/[^A-Za-z0-9 ]/g,'').split(/\s+/).map(function(w){return w[0]||'';}).join('').slice(0,2).toUpperCase() || '?';
     var meta = a.signals.length + ' signal' + (a.signals.length!==1?'s':'') + ', ' + a.rows.length + ' meeting' + (a.rows.length!==1?'s':'') + (x.samN ? ', ' + x.samN + ' SAM-verified' : '');
-    var flag = x.risk ? '<span style="font-size:11px;color:var(--coral);background:rgba(192,82,63,0.12);padding:2px 8px;border-radius:3px;white-space:nowrap">' + x.risk + ' risk</span>'
-             : (x.daysDark > 14 && x.daysDark < 999 ? '<span style="font-size:11px;color:var(--amber);background:rgba(201,151,62,0.12);padding:2px 8px;border-radius:3px;white-space:nowrap">dark ' + x.daysDark + 'd</span>' : '');
-    h += '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;overflow:hidden">' +
+    var flag = x.risk ? '<span style="font-size:11px;color:var(--coral);background:rgba(192,82,63,0.12);padding:2px 8px;border-radius:var(--r-md);white-space:nowrap">' + x.risk + ' risk</span>'
+             : (x.daysDark > 14 && x.daysDark < 999 ? '<span style="font-size:11px;color:var(--amber);background:rgba(201,151,62,0.12);padding:2px 8px;border-radius:var(--r-md);white-space:nowrap">dark ' + x.daysDark + 'd</span>' : '');
+    h += '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-md);overflow:hidden">' +
       '<div onclick="toggleIntelDrill(\'' + rid + '\')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer">' +
         '<div style="width:34px;height:34px;border-radius:50%;background:' + sm.bg + ';display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:' + sm.c + ';flex-shrink:0">' + esc(initials) + '</div>' +
         '<div style="flex:1;min-width:0">' +
@@ -14462,7 +14462,7 @@ function _renderIntelAccountLens(byAccount) {
           '<div style="font-size:11px;color:var(--text3)">' + esc(meta) + '</div>' +
         '</div>' +
         flag +
-        '<span style="font-size:11px;color:' + sm.c + ';background:' + sm.bg + ';padding:2px 8px;border-radius:3px;white-space:nowrap">' + x.domSent + '</span>' +
+        '<span style="font-size:11px;color:' + sm.c + ';background:' + sm.bg + ';padding:2px 8px;border-radius:var(--r-md);white-space:nowrap">' + x.domSent + '</span>' +
         '<span id="chevron-' + rid + '" style="font-size:16px;color:var(--text3)">›</span>' +
       '</div>' +
       '<div id="' + rid + '" style="display:none;padding:0 14px 12px">' + _renderAccountReceipts(a) + '</div>' +
@@ -14480,7 +14480,7 @@ function _renderAccountReceipts(a) {
     (byMeeting[key] || (byMeeting[key] = [])).push(s);
   });
   return Object.entries(byMeeting).map(function(entry) {
-    return '<div style="margin-bottom:8px;padding:10px 12px;background:var(--surface2);border-radius:2px">' +
+    return '<div style="margin-bottom:8px;padding:10px 12px;background:var(--surface2);border-radius:var(--r-sm)">' +
       '<div style="font-size:11px;color:var(--text3);margin-bottom:6px;font-weight:600">' + esc(entry[0]) + '</div>' +
       entry[1].map(function(s) {
         var cm = catMeta[s._cat] || { icon:'○', label:'', color:'var(--text3)' };
@@ -14628,9 +14628,9 @@ async function changePassword() {
         });
         othersNote = lo.ok
           ? ' Your other devices have been signed out.'
-          : ' Your password changed, but other devices could not be signed out — sign out manually there.';
+          : ' Your password changed, but other devices could not be signed out, sign out manually there.';
       } catch (e) {
-        othersNote = ' Your password changed, but other devices could not be signed out — sign out manually there.';
+        othersNote = ' Your password changed, but other devices could not be signed out, sign out manually there.';
       }
     }
 
