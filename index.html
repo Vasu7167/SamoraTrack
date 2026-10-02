@@ -1716,6 +1716,44 @@ body[data-tab]:not([data-tab="today"]) .metric-wrap{display:none}
   .you-setup-go{width:7px;height:7px;border-right:1.6px solid var(--text3);border-top:1.6px solid var(--text3);transform:rotate(45deg);margin-right:6px}
 }
 
+
+/* ══ Accounts: bulk download and upload ═════════════════════════════════════ */
+.acct-bulk{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:2px 0 6px}
+.acct-bulk-hint{font-size:12.5px;color:var(--text3);line-height:1.5;margin:0 0 14px}
+.acct-one{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);margin:4px 0 8px;padding-top:12px;border-top:1px solid var(--g-line)}
+.bulk-modal{position:fixed;inset:0;z-index:9500;display:flex;align-items:center;justify-content:center;padding:16px;
+  background:rgba(16,18,24,.38);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.bulk-card{width:100%;max-width:640px;max-height:86vh;display:flex;flex-direction:column;border-radius:20px;padding:18px 18px 14px;
+  background:var(--surface);border:1px solid var(--g-line);box-shadow:0 30px 80px -20px rgba(16,18,24,.45)}
+.bulk-h{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}
+.bulk-t{font-size:18px;font-weight:650;letter-spacing:-.015em;color:var(--text)}
+.bulk-s{font-size:12.5px;color:var(--text3);margin-top:2px;word-break:break-all}
+.bulk-x{width:30px;height:30px;border-radius:50%;border:1px solid var(--g-line);background:var(--surface2);color:var(--text2);font-size:18px;line-height:1;cursor:pointer}
+.bulk-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.bulk-chip{font-size:12.5px;padding:5px 11px;border-radius:999px;background:var(--surface2);color:var(--text2);border:1px solid var(--g-line)}
+.bulk-chip b{color:var(--text);font-weight:650}
+.bulk-chip.add{background:var(--c-verified-wash);color:var(--c-verified)}.bulk-chip.add b{color:var(--c-verified)}
+.bulk-chip.update{background:var(--c-info-wash);color:var(--c-info)}.bulk-chip.update b{color:var(--c-info)}
+.bulk-chip.skip{background:var(--c-risk-wash);color:var(--c-risk)}.bulk-chip.skip b{color:var(--c-risk)}
+.bulk-list{list-style:none;margin:0;padding:0;overflow-y:auto;flex:1;min-height:0;border:1px solid var(--g-line);border-radius:14px}
+.bulk-r{display:flex;align-items:flex-start;gap:10px;padding:9px 12px;border-bottom:1px solid var(--g-line)}
+.bulk-r:last-child{border-bottom:0}
+.bulk-tag{flex:0 0 58px;text-align:center;font-size:11px;font-weight:650;padding:3px 0;border-radius:999px;margin-top:1px}
+.bulk-r.add .bulk-tag{background:var(--c-verified-wash);color:var(--c-verified)}
+.bulk-r.update .bulk-tag{background:var(--c-info-wash);color:var(--c-info)}
+.bulk-r.skip .bulk-tag{background:var(--c-risk-wash);color:var(--c-risk)}
+.bulk-rn{display:flex;flex-direction:column;min-width:0;font-size:13.5px;color:var(--text)}
+.bulk-rn small{font-size:12px;color:var(--text3);margin-top:2px;line-height:1.45;overflow-wrap:anywhere}
+.bulk-note{font-size:12px;color:var(--text3);margin-top:10px;line-height:1.5}
+.bulk-wait{font-size:13.5px;color:var(--text2);padding:18px 2px}
+.bulk-err{font-size:13px;color:var(--c-risk);background:var(--c-risk-wash);border-radius:12px;padding:10px 12px;margin:6px 0}
+.bulk-ok{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:600;color:var(--text);padding:14px 2px}
+.bulk-okdot{width:10px;height:10px;border-radius:50%;background:var(--c-verified);box-shadow:0 0 0 5px var(--c-verified-wash)}
+.bulk-f{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+.bulk-go{background:var(--c-accent)!important;color:var(--c-on-accent)!important;border-color:transparent!important;background-image:var(--g-gold-sheen)!important;box-shadow:var(--g-gold-shadow)!important}
+.bulk-go:disabled{opacity:.5}
+@media(max-width:600px){.bulk-card{max-height:92vh;padding:16px 14px 12px}.acct-bulk .g-btn{flex:1 1 100%;justify-content:center}}
+
 </style>
 <script src="/js/vendor/sortable.min.js"></script>
 </head>
@@ -2417,6 +2455,12 @@ body[data-tab]:not([data-tab="today"]) .metric-wrap{display:none}
       <div class="admin-title">Rep Accounts</div>
       <div class="admin-card">
         <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Assign accounts to each rep. Coverage checks will run against these accounts only.</div>
+        <div class="acct-bulk">
+          <button class="g-btn" onclick="acctBulkDownload(this)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19.5h14"/></svg> Download all accounts</button>
+          <button class="g-btn" onclick="acctBulkUpload()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15.5V4.5M7.5 9L12 4.5 16.5 9M5 19.5h14"/></svg> Upload a file</button>
+        </div>
+        <div class="acct-bulk-hint">Download the CSV, edit it in Excel or Google Sheets, then upload it back. Rows with an Account ID update that account, new rows are added, and you see every change before it is saved.</div>
+        <div class="acct-one">One rep at a time</div>
         <div class="acct-pick-row" style="display:flex;gap:8px;margin-bottom:12px">
           <select id="accountRepSelect" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none" onchange="loadRepAccounts()">
             <option value="">Select a rep…</option> </select> </div>
