@@ -419,6 +419,10 @@ async function loadProfile() {
       }
       const orgs = await sbGet(`organisations?id=eq.${p.org_id}&select=org_code,name&limit=1`);
       profile = { ...p, org_code: orgs?.[0]?.org_code || '—', org_name: orgs?.[0]?.name || 'Unknown' };
+      try {
+        const adm = await sbGet(`user_profiles?user_id=eq.${currentUser.id}&select=is_org_admin`);
+        profile.is_org_admin = !!(adm && adm[0] && adm[0].is_org_admin);
+      } catch (_e) { profile.is_org_admin = false; }
       localStorage.setItem('dt-profile-' + currentUser.id, JSON.stringify(profile));
     } else {
       // NO PROFILE. This is where SSO was dangerous.
@@ -513,6 +517,10 @@ function canSeeTeam(r) { return ['manager','director','executive','admin','super
 function canSeeCrossTeam(r) { return ['director','executive','admin','super_admin'].includes(r); }
 function canSeeFullOrg(r) { return ['executive','admin','super_admin'].includes(r); }
 function canManageOrg(r) { return ['admin','super_admin'].includes(r); }
+// Org admin is a SWITCH on top of a job role (2 Oct): a Director can be an
+// admin too. Old admin and owner roles still count. Data visibility is NOT
+// decided here, the server decides it from role and reporting line.
+function _isOrgAdmin() { return !!profile && (profile.is_org_admin === true || ['admin','super_admin'].includes(profile.role)); }
 
 // Header labels + role-gated nav visibility. Idempotent and network-free, so it
 // can be re-applied cheaply after a background profile refresh without re-running
@@ -1167,7 +1175,7 @@ function switchTab(tab) {
   document.body.setAttribute('data-tab', actualPanel);
   if (['tasks','issues','wins','misses'].includes(tab)) { if (tab !== 'misses') setTodaySection(tab); renderToday(); }
   if (tab === 'today') { setTodaySection('tasks'); renderToday(); }
-  if (tab === 'settings') { renderSettings(); if (currentUser?.token) { loadHealthWeights(); loadNotificationRules(); } }
+  if (tab === 'settings') { renderSettings(); if (currentUser?.token && _isOrgAdmin()) { loadNotificationRules(); } }
   if (tab === 'you') { renderYouPanel(); refreshYouTabConnections(); loadHabitsSection(); loadEnrichmentStatus(); }
   if (tab === 'review') renderSummary();
   if (tab === 'exec') loadExecDashboard();
@@ -1236,7 +1244,7 @@ function setSamMode(mode) {
   }
 }
 function switchToOrgPanel() {
-  if (!['super_admin','admin'].includes(profile?.role)) return;
+  if (!_isOrgAdmin()) return;
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-org').classList.add('active');
   renderOrg();
@@ -1493,7 +1501,7 @@ function renderYouPanel() {
   // Re-render it here so the selected theme and size are correct whenever the
   // You tab is drawn, including after a device-theme change while on auto.
   try { renderAppearancePanel(); } catch(e) {}
-  const orgBtn = document.getElementById('orgMenuBtn'); if (orgBtn) orgBtn.style.display = ['super_admin','admin'].includes(profile?.role) ? '' : 'none';
+  const orgBtn = document.getElementById('orgMenuBtn'); if (orgBtn) orgBtn.style.display = _isOrgAdmin() ? '' : 'none';
   loadMyAccounts();
 }
 async function loadSamSignals() {
@@ -5854,19 +5862,30 @@ async function loadMeetingsKpiOrg() {
 }
 
 let orgPeople = [];
-async function renderOrg() {
-  document.getElementById('orgCodeDisplay').textContent = profile?.org_code || '—';
-  const isSuperAdmin = ['super_admin','admin'].includes(profile?.role);
-  const peopleCard = document.getElementById('peopleCard'); const assignSection = document.getElementById('assignSection');
-  if (peopleCard) peopleCard.style.display = isSuperAdmin ? '' : 'none';
-  if (assignSection) assignSection.style.display = isSuperAdmin ? '' : 'none';
-  if (!SB_URL || !isSuperAdmin) return;
+// ── Admin: Team & access ───────────────────────────────────────────────
+// The console (SamoraAccessConsole, bottom of this file) talks only to the
+// org_admin_* edge actions, which return people, reporting lines, shares,
+// seats and the activity log, and nothing about how SamoraOS scores or
+// targets. The old People table and Manager teams card are replaced by it.
+async function _sxaCall(action, body) {
+  const r = await fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify(Object.assign({ action: action }, body || {})) });
+  return r.json().catch(() => ({ ok: false, error: 'HTTP ' + r.status }));
+}
+async function _refreshOrgPeopleForAccounts() {
   try {
     orgPeople = await sbGet(`user_profiles?org_id=eq.${profile.org_id}&is_active=not.is.false&select=user_id,email,role,manager_id`);
-    renderPeopleTable(); renderAssignCard();
     const accountRepSel = document.getElementById('accountRepSelect');
     if (accountRepSel) accountRepSel.innerHTML = '<option value="">Select a rep…</option>' + orgPeople.map(p => '<option value="' + p.user_id + '">' + esc(p.email) + '</option>').join('');
-  } catch(e) { document.getElementById('peopleList').innerHTML = `<div class="empty">Error: ${e.message}</div>`; }
+  } catch (_e) { /* the console above reports its own errors */ }
+}
+async function renderOrg() {
+  if (!SB_URL || !_isOrgAdmin()) return;
+  const mount = document.getElementById('sxaMount');
+  if (mount && window.SamoraAccessConsole) {
+    if (window._sxaConsole && window._sxaConsole.el === mount) window._sxaConsole.load();
+    else window._sxaConsole = window.SamoraAccessConsole.mount(mount, { call: _sxaCall, onChange: _refreshOrgPeopleForAccounts });
+  }
+  await _refreshOrgPeopleForAccounts();
 }
 function renderPeopleTable() {
   if (!orgPeople?.length) { document.getElementById('peopleList').innerHTML = '<div class="empty">No members yet.</div>'; return; }
@@ -6012,6 +6031,12 @@ async function removeRepAccount(id) {
 function copyOrgCode() { const code = profile?.org_code || ''; navigator.clipboard?.writeText(code).then(() => alert('Copied: ' + code)).catch(() => alert('Your org code: ' + code)); }
 
 function renderSettings() {
+  // Org-wide notification rules and enrichment keys are for admins. Health
+  // score weights are Samora's (2 Oct), so that card never shows here; the
+  // server refuses the write anyway.
+  var _adm = _isOrgAdmin();
+  ['notifRulesAdminSection', 'enrichmentAdminSection'].forEach(function (id) { var el = document.getElementById(id); if (el) el.style.display = _adm ? '' : 'none'; });
+  var _hw = document.getElementById('healthWeightsSection'); if (_hw) _hw.style.display = 'none';
  document.getElementById('apiBadge').textContent = API_KEY ? 'set' : 'not set';
   document.getElementById('apiBadge').className = API_KEY ? 'badge-ok' : 'badge-no';
  document.getElementById('supaBadge').textContent = (SB_URL && SB_KEY) ? 'connected' : 'not set';
@@ -7622,11 +7647,14 @@ async function saveScoutProfile() {
     } else {
       // Saving the org default. If a per-account override existed, clear it so
       // this account follows the default again.
-      var jobs = [ fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
-        body:JSON.stringify({ action:'save_org_setting', key:'stakeholder_scout_profile', value: JSON.stringify(profile) }) }) ];
-      if (_scoutAcctId) jobs.push(fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
-        body:JSON.stringify({ action:'save_org_setting', key:'scout_profile_'+_scoutAcctId, value: JSON.stringify({}) }) }));
-      await Promise.all(jobs);
+      // Sequential on purpose: the org default is now limited to managers and
+      // admins, and the per-account override must survive a refused default.
+      var _r0 = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+        body:JSON.stringify({ action:'save_org_setting', key:'stakeholder_scout_profile', value: JSON.stringify(profile) }) });
+      var _d0 = await _r0.json().catch(function(){ return {}; });
+      if (!_d0.ok) { showToast(_d0.error || 'Could not save the organisation default.'); return; }
+      if (_scoutAcctId) await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+        body:JSON.stringify({ action:'save_org_setting', key:'scout_profile_'+_scoutAcctId, value: JSON.stringify({}) }) });
  showToast('Org default targets saved');
     }
     document.getElementById('scout-profile-modal')?.remove();
@@ -12612,11 +12640,12 @@ async function saveSampaignScoutProfile() {
         body:JSON.stringify({ action:'save_org_setting', key:'scout_profile_sampaign_'+_sampScoutCampaignId, value: JSON.stringify(profile) }) });
  showToast('Custom targets saved for this SAMpaign');
     } else {
-      var jobs = [ fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
-        body:JSON.stringify({ action:'save_org_setting', key:'stakeholder_scout_profile', value: JSON.stringify(profile) }) }) ];
-      if (_sampScoutCampaignId) jobs.push(fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
-        body:JSON.stringify({ action:'save_org_setting', key:'scout_profile_sampaign_'+_sampScoutCampaignId, value: JSON.stringify({}) }) }));
-      await Promise.all(jobs);
+      var _r0 = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+        body:JSON.stringify({ action:'save_org_setting', key:'stakeholder_scout_profile', value: JSON.stringify(profile) }) });
+      var _d0 = await _r0.json().catch(function(){ return {}; });
+      if (!_d0.ok) { showToast(_d0.error || 'Could not save the organisation default.'); return; }
+      if (_sampScoutCampaignId) await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY},
+        body:JSON.stringify({ action:'save_org_setting', key:'scout_profile_sampaign_'+_sampScoutCampaignId, value: JSON.stringify({}) }) });
  showToast('Org default targets saved');
     }
     document.getElementById('samp-scout-profile-modal')?.remove();
@@ -13326,14 +13355,19 @@ async function openHealthBreakdown(accountId, accountName) {
     }
 
     var rows = data.components.map(function(c) {
+      // Customers get how strongly each rule is met; the weights behind the
+      // score stay with Samora and the server no longer sends them. A Samora
+      // admin still gets points and weights.
+      var hasFormula = c.weight != null;
       var pts = Math.round(c.points || 0);
       var maxPts = c.weight || 0;
-      var pct = maxPts ? Math.min(100, Math.round((pts / maxPts) * 100)) : 0;
+      var pct = hasFormula ? (maxPts ? Math.min(100, Math.round((pts / maxPts) * 100)) : 0) : Math.max(0, Math.min(100, Number(c.strength) || 0));
+      var strengthWord = pct >= 70 ? 'Strong' : pct >= 40 ? 'Partial' : pct > 0 ? 'Weak' : 'Missing';
       var barColor = pct >= 70 ? 'var(--green)' : pct >= 40 ? 'var(--amber)' : 'var(--coral)';
       return '<div style="padding:10px 0;border-bottom:1px solid var(--border)">' +
         '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">' +
-          '<span style="font-size:12px;font-weight:600;color:var(--text)">' + esc(c.label || c.key || '') + ' <span style="font-weight:400;color:var(--text3)">· weight ' + maxPts + '%</span></span>' +
-          '<span style="font-size:12px;font-weight:700;color:' + barColor + '">' + pts + ' / ' + maxPts + '</span>' +
+          '<span style="font-size:12px;font-weight:600;color:var(--text)">' + esc(c.label || c.key || '') + (hasFormula ? ' <span style="font-weight:400;color:var(--text3)">· weight ' + maxPts + '%</span>' : '') + '</span>' +
+          '<span style="font-size:12px;font-weight:700;color:' + barColor + '">' + (hasFormula ? pts + ' / ' + maxPts : strengthWord) + '</span>' +
         '</div>' +
         '<div style="height:4px;background:var(--border2);border-radius:2px;overflow:hidden;margin-bottom:5px"><div style="height:100%;width:' + pct + '%;background:' + barColor + '"></div></div>' +
         (c.raw ? '<div style="font-size:11px;color:var(--text2)">' + esc(c.raw) + '</div>' : '') +
@@ -13345,7 +13379,7 @@ async function openHealthBreakdown(accountId, accountName) {
     body.innerHTML =
       '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0 4px">' +
         '<span style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em">Rule</span>' +
-        '<span style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em">Points</span>' +
+        '<span style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em">' + ((data.components[0] && data.components[0].weight != null) ? 'Points' : 'Strength') + '</span>' +
       '</div>' +
       rows +
       '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0 4px">' +
@@ -13353,7 +13387,7 @@ async function openHealthBreakdown(accountId, accountName) {
         '<span style="font-size:16px;font-weight:700;color:var(--gold)">' + (data.health_score != null ? data.health_score : '—') + ' / 100</span>' +
       '</div>' +
       (computedAt ? '<div style="font-size:11px;color:var(--text3);text-align:right">Computed ' + esc(computedAt) + '</div>' : '') +
-      '<div style="font-size:11px;color:var(--text3);margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">Weights are org-configurable in Admin → Deal health score weights.</div>';
+      '<div style="font-size:11px;color:var(--text3);margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">The score combines these rules. What each one found is shown above.</div>';
   } catch(e) {
     var b = document.getElementById('health-breakdown-body');
     if (b) b.innerHTML = '<div style="color:var(--coral);font-size:12px">Error: ' + esc(e.message) + '</div>';
@@ -14836,3 +14870,442 @@ function joinOrgCancel() {
   _pendingSsoUser = false;
   doLogout();
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TEAM & ACCESS CONSOLE (2026-10-02)
+// One component, two homes: the customer's admin inside SamoraOS (their own
+// org) and Samora's admin panel (any org). Same edge actions behind both, so
+// the two can never disagree about who reports to whom or who sees what.
+//
+// It renders ONLY what org_admin_get returns: people, reporting lines, shares,
+// seats and the activity log. There is deliberately nothing here about
+// scoring, signals, providers or settings.
+//
+// mount(el, { call(action, body) -> json, orgId?: string, onChange?: fn })
+// ═══════════════════════════════════════════════════════════════════════════
+(function () {
+  'use strict';
+
+  var ROLE_LABEL = { sdr: 'SDR', ae: 'AE', manager: 'Manager', director: 'Director', executive: 'Executive',
+                     member: 'Member (old role)', admin: 'Admin (old role)', super_admin: 'Account owner' };
+  var WHY_LABEL = { self: 'Themselves', org: 'Whole organisation', team: 'In their team', shared: 'Shared', shared_team: 'Shared, with team' };
+
+  function h(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+  function initials(p) {
+    var src = (p.name || p.email || '?').replace(/@.*/, '');
+    var parts = src.split(/[\s._-]+/).filter(Boolean);
+    return ((parts[0] || '?')[0] + ((parts[1] || '')[0] || '')).toUpperCase();
+  }
+  function who(p) { return p ? (p.name || p.email) : 'Unknown'; }
+  function fmtWhen(iso) {
+    try { return new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; }
+  }
+
+  function Console(el, opts) {
+    this.el = el;
+    this.call = opts.call;
+    this.orgId = opts.orgId || null;
+    this.onChange = opts.onChange || function () {};
+    this.tab = 'people';
+    this.data = null;
+    this.query = '';
+    this.accessFor = null;
+    this.collapsed = {};
+    var self = this;
+    el.addEventListener('click', function (e) { self._click(e); });
+    el.addEventListener('change', function (e) { self._change(e); });
+    el.addEventListener('input', function (e) {
+      if (e.target && e.target.getAttribute('data-sxa') === 'search') { self.query = e.target.value.toLowerCase(); self._renderBody(); }
+    });
+  }
+
+  Console.prototype._body = function (extra) {
+    var b = extra || {};
+    if (this.orgId) b.org_id = this.orgId;
+    return b;
+  };
+
+  Console.prototype.load = async function () {
+    if (!this.data) this.el.innerHTML = '<div class="sxa"><div class="sxa-empty">Loading your team…</div></div>';
+    var d;
+    try { d = await this.call('org_admin_get', this._body()); } catch (e) { d = { ok: false, error: e.message }; }
+    if (!d || !d.ok) {
+      this.el.innerHTML = '<div class="sxa"><div class="sxa-empty sxa-err">' + h((d && d.error) || 'Could not load your team.') + '</div></div>';
+      return;
+    }
+    this.data = d;
+    this.byId = {};
+    var self = this;
+    d.people.forEach(function (p) { self.byId[p.user_id] = p; });
+    if (!this.accessFor || !this.byId[this.accessFor]) {
+      var first = d.people.filter(function (p) { return p.is_active; })[0];
+      this.accessFor = first ? first.user_id : null;
+    }
+    this.render();
+  };
+
+  // ── shell ──────────────────────────────────────────────────────────────
+  Console.prototype.render = function () {
+    var d = this.data, seats = d.seats || {};
+    var active = d.people.filter(function (p) { return p.is_active; }).length;
+    var full = seats.limit && seats.active >= seats.limit;
+    var seatTxt = seats.limit ? (seats.active + ' of ' + seats.limit + ' seats used') : (active + ' active ' + (active === 1 ? 'person' : 'people'));
+    var tabs = [['people', 'People'], ['tree', 'Reporting lines'], ['access', 'Data access'], ['log', 'Activity']];
+    var self = this;
+    this.el.innerHTML =
+      '<div class="sxa">' +
+        '<div class="sxa-head">' +
+          '<div><div class="sxa-title">Team &amp; access</div>' +
+          '<div class="sxa-sub">Who is on ' + h(d.org.name || 'your organisation') + ', who they report to, and whose work they can see.</div></div>' +
+          '<div class="sxa-head-r">' +
+            '<span class="sxa-chip' + (full ? ' sxa-chip-warn' : '') + '" title="' + (seats.limit ? 'Seats on your plan' : 'No seat cap set') + '">' + h(seatTxt) + '</span>' +
+            '<button class="sxa-btn sxa-btn-gold" data-sxa="add"' + (full && !d.me.is_samora ? ' disabled title="All seats are in use. Remove someone first, or ask Samora for more seats."' : '') + '>+ Add person</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="sxa-tabs" role="tablist">' + tabs.map(function (t) {
+          return '<button role="tab" class="sxa-tab' + (self.tab === t[0] ? ' on' : '') + '" data-sxa="tab" data-v="' + t[0] + '">' + t[1] + '</button>';
+        }).join('') + '</div>' +
+        '<div class="sxa-body" id="sxa-body"></div>' +
+      '</div>';
+    this._renderBody();
+  };
+
+  Console.prototype._renderBody = function () {
+    var body = this.el.querySelector('#sxa-body');
+    if (!body) return;
+    if (this.tab === 'people') body.innerHTML = this._people();
+    else if (this.tab === 'tree') body.innerHTML = this._tree();
+    else if (this.tab === 'access') body.innerHTML = this._access();
+    else { body.innerHTML = '<div class="sxa-empty">Loading activity…</div>'; this._loadLog(); }
+  };
+
+  // The toast lives on <body>, not inside the console: every save reloads and
+  // re-renders the console, which would otherwise wipe the "Saved" message the
+  // moment it appeared.
+  Console.prototype.toast = function (msg, bad) {
+    var t = document.getElementById('sxa-toast-global');
+    if (!t) { t = document.createElement('div'); t.id = 'sxa-toast-global'; t.setAttribute('role', 'status'); t.setAttribute('aria-live', 'polite'); document.body.appendChild(t); }
+    t.textContent = msg;
+    t.className = 'sxa-toast show' + (bad ? ' bad' : '');
+    clearTimeout(this._tt);
+    this._tt = setTimeout(function () { t.className = 'sxa-toast'; }, bad ? 5200 : 2400);
+  };
+
+  // ── People ─────────────────────────────────────────────────────────────
+  Console.prototype._roleSelect = function (p) {
+    var roles = this.data.roles.slice();
+    if (roles.indexOf(p.role) === -1) roles.unshift(p.role);
+    return '<select class="sxa-sel" data-sxa="role" data-id="' + p.user_id + '" aria-label="Role for ' + h(who(p)) + '">' +
+      roles.map(function (r) { return '<option value="' + r + '"' + (r === p.role ? ' selected' : '') + (ROLE_LABEL[r] && /old role|owner/.test(ROLE_LABEL[r]) && r !== p.role ? ' disabled' : '') + '>' + h(ROLE_LABEL[r] || r) + '</option>'; }).join('') +
+    '</select>';
+  };
+
+  // Managers offered for p: active, not p, and not anyone already under p
+  // (that would be a loop; the server refuses it too).
+  Console.prototype._managerOptions = function (p) {
+    var under = this._under(p.user_id), self = this;
+    var opts = this.data.people.filter(function (m) { return m.is_active && m.user_id !== p.user_id && !under[m.user_id]; })
+      .sort(function (a, b) { return who(a).localeCompare(who(b)); });
+    var current = p.manager_id && this.byId[p.manager_id];
+    var html = '<option value="">No manager</option>';
+    if (current && !current.is_active) html += '<option value="' + current.user_id + '" selected disabled>' + h(who(current)) + ' (removed)</option>';
+    return html + opts.map(function (m) { return '<option value="' + m.user_id + '"' + (m.user_id === p.manager_id ? ' selected' : '') + '>' + h(who(m)) + ' · ' + h(ROLE_LABEL[m.role] || m.role) + '</option>'; }).join('');
+  };
+
+  Console.prototype._under = function (rootId) {
+    var kids = {}, out = {};
+    this.data.people.forEach(function (p) { if (p.manager_id) (kids[p.manager_id] = kids[p.manager_id] || []).push(p.user_id); });
+    var q = (kids[rootId] || []).slice(), seen = {}; seen[rootId] = 1;
+    while (q.length) { var id = q.shift(); if (seen[id]) continue; seen[id] = 1; out[id] = 1; (kids[id] || []).forEach(function (k) { q.push(k); }); }
+    return out;
+  };
+
+  Console.prototype._people = function () {
+    var q = this.query, self = this, me = this.data.me.user_id;
+    var match = function (p) { return !q || (who(p) + ' ' + p.email + ' ' + (ROLE_LABEL[p.role] || p.role)).toLowerCase().indexOf(q) !== -1; };
+    var act = this.data.people.filter(function (p) { return p.is_active && match(p); });
+    var gone = this.data.people.filter(function (p) { return !p.is_active && match(p); });
+    var row = function (p) {
+      var isMe = p.user_id === me && !self.data.me.is_samora;
+      var legacyAdmin = p.role === 'admin' || p.role === 'super_admin';
+      var reports = Object.keys(self._under(p.user_id)).length;
+      return '<div class="sxa-row">' +
+        '<div class="sxa-person"><span class="sxa-av">' + h(initials(p)) + '</span><div class="sxa-pw">' +
+          '<div class="sxa-pn">' + h(who(p)) + (isMe ? ' <span class="sxa-you">You</span>' : '') + '</div>' +
+          '<div class="sxa-pe">' + h(p.email) + (reports ? ' · ' + reports + ' under them' : '') + '</div></div></div>' +
+        '<label class="sxa-cell"><span class="sxa-lbl">Role</span>' + (isMe ? '<span class="sxa-static">' + h(ROLE_LABEL[p.role] || p.role) + '</span>' : self._roleSelect(p)) + '</label>' +
+        '<label class="sxa-cell"><span class="sxa-lbl">Reports to</span><select class="sxa-sel" data-sxa="mgr" data-id="' + p.user_id + '" aria-label="Manager for ' + h(who(p)) + '">' + self._managerOptions(p) + '</select></label>' +
+        '<label class="sxa-cell sxa-cell-sw" title="' + (isMe ? 'You cannot change your own admin access.' : legacyAdmin ? 'Admin by their old role. Pick a job role to manage this switch.' : 'Admins manage people, reporting lines and access. It does not change whose data they see.') + '">' +
+          '<span class="sxa-lbl">Admin</span><input type="checkbox" class="sxa-sw" data-sxa="admin" data-id="' + p.user_id + '"' + (p.is_org_admin ? ' checked' : '') + (isMe || legacyAdmin ? ' disabled' : '') + '/></label>' +
+        '<div class="sxa-cell sxa-cell-act">' + (isMe ? '' : '<button class="sxa-btn sxa-btn-ghost" data-sxa="remove" data-id="' + p.user_id + '">Remove</button>') + '</div>' +
+      '</div>';
+    };
+    return '<div class="sxa-tools"><input class="sxa-in" data-sxa="search" placeholder="Find a person" value="' + h(this.query) + '"/>' +
+      '<span class="sxa-note">Admin lets someone manage the team. What they can see still follows their role and reporting line.</span></div>' +
+      (act.length ? '<div class="sxa-list">' + act.map(row).join('') + '</div>' : '<div class="sxa-empty">' + (q ? 'Nobody matches that.' : 'No active people yet. Add someone to get started.') + '</div>') +
+      (gone.length ? '<details class="sxa-gone"><summary>Removed (' + gone.length + '). Their history stays in reports.</summary>' +
+        gone.map(function (p) {
+          return '<div class="sxa-row sxa-row-gone"><div class="sxa-person"><span class="sxa-av">' + h(initials(p)) + '</span><div class="sxa-pw"><div class="sxa-pn">' + h(who(p)) + '</div><div class="sxa-pe">' + h(p.email) + '</div></div></div>' +
+            '<div class="sxa-cell sxa-cell-act"><button class="sxa-btn sxa-btn-ghost" data-sxa="restore" data-id="' + p.user_id + '">Restore</button></div></div>';
+        }).join('') + '</details>' : '');
+  };
+
+  // ── Reporting lines ────────────────────────────────────────────────────
+  Console.prototype._tree = function () {
+    var people = this.data.people.filter(function (p) { return p.is_active; });
+    var byId = this.byId, self = this;
+    var kids = {};
+    people.forEach(function (p) {
+      var m = p.manager_id && byId[p.manager_id] && byId[p.manager_id].is_active ? p.manager_id : null;
+      (kids[m || '_root'] = kids[m || '_root'] || []).push(p);
+    });
+    var rank = { executive: 0, super_admin: 0, admin: 1, director: 2, manager: 3, ae: 4, sdr: 5, member: 6 };
+    var sort = function (a) { return a.sort(function (x, y) { return ((rank[x.role] || 9) - (rank[y.role] || 9)) || who(x).localeCompare(who(y)); }); };
+    var count = function (id) { return Object.keys(self._under(id)).length; };
+    var node = function (p, depth) {
+      var ch = sort(kids[p.user_id] || []);
+      var open = !self.collapsed[p.user_id];
+      var orphan = p.manager_id && byId[p.manager_id] && !byId[p.manager_id].is_active;
+      return '<li class="sxa-node">' +
+        '<div class="sxa-card' + (orphan ? ' sxa-card-warn' : '') + '">' +
+          (ch.length ? '<button class="sxa-tw" data-sxa="fold" data-id="' + p.user_id + '" aria-label="' + (open ? 'Collapse' : 'Expand') + '">' + (open ? '▾' : '▸') + '</button>' : '<span class="sxa-tw sxa-tw-x"></span>') +
+          '<span class="sxa-av sxa-av-s">' + h(initials(p)) + '</span>' +
+          '<div class="sxa-pw"><div class="sxa-pn">' + h(who(p)) + (p.is_org_admin ? ' <span class="sxa-badge">Admin</span>' : '') + '</div>' +
+          '<div class="sxa-pe">' + h(ROLE_LABEL[p.role] || p.role) + (ch.length ? ' · ' + count(p.user_id) + ' in team' : '') + (orphan ? ' · their manager was removed' : '') + '</div></div>' +
+          '<select class="sxa-sel sxa-sel-s" data-sxa="mgr" data-id="' + p.user_id + '" aria-label="Move ' + h(who(p)) + '">' + self._managerOptions(p) + '</select>' +
+        '</div>' +
+        (ch.length && open ? '<ul class="sxa-ul">' + ch.map(function (c) { return node(c, depth + 1); }).join('') + '</ul>' : '') +
+      '</li>';
+    };
+    var roots = sort(kids._root || []);
+    var leaders = roots.filter(function (p) { return (kids[p.user_id] || []).length || ['executive', 'director', 'manager', 'super_admin', 'admin'].indexOf(p.role) !== -1; });
+    var unplaced = roots.filter(function (p) { return leaders.indexOf(p) === -1; });
+    return '<div class="sxa-note sxa-note-block">Executives see everyone. Managers and Directors see everyone below them here, at any depth. Everyone else sees their own work, plus anything shared with them under Data access. Use the menu on any card to move that person.</div>' +
+      (leaders.length ? '<ul class="sxa-ul sxa-ul-root">' + leaders.map(function (p) { return node(p, 0); }).join('') + '</ul>' : '') +
+      (unplaced.length ? '<div class="sxa-sec">Not in a team yet (' + unplaced.length + ')</div><div class="sxa-sub sxa-sub-tight">Only Executives can see their work until they report to someone.</div>' +
+        '<ul class="sxa-ul sxa-ul-root">' + unplaced.map(function (p) { return node(p, 0); }).join('') + '</ul>' : '') +
+      (!people.length ? '<div class="sxa-empty">No active people yet.</div>' : '');
+  };
+
+  // ── Data access ────────────────────────────────────────────────────────
+  Console.prototype._access = function () {
+    var d = this.data, byId = this.byId, self = this;
+    var active = d.people.filter(function (p) { return p.is_active; }).sort(function (a, b) { return who(a).localeCompare(who(b)); });
+    if (!active.length) return '<div class="sxa-empty">No active people yet.</div>';
+    var pid = this.accessFor;
+    var acc = (d.access[pid] || { sees: {}, tier: 'self' });
+    var sees = Object.keys(acc.sees).filter(function (id) { return id !== pid && byId[id]; });
+    var seenBy = active.filter(function (v) { return v.user_id !== pid && d.access[v.user_id] && d.access[v.user_id].sees[pid]; });
+    var chip = function (why) { return '<span class="sxa-why sxa-why-' + why + '">' + h(WHY_LABEL[why] || why) + '</span>'; };
+    var li = function (p, why) { return '<li><span class="sxa-av sxa-av-s">' + h(initials(p)) + '</span><span class="sxa-li-n">' + h(who(p)) + (p.is_active ? '' : ' <span class="sxa-muted">(removed)</span>') + '</span>' + chip(why) + '</li>'; };
+    var pick = function (attr, sel, excl) {
+      return '<select class="sxa-sel" data-sxa="' + attr + '">' + active.filter(function (p) { return p.user_id !== excl; }).map(function (p) {
+        return '<option value="' + p.user_id + '"' + (p.user_id === sel ? ' selected' : '') + '>' + h(who(p)) + ' · ' + h(ROLE_LABEL[p.role] || p.role) + '</option>';
+      }).join('') + '</select>';
+    };
+    var shares = d.grants.filter(function (g) { return byId[g.viewer_user_id] && byId[g.subject_user_id]; });
+    var tierLine = acc.tier === 'org' ? 'As ' + (ROLE_LABEL[byId[pid].role] || byId[pid].role) + ', sees the whole organisation.'
+                 : acc.tier === 'team' ? 'Sees everyone below them in Reporting lines, plus anything shared.'
+                 : 'Sees their own work, plus anything shared with them.';
+    var firstOther = active.filter(function (p) { return p.user_id !== pid; })[0];
+    return '<div class="sxa-acc">' +
+      '<div class="sxa-acc-pick"><span class="sxa-lbl">Person</span>' + pick('acc-person', pid, null) + '<div class="sxa-note">' + h(tierLine) + '</div></div>' +
+      '<div class="sxa-acc-cols">' +
+        '<div class="sxa-acc-col"><div class="sxa-sec">Can see (' + sees.length + ')</div>' +
+          (sees.length ? '<ul class="sxa-acc-ul">' + sees.sort(function (a, b) { return who(byId[a]).localeCompare(who(byId[b])); }).map(function (id) { return li(byId[id], acc.sees[id]); }).join('') + '</ul>' : '<div class="sxa-empty sxa-empty-s">Only their own work.</div>') +
+        '</div>' +
+        '<div class="sxa-acc-col"><div class="sxa-sec">Can be seen by (' + seenBy.length + ')</div>' +
+          (seenBy.length ? '<ul class="sxa-acc-ul">' + seenBy.map(function (v) { return li(v, d.access[v.user_id].sees[pid]); }).join('') + '</ul>' : '<div class="sxa-empty sxa-empty-s">Nobody else yet.</div>') +
+        '</div>' +
+      '</div>' +
+      '<div class="sxa-share">' +
+        '<div class="sxa-sec">Share access</div>' +
+        '<div class="sxa-share-row"><span>Let</span>' + pick('sh-viewer', pid, null) + '<span>also see</span>' + pick('sh-subject', firstOther ? firstOther.user_id : null, null) +
+          '<label class="sxa-inl"><input type="checkbox" data-sxa="sh-team" checked/> and everyone under them</label>' +
+          '<button class="sxa-btn sxa-btn-gold" data-sxa="share">Share</button></div>' +
+        (shares.length ? '<ul class="sxa-acc-ul sxa-shares">' + shares.map(function (g) {
+          return '<li><span class="sxa-li-n">' + h(who(byId[g.viewer_user_id])) + ' <span class="sxa-muted">sees</span> ' + h(who(byId[g.subject_user_id])) + (g.include_team ? ' <span class="sxa-muted">and their team</span>' : '') + '</span>' +
+            '<button class="sxa-btn sxa-btn-ghost" data-sxa="unshare" data-v="' + g.viewer_user_id + '" data-s="' + g.subject_user_id + '">Remove</button></li>';
+        }).join('') + '</ul>' : '<div class="sxa-note">No extra shares. Everyone sees what their role and reporting line give them.</div>') +
+      '</div>' +
+    '</div>';
+  };
+
+  // ── Activity ───────────────────────────────────────────────────────────
+  Console.prototype._loadLog = async function () {
+    var body = this.el.querySelector('#sxa-body');
+    var d;
+    try { d = await this.call('org_admin_audit', this._body()); } catch (e) { d = { ok: false, error: e.message }; }
+    if (this.tab !== 'log' || !body) return;
+    if (!d.ok) { body.innerHTML = '<div class="sxa-empty sxa-err">' + h(d.error || 'Could not load activity.') + '</div>'; return; }
+    if (!d.entries.length) { body.innerHTML = '<div class="sxa-empty">No changes recorded yet. Every change to people, reporting lines and access will appear here.</div>'; return; }
+    var said = function (e) {
+      var x = e.detail || {}, t = h(e.target_email || 'someone'), parts = [];
+      if (e.action === 'person_added') return 'added ' + t + ' as ' + h(ROLE_LABEL[x.role] || x.role || '') + (x.is_org_admin ? ', with admin' : '');
+      if (e.action === 'person_restored') return 'restored ' + t;
+      if (e.action === 'person_removed') return 'removed ' + t + (x.reports_moved_up ? ' (' + x.reports_moved_up + ' moved up to their manager)' : '');
+      if (e.action === 'access_shared') return 'let ' + t + ' see ' + h(x.subject_email || '') + (x.include_team ? ' and their team' : '');
+      if (e.action === 'access_removed') return 'stopped ' + t + ' seeing ' + h(x.subject_email || '');
+      if (x.role) parts.push('role ' + h(ROLE_LABEL[x.role.from] || x.role.from || 'none') + ' to ' + h(ROLE_LABEL[x.role.to] || x.role.to));
+      if (x.admin) parts.push(x.admin.to ? 'turned admin on' : 'turned admin off');
+      if (x.manager) parts.push('manager ' + h(x.manager.from || 'none') + ' to ' + h(x.manager.to || 'none'));
+      return 'changed ' + t + ': ' + (parts.join(', ') || 'details');
+    };
+    body.innerHTML = '<ul class="sxa-log">' + d.entries.map(function (e) {
+      return '<li><span class="sxa-when">' + h(fmtWhen(e.created_at)) + '</span><span><b>' + h(e.actor_is_samora ? 'Samora' : (e.actor_email || 'An admin')) + '</b> ' + said(e) + '</span></li>';
+    }).join('') + '</ul>';
+  };
+
+  // ── events ─────────────────────────────────────────────────────────────
+  Console.prototype._click = function (e) {
+    var t = e.target.closest ? e.target.closest('[data-sxa]') : null;
+    if (!t || t.disabled) return;
+    var a = t.getAttribute('data-sxa'), id = t.getAttribute('data-id');
+    if (a === 'tab') { this.tab = t.getAttribute('data-v'); this.render(); }
+    else if (a === 'fold') { this.collapsed[id] = !this.collapsed[id]; this._renderBody(); }
+    else if (a === 'add') this._addModal();
+    else if (a === 'remove') this._removeModal(id);
+    else if (a === 'restore') this._restore(id);
+    else if (a === 'share') this._share();
+    else if (a === 'unshare') this._unshare(t.getAttribute('data-v'), t.getAttribute('data-s'));
+  };
+
+  Console.prototype._change = function (e) {
+    var t = e.target, a = t.getAttribute && t.getAttribute('data-sxa'), id = t.getAttribute && t.getAttribute('data-id');
+    if (a === 'role') this._update(id, { role: t.value }, t);
+    else if (a === 'mgr') this._update(id, { manager_id: t.value || null }, t);
+    else if (a === 'admin') this._update(id, { is_org_admin: !!t.checked }, t);
+    else if (a === 'acc-person') { this.accessFor = t.value; this._renderBody(); }
+  };
+
+  Console.prototype._update = async function (id, change, ctrl) {
+    if (ctrl) ctrl.disabled = true;
+    var d;
+    try { d = await this.call('org_update_member', this._body(Object.assign({ user_id: id }, change))); } catch (e) { d = { ok: false, error: e.message }; }
+    if (!d || !d.ok) { this.toast((d && d.error) || 'Could not save.', true); await this.load(); return; }
+    this.toast('Saved');
+    await this.load();
+    this.onChange();
+  };
+
+  Console.prototype._share = async function () {
+    var v = this.el.querySelector('[data-sxa="sh-viewer"]'), s = this.el.querySelector('[data-sxa="sh-subject"]'), tm = this.el.querySelector('[data-sxa="sh-team"]');
+    if (!v || !s) return;
+    if (v.value === s.value) { this.toast('Everyone already sees their own work. Pick two different people.', true); return; }
+    var d;
+    try { d = await this.call('org_admin_set_access', this._body({ viewer_user_id: v.value, subject_user_id: s.value, include_team: !!(tm && tm.checked) })); } catch (e) { d = { ok: false, error: e.message }; }
+    if (!d.ok) { this.toast(d.error || 'Could not share.', true); return; }
+    this.accessFor = v.value;
+    this.toast('Shared');
+    await this.load();
+  };
+
+  Console.prototype._unshare = async function (viewer, subject) {
+    var d;
+    try { d = await this.call('org_admin_set_access', this._body({ viewer_user_id: viewer, subject_user_id: subject, remove: true })); } catch (e) { d = { ok: false, error: e.message }; }
+    if (!d.ok) { this.toast(d.error || 'Could not remove.', true); return; }
+    this.toast('Share removed');
+    await this.load();
+  };
+
+  Console.prototype._restore = async function (id) {
+    var d;
+    try { d = await this.call('admin_reactivate_user', { org_id: this.data.org.id, user_id: id }); } catch (e) { d = { ok: false, error: e.message }; }
+    if (!d.ok) { this.toast(d.error || 'Could not restore.', true); return; }
+    this.toast('Restored. Their sign-in works again.');
+    await this.load();
+    this.onChange();
+  };
+
+  // ── modals ─────────────────────────────────────────────────────────────
+  Console.prototype._modal = function (html) {
+    var m = document.createElement('div');
+    m.className = 'sxa-modal-bg';
+    m.innerHTML = '<div class="sxa sxa-modal" role="dialog" aria-modal="true">' + html + '</div>';
+    m.addEventListener('click', function (e) { if (e.target === m) m.remove(); });
+    document.body.appendChild(m);
+    var f = m.querySelector('input,select,button'); if (f) f.focus();
+    return m;
+  };
+
+  Console.prototype._addModal = function () {
+    var self = this, d = this.data, seats = d.seats || {};
+    var mgrs = d.people.filter(function (p) { return p.is_active; }).sort(function (a, b) { return who(a).localeCompare(who(b)); });
+    var m = this._modal(
+      '<div class="sxa-title">Add a person</div>' +
+      '<div class="sxa-sub">They get a welcome email with a temporary password and set their own on first sign-in.' + (seats.limit ? ' Uses 1 of the ' + (seats.limit - seats.active) + ' seats left on your plan.' : '') + '</div>' +
+      '<label class="sxa-f"><span class="sxa-lbl">Work email</span><input class="sxa-in" data-f="email" type="email" placeholder="name@company.com" autocomplete="off"/></label>' +
+      '<label class="sxa-f"><span class="sxa-lbl">Full name</span><input class="sxa-in" data-f="name" placeholder="Optional"/></label>' +
+      '<div class="sxa-f2"><label class="sxa-f"><span class="sxa-lbl">Role</span><select class="sxa-sel" data-f="role">' + d.roles.map(function (r) { return '<option value="' + r + '"' + (r === 'ae' ? ' selected' : '') + '>' + h(ROLE_LABEL[r] || r) + '</option>'; }).join('') + '</select></label>' +
+      '<label class="sxa-f"><span class="sxa-lbl">Reports to</span><select class="sxa-sel" data-f="mgr"><option value="">No manager yet</option>' + mgrs.map(function (p) { return '<option value="' + p.user_id + '">' + h(who(p)) + '</option>'; }).join('') + '</select></label></div>' +
+      '<label class="sxa-inl sxa-f"><input type="checkbox" data-f="admin"/> Also make them an admin</label>' +
+      '<div class="sxa-msg" data-f="msg"></div>' +
+      '<div class="sxa-actions"><button class="sxa-btn sxa-btn-ghost" data-f="cancel">Cancel</button><button class="sxa-btn sxa-btn-gold" data-f="go">Add and send invite</button></div>'
+    );
+    var q = function (k) { return m.querySelector('[data-f="' + k + '"]'); };
+    q('cancel').onclick = function () { m.remove(); };
+    q('go').onclick = async function () {
+      var email = q('email').value.trim();
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { q('msg').textContent = 'Enter a valid work email.'; q('msg').className = 'sxa-msg bad'; return; }
+      q('go').disabled = true; q('go').textContent = 'Adding…';
+      var r;
+      try { r = await self.call('org_admin_invite', self._body({ email: email, name: q('name').value.trim(), role: q('role').value, manager_id: q('mgr').value || null, is_org_admin: q('admin').checked })); } catch (e) { r = { ok: false, error: e.message }; }
+      if (!r.ok) { q('msg').textContent = r.error || 'Could not add.'; q('msg').className = 'sxa-msg bad'; q('go').disabled = false; q('go').textContent = 'Add and send invite'; return; }
+      var done = '<div class="sxa-title">' + (r.status === 'restored' ? 'Welcome back' : 'Added') + '</div>' +
+        (r.email_sent ? '<div class="sxa-sub">' + h(email) + ' has a welcome email with their sign-in details.</div>'
+          : '<div class="sxa-sub">The welcome email did not go out' + (r.email_error ? ' (' + h(r.email_error) + ')' : '') + '. Share this temporary password with ' + h(email) + ' yourself. It is shown once.</div>' +
+            (r.temp_password ? '<div class="sxa-code">' + h(r.temp_password) + '</div>' : '')) +
+        (r.warning ? '<div class="sxa-msg bad">' + h(r.warning) + '</div>' : '') + (r.note ? '<div class="sxa-note">' + h(r.note) + '</div>' : '') +
+        '<div class="sxa-actions"><button class="sxa-btn sxa-btn-gold" data-f="ok">Done</button></div>';
+      m.querySelector('.sxa-modal').innerHTML = done;
+      q('ok').onclick = function () { m.remove(); };
+      await self.load();
+      self.onChange();
+    };
+  };
+
+  Console.prototype._removeModal = function (id) {
+    var self = this, p = this.byId[id], d = this.data;
+    var reports = d.people.filter(function (x) { return x.is_active && x.manager_id === id; });
+    var up = p.manager_id && this.byId[p.manager_id];
+    var m = this._modal(
+      '<div class="sxa-title">Remove ' + h(who(p)) + '?</div>' +
+      '<div class="sxa-sub">Their sign-in stops today and their seat frees up. Their past work stays in your reports. You can restore them later.</div>' +
+      (reports.length ? '<div class="sxa-note sxa-note-block">' + reports.length + ' ' + (reports.length === 1 ? 'person reports' : 'people report') + ' to them. They will move up to ' + h(up ? who(up) : 'no manager') + '.</div>' : '') +
+      '<div data-f="reassign"></div><div class="sxa-msg" data-f="msg"></div>' +
+      '<div class="sxa-actions"><button class="sxa-btn sxa-btn-ghost" data-f="cancel">Cancel</button><button class="sxa-btn sxa-btn-bad" data-f="go">Remove access</button></div>'
+    );
+    var q = function (k) { return m.querySelector('[data-f="' + k + '"]'); };
+    q('cancel').onclick = function () { m.remove(); };
+    q('go').onclick = async function () {
+      q('go').disabled = true;
+      var sel = m.querySelector('[data-f="heir"]');
+      var body = { org_id: d.org.id, user_id: id };
+      if (sel) body.reassign_to = sel.value;
+      var r;
+      try { r = await self.call('admin_deactivate_user', body); } catch (e) { r = { ok: false, error: e.message }; }
+      if (r && r.needs_reassignment) {
+        var heirs = d.people.filter(function (x) { return x.is_active && x.user_id !== id; });
+        q('reassign').innerHTML = '<div class="sxa-note sxa-note-block">' + h(who(p)) + ' owns ' + r.owned_count + ' account' + (r.owned_count === 1 ? '' : 's') + '. Pick who takes them over, so no deal is left without an owner.</div>' +
+          '<label class="sxa-f"><span class="sxa-lbl">Hand accounts to</span><select class="sxa-sel" data-f="heir">' +
+          heirs.map(function (x) { return '<option value="' + x.user_id + '"' + (up && x.user_id === up.user_id ? ' selected' : '') + '>' + h(who(x)) + '</option>'; }).join('') + '</select></label>';
+        q('go').disabled = false; q('go').textContent = 'Hand over and remove';
+        return;
+      }
+      if (!r || !r.ok) { q('msg').textContent = (r && r.error) || 'Could not remove.'; q('msg').className = 'sxa-msg bad'; q('go').disabled = false; return; }
+      m.remove();
+      self.toast(who(p) + ' removed' + (r.reassigned_accounts ? ', ' + r.reassigned_accounts + ' accounts handed over' : ''));
+      await self.load();
+      self.onChange();
+    };
+  };
+
+  window.SamoraAccessConsole = {
+    mount: function (el, opts) {
+      if (!el) return null;
+      var c = new Console(el, opts || {});
+      c.load();
+      return c;
+    }
+  };
+})();
