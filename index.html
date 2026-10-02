@@ -1255,6 +1255,22 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
   .sxa-log li{grid-template-columns:1fr;gap:2px}
   .sxa-ul{padding-left:12px}
 }
+.sxa-chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px;border:1px solid var(--border2,#d8d3c4);border-radius:3px;background:var(--surface2,#f6f4ef);min-height:38px}
+.sxa-chips:focus-within{outline:2px solid var(--gold,#c49a2a);outline-offset:1px}
+.sxa-chipv{display:inline-flex;align-items:center;gap:4px;font-size:12.5px;padding:3px 4px 3px 9px;border-radius:999px;background:var(--surface,#fff);border:1px solid var(--border2,#d8d3c4);color:var(--text,#1c1a14)}
+.sxa-chipv button{border:0;background:none;cursor:pointer;color:var(--text3,#7a7668);font-size:14px;line-height:1;padding:0 4px}
+.sxa-chipv button:hover{color:var(--coral,#c0523f)}
+.sxa-chip-in{flex:1;min-width:160px;border:0;background:transparent;font:inherit;font-size:13px;color:var(--text,#1c1a14);padding:4px;outline:none}
+.sxa-pf textarea.sxa-in{width:100%;resize:vertical}
+.sxa-prod{display:flex;gap:12px;align-items:flex-start;padding:10px 12px;border-bottom:1px solid var(--border,#e6e1d4)}
+.sxa-prod:last-child{border-bottom:0}
+.sxa-prod-act{display:flex;gap:6px;flex:0 0 auto}
+.sxa-wrap{white-space:normal}
+.sxa-kw{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.sxa-kw span{font-size:11px;padding:1px 7px;border-radius:999px;background:var(--surface2,#f6f4ef);color:var(--text2,#4a473e)}
+[data-sxa-hosted] .admin-title{display:none}
+[data-sxa-hosted]>.admin-card{border:0;padding:0;background:none}
+@media (max-width:720px){.sxa-prod{flex-direction:column}.sxa-chip-in{min-width:120px}}
 @media (prefers-reduced-motion:reduce){.sxa-sw,.sxa-sw::after,.sxa-toast{transition:none}}
 </style>
 <script src="/js/vendor/sortable.min.js"></script>
@@ -1973,7 +1989,10 @@ body[data-tab]:not([data-tab="today"]) .app{padding-top:24px}
           <input type="hidden" id="newAccountParentId" value=""/> </div> </div> </div>
     <div class="admin-section" id="assignSection">
 
-    <div class="admin-section" style="margin-top:24px">
+    <!-- Replaced by Team & access, Company profile (2026-10-02): this box
+         saved a sentence that overwrote the structured ICP the Samora admin
+         edits. Kept hidden so old handlers find their elements. -->
+    <div class="admin-section" style="display:none">
       <div class="admin-title">ICP — Ideal Customer Profile</div>
       <div class="admin-card">
         <div class="admin-card-title">ICP definition <span id="icpSavedBadge" style="display:none;font-size:11px;font-weight:600;color:var(--green);background:rgba(74,140,92,0.1);padding:2px 8px;border-radius:3px">Saved</span></div>
