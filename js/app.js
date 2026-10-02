@@ -3,7 +3,7 @@ let SB_KEY = localStorage.getItem('dt-sb-key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6I
 let API_KEY = localStorage.getItem('dt-api-key') || '';
 var _userHabits = null;
 // Cache buster — update this string on every deploy to purge stale service worker cache
-var APP_VERSION = '20261002-02';
+var APP_VERSION = '20261002-03';
 (function() {
   if (localStorage.getItem('app-sw-version') !== APP_VERSION && 'serviceWorker' in navigator) {
     navigator.serviceWorker.getRegistrations().then(function(regs) {
@@ -777,6 +777,7 @@ function launchApp() {
   showScreen('appScreen');
   const role = profile?.role || 'member';
   _applyRoleChrome();
+  try { _renderRailMe(); } catch (e) {}
   // Every sign-in lands on Today. Sign out lives in the You tab and signing
   // out does not reload the page (nor does an installed PWA), so the You panel
   // stayed active and the next sign-in opened on You instead of Today.
@@ -1489,7 +1490,7 @@ function renderYouPanel() {
   const initials = email.substring(0,2).toUpperCase();
   const av = document.getElementById('youAvatar'); if (av) av.textContent = initials;
   const em = document.getElementById('youEmailDisplay'); if (em) em.textContent = email;
-  const rp = document.getElementById('youRolePill'); if (rp) { rp.textContent = (profile?.role||'').replace('_',' '); rp.className = 'role-pill rp-'+(profile?.role||''); }
+  const rp = document.getElementById('youRolePill'); if (rp) { rp.textContent = (((window._orgConfig && window._orgConfig.roleLabels) || {})[profile?.role]) || (profile?.role||'').replace('_',' '); rp.className = 'role-pill rp-'+(profile?.role||''); }
   const op = document.getElementById('youOrgPill'); if (op) { op.textContent = profile?.org_name || profile?.org_code || ''; op.style.display = op.textContent ? '' : 'none'; }
   const nm = document.getElementById('youNameDisplay');
   if (nm) {
@@ -1513,6 +1514,7 @@ function renderYouPanel() {
   var ap = document.getElementById('youAdminPill'); if (ap) ap.hidden = !isAdm || /admin/.test(profile?.role || '');
   var ft = document.getElementById('youFoot'); if (ft) ft.textContent = 'SamoraOS \u00b7 version ' + APP_VERSION;
   try { refreshInstallStatus(); } catch (e) {}
+  try { _renderRailMe(); _renderYouSetup(); } catch (e) {}
   loadMyAccounts();
 }
 async function loadSamSignals() {
@@ -2101,12 +2103,14 @@ async function refreshYouTabConnections() {
       _youProvider(mine, broken ? 'broken' : 'connected', broken ? 'Reconnect' : (d.demo ? 'Demo' : 'Connected'));
       _youProvider(other, 'other', 'Switch');
       setChip(broken ? 'bad' : 'ok', broken ? 'Reconnect' : pname);
+      _youSetupSet('email', !broken);
     } else {
       if (lbl) { lbl.textContent = 'Not connected'; lbl.setAttribute('data-state', 'idle'); }
       if (sub) sub.textContent = 'Connect your work mailbox to turn on coverage checks, reply tracking, calendar sync and your SAM brief.';
       _youProvider('youGmailBtn', 'idle', 'Connect');
       _youProvider('youOutlookBtn', 'idle', 'Connect');
       setChip('warn', 'Not connected');
+      _youSetupSet('email', false);
     }
     // Also update SAM tab label
     var samLbl = document.getElementById('samGmailLabel'); var samSub = document.getElementById('samGmailSub');
@@ -2125,6 +2129,7 @@ async function refreshYouTabConnections() {
     var nr = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'get_user_connections'}) });
     var nd = await nr.json();
     var ns = document.getElementById('youNotetakerStatus');
+    _youSetupSet('notetaker', !!(nd.connections && nd.connections.length));
     if (ns && nd.connections && nd.connections.length) {
       ns.innerHTML = nd.connections.map(function(c){ return '<span style="color:var(--green)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg> '+esc(c.provider)+(c.provider_email?' ('+esc(c.provider_email)+')':'')+'</span>'; }).join(', ');
     }
@@ -2292,7 +2297,7 @@ setTimeout(function () { if (_isIOS()) _maybeShowInstallBar(); }, 2500);
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', hook); else hook();
 })();
-function _youPushChip(cls, t) { var c = document.getElementById('youPushChip'); if (c) { c.className = 'you-row-v you-chip ' + cls; c.textContent = t; } }
+function _youPushChip(cls, t) { var c = document.getElementById('youPushChip'); if (c) { c.className = 'you-row-v you-chip ' + cls; c.textContent = t; } _youSetupSet('push', cls === 'ok'); }
 async function refreshPushStatus() {
   var statusEl = document.getElementById('youPushStatus');
   var btn = document.getElementById('pushToggleBtn');
@@ -2743,6 +2748,7 @@ async function loadMyAccounts() {
   try {
     // Unified mapping: show accounts where I'm the owner/AE OR the assigned SDR
     const rows = await sbGet('org_accounts?or=(user_id.eq.' + currentUser.id + ',sdr_user_id.eq.' + currentUser.id + ')&org_id=eq.' + profile.org_id + '&select=id,account_name,domain,additional_domains,region,deal_value,deal_value_usd,user_id,sdr_user_id&order=account_name');
+    _youSetupSet('accounts', !!(rows && rows.length));
     if (!rows || !rows.length) { list.innerHTML = '<div style="font-size:12px;color:var(--text3);font-style:italic">No accounts assigned yet.</div>'; return; }
     var _canAssignTeam = ['manager','director','executive','admin','super_admin'].includes(profile?.role);
     list.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:6px">' + rows.map(r => {
@@ -14942,6 +14948,19 @@ function joinOrgCancel() {
 (function () {
   'use strict';
 
+  // The org's own names for roles (org_settings.role_labels, edited in Samora
+  // admin) replace these defaults wherever a role is shown or picked.
+  var ROLE_DEFAULT = { sdr: 'SDR', ae: 'AE', manager: 'Manager', director: 'Director', executive: 'Executive',
+                     member: 'Member (old role)', admin: 'Admin (old role)', super_admin: 'Account owner' };
+  function applyRoleLabels(map) {
+    Object.keys(ROLE_LABEL).forEach(function (k) { delete ROLE_LABEL[k]; });
+    Object.keys(ROLE_DEFAULT).forEach(function (k) { ROLE_LABEL[k] = ROLE_DEFAULT[k]; });
+    if (!map || typeof map !== 'object') return;
+    ['sdr', 'ae', 'manager', 'director', 'executive'].forEach(function (k) {
+      var v = map[k]; if (typeof v === 'string' && v.trim()) ROLE_LABEL[k] = v.trim().slice(0, 40);
+    });
+    if (typeof map.member === 'string' && map.member.trim()) ROLE_LABEL.member = map.member.trim().slice(0, 40) + ' (old role)';
+  }
   var ROLE_LABEL = { sdr: 'SDR', ae: 'AE', manager: 'Manager', director: 'Director', executive: 'Executive',
                      member: 'Member (old role)', admin: 'Admin (old role)', super_admin: 'Account owner' };
   var WHY_LABEL = { self: 'Themselves', org: 'Whole organisation', team: 'In their team', shared: 'Shared', shared_team: 'Shared, with team' };
@@ -14997,6 +15016,7 @@ function joinOrgCancel() {
       return;
     }
     this.data = d;
+    applyRoleLabels(d.role_labels || (this.orgId ? null : (window._orgConfig && window._orgConfig.roleLabels)));
     if (!this.pfDirty) this.profile = null;
     this.byId = {};
     var self = this;
@@ -15595,3 +15615,158 @@ function joinOrgCancel() {
     }
   };
 })();
+
+// ══ Scroll arrows for every sideways strip (2026-10-02) ═══════════════════════
+// A strip that scrolls sideways with a hidden scrollbar gives no clue that more
+// sits off screen. Any strip listed here gets a round arrow on each side that
+// has more to show; it appears only while there is somewhere to go, and a tap
+// moves by most of a screen. Attached by observation, so strips drawn later
+// (Team & access tabs, Pipeline views) are covered without each caller asking.
+(function () {
+  var SEL = '.metric-strip,.cal-strip,.pdt-bar,.sxa-tabs,.today-sections,[data-hscroll]';
+  var MASK = { 'sxa-tabs': 1, 'today-sections': 1, 'cal-strip': 1 };
+  var live = [];
+  function arrow(dir) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'sh-btn sh-' + dir; b.hidden = true; b.tabIndex = -1;
+    b.setAttribute('aria-label', dir === 'l' ? 'Show earlier items' : 'Show more items');
+    b.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + (dir === 'l' ? 'M14.5 6l-6 6 6 6' : 'M9.5 6l6 6-6 6') + '"/></svg>';
+    return b;
+  }
+  function place(el) {
+    var s = el._sh; if (!s) return;
+    if (!el.isConnected || !s.l.isConnected) return;
+    var visible = el.offsetParent !== null && el.clientWidth > 0;
+    var over = visible && el.scrollWidth > el.clientWidth + 4;
+    var atL = el.scrollLeft <= 2, atR = el.scrollLeft + el.clientWidth >= el.scrollWidth - 2;
+    el.classList.toggle('sh-fl', over && !atL);
+    el.classList.toggle('sh-fr', over && !atR);
+    s.l.hidden = !(over && !atL); s.r.hidden = !(over && !atR);
+    if (!over) return;
+    var mid = el.offsetTop + el.offsetHeight / 2;
+    s.l.style.top = s.r.style.top = mid + 'px';
+    s.l.style.left = (el.offsetLeft + 2) + 'px';
+    s.r.style.left = (el.offsetLeft + el.offsetWidth - 30) + 'px';
+  }
+  function attach(el) {
+    if (el._sh && el._sh.l.isConnected) return;
+    var p = el.parentNode; if (!p || p.nodeType !== 1) return;
+    if (getComputedStyle(p).position === 'static') p.style.position = 'relative';
+    var l = arrow('l'), r = arrow('r');
+    p.insertBefore(l, el); p.insertBefore(r, el.nextSibling);
+    el._sh = { l: l, r: r };
+    for (var k in MASK) if (el.classList.contains(k)) el.classList.add('sh-mask');
+    var go = function (dir) { el.scrollBy({ left: dir * Math.max(140, el.clientWidth * 0.7), behavior: 'smooth' }); };
+    l.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); go(-1); });
+    r.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); go(1); });
+    el.addEventListener('scroll', function () { place(el); }, { passive: true });
+    if (window.ResizeObserver) { try { new ResizeObserver(function () { place(el); }).observe(el); } catch (e) {} }
+    live.push(el);
+    // A strip drawn with its selected item off screen scrolls to show it
+    var act = el.querySelector('.on,.active,[aria-selected="true"]');
+    if (act && el.scrollWidth > el.clientWidth + 4) {
+      var er = el.getBoundingClientRect(), ar = act.getBoundingClientRect();
+      if (ar.left < er.left || ar.right > er.right) el.scrollLeft += (ar.left - er.left) - (el.clientWidth - ar.width) / 2;
+    }
+  }
+  var queued = false;
+  function scan() {
+    queued = false;
+    var els = document.querySelectorAll(SEL);
+    for (var i = 0; i < els.length; i++) attach(els[i]);
+    live = live.filter(function (el) { return el.isConnected; });
+    live.forEach(place);
+  }
+  function soon() { if (!queued) { queued = true; setTimeout(scan, 120); } }
+  window._scrollHintsRefresh = soon;
+  function start() {
+    scan();
+    try {
+      new MutationObserver(function (muts) {
+        for (var i = 0; i < muts.length; i++) {
+          var t = muts[i].target;
+          if (t && t.classList && (t.classList.contains('sh-btn') || t.classList.contains('sh-fl') || t.classList.contains('sh-fr'))) continue;
+          soon(); return;
+        }
+      }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+    } catch (e) {}
+    window.addEventListener('resize', soon, { passive: true });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+})();
+
+// ══ Rail identity (desktop) ═══════════════════════════════════════════════════
+// The foot of the rail says who is signed in and to which company, the way
+// Linear, Slack and Notion do, and opens You. It also gives the long empty
+// rail a reason to end where it does.
+function _renderRailMe() {
+  var b = document.getElementById('railMe'); if (!b || !currentUser) return;
+  var full = (currentUser.user_metadata && currentUser.user_metadata.full_name) || (profile && (profile.full_name || profile.name)) || '';
+  var email = currentUser.email || '';
+  if (!full && email) full = email.split('@')[0].replace(/[._-]+/g, ' ').replace(/\d+/g, '').trim().replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+  var w = (full || email).trim().split(/\s+/);
+  var ini = ((w[0] || '')[0] || '') + ((w[1] || '')[0] || (w[0] || '')[1] || '');
+  document.getElementById('railMeAv').textContent = ini.toUpperCase();
+  document.getElementById('railMeName').textContent = full || email;
+  var org = (profile && (profile.org_name || profile.org_code)) || '';
+  var roleKey = profile && profile.role;
+  var labels = (window._orgConfig && window._orgConfig.roleLabels) || {};
+  var role = roleKey ? (labels[roleKey] || roleKey.replace('_', ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); })) : '';
+  document.getElementById('railMeOrg').textContent = [role, org].filter(Boolean).join(' · ');
+  b.title = email;
+  b.hidden = false;
+}
+
+// ══ You: setup checklist (desktop side column) ═════════════════════════════════
+// Five things that decide how much SamoraOS can do for this person. Each line
+// says what is done or the next action, and opens the matching row. Values
+// arrive from the checks the tab already runs; unknown stays neutral.
+var _youSetup = { email: null, push: null, accounts: null, habits: null, notetaker: null };
+function _youSetupSet(k, v) {
+  if (_youSetup[k] === v) return;
+  _youSetup[k] = v;
+  try { _renderYouSetup(); } catch (e) {}
+}
+var _YOU_SETUP = [
+  { k: 'email', acc: 'email', done: 'Mailbox connected', todo: 'Connect your mailbox' },
+  { k: 'accounts', acc: 'accounts', done: 'Accounts assigned to you', todo: 'Add the accounts you work' },
+  { k: 'habits', acc: 'habits', done: 'Daily habits set', todo: 'Set your daily habits' },
+  { k: 'push', acc: 'notifications', done: 'Notifications on here', todo: 'Turn on notifications' },
+  { k: 'notetaker', acc: 'notetaker', done: 'Notetaker connected', todo: 'Connect a notetaker' }
+];
+function _renderYouSetup() {
+  var box = document.getElementById('youSetup'); if (!box) return;
+  if (typeof _userHabits !== 'undefined' && _userHabits !== null) _youSetup.habits = !!(_userHabits && _userHabits.length);
+  var known = _YOU_SETUP.filter(function (s) { return _youSetup[s.k] !== null; });
+  if (_youSetup.email === null) { box.hidden = true; return; }
+  var done = _YOU_SETUP.filter(function (s) { return _youSetup[s.k] === true; }).length;
+  var total = _YOU_SETUP.length, pct = Math.round(done / total * 100);
+  var R = 15, C = 2 * Math.PI * R, off = C * (1 - done / total);
+  var ring = '<svg class="you-setup-ring" width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">' +
+    '<circle cx="20" cy="20" r="' + R + '" fill="none" stroke="currentColor" stroke-opacity=".14" stroke-width="4"/>' +
+    '<circle cx="20" cy="20" r="' + R + '" fill="none" stroke="var(--c-accent)" stroke-width="4" stroke-linecap="round" stroke-dasharray="' + C.toFixed(1) + '" stroke-dashoffset="' + off.toFixed(1) + '" transform="rotate(-90 20 20)"/></svg>';
+  var tick = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+  box.innerHTML =
+    '<div class="you-setup-head">' + ring + '<div><div class="you-setup-t">' + (done === total ? 'You are all set' : 'Your setup') + '</div>' +
+    '<div class="you-setup-s">' + done + ' of ' + total + ' done</div></div></div>' +
+    '<ul class="you-setup-list">' + _YOU_SETUP.map(function (s) {
+      var v = _youSetup[s.k];
+      var st = v === true ? 'ok' : v === false ? 'todo' : 'wait';
+      return '<li><button type="button" class="you-setup-i ' + st + '" onclick="_youGo(\'' + s.acc + '\')">' +
+        '<span class="you-setup-dot">' + (st === 'ok' ? tick : '') + '</span>' +
+        '<span class="you-setup-l">' + (st === 'ok' ? s.done : s.todo) + '</span>' +
+        (st === 'todo' ? '<span class="you-setup-go" aria-hidden="true"></span>' : '') + '</button></li>';
+    }).join('') + '</ul>';
+  box.hidden = false;
+  box.setAttribute('data-pct', pct);
+}
+function _youGo(acc) {
+  var el = document.getElementById('youAcc-' + acc); if (!el) return;
+  if (!el.classList.contains('open')) {
+    var btn = el.querySelector('.you-row');
+    if (btn) btn.click(); else toggleYouAcc(acc);
+  } else {
+    var r = el.getBoundingClientRect();
+    try { window.scrollBy({ top: r.top - 84, behavior: 'smooth' }); } catch (e) { window.scrollBy(0, r.top - 84); }
+  }
+}
