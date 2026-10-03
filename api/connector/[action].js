@@ -39,3 +39,6 @@ export default async function handler(req, res) {
     res.status(err.status === 401 ? 401 : 500).json({ ok: false, error: err.message });
   }
 }
+
+// Scouting ten companies in one call can take a minute or two.
+export const maxDuration = 300;
