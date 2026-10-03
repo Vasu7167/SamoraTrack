@@ -3,7 +3,7 @@ let SB_KEY = localStorage.getItem('dt-sb-key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6I
 let API_KEY = localStorage.getItem('dt-api-key') || '';
 var _userHabits = null;
 // Cache buster — update this string on every deploy to purge stale service worker cache
-var APP_VERSION = '20261002-05';
+var APP_VERSION = '20261003-01';
 (function() {
   if (localStorage.getItem('app-sw-version') !== APP_VERSION && 'serviceWorker' in navigator) {
     navigator.serviceWorker.getRegistrations().then(function(regs) {
@@ -16011,7 +16011,7 @@ function _spNeedsHtml(items) {
     if (n.kind === 'bounces') return li('r', SP_ICON.warn, _spPlural(n.count, 'email') + ' bounced', camp + ' · last 14 days', go(n.campaign_id, 'people', 'Find new addresses', '\'dead\''));
     if (n.kind === 'failed') return li('r', SP_ICON.warn, _spPlural(n.count, 'email') + ' could not be sent', camp, go(n.campaign_id, 'sequence', 'See why'));
     if (n.kind === 'overdue') return li('a', SP_ICON.clock, _spWave(n.stage + 1) + ' is overdue', camp + ' · ' + _spPlural(n.count, 'person', 'people') + (n.since ? ' since ' + _spDate(n.since) : ''), go(n.campaign_id, 'sequence', 'Write it'));
-    if (n.kind === 'linkedin') return li('b', SP_ICON.li, _spPlural(n.count, 'LinkedIn note') + ' written', 'Ready to send when LinkedIn automation arrives', '');
+    if (n.kind === 'linkedin') return li('b', SP_ICON.li, _spPlural(n.count, 'LinkedIn note') + ' written', 'Waiting in the LinkedIn plugin', '');
     return '';
   }).join('');
   return '<div class="sp-lbl">Needs you' + (items.length ? ' · ' + items.length : '') + '</div>' + (html ? '<ul>' + html + '</ul>' : '<div class="sp-small" style="margin-top:10px">Nothing needs you right now. New replies and drafts show up here first.</div>');
@@ -16047,7 +16047,7 @@ function _spRenderToolbar(d) {
   bar.innerHTML =
     '<div class="sp-seg" aria-label="Active or archived"><button type="button" class="' + (v === 'active' ? 'on' : '') + '" onclick="setSampaignView(\'active\')">Active ' + ((d.counts && d.counts.active) || 0) + '</button><button type="button" class="' + (v === 'archived' ? 'on' : '') + '" onclick="setSampaignView(\'archived\')">Archived ' + ((d.counts && d.counts.archived) || 0) + '</button></div>' +
     people +
-    '<div class="sp-seg" aria-label="Channel"><button type="button" class="on">All channels</button><button type="button" disabled title="LinkedIn automation arrives with the Chrome extension">LinkedIn<span class="sp-soon">Soon</span></button></div>' +
+    '<div class="sp-seg" aria-label="Channel"><button type="button" class="' + (window._spChan === 'li' ? '' : 'on') + '" onclick="window._spChan=\'all\';_spRenderToolbar(window._sampList||{});_spRenderRows()">All channels</button><button type="button" class="' + (window._spChan === 'li' ? 'on' : '') + '" onclick="window._spChan=\'li\';_spRenderToolbar(window._sampList||{});_spRenderRows()">With LinkedIn</button></div>' +
     '<input class="sp-search" type="search" id="sampSearch" aria-label="Search SAMpaigns" placeholder="Search a SAMpaign or owner" value="' + esc(window._sampSearch || '') + '" oninput="window._sampSearch=this.value;_spRenderRows()">';
 }
 function _spNextLine(c) {
@@ -16068,7 +16068,8 @@ function _spRenderRows() {
   var el = document.getElementById('sampaignCampaignsList'); var d = window._sampList; if (!el || !d) return;
   var q = String(window._sampSearch || '').trim().toLowerCase();
   var all = (d.campaigns || []).filter(function (c) { return _sampaignOwnerAdmits(c.owner_user_id); })
-    .filter(function (c) { return !q || (c.name + ' ' + (c.owner_email || '') + ' ' + (c.focus || '')).toLowerCase().indexOf(q) !== -1; });
+    .filter(function (c) { return !q || (c.name + ' ' + (c.owner_email || '') + ' ' + (c.focus || '')).toLowerCase().indexOf(q) !== -1; })
+    .filter(function (c) { return window._spChan !== 'li' || !!(c.channels && c.channels.linkedin && c.channels.linkedin.on); });
   if (!all.length) {
     var why = window._sampaignView === 'archived' ? 'Nothing archived here.' : q ? 'No SAMpaign matches "' + esc(q) + '".' : (window._sampaignOwnerFilter === 'mine' ? 'You have no live SAMpaigns yet.' : 'No live SAMpaigns yet.');
     el.innerHTML = '<div class="sp-card sp-empty">' + why + (window._sampaignView !== 'archived' ? '<div style="margin-top:12px"><button class="g-btn sp-gold" type="button" onclick="toggleNewSampaignForm()">' + SP_ICON.plus + ' New SAMpaign</button></div>' : '') + '</div>';
@@ -16091,7 +16092,7 @@ function _spRenderRows() {
     return '<div class="sp-row" role="link" tabindex="0" onclick="openSampaignDetail(\'' + esc(c.id) + '\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();openSampaignDetail(\'' + esc(c.id) + '\')}">' +
       '<div><div class="sp-cn">' + esc(c.name) + '</div>' +
         '<div class="sp-cm"><span class="sp-av">' + esc(_spIni(c.owner_email)) + '</span>' + esc(owner) + (c.is_owner ? '' : ' · view only') + ' · ' + (c.scope === 'list' ? 'a list of companies' : 'one account') + (c.focus ? ' · ' + esc(c.focus) : '') + '</div>' +
-        '<div class="sp-chips"><span class="sp-chip ' + (c.paused ? 'warn' : 'live') + '"><i></i>Email</span><span class="sp-chip soon">LinkedIn soon</span>' + flags.join('') + '</div></div>' +
+        '<div class="sp-chips"><span class="sp-chip ' + (c.paused ? 'warn' : 'live') + '"><i></i>Email</span>' + (c.channels && c.channels.linkedin && c.channels.linkedin.on ? '<span class="sp-chip li"><i></i>LinkedIn</span>' : '') + flags.join('') + '</div></div>' +
       '<div><div class="sp-fun" aria-hidden="true"><span class="sp-f1" style="width:' + w(interested) + '"></span><span class="sp-f2" style="width:' + w(Math.max(0, replied - interested)) + '"></span><span class="sp-f3" style="width:' + w(Math.max(0, (s.sent || 0) - replied)) + '"></span></div>' +
         '<div class="sp-fl"><span><b>' + (s.sent || 0) + '</b> of ' + tot + ' reached</span><span><b>' + replied + '</b> replied</span><span class="sp-g"><b class="sp-g">' + interested + '</b> interested</span>' + (s.meetings ? '<span><b>' + s.meetings + '</b> ' + (s.meetings === 1 ? 'meeting' : 'meetings') + '</span>' : '') + '</div></div>' +
       '<div class="sp-rate"><div class="n ' + tone + '">' + (rate === null ? 'n/a' : rate + '%') + '</div><small>' + note + '</small></div>' +
@@ -16229,13 +16230,13 @@ function _spOverviewHtml(id, o) {
     if (w.draft) line = _spPlural(w.draft, 'draft') + ' ready for review';
     else if (w.pending) line = (line ? line + ' · ' : '') + w.pending + ' scheduled from ' + _spDate(w.next_send, true);
     else if (!w.sent) line = w.planned_date ? 'Planned for ' + _spDate(w.planned_date) + (w.ready ? ' · ' + w.ready + ' ready' : '') : (w.ready ? w.ready + ' ready to write' : 'Not started');
-    return '<div class="sp-tli ' + cls + '">' + esc(w.label) + '<small>' + esc(line) + '</small></div>' + (w.launch === 1 ? '<div class="sp-tli soon">LinkedIn invite with a note<small>Arrives with the Chrome extension' + (li.notes ? ' · ' + li.notes + ' notes written' : '') + '</small></div>' : '');
+    return '<div class="sp-tli ' + cls + '">' + esc(w.label) + '<small>' + esc(line) + '</small></div>' + (w.launch === 1 ? (li.status === 'live' ? '<div class="sp-tli li">LinkedIn invite with a note<small>' + (li.invited || 0) + ' invited · ' + (li.connected || 0) + ' accepted · ' + (li.replied || 0) + ' replied</small></div>' : '<div class="sp-tli soon">LinkedIn steps<small>Off for this SAMpaign' + (li.notes ? ' · ' + li.notes + ' notes written' : '') + '</small></div>') : '');
   }).join('');
   return '<div class="sp-ov"><div class="sp-col">' +
     '<section class="sp-card sp-pad sp-take"><div class="sp-lbl">SAM\'s take</div>' + take + '<div class="sp-small">From ' + _spPlural(c.sent, 'email') + ' sent and ' + _spPlural(c.replied, 'reply', 'replies') + ', as of ' + _spDate(o.as_of, true) + '.</div></section>' +
     '<section class="sp-card sp-pad"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><div class="sp-lbl">Outcome by channel</div><span class="sp-small">A reply on any channel stops the rest for that person</span></div>' +
       '<div class="sp-track"><div class="sp-tk" style="color:var(--c-accent-text)">' + SP_ICON.mail + '<span style="color:var(--text)">Email</span></div>' + tile(c.sent, 'reached of ' + c.total) + tile('<span class="sp-g">' + c.replied + '</span>', 'replied', conv(c.replied, c.delivered)) + tile('<span class="sp-g">' + c.by_type.interested + '</span>', 'interested', conv(c.by_type.interested, c.replied)) + tile(c.meetings, c.meetings === 1 ? 'meeting booked' : 'meetings booked', conv(c.meetings, c.by_type.interested)) + '</div>' +
-      '<div class="sp-track"><div class="sp-tk" style="color:var(--c-info)">' + SP_ICON.li + '<span style="color:var(--text)">LinkedIn</span><span class="sp-soon">Soon</span></div>' + tile(li.notes || 0, 'notes written') + tile(li.invited || 0, 'invited', '', 'dim') + tile(li.connected || 0, 'connected', '', 'dim') + tile(li.replied || 0, 'replied', '', 'dim') + '</div>' +
+      '<div class="sp-track"><div class="sp-tk" style="color:var(--c-info)">' + SP_ICON.li + '<span style="color:var(--text)">LinkedIn</span>' + (li.status === 'live' ? '' : '<span class="sp-soon">Off</span>') + '</div>' + tile(li.notes || 0, 'notes written') + tile(li.invited || 0, 'invited', '', li.status === 'live' ? '' : 'dim') + tile(li.connected || 0, 'accepted', '', li.status === 'live' ? '' : 'dim') + tile(li.replied || 0, 'replied', '', li.status === 'live' ? '' : 'dim') + '</div>' +
     '</section>' +
     '<section class="sp-card sp-pad"><div class="sp-lbl">Act now' + ((o.act_now || []).length ? ' · ' + o.act_now.length : '') + '</div>' + (act || '<p class="sp-small" style="margin:10px 0 0">No replies waiting on you.</p>') + '</section>' +
   '</div><div class="sp-col">' +
@@ -16304,7 +16305,7 @@ function setSampaignStatusFilter(campaignId, status) {
 }
 
 // Sequence: what each email did, what is next, and the mailbox calendar
-function _spRenderSeqTop(id) {
+function _spRenderSeqTopBase(id) {
   var box = document.getElementById('sampSeqTop_' + id); if (!box) return;
   var o = (window._sampOv || {})[id];
   if (!o || !o.ok) { box.innerHTML = ''; return; }
@@ -16328,7 +16329,7 @@ function _spRenderSeqTop(id) {
     var row = '<div class="sp-step"><span class="sp-sn">' + SP_ICON.mail + '</span><div><div class="sp-sh">' + esc(w.label) + (w.draft ? ' <span class="sp-chip warn">' + w.draft + ' to review</span>' : '') + (w.launch > 1 ? ' <span class="sp-small">· same thread</span>' : '') + '</div>' +
       '<div class="sp-sm2">' + esc(bits.join(' · ') || (w.ready ? w.ready + ' ready to write' : 'Nobody is waiting for this email yet')) + '</div>' +
       (w.sent ? '<div class="sp-rb"><span style="width:' + share + '%"></span></div><div class="sp-sm2">' + share + '% of replies</div>' : '') + '</div><div class="sp-acts">' + acts + '</div></div>';
-    if (w.launch === 1) row += '<div class="sp-step"><span class="sp-sn li">' + SP_ICON.li + '</span><div><div class="sp-sh">LinkedIn invite with a note <span class="sp-soon">Soon</span></div><div class="sp-sm2">For people with no email reply' + (li.notes ? ' · ' + li.notes + ' notes written' : ' · write notes in People') + '</div></div><div></div></div>';
+    if (w.launch === 1) row += '<div id="spLiSteps_' + esc(id) + '"></div>';
     return row;
   }).join('');
   var cal = o.calendar || { days: [], cap: 25 };
@@ -16338,8 +16339,8 @@ function _spRenderSeqTop(id) {
     var lbl = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.dow] || '';
     return '<div class="sp-cb" title="' + esc(_spDate(d.date) + ': ' + d.mine + ' from this SAMpaign, ' + other + ' from others') + '"><div class="bars"><span class="o" style="height:' + Math.round(other / maxV * 100) + '%"></span><span class="m" style="height:' + Math.round(d.mine / maxV * 100) + '%"></span></div><small>' + lbl + '</small></div>';
   }).join('');
-  box.innerHTML = '<div class="sp-wv"><section class="sp-card"><div class="sp-pad" style="padding-bottom:6px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><div class="sp-lbl">Sequence · email live, LinkedIn soon</div>' + (owner ? '<button class="g-btn sp-sm sp-ghost" type="button" onclick="sampOpenEdit(\'' + esc(id) + '\')">' + SP_ICON.plus + ' Add a follow-up</button>' : '') + '</div>' + steps + '</section>' +
-    '<div class="sp-col"><section class="sp-card sp-pad"><div class="sp-lbl">Sends from this mailbox, next 10 weekdays</div><div class="sp-cal"><div class="sp-cap" style="bottom:' + Math.round(cal.cap / maxV * 100) + '%"><b>Limit ' + cal.cap + '</b></div>' + bars + '</div>' +
+  box.innerHTML = '<div class="sp-wv"><section class="sp-card"><div class="sp-pad" style="padding-bottom:6px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><div class="sp-lbl">Sequence · email and LinkedIn</div>' + (owner ? '<button class="g-btn sp-sm sp-ghost" type="button" onclick="sampOpenEdit(\'' + esc(id) + '\')">' + SP_ICON.plus + ' Add a follow-up</button>' : '') + '</div>' + steps + '</section>' +
+    '<div class="sp-col"><div id="spLiSender_' + esc(id) + '"></div><section class="sp-card sp-pad"><div class="sp-lbl">Sends from this mailbox, next 10 weekdays</div><div class="sp-cal"><div class="sp-cap" style="bottom:' + Math.round(cal.cap / maxV * 100) + '%"><b>Limit ' + cal.cap + '</b></div>' + bars + '</div>' +
       '<div class="sp-small" style="margin-top:10px">Gold is this SAMpaign, pale is the owner\'s other SAMpaigns. A full day pushes emails to the next free day.</div></section>' +
       '<section class="sp-card sp-pad"><div class="sp-lbl">Rules</div>' +
         '<div class="sp-rule" style="margin-top:6px"><span>Stop for anyone who replies, bounces or opts out, on every channel</span><span class="sp-on">Always on</span></div>' +
@@ -16611,10 +16612,10 @@ function _spWizRender() {
       '<label class="sp-fld" style="max-width:240px">First email goes out<input id="spw_start" type="date" value="' + esc(W.start) + '" onchange="_spWizSave();_spWizRender()"></label>' +
       '<div class="sp-seq">' +
         '<div class="sp-sq"><span class="sp-sn" style="width:40px;height:40px">' + SP_ICON.mail + '</span><div><b>Email</b> · first touch<div class="sp-sm2">Personal, short, one ask</div></div><span class="sp-small sp-dayin">Day 0</span><span class="sp-small sp-date">' + esc(_spDate(W.start)) + '</span><span></span></div>' +
-        '<div class="sp-sq dim"><span class="sp-sn li" style="width:40px;height:40px">' + SP_ICON.li + '</span><div><b>LinkedIn</b> · invite with a note <span class="sp-soon">Soon</span><div class="sp-sm2"><label style="display:inline-flex;gap:6px;align-items:center"><input id="spw_li" type="checkbox"' + (W.li ? ' checked' : '') + '> Plan it, so notes can be written now</label></div></div><span class="sp-small sp-dayin">Day 1</span><span class="sp-small sp-date">sent when automation arrives</span><span></span></div>' +
+        '<div class="sp-sq' + (W.li ? '' : ' dim') + '"><span class="sp-sn li" style="width:40px;height:40px">' + SP_ICON.li + '</span><div><b>LinkedIn</b> · profile visit, invite with a note, message once they accept<div class="sp-sm2"><label style="display:inline-flex;gap:6px;align-items:center"><input id="spw_li" type="checkbox"' + (W.li ? ' checked' : '') + ' onchange="_spWizSave();_spWizRender()"> Add LinkedIn steps. SAM writes the notes; they run from the Samora Chrome plugin</label></div></div><span class="sp-small sp-dayin">Day 1 to 2</span><span class="sp-small sp-date">' + (_liExtVersion() ? 'plugin installed' : 'needs the plugin') + '</span><span></span></div>' +
         W.ups.map(function (n, i) { return '<div class="sp-sq"><span class="sp-sn" style="width:40px;height:40px">' + SP_ICON.mail + '</span><div><b>Email</b> · follow-up ' + (i + 1) + (i === W.ups.length - 1 ? ', the last' : '') + '<div class="sp-sm2">' + (i === W.ups.length - 1 ? 'A short close: right person, or not now' : 'Same thread, adds a new reason') + '</div></div><label class="sp-dayin" style="display:flex;align-items:center;gap:6px"><span class="sp-small">Day</span><input type="number" min="1" max="60" value="' + n + '" data-spw-up="' + i + '" onchange="_spWizSave();_spWizRender()" aria-label="Working days after the first email"></label><span class="sp-small sp-date">' + esc(_spDate(dates[i])) + '</span><button class="sp-x" type="button" aria-label="Remove follow-up ' + (i + 1) + '" onclick="_spWizSave();window._sampW.ups.splice(' + i + ',1);_spWizRender()">' + SP_ICON.x + '</button></div>'; }).join('') +
       '</div>' +
-      (W.ups.length < 5 ? '<div class="sp-acts" style="margin-top:12px"><button class="g-btn sp-sm" type="button" onclick="_spWizSave();var u=window._sampW.ups;u.push((u[u.length-1]||0)+5);_spWizRender()">' + SP_ICON.plus + ' Email follow-up</button><button class="g-btn sp-sm" type="button" disabled>' + SP_ICON.plus + ' LinkedIn step, soon</button></div>' : '');
+      (W.ups.length < 5 ? '<div class="sp-acts" style="margin-top:12px"><button class="g-btn sp-sm" type="button" onclick="_spWizSave();var u=window._sampW.ups;u.push((u[u.length-1]||0)+5);_spWizRender()">' + SP_ICON.plus + ' Email follow-up</button></div>' : '');
   } else {
     var ppl = _spWizParsePeople(W.people).rows;
     var withEmail = ppl.filter(function (p) { return p.email; }).length;
@@ -16626,7 +16627,7 @@ function _spWizRender() {
       '<div><span class="sp-lbl">First email</span><b>' + esc(_spDate(W.start)) + '</b><span class="sp-small">last follow-up ' + esc(_spDate(dates2[dates2.length - 1] || W.start)) + '</span></div></div>' +
       '<div class="sp-sum" style="margin-top:12px"><div><span class="sp-lbl">Goal</span><b style="font-size:16px">' + esc(W.target ? W.target + ' ' : '') + ({ meetings: 'meetings booked', interested: 'interested replies', replies: 'replies' })[W.metric] + '</b></div>' +
       '<div><span class="sp-lbl">Mailbox</span><b style="font-size:16px">Yours</b><span class="sp-small">sends are spread to protect it</span></div>' +
-      '<div><span class="sp-lbl">LinkedIn</span><b style="font-size:16px">' + (W.li ? 'Planned' : 'Off') + '</b><span class="sp-small">sends when automation arrives</span></div></div>' +
+      '<div><span class="sp-lbl">LinkedIn</span><b style="font-size:16px">' + (W.li ? 'On' : 'Off') + '</b><span class="sp-small">' + (W.li ? 'visit, invite with a note, message after they accept' : 'email only') + '</span></div></div>' +
       '<label class="sp-check"><input id="spw_writeNow" type="checkbox"' + (W.writeNow ? ' checked' : '') + '><span>Have SAM write the first emails right after creating' + (W.csv || withEmail ? '' : ' (once people with emails are added)') + '. You review and edit every one; nothing sends until you press Schedule.</span></label>';
   }
   page.innerHTML = '<div class="sp-wiz"><button class="sp-back" type="button" onclick="sampBackToList()">' + SP_ICON.back + 'All SAMpaigns</button>' +
@@ -16665,6 +16666,7 @@ async function _spWizCreate() {
     if (!d.ok || !d.campaign) { showToast(d.error || 'Could not create the SAMpaign'); return; }
     var id = d.campaign.id, name = d.campaign.name;
     try { await _syncSampaignFupTasks(id, name, [], dates); } catch (e) {}
+    if (W.li) { try { await _sampEdge('set_sampaign_linkedin', { campaign_id: id, on: true }); } catch (e) {} }
     var pp = _spWizParsePeople(W.people).rows;
     if (pp.length) {
       var up = await _sampEdge('upload_sampaign_contacts', { campaign_id: id, contacts: pp });
@@ -16683,4 +16685,239 @@ async function _spWizCreate() {
     }
   } catch (e) { showToast('Error: ' + e.message); }
   finally { window._spCreating = false; if (btn) { btn.disabled = false; btn.textContent = 'Create SAMpaign'; } }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Samora for LinkedIn in SamoraOS (2026-10-03)
+// One-click connect for the Chrome plugin, the LinkedIn plugin row in You, and
+// LinkedIn steps inside each SAMpaign's Sequence: a profile visit, an invite
+// with a note SAM writes, and a message once they accept.
+// ════════════════════════════════════════════════════════════════════════════
+var LI_STORE_URL = window.SAMORA_LI_STORE_URL || '';
+var LI_ZIP_URL = '/downloads/samora-for-linkedin.zip';
+var LI_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="M8 10.5V16M8 7.8v.2M11.5 16v-3.2a2.3 2.3 0 014.6 0V16M11.5 10.5V16"/></svg>';
+window._liExt = null;
+function _liExtVersion() { return document.documentElement.getAttribute('data-samora-ext') || (window._liExt && window._liExt.version) || null; }
+window.addEventListener('message', function (ev) {
+  if (ev.source !== window || ev.origin !== location.origin) return;
+  var d = ev.data;
+  if (!d || d.source !== 'samora-ext') return;
+  if (d.type === 'samora:hello') { window._liExt = d; try { _liRefreshChip(); } catch (e) {} }
+  if (d.type === 'samora:paired' && typeof window._liPairWait === 'function') window._liPairWait(d);
+});
+function _liPing() { try { window.postMessage({ source: 'samora-app', type: 'samora:ping' }, location.origin); } catch (e) {} }
+function _liWaitExt(ms) {
+  return new Promise(function (res) {
+    if (_liExtVersion()) return res(true);
+    _liPing();
+    var t0 = Date.now();
+    var iv = setInterval(function () { if (_liExtVersion()) { clearInterval(iv); res(true); } else if (Date.now() - t0 > ms) { clearInterval(iv); res(false); } }, 150);
+  });
+}
+
+// ── Connect sheet ───────────────────────────────────────────────────────────
+function _liSheet(html) {
+  var m = document.getElementById('liSheet');
+  if (!m) {
+    m = document.createElement('div'); m.className = 'sp-modal'; m.id = 'liSheet';
+    m.addEventListener('click', function (e) { if (e.target === m) m.remove(); });
+    document.body.appendChild(m);
+  }
+  m.innerHTML = '<div class="sp-mcard li-sheet" role="dialog" aria-modal="true" aria-label="Samora for LinkedIn">' + html + '</div>';
+  return m;
+}
+function _liClose() { var m = document.getElementById('liSheet'); if (m) m.remove(); }
+function _liInstallHtml(extra) {
+  var store = LI_STORE_URL
+    ? '<a class="g-btn sp-gold" href="' + esc(LI_STORE_URL) + '" target="_blank" rel="noopener">Add to Chrome</a>'
+    : '';
+  return '<div class="li-hd"><span class="li-mk">S</span><div><h3>Get Samora for LinkedIn</h3><p class="sp-muted">Runs the LinkedIn steps of your SAMpaigns from Chrome on this computer.</p></div></div>' +
+    (extra ? '<div class="li-note">' + extra + '</div>' : '') +
+    (store ? '<div class="li-store">' + store + '<span class="sp-small">From the Chrome Web Store. Updates itself.</span></div><div class="li-or">or install it from a file</div>' : '') +
+    '<ol class="li-steps">' +
+      '<li><b>Download</b> the plugin and unzip it. <a class="g-btn sp-sm' + (store ? '' : ' sp-gold') + '" href="' + LI_ZIP_URL + '" download>Download</a></li>' +
+      '<li>Open <b>chrome://extensions</b> in a new tab and switch on <b>Developer mode</b>, top right.</li>' +
+      '<li>Press <b>Load unpacked</b> and choose the unzipped folder. Samora opens this page again and connects by itself.</li>' +
+    '</ol>' +
+    '<div class="sp-foot"><span class="sp-small">Already installed? Reload this page.</span><span class="sp-acts"><button class="g-btn" type="button" onclick="_liClose()">Close</button><button class="g-btn" type="button" onclick="location.reload()">Reload</button></span></div>';
+}
+async function liConnect(auto) {
+  if (!currentUser || !currentUser.token) return;
+  var has = await _liWaitExt(auto ? 2500 : 1200);
+  if (!has) { _liSheet(_liInstallHtml()); return; }
+  _liSheet('<div class="li-hd"><span class="li-mk">S</span><div><h3>Connecting this Chrome</h3><p class="sp-muted">One moment…</p></div></div>');
+  var c = await _sampEdge('create_linkedin_pair_code', {});
+  if (!c.ok || !c.code) { _liSheet('<h3>Could not connect</h3><p class="sp-muted">' + esc(c.error || 'Try again in a moment.') + '</p><div class="sp-foot"><span></span><button class="g-btn" type="button" onclick="_liClose()">Close</button></div>'); return; }
+  var done = false;
+  window._liPairWait = function (d) {
+    if (done) return; done = true; window._liPairWait = null;
+    if (d.ok) {
+      _liSheet('<div class="li-hd"><span class="li-ok">✓</span><div><h3>Connected</h3><p class="sp-muted">Samora for LinkedIn is linked to ' + esc(d.user_email || currentUser.email || 'your account') + '. Finish the last step in the Samora panel on LinkedIn: choose Co-pilot or Autopilot.</p></div></div>' +
+        '<div class="sp-foot"><button class="g-btn" type="button" onclick="_liClose()">Close</button><a class="g-btn sp-gold" href="https://www.linkedin.com/feed/" target="_blank" rel="noopener" onclick="_liClose()">Open LinkedIn</a></div>');
+      try { _liRefreshChip(); _liRenderYou(); } catch (e) {}
+    } else {
+      _liSheet('<h3>' + (/already connected/i.test(d.error || '') ? 'Confirm in the Samora panel' : 'Could not connect') + '</h3><p class="sp-muted">' + esc(d.error || 'Pairing failed.') + '</p><div class="sp-foot"><span></span><button class="g-btn" type="button" onclick="_liClose()">Close</button></div>');
+    }
+  };
+  window.postMessage({ source: 'samora-app', type: 'samora:pair-code', code: c.code }, location.origin);
+  setTimeout(function () {
+    if (done) return; done = true; window._liPairWait = null;
+    _liSheet('<h3>The plugin did not answer</h3><p class="sp-muted">Reload this page and try again. If it keeps happening, use a code: open the Samora panel on LinkedIn and type <b class="li-code">' + esc(c.code) + '</b> (valid for 10 minutes).</p><div class="sp-foot"><span></span><button class="g-btn" type="button" onclick="_liClose()">Close</button></div>');
+  }, 10000);
+}
+async function liShowCode() {
+  var c = await _sampEdge('create_linkedin_pair_code', {});
+  if (!c.ok) { showToast(c.error || 'Could not make a code'); return; }
+  _liSheet('<h3>Pairing code</h3><p class="sp-muted">In the Samora panel on LinkedIn, press <b>Use a code instead</b> and type:</p><div class="li-code-big">' + esc(c.code) + '</div><p class="sp-small">Works once, for 10 minutes.</p><div class="sp-foot"><span></span><button class="g-btn" type="button" onclick="_liClose()">Done</button></div>');
+}
+
+// Arriving with ?connect=linkedin (the plugin opens this right after install)
+// or ?sampaign=<id>&tab=<tab> (links from the plugin panel).
+function _liHandleUrl() {
+  var q = new URLSearchParams(location.search);
+  var did = false;
+  if (q.get('connect') === 'linkedin') { did = true; setTimeout(function () { liConnect(true); }, 300); }
+  var sid = q.get('sampaign');
+  if (sid && /^[0-9a-f-]{36}$/i.test(sid)) {
+    did = true;
+    setTimeout(function () { try { switchTab('sampaign'); setTimeout(function () { openSampaignDetail(sid, q.get('tab') || 'overview'); }, 600); } catch (e) {} }, 300);
+  }
+  if (did) { try { history.replaceState(null, '', location.pathname); } catch (e) {} }
+}
+var _liLaunchBase = launchApp;
+launchApp = function () {
+  var r = _liLaunchBase.apply(this, arguments);
+  setTimeout(function () { try { _liHandleUrl(); } catch (e) {} }, 900);
+  return r;
+};
+
+// ── You: the LinkedIn plugin row ────────────────────────────────────────────
+var _liRenderYouPanelBase = renderYouPanel;
+renderYouPanel = function () { var r = _liRenderYouPanelBase.apply(this, arguments); try { _liRefreshChip(); } catch (e) {} return r; };
+async function _liStatus(force) {
+  if (!force && window._liStatusCache && Date.now() - window._liStatusCache.at < 30000) return window._liStatusCache.d;
+  var d = await _sampEdge('get_linkedin_status', {});
+  window._liStatusCache = { at: Date.now(), d: d };
+  return d;
+}
+async function _liRefreshChip() {
+  var chip = document.getElementById('youLiChip'); if (!chip || !currentUser || !currentUser.token) return;
+  var d = await _liStatus();
+  var dev = d && d.ok && d.devices && d.devices[0];
+  chip.textContent = dev ? (dev.online ? 'Connected' : 'Connected, offline') : (_liExtVersion() ? 'Not connected' : 'Not installed');
+}
+function _liAgo(iso) { if (!iso) return 'never'; var m = Math.round((Date.now() - Date.parse(iso)) / 60000); return m < 2 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' d ago'; }
+function _liHour(h) { var hh = ((h + 11) % 12) + 1; return hh + (h < 12 || h === 24 ? ' am' : ' pm'); }
+async function _liRenderYou() {
+  var box = document.getElementById('youLiBody'); if (!box) return;
+  box.innerHTML = '<div class="sp-small">Checking…</div>';
+  var d = await _liStatus(true);
+  var ext = _liExtVersion();
+  if (!d || !d.ok) { box.innerHTML = '<div class="sp-small">' + esc((d && d.error) || 'Could not load.') + '</div>'; return; }
+  var devs = d.devices || [];
+  var head = devs.length
+    ? devs.map(function (v) {
+        return '<div class="li-dev"><span class="li-dot ' + (v.online ? 'on' : '') + '"></span><div><b>' + esc(v.label || 'Chrome') + '</b><small>' + (v.online ? 'Online now' : 'Last seen ' + _liAgo(v.last_seen_at)) + (v.linkedin_name ? ' · LinkedIn: ' + esc(v.linkedin_name) : '') + (v.version ? ' · v' + esc(v.version) : '') + '</small></div></div>';
+      }).join('') +
+      '<div class="li-meta"><span><b>' + (d.mode === 'autopilot' ? 'Autopilot' : 'Co-pilot') + '</b> mode</span><span>' + (d.today.invites || 0) + ' of ' + d.limit + ' invites today</span><span>' + _liHour(d.window.start) + ' to ' + _liHour(d.window.end) + (d.window.skip_weekends ? ', weekdays' : ', every day') + '</span>' + (d.queued ? '<span>' + d.queued + ' queued</span>' : '') + '</div>' +
+      (d.paused_until ? '<div class="li-note">Paused until ' + esc(new Date(d.paused_until).toLocaleString()) + ' because LinkedIn showed a warning.</div>' : '')
+    : '<div class="you-conn"><div class="you-conn-state">' + (ext ? 'Installed, not connected' : 'Not installed') + '</div><div class="you-conn-sub">Samora for LinkedIn runs the LinkedIn steps of your SAMpaigns from Chrome: profile visits, invites with a note, and a message once they accept. Mode, hours and limits are set in the plugin.</div></div>';
+  var btns = ext
+    ? '<button class="g-btn' + (devs.length ? '' : ' sp-gold') + '" type="button" onclick="liConnect(false)">' + (devs.length ? 'Reconnect this Chrome' : 'Connect this Chrome') + '</button>'
+    : '<button class="g-btn sp-gold" type="button" onclick="_liSheet(_liInstallHtml())">Get the plugin</button>';
+  box.innerHTML = '<div class="admin-card" style="margin-bottom:0">' + head + '<div class="li-btns">' + btns + '<button class="g-btn sp-ghost" type="button" onclick="liShowCode()">Show a code</button></div><div class="you-fine">Settings live in the plugin: the gear in the Samora panel on LinkedIn.</div></div>';
+}
+
+// ── SAMpaign Sequence: LinkedIn steps ───────────────────────────────────────
+function _spRenderSeqTop(id) {
+  _spRenderSeqTopBase(id);
+  _spLiDecorate(id);
+}
+async function _spLiDecorate(id, force) {
+  var steps = document.getElementById('spLiSteps_' + id), side = document.getElementById('spLiSender_' + id);
+  if (!steps && !side) return;
+  var cache = window._spLiCache = window._spLiCache || {};
+  var d = cache[id];
+  if (!d || force || Date.now() - d._at > 20000) {
+    d = await _sampEdge('get_sampaign_linkedin', { campaign_id: id });
+    d._at = Date.now(); cache[id] = d;
+  }
+  steps = document.getElementById('spLiSteps_' + id); side = document.getElementById('spLiSender_' + id);
+  if (!d.ok) { if (steps) steps.innerHTML = ''; if (side) side.innerHTML = ''; return; }
+  var owner = d.is_owner, cfg = d.config, s = d.steps;
+  var act = function (h) { return owner ? h : ''; };
+  var html = '';
+  if (cfg.on) {
+    var accRate = s.invite.done ? Math.round(s.invite.accepted / s.invite.done * 100) : 0;
+    if (cfg.visit) html += '<div class="sp-step"><span class="sp-sn li">' + LI_ICON + '</span><div><div class="sp-sh">Profile visit <span class="sp-small">· day 1</span></div><div class="sp-sm2">No note. Your name shows in their viewers before the invite lands' + (s.visit.done || s.visit.queued ? ' · ' + s.visit.done + ' viewed' + (s.visit.queued ? ', ' + s.visit.queued + ' queued' : '') : '') + '</div></div><div class="sp-acts">' + act('<button class="g-btn sp-sm" type="button" onclick="spLiEdit(\'' + esc(id) + '\')">Edit</button>') + '</div></div>';
+    html += '<div class="sp-step"><span class="sp-sn li">' + LI_ICON + '</span><div><div class="sp-sh">LinkedIn invite with a note <span class="sp-small">· day ' + cfg.invite_day + '</span>' + (s.invite.needs_note ? ' <span class="sp-chip warn">' + s.invite.needs_note + ' need a note</span>' : '') + '</div>' +
+      '<div class="sp-sm2">' + (s.invite.done ? s.invite.done + ' invited · ' + s.invite.accepted + ' accepted' : 'SAM writes each note from the first email, under 300 characters') + (s.invite.queued ? ' · ' + s.invite.queued + ' queued' : '') + '</div>' +
+      (s.invite.done ? '<div class="sp-rb li"><span style="width:' + accRate + '%"></span></div><div class="sp-sm2">' + accRate + '% accepted</div>' : '') + '</div>' +
+      '<div class="sp-acts">' + act(s.invite.needs_note ? '<button class="g-btn sp-sm sp-gold" type="button" onclick="spLiWrite(\'' + esc(id) + '\',\'invite\')">' + SP_ICON.spark + ' Write ' + s.invite.needs_note + ' with SAM</button>' : '<button class="g-btn sp-sm" type="button" onclick="spLiEdit(\'' + esc(id) + '\')">Edit</button>') + '</div></div>';
+    if (cfg.message) html += '<div class="sp-step"><span class="sp-sn li">' + LI_ICON + '</span><div><div class="sp-sh">LinkedIn message <span class="sp-small">· ' + (cfg.message_after_days ? cfg.message_after_days + ' working day' + (cfg.message_after_days > 1 ? 's' : '') + ' after they accept' : 'as soon as they accept') + '</span>' + (s.message.needs_text ? ' <span class="sp-chip warn">' + s.message.needs_text + ' to write</span>' : '') + '</div>' +
+      '<div class="sp-sm2">' + (s.message.done ? s.message.done + ' sent · ' + s.message.replied + ' replied on LinkedIn' : 'Builds on the invite note. Skipped for anyone who replied by email') + (s.message.queued ? ' · ' + s.message.queued + ' queued' : '') + '</div></div>' +
+      '<div class="sp-acts">' + act(s.message.needs_text ? '<button class="g-btn sp-sm sp-gold" type="button" onclick="spLiWrite(\'' + esc(id) + '\',\'message\')">' + SP_ICON.spark + ' Write ' + s.message.needs_text + ' with SAM</button>' : '') + '</div></div>';
+    if (d.people.no_profile) html += '<div class="sp-step li-gap"><span></span><div class="sp-sm2">' + d.people.no_profile + ' ' + (d.people.no_profile === 1 ? 'person has' : 'people have') + ' no LinkedIn profile, so they get email only. <button class="sp-lnk" type="button" onclick="setSampTab(\'' + esc(id) + '\',\'people\')">Add profiles in People</button></div><span></span></div>';
+  } else {
+    html = '<div class="sp-step"><span class="sp-sn li">' + LI_ICON + '</span><div><div class="sp-sh">LinkedIn <span class="sp-chip">Off</span></div><div class="sp-sm2">Add a profile visit, an invite with a note and a message after they accept. They run from the Samora Chrome plugin, and a reply on either channel stops the rest.</div></div>' +
+      '<div class="sp-acts">' + act('<button class="g-btn sp-sm sp-gold" type="button" onclick="spLiEdit(\'' + esc(id) + '\',true)">Add LinkedIn steps</button>') + '</div></div>';
+  }
+  if (steps) steps.innerHTML = html;
+  if (side) {
+    var snd = d.sender || {}, dev = snd.device;
+    var lim = snd.limit || 10, inv = (snd.today && snd.today.invites) || 0, pct = Math.min(100, Math.round(inv / Math.max(1, lim) * 100));
+    side.innerHTML = '<section class="sp-card sp-pad li-sender"><div class="sp-lbl">LinkedIn sender</div>' +
+      (dev
+        ? '<div class="li-sr"><div class="li-ring" style="background:conic-gradient(var(--c-accent) 0 ' + pct + '%,var(--g-line) ' + pct + '% 100%)"><div>' + inv + '/' + lim + '</div></div><div><b><span class="li-dot ' + (dev.online ? 'on' : '') + '"></span>' + esc(dev.label || 'Chrome') + ' · ' + (dev.online ? 'online' : 'offline') + '</b><div class="sp-small">' + (snd.mode === 'autopilot' ? 'Autopilot' : 'Co-pilot') + ' · invites today' + (snd.next_due ? ' · next ' + esc(_spDate(snd.next_due, true)) : '') + '</div></div></div>' +
+          '<div class="sp-small" style="margin-top:10px">LinkedIn steps run from the plugin on ' + (owner ? 'your' : 'the owner\'s') + ' computer, ' + _liHour(snd.window.start) + ' to ' + _liHour(snd.window.end) + '. If Chrome is closed they wait; nothing is lost.</div>'
+        : '<div class="sp-small" style="margin-top:8px">' + (owner ? 'Samora for LinkedIn is not connected yet. LinkedIn steps wait until it is.' : 'The owner has not connected Samora for LinkedIn yet.') + '</div>' + (owner ? '<div class="li-btns"><button class="g-btn sp-sm sp-gold" type="button" onclick="liConnect(false)">' + (_liExtVersion() ? 'Connect this Chrome' : 'Get the plugin') + '</button></div>' : '')) +
+      (owner && cfg.on ? '<div class="li-btns"><button class="g-btn sp-sm" type="button" onclick="spLiEdit(\'' + esc(id) + '\')">LinkedIn steps</button></div>' : '') +
+      '</section>';
+  }
+}
+function spLiEdit(id, turnOn) {
+  var d = (window._spLiCache || {})[id] || {};
+  var cfg = Object.assign({ on: true, visit: true, invite_day: 2, message: true, message_after_days: 1 }, d.config || {});
+  if (turnOn) cfg.on = true;
+  var opt = function (vals, cur, fmt) { return vals.map(function (v) { return '<option value="' + v + '"' + (Number(cur) === v ? ' selected' : '') + '>' + fmt(v) + '</option>'; }).join(''); };
+  var m = _liSheet('<h3>LinkedIn steps</h3><p class="sp-muted">They run from the Samora Chrome plugin, alongside the emails. A reply on either channel stops everything for that person.</p>' +
+    '<label class="sp-check"><input type="checkbox" id="liOn"' + (cfg.on ? ' checked' : '') + '><span><b>LinkedIn on for this SAMpaign</b></span></label>' +
+    '<label class="sp-check"><input type="checkbox" id="liVisit"' + (cfg.visit ? ' checked' : '') + '><span>Profile visit on day 1<br><span class="sp-small">They see your name in their viewers before the invite lands.</span></span></label>' +
+    '<div class="sp-row2"><label class="sp-fld">Invite with a note<select id="liDay">' + opt([1, 2, 3, 4, 5, 7, 10], cfg.invite_day, function (v) { return 'Day ' + v + (v === 1 ? ', with the first email' : ''); }) + '</select></label>' +
+    '<label class="sp-fld">Message after they accept<select id="liAfter">' + opt([0, 1, 2, 3, 5], cfg.message_after_days, function (v) { return v ? v + ' working day' + (v > 1 ? 's' : '') + ' later' : 'Straight away'; }) + '</select></label></div>' +
+    '<label class="sp-check"><input type="checkbox" id="liMsg"' + (cfg.message ? ' checked' : '') + '><span>Send the message once they accept</span></label>' +
+    '<p class="sp-small" style="margin-top:14px">People without an email address get the LinkedIn steps only. People with one start on LinkedIn once their first email has gone.</p>' +
+    '<div class="sp-foot"><button class="g-btn" type="button" onclick="_liClose()">Cancel</button><button class="g-btn sp-gold" type="button" id="liSave">Save</button></div>');
+  m.querySelector('#liSave').onclick = async function () {
+    this.disabled = true;
+    var r = await _sampEdge('set_sampaign_linkedin', { campaign_id: id, on: document.getElementById('liOn').checked, visit: document.getElementById('liVisit').checked, invite_day: Number(document.getElementById('liDay').value), message: document.getElementById('liMsg').checked, message_after_days: Number(document.getElementById('liAfter').value) });
+    this.disabled = false;
+    if (!r.ok) { showToast(r.error || 'Could not save'); return; }
+    _liClose();
+    r._at = Date.now(); (window._spLiCache = window._spLiCache || {})[id] = r;
+    var n = r.steps && r.steps.invite.needs_note;
+    showToast(r.config.on ? (r.plan && r.plan.queued ? r.plan.queued + ' LinkedIn step' + (r.plan.queued > 1 ? 's' : '') + ' queued' : 'LinkedIn steps saved') + (n ? '. ' + n + ' note' + (n > 1 ? 's' : '') + ' to write' : '') : 'LinkedIn is off for this SAMpaign');
+    _spLiDecorate(id);
+    if (r.config.on && n && r.is_owner) spLiWrite(id, 'invite');
+  };
+}
+async function spLiWrite(id, kind) {
+  var m = document.createElement('div'); m.className = 'sp-modal'; m.id = 'liWriteModal';
+  m.innerHTML = '<div class="sp-mcard" role="dialog" aria-modal="true" aria-label="Writing"><h3>SAM is writing ' + (kind === 'invite' ? 'invite notes' : 'LinkedIn messages') + '</h3><div class="sp-small" id="liWMsg">Starting…</div><div class="sp-progress"><span id="liWBar" style="width:4%"></span></div><div class="sp-small" style="margin-top:10px">One per person, from their role, company and the first email. ' + (kind === 'invite' ? 'Under 300 characters each.' : '') + '</div><div class="sp-foot"><span></span><button class="g-btn" type="button" id="liWStop">Stop</button></div></div>';
+  document.body.appendChild(m);
+  var stop = false; document.getElementById('liWStop').onclick = function () { stop = true; this.textContent = 'Stopping…'; };
+  var written = 0, skip = [], total = null, err = null;
+  for (var i = 0; i < 30 && !stop; i++) {
+    var r = await _sampEdge('write_linkedin_notes', { campaign_id: id, kind: kind, batch: 6, skip_ids: skip });
+    if (!r.ok) { err = r.error || 'SAM could not write these.'; break; }
+    written += r.written || 0; skip = skip.concat(r.missed || []);
+    if (total === null) total = written + (r.remaining || 0) + (r.missed || []).length;
+    var msg = document.getElementById('liWMsg'), bar = document.getElementById('liWBar');
+    if (msg) msg.textContent = written + ' written' + (total ? ' of ' + total : '');
+    if (bar) bar.style.width = Math.max(4, Math.round(written / Math.max(1, total || 1) * 100)) + '%';
+    if (!r.remaining || (!r.written && !(r.missed || []).length)) break;
+  }
+  m.remove();
+  if (err) showToast(err); else showToast(written ? written + ' written and queued for LinkedIn' : 'Nothing left to write');
+  _spLiDecorate(id, true);
 }
