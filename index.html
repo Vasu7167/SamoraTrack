@@ -2027,6 +2027,27 @@ body[data-tab]:not([data-tab="today"]) .metric-wrap{display:none}
 .li-gap{padding-top:0!important}
 @media (max-width:600px){.li-steps li .g-btn{margin:6px 0 0;display:inline-flex}}
 
+/* Sequence builder and field alignment (2026-10-03, second drop) */
+.sp-fld{flex-direction:row;flex-wrap:wrap;align-items:baseline;column-gap:6px;row-gap:6px}
+.sp-fld>input,.sp-fld>textarea,.sp-fld>select,.sp-fld>div{flex:1 1 100%;min-width:0;box-sizing:border-box}
+.sp-fld>button{flex:0 0 auto}
+.sp-row2,.sp-row3{align-items:end}
+.sp-tpls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:14px}
+.sp-opt.sp-tpl{padding:11px 13px}
+.sp-opt.sp-tpl b{font-size:13.5px}
+.sp-opt.sp-tpl span{font-size:12px;line-height:1.35;display:block}
+.sp-sq.sp-sqb{grid-template-columns:40px minmax(0,1fr) 168px 104px 34px}
+.sp-kind{font:600 14px var(--font);color:var(--text);border:1px solid var(--c-line-strong);border-radius:10px;padding:6px 8px;background:var(--surface);max-width:100%}
+.sp-seqday{display:flex;align-items:center;gap:6px}
+.sp-sq .sp-seqday input[type=number]{width:62px;flex:0 0 62px}
+.sp-seqerr{margin-top:12px;font-size:13px;color:var(--c-risk);background:var(--c-risk-wash);padding:8px 12px;border-radius:10px}
+.sp-mcard.sp-wide{max-width:780px}
+@media (max-width:760px){
+  .sp-tpls{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .sp-sq.sp-sqb{grid-template-columns:40px minmax(0,1fr) 34px}
+  .sp-sq.sp-sqb .sp-seqday,.sp-sq.sp-sqb .sp-date{grid-column:2 / 3}
+}
+.sp-fld>input:not([type=file]):not([type=checkbox]):not([type=radio]),.sp-fld>select{height:42px}
 </style>
 <script src="/js/vendor/sortable.min.js"></script>
 </head>
