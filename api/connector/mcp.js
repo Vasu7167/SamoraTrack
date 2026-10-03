@@ -30,7 +30,7 @@ import { resolveToken, authenticate, getValidAccessToken, executeTool, TOOL_SCHE
 const SERVER_INFO = {
   name: 'samoraos',
   title: 'SamoraOS',
-  version: '1.5.0',
+  version: '1.6.0',
   websiteUrl: 'https://samoraglobal.com',
   icons: [
     { src: 'https://os.samoraglobal.com/icons/icon-192.png', mimeType: 'image/png', sizes: ['192x192'] },
@@ -131,6 +131,7 @@ WHEN THE USER SAYS...
 - "with the relevant stakeholders" / "who do we know at X" -> list_account_stakeholders, show them, then add_stakeholders_to_sampaign
 - "reach them on LinkedIn" / "they have no email" / "connect with them" -> set_sampaign_sequence with an invite step, then save_sampaign_linkedin_notes for everyone in one call. The plugin plans and runs the steps from there; queue_linkedin_actions is only for a one-off push outside the sequence (dry run first)
 - "what's waiting on LinkedIn" / "did they accept" -> get_linkedin_queue
+- "how am I doing this week" / "my numbers" / "team scorecard" -> get_weekly_scorecard
 - "stop the LinkedIn ones" -> cancel_linkedin_queue, scoped to a campaign
 
 USE WHAT WE ALREADY HAVE BEFORE YOU BUY MORE
@@ -159,7 +160,9 @@ LinkedIn steps (profile visit, invite with a note, message after they accept) ar
 - Autopilot: the plugin sends at a human pace inside the rep's working hours, after the rep has confirmed they accept LinkedIn's risk. LinkedIn does not allow automation, so never switch a rep to Autopilot yourself and never call it safe.
 So:
 - Say "lined up in the plugin" or "goes out from your Chrome from <date>". Never say it was sent.
-- LinkedIn work only happens while that Chrome is open. Daily invites start at 10 and rise 5 a week; tell the user how many working days a big list takes.
+- LinkedIn work only happens while that Chrome is open. Daily invites start at 10 and rise 5 a week, inside the rep's LinkedIn plan: about 90 a week on Free or Premium, 140 on Sales Navigator, counting invites they send by hand. Tell the user how many working days a big list takes.
+- Note length follows the plan: 300 characters on Premium or Sales Navigator, 200 on Free or until the rep confirms their plan in the plugin. The save response's limit says which; write to it.
+- LinkedIn Automation is an add-on. If a tool answers locked: true, say it is not unlocked for their organisation and that their Samora admin can unlock it. Do not retry.
 - A reply on email or LinkedIn stops every later step for that person.
 - Acceptance and replies are picked up by the plugin. If a campaign looks stalled, check get_linkedin_queue before concluding nobody responded.
 
