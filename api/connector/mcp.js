@@ -30,7 +30,7 @@ import { resolveToken, authenticate, getValidAccessToken, executeTool, TOOL_SCHE
 const SERVER_INFO = {
   name: 'samoraos',
   title: 'SamoraOS',
-  version: '1.4.0',
+  version: '1.5.0',
   websiteUrl: 'https://samoraglobal.com',
   icons: [
     { src: 'https://os.samoraglobal.com/icons/icon-192.png', mimeType: 'image/png', sizes: ['192x192'] },
@@ -75,8 +75,21 @@ WRITING A WAVE
 1. get_draft_brief(campaign_id, launch). One call, everything you need. Do not chain the individual tools by hand.
 2. Read its warnings first. If it says a wave is already queued, stop and ask the user.
 3. Write ONE GENUINELY DIFFERENT email per person. Same email with the name swapped is not personalisation and the recipient can tell. Use the person's actual role, the account's real recorded activity, and only the proof the brief returned.
-   Before saving, reread every draft for two things: no dashes of any kind, and two to four bolded fragments. Both are house rules and both are checked.
-4. save_sampaign_drafts, then schedule_sampaign_drafts with dry_run true. Read the plan back to the user, including today_limit and why. Only then schedule for real.
+4. Save the WHOLE wave in ONE save_sampaign_drafts call. Do not reread or re-check drafts yourself first: SAM reviews every save (see below).
+5. Read the response's review. Rewrite ONLY the drafts in review.flagged whose issues have severity "fix", and save just those again in one call. Never rewrite clean drafts.
+6. schedule_sampaign_drafts with dry_run true. Read the plan back to the user, including today_limit and why. Only then schedule for real.
+
+CLAUDE WRITES, SAM REVIEWS
+Every save_sampaign_drafts and save_sampaign_linkedin_notes call is checked by SAM before it is stored. Dashes are fixed in place. SAM flags a wrong name in the greeting, another prospect's company, template placeholders, near copies of another draft, length, long or loud subjects, links, and (with a quick AI read) copy that could go to anyone or a claim the proof does not back. The response carries review: { checked, clean, to_fix, flagged: [{ contact_id, name, issues: [{ code, severity, detail }] }] }.
+Tell the user the result in one line ("SAM reviewed 40: 37 clean, 3 rewritten"), not the drafts themselves.
+
+GO FAST
+A 40 person SAMpaign should take minutes, not a quarter of an hour. The time goes on round trips and on text you print, so:
+- One call per job: one save for the whole wave, one scout_list_accounts call per ten companies (batch 10), one get_draft_brief per wave. Never one call per person or per company.
+- Do not print every email in the chat. Show two as samples, then the review line.
+- Do not call get_sampaign_contacts, get_company_context or get_success_stories when get_draft_brief has already returned them.
+- Scouting a list: scout_list_accounts with batch 10. Repeat with the same campaign_id and skip_account_ids set to the previous no_result_account_ids until remaining is 0.
+- LinkedIn notes for the whole SAMpaign go in ONE save_sampaign_linkedin_notes call.
 
 FORMATTING THE BODY
 Bodies are HTML. Use <br> for a line break and <br><br> for a paragraph gap, <b> for emphasis, <i> sparingly, <a href> for links. Do not use markdown: **bold** arrives as literal asterisks.
@@ -109,13 +122,14 @@ WHEN THE USER SAYS...
 - "send it earlier" / "move it to Monday" / "it went out on the wrong day" -> reschedule_scheduled_sends
 - "stop it" / "don't send those" -> cancel_scheduled_sends, scoped
 - "how many can I send today" / "why only 8" -> get_sending_limit
-- "find me contacts at X" -> set_scout_targets first, then scout_sampaign_contacts or scout_list_accounts
+- "find me contacts at X" -> set_scout_targets first, then scout_sampaign_contacts (one company) or scout_list_accounts (a list, batch 10)
+- "start with LinkedIn" / "LinkedIn first, then email" / "change the order of the steps" / "email only" -> set_sampaign_sequence
 - "find me new companies" -> discover_accounts, show the evidence, let them choose, then commit_discovery
 - "we did a great job at X and they loved it" -> offer save_success_story, so future outreach can cite it
 - "this campaign is about Y" / a campaign whose goal is empty -> set_campaign_goal
 - "create a campaign for X" / "set up outreach to X" -> create_sampaign (ANY rep can, no manager needed)
 - "with the relevant stakeholders" / "who do we know at X" -> list_account_stakeholders, show them, then add_stakeholders_to_sampaign
-- "reach them on LinkedIn" / "they have no email" / "connect with them" -> save_sampaign_linkedin_notes, then queue_linkedin_actions (dry run first)
+- "reach them on LinkedIn" / "they have no email" / "connect with them" -> set_sampaign_sequence with an invite step, then save_sampaign_linkedin_notes for everyone in one call. The plugin plans and runs the steps from there; queue_linkedin_actions is only for a one-off push outside the sequence (dry run first)
 - "what's waiting on LinkedIn" / "did they accept" -> get_linkedin_queue
 - "stop the LinkedIn ones" -> cancel_linkedin_queue, scoped to a campaign
 
@@ -139,25 +153,15 @@ If a rep asks for something and you hit a permission wall, say WHICH tool was
 refused and offer the rep-level path, rather than telling them the whole task
 needs a manager. Usually it does not.
 
-LINKEDIN SENDS NOTHING BY ITSELF
-Never tell a user that Samora will send LinkedIn invitations or messages for
-them. It does not, and no honest product can: LinkedIn has no API for it, and
-the tools that pretend otherwise are driving the user's own login in breach of
-LinkedIn's terms, with their account carrying the risk.
-
-What Samora does is write the note, order the work, and hold it in a queue. The
-rep opens the Samora browser extension and presses Send themselves, one at a
-time. So:
-- Say "queued for you to send" or "ready in your extension". Never "sent" and
-  never "scheduled", because a LinkedIn action has no send time.
-- After queueing, report estimated_days. At 15 invitations a day, 200 contacts
-  is two working weeks of the rep's clicking, and they need that number before
-  they agree to it, not after.
-- If the user asks for full automation, tell them plainly why it does not exist
-  here and what the trade is. Do not imply we are working around it.
-- Acceptance and replies are only detected when the rep runs the extension. If
-  a campaign looks stalled, check get_linkedin_queue before concluding nobody
-  responded: unchecked is not the same as no.
+LINKEDIN STEPS RUN FROM THE REP'S CHROME
+LinkedIn steps (profile visit, invite with a note, message after they accept) are part of a SAMpaign's sequence and run from the Samora for LinkedIn plugin in the rep's Chrome, in one of two modes the rep picks:
+- Co-pilot (the default): each person opens with the note written and the rep presses Enter to send.
+- Autopilot: the plugin sends at a human pace inside the rep's working hours, after the rep has confirmed they accept LinkedIn's risk. LinkedIn does not allow automation, so never switch a rep to Autopilot yourself and never call it safe.
+So:
+- Say "lined up in the plugin" or "goes out from your Chrome from <date>". Never say it was sent.
+- LinkedIn work only happens while that Chrome is open. Daily invites start at 10 and rise 5 a week; tell the user how many working days a big list takes.
+- A reply on email or LinkedIn stops every later step for that person.
+- Acceptance and replies are picked up by the plugin. If a campaign looks stalled, check get_linkedin_queue before concluding nobody responded.
 
 EMPTY IS AN ANSWER
 If something returns nothing, say so plainly. Do not fill a gap with a plausible guess: this product's whole promise is that every number shows its receipts.`;
@@ -231,7 +235,9 @@ export default async function handler(req, res) {
         }
         return res.json({
           jsonrpc: '2.0', id,
-          result: { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] }
+          // Compact JSON: indentation was a third of every result's tokens,
+          // and Claude reads every one of them before its next step.
+          result: { content: [{ type: 'text', text: JSON.stringify(result) }] }
         });
       }
 
@@ -245,4 +251,6 @@ export default async function handler(req, res) {
 }
 
 // Vercel config — allow larger body, longer timeout for Gemini/pipeline calls
-export const config = { api: { bodyParser: { sizeLimit: '1mb' }, responseLimit: false } };
+export const config = { api: { bodyParser: { sizeLimit: '2mb' }, responseLimit: false } };
+// Scouting ten companies in one call can take a minute or two.
+export const maxDuration = 300;
