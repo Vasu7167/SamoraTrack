@@ -1996,6 +1996,37 @@ body[data-tab]:not([data-tab="today"]) .metric-wrap{display:none}
   .sp-next .sp-rowacts{margin-left:0}
 }
 
+/* ── Samora for LinkedIn (2026-10-03) ── */
+.li-sheet h3{margin:0;font-size:18px;font-weight:650;letter-spacing:-.01em}
+.li-hd{display:flex;gap:14px;align-items:flex-start}
+.li-hd p{margin:4px 0 0}
+.li-mk,.li-ok{width:40px;height:40px;border-radius:50%;flex:none;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;color:#2B1B08;background:linear-gradient(140deg,#F3D77A,#D4AF37 55%,#B8892A)}
+.li-ok{background:var(--c-verified-wash);color:var(--c-verified)}
+.li-steps{margin:16px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:12px;font-size:14px;line-height:1.5}
+.li-steps li .g-btn{margin-left:6px;vertical-align:middle}
+.li-store{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px}
+.li-or{margin-top:16px;font-size:12px;font-weight:650;letter-spacing:.08em;text-transform:uppercase;color:var(--text3)}
+.li-note{margin-top:12px;padding:11px 13px;border-radius:12px;background:rgba(var(--c-accent-rgb),.12);font-size:13px;line-height:1.5}
+.li-code,.li-code-big{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.12em}
+.li-code-big{margin:14px 0 6px;font-size:28px;font-weight:700;text-align:center;padding:14px;border-radius:14px;background:rgba(var(--c-accent-rgb),.12)}
+.li-dev{display:flex;gap:10px;align-items:flex-start;padding:4px 0 10px}
+.li-dev small{display:block;color:var(--text3);font-size:12.5px}
+.li-dot{width:8px;height:8px;border-radius:50%;background:var(--text3);display:inline-block;margin-top:6px;flex:none;vertical-align:1px;margin-right:6px}
+.li-dev .li-dot{margin-right:0}
+.li-dot.on{background:var(--c-verified)}
+.li-meta{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12.5px;color:var(--text2);padding-bottom:4px}
+.li-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.li-sr{display:flex;gap:14px;align-items:center;margin-top:10px}
+.li-ring{width:58px;height:58px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center}
+.li-ring>div{width:44px;height:44px;border-radius:50%;background:var(--surface);display:flex;align-items:center;justify-content:center;font-weight:650;font-size:13px;font-variant-numeric:tabular-nums}
+.sp-rb.li span{background:var(--c-info)}
+.sp-tli.li:before{border-color:var(--c-info)}
+.sp-chip.li{background:var(--c-info-wash);color:var(--c-info)}
+.sp-lnk{all:unset;cursor:pointer;color:var(--c-accent-text);font-weight:600}
+.sp-lnk:focus-visible{outline:2px solid var(--c-focus);outline-offset:2px;border-radius:4px}
+.li-gap{padding-top:0!important}
+@media (max-width:600px){.li-steps li .g-btn{margin:6px 0 0;display:inline-flex}}
+
 </style>
 <script src="/js/vendor/sortable.min.js"></script>
 </head>
@@ -2879,6 +2910,10 @@ body[data-tab]:not([data-tab="today"]) .metric-wrap{display:none}
       <div class="you-fine">SamoraOS reads message headers and replies to verify activity. It never sends mail you did not ask it to send.</div>
     </div>
         </div></div>
+      </div>
+      <div class="you-acc" id="youAcc-linkedin">
+        <button class="you-row" onclick="toggleYouAcc('linkedin');_liRenderYou()" aria-expanded="false"><span class="you-ic tone-blue"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="M8 10.5V16M8 7.8v.2M11.5 16v-3.2a2.3 2.3 0 014.6 0V16M11.5 10.5V16"/></svg></span><span class="you-row-l">LinkedIn plugin</span><span class="you-row-v" id="youLiChip"></span><span class="you-chev" aria-hidden="true"></span></button>
+        <div class="you-acc-body"><div class="you-acc-in" id="youLiBody"></div></div>
       </div>
       <div class="you-acc" id="youAcc-ai">
         <button class="you-row" onclick="toggleYouAcc('ai')" aria-expanded="false"><span class="you-ic tone-violet"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 8.5h10v9H7zM10 12.5v1M14 12.5v1M12 5v3.5M9.5 17.5v3M14.5 17.5v3M4.5 11.5v3M19.5 11.5v3"/></svg></span><span class="you-row-l">Connect to AI</span><span class="you-row-v">Claude, ChatGPT, Gemini</span><span class="you-chev" aria-hidden="true"></span></button>
