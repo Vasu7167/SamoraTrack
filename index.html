@@ -2048,6 +2048,87 @@ body[data-tab]:not([data-tab="today"]) .metric-wrap{display:none}
   .sp-sq.sp-sqb .sp-seqday,.sp-sq.sp-sqb .sp-date{grid-column:2 / 3}
 }
 .sp-fld>input:not([type=file]):not([type=checkbox]):not([type=radio]),.sp-fld>select{height:42px}
+/* LinkedIn card line, weekly scorecard, LinkedIn add-on lock (2026-10-03, third drop) */
+.sp-lil{display:flex;align-items:flex-start;gap:9px;margin-top:11px}
+.sp-lik{width:20px;height:20px;border-radius:6px;flex:none;display:inline-flex;align-items:center;justify-content:center;background:var(--c-info-wash);color:var(--c-info);margin-top:-1px}
+.sp-lik svg{width:12px;height:12px}
+.sp-lifun{height:7px}
+.sp-l1{background:var(--c-verified)}.sp-l2{background:#2F6FB0}.sp-l3{background:#8FB6DE}.sp-l4{background:rgba(47,111,176,.16)}
+.sp-side{display:flex;flex-direction:column;gap:16px;min-width:0}
+@media (max-width:1100px){.sp-side{order:-1}}
+
+/* Scorecard */
+.sc-hd{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.sc-sub{font-size:12.5px;color:var(--text2);margin-top:4px}
+.sc-streak{font-weight:650;color:var(--c-accent-text)}
+.sc-ring{--p:0;width:52px;height:52px;border-radius:50%;flex:none;display:grid;place-items:center;background:conic-gradient(var(--c-accent) calc(var(--p) * 1%),rgba(127,127,127,.14) 0)}
+.sc-ring span{width:42px;height:42px;border-radius:50%;background:var(--surface);display:grid;place-items:center;font:700 14px var(--font);color:var(--text)}
+.sc-ring small{font-size:9.5px;font-weight:600;color:var(--text3)}
+.sc-ring.sm{width:34px;height:34px}.sc-ring.sm span{width:27px;height:27px;font-size:10.5px}
+.sc-rows{display:flex;flex-direction:column;gap:12px;margin-top:14px}
+.sc-m{display:flex;gap:10px;align-items:flex-start}
+.sc-ic{width:26px;height:26px;border-radius:9px;flex:none;display:inline-flex;align-items:center;justify-content:center;background:rgba(127,127,127,.1);color:var(--text2)}
+.sc-ic svg{width:14px;height:14px}
+.sc-m.hit .sc-ic{background:var(--c-verified-wash);color:var(--c-verified)}
+.sc-mb{flex:1;min-width:0}
+.sc-mh{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:13px;color:var(--text2)}
+.sc-mh b{font:700 14px var(--font);color:var(--text)}.sc-mh small{font-weight:500;color:var(--text3)}
+.sc-bar{height:6px;border-radius:999px;background:rgba(127,127,127,.13);overflow:hidden;margin-top:6px}
+.sc-bar span{display:block;height:100%;border-radius:999px;background:var(--c-accent);transition:width .6s var(--ease,ease)}
+.sc-m.hit .sc-bar span{background:var(--c-verified)}
+.sc-bar.sm{height:4px;margin:4px 0}
+.sc-tr{display:block;font-size:11.5px;color:var(--text3);margin-top:4px}.sc-tr.up{color:var(--c-verified)}.sc-tr.dn{color:var(--c-risk)}
+.sc-ft{font-size:12px;color:var(--text3);margin-top:14px;padding-top:12px;border-top:1px solid var(--g-line)}
+.sc-seg{margin-top:12px}
+.sc-team{display:flex;flex-direction:column;gap:12px;margin-top:14px}
+.sc-tr2{display:flex;gap:10px;align-items:center}
+.sc-tn{font-size:13px;font-weight:600;color:var(--text)}
+.sc-ts{font:700 13px var(--font);color:var(--text)}
+.sc-strip{display:grid;grid-template-columns:auto minmax(0,1fr);gap:18px;align-items:center;padding:14px 18px;border-radius:18px;background:var(--surface);border:1px solid var(--g-line);margin:4px 0 14px}
+.sc-sh{display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+.sc-strip .sc-rows{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px 16px;margin:0}
+@media (max-width:640px){.sc-strip{grid-template-columns:minmax(0,1fr)}.sc-sh{flex-direction:row;align-items:center}}
+
+/* Celebration */
+.sc-cele{position:fixed;left:50%;top:18px;z-index:9600;width:min(440px,calc(100vw - 32px));transform:translate(-50%,-30px);opacity:0;transition:opacity .35s ease,transform .45s cubic-bezier(.2,.9,.3,1.2);border-radius:20px;overflow:hidden;
+  background:linear-gradient(135deg,#17140E 0%,#2A2213 55%,#3A2E14 100%);color:#F6EED6;border:1px solid rgba(233,201,106,.45);box-shadow:0 24px 70px -18px rgba(0,0,0,.55),0 0 0 6px rgba(212,175,55,.08)}
+.sc-cele.on{opacity:1;transform:translate(-50%,0)}
+.sc-cele canvas{position:absolute;left:0;top:0;width:100%;height:260px;pointer-events:none}
+.sc-cele-c{position:relative;padding:18px 48px 18px 22px}
+.sc-cele-k{font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#E9C96A}
+.sc-cele-t{font-size:18px;font-weight:700;margin-top:4px;letter-spacing:-.01em}
+.sc-cele-s{font-size:13px;color:rgba(246,238,214,.75);margin-top:3px}
+.sc-cele-x{all:unset;cursor:pointer;position:absolute;right:12px;top:12px;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;color:rgba(246,238,214,.7)}
+.sc-cele-x:hover{background:rgba(255,255,255,.08)}
+.sc-cele-x svg{width:14px;height:14px}
+@media (prefers-reduced-motion:reduce){.sc-cele{transition:opacity .2s}}
+
+/* The LinkedIn Automation add-on, locked */
+.li-lock{position:relative;overflow:hidden;display:flex;gap:16px;align-items:flex-start;padding:20px 22px;border-radius:18px;
+  background:radial-gradient(120% 140% at 0% 0%,#2B2416 0%,#16130D 48%,#0E0C08 100%);color:#EFE7D2;border:1px solid rgba(212,175,55,.35);box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
+.li-lock.sm{padding:16px 18px}
+.li-lock-sheen{position:absolute;inset:-40% -60%;background:linear-gradient(115deg,transparent 42%,rgba(233,201,106,.10) 50%,transparent 58%);animation:liSheen 6s ease-in-out infinite;pointer-events:none}
+@keyframes liSheen{0%{transform:translateX(-30%)}60%,100%{transform:translateX(30%)}}
+@media (prefers-reduced-motion:reduce){.li-lock-sheen{animation:none;opacity:.5}}
+.li-lock-mark{position:relative;width:44px;height:44px;border-radius:14px;flex:none;display:grid;place-items:center;color:#E9C96A;background:rgba(212,175,55,.10);border:1px solid rgba(212,175,55,.35)}
+.li-lock-body{position:relative;min-width:0}
+.li-lock-k{font-size:10.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#C9A646}
+.li-lock-t{font-size:17px;font-weight:700;letter-spacing:-.01em;margin-top:3px;color:#FFF8E6}
+.li-lock-s{font-size:13px;line-height:1.55;color:rgba(239,231,210,.72);margin-top:6px;max-width:58ch}
+.li-lock-acts{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px}
+.li-lock-b{all:unset;cursor:pointer;font:650 13px var(--font);color:#1E1608;background:linear-gradient(180deg,#F1D584,#D4AF37);padding:8px 16px;border-radius:999px;box-shadow:0 6px 18px -8px rgba(212,175,55,.8)}
+.li-lock-b:focus-visible{outline:2px solid #F1D584;outline-offset:2px}
+.li-lock-b[disabled]{opacity:.7;cursor:default}
+.li-lock-f{font-size:12px;color:rgba(239,231,210,.55)}
+.sp-tpl.locked{opacity:.55}
+.sp-tpl .sp-lk{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--c-accent-text);margin-left:6px}
+.sc-strip .sc-ic{display:none}
+.sc-strip .sc-mh{flex-direction:column;align-items:flex-start;gap:1px}
+.sc-strip .sc-mh span{font-size:12px;white-space:nowrap}
+.sc-strip .sc-rows{grid-template-columns:repeat(auto-fit,minmax(110px,1fr))}
+.sp-tpl .sp-lk{display:block;margin:3px 0 0}
+
+.li-locked [aria-label="Channel"],.li-locked .sp-chip.li{display:none}
 </style>
 <script src="/js/vendor/sortable.min.js"></script>
 </head>
@@ -2333,6 +2414,8 @@ body[data-tab]:not([data-tab="today"]) .metric-wrap{display:none}
            produced the large vertical gaps. Independent column flow needs
            independent formatting contexts. -->
     <div class="today-main">
+    <!-- This week: the rep's scorecard against the team's weekly targets. -->
+    <div id="todayScore"></div>
     <div id="productivityBanner" style="margin-bottom:8px"></div>
     <div id="nudgeBanner" style="display:none;background:rgba(var(--c-accent-rgb),0.08);border:1px solid rgba(var(--c-accent-rgb),0.25);border-radius:var(--radius);padding:10px 14px;margin-bottom:12px"><div style="display:flex;align-items:center;justify-content:space-between"><div id="nudgeText" style="font-size:12px;color:var(--text2)"></div><button onclick="this.parentElement.parentElement.style.display='none'" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:0 0 0 8px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div></div>
     <div class="today-sections" style="display:flex;gap:8px;margin-bottom:8px">
