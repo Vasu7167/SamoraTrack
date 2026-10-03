@@ -3,7 +3,7 @@ let SB_KEY = localStorage.getItem('dt-sb-key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6I
 let API_KEY = localStorage.getItem('dt-api-key') || '';
 var _userHabits = null;
 // Cache buster — update this string on every deploy to purge stale service worker cache
-var APP_VERSION = '20261003-02';
+var APP_VERSION = '20261003-03';
 (function() {
   if (localStorage.getItem('app-sw-version') !== APP_VERSION && 'serviceWorker' in navigator) {
     navigator.serviceWorker.getRegistrations().then(function(regs) {
@@ -447,7 +447,7 @@ async function loadProfile() {
   // get_org_config fires in background — never blocks launchApp
   try {
     fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'get_org_config'}) })
-      .then(r=>r.json()).then(cfg=>{ if(cfg.ok){if(cfg.googleClientId)GOOGLE_CLIENT_ID_SAM=cfg.googleClientId;window._orgConfig=cfg;_applyDemoChip();} }).catch(()=>{});
+      .then(r=>r.json()).then(cfg=>{ if(cfg.ok){if(cfg.googleClientId)GOOGLE_CLIENT_ID_SAM=cfg.googleClientId;window._orgConfig=cfg;_applyDemoChip();try{_liCfgAt=Date.now();_liApplyLock();}catch(_e){}} }).catch(()=>{});
   } catch(e) {}
 }
 // ── Exactly one screen is visible, always ────────────────────────────────
@@ -637,6 +637,7 @@ function _setMetric(id, main, suffixHtml, positive) {
 }
 
 function renderTodayMetrics() {
+  try { if (document.getElementById('todayScore')) _scLoad(); } catch (_e) {}
   var d = dayData(viewDate);
   var open = (d.tasks || []).filter(function(t){ return !t.done && !t.carriedTo; }).length;
   _setMetric('mOpenTasks', open);
@@ -15976,7 +15977,8 @@ async function loadSampaignWorkspace() {
     '<section class="sp-card sp-kpis" id="sampKpis" aria-label="Your SAMpaigns at a glance">' + _spKpisHtml(null) + '</section>' +
     '<div class="sp-note" id="sampKpiNote" hidden></div>' +
     '<div class="sp-two"><div><div class="sp-bar" id="sampaignListToolbar"></div><div class="sp-list" id="sampaignCampaignsList"><div class="sp-empty">Loading SAMpaigns…</div></div></div>' +
-    '<aside class="sp-card sp-pad sp-needs" id="sampNeeds" aria-label="Needs you"><div class="sp-lbl">Needs you</div><div class="sp-small" style="margin-top:10px">Checking…</div></aside></div>';
+    '<div class="sp-side"><section class="sp-card sp-pad sp-score" id="sampScore" aria-label="Your week"><div class="sp-lbl">This week</div><div class="sp-small" style="margin-top:10px">Counting…</div></section>' +
+    '<aside class="sp-card sp-pad sp-needs" id="sampNeeds" aria-label="Needs you"><div class="sp-lbl">Needs you</div><div class="sp-small" style="margin-top:10px">Checking…</div></aside></div></div>';
   try { if (typeof loadGoalTemplates === 'function') loadGoalTemplates(); } catch (e) {}
   loadSampaignCampaigns();
 }
@@ -15998,6 +16000,7 @@ async function _sampLoadHome() {
   if (box) box.innerHTML = _spKpisHtml(d.kpis);
   if (note) { note.hidden = !!d.kpis.captured; note.textContent = d.kpis.captured ? '' : 'Reply times, reply types and meetings start recording once the latest database update has run.'; }
   if (needs) needs.innerHTML = _spNeedsHtml(d.needs || []);
+  _scLoad();
 }
 function _spNeedsHtml(items) {
   var li = function (cls, icon, title, sub, btn) { return '<li><span class="sp-ni ' + cls + '">' + icon + '</span><div class="sp-nt">' + title + (sub ? '<small>' + sub + '</small>' : '') + (btn || '') + '</div></li>'; };
@@ -16022,6 +16025,7 @@ async function loadSampaignCampaigns() {
   if (!el || !currentUser || !currentUser.token) return;
   var viewing = window._sampaignView || 'active';
   try {
+    await _liEnsureConfig();
     var d = await _sampEdge('list_sampaigns', { view: viewing, scope: 'org' });
     if (!d.ok) { el.innerHTML = '<div class="sp-empty sp-r">' + esc(d.error || 'Could not load SAMpaigns') + '</div>'; return; }
     window._sampList = d;
@@ -16094,7 +16098,7 @@ function _spRenderRows() {
         '<div class="sp-cm"><span class="sp-av">' + esc(_spIni(c.owner_email)) + '</span>' + esc(owner) + (c.is_owner ? '' : ' · view only') + ' · ' + (c.scope === 'list' ? 'a list of companies' : 'one account') + (c.focus ? ' · ' + esc(c.focus) : '') + '</div>' +
         '<div class="sp-chips"><span class="sp-chip ' + (c.paused ? 'warn' : 'live') + '"><i></i>Email</span>' + (c.channels && c.channels.linkedin && c.channels.linkedin.on ? '<span class="sp-chip li"><i></i>LinkedIn</span>' : '') + flags.join('') + '</div></div>' +
       '<div><div class="sp-fun" aria-hidden="true"><span class="sp-f1" style="width:' + w(interested) + '"></span><span class="sp-f2" style="width:' + w(Math.max(0, replied - interested)) + '"></span><span class="sp-f3" style="width:' + w(Math.max(0, (s.sent || 0) - replied)) + '"></span></div>' +
-        '<div class="sp-fl"><span><b>' + (s.sent || 0) + '</b> of ' + tot + ' reached</span><span><b>' + replied + '</b> replied</span><span class="sp-g"><b class="sp-g">' + interested + '</b> interested</span>' + (s.meetings ? '<span><b>' + s.meetings + '</b> ' + (s.meetings === 1 ? 'meeting' : 'meetings') + '</span>' : '') + '</div></div>' +
+        '<div class="sp-fl"><span><b>' + (s.sent || 0) + '</b> of ' + tot + ' reached</span><span><b>' + replied + '</b> replied</span><span class="sp-g"><b class="sp-g">' + interested + '</b> interested</span>' + (s.meetings ? '<span><b>' + s.meetings + '</b> ' + (s.meetings === 1 ? 'meeting' : 'meetings') + '</span>' : '') + '</div>' + _spLiCardLine(c) + '</div>' +
       '<div class="sp-rate"><div class="n ' + tone + '">' + (rate === null ? 'n/a' : rate + '%') + '</div><small>' + note + '</small></div>' +
       '<div class="sp-next">' + SP_ICON.arrow + '<span>' + esc(_spNextLine(c)) + '</span>' + (acts ? '<span class="sp-rowacts">' + acts + '</span>' : '') + '</div>' +
     '</div>';
@@ -16547,6 +16551,8 @@ function toggleNewSampaignForm() { sampOpenWizard(); }
 function _spNextWeekday(from) { var d = from ? new Date(from) : new Date(); d.setDate(d.getDate() + 1); while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); }
 function _spAddWorkdays(iso, n) { var d = new Date(iso + 'T12:00:00'); var left = n; while (left > 0) { d.setDate(d.getDate() + 1); if (d.getDay() !== 0 && d.getDay() !== 6) left--; } return d.toISOString().slice(0, 10); }
 function sampOpenWizard() {
+  // Re-read the add-on first, so a switch Samora just made shows here.
+  if (!window._spWizCfgChecked) { window._spWizCfgChecked = true; _liEnsureConfig().then(function () { window._spWizCfgChecked = false; var W = window._sampW; if (W && W.step === 3) _spWizRender(); }); }
   window._sampW = { step: 1, scope: 'account', name: '', domain: '', region: '', listName: '', companies: '', people: '', goal: '', metric: 'meetings', target: '', focus: '', start: _spNextWeekday(), ups: [4, 9], li: true, writeNow: true, seq: _spSeqTpl('email_first', _spNextWeekday()) };
   var page = document.getElementById('sampWizardPage'); if (!page) return;
   _spShow('new');
@@ -16741,6 +16747,8 @@ function _liInstallHtml(extra) {
 }
 async function liConnect(auto) {
   if (!currentUser || !currentUser.token) return;
+  await _liEnsureConfig();
+  if (_liLocked()) { _liSheet(_liLockedCard(false)); return; }
   var has = await _liWaitExt(auto ? 2500 : 1200);
   if (!has) { _liSheet(_liInstallHtml()); return; }
   _liSheet('<div class="li-hd"><span class="li-mk">S</span><div><h3>Connecting this Chrome</h3><p class="sp-muted">One moment…</p></div></div>');
@@ -16800,6 +16808,8 @@ async function _liStatus(force) {
 }
 async function _liRefreshChip() {
   var chip = document.getElementById('youLiChip'); if (!chip || !currentUser || !currentUser.token) return;
+  await _liEnsureConfig();
+  if (_liLocked()) { chip.textContent = 'Locked'; return; }
   var d = await _liStatus();
   var dev = d && d.ok && d.devices && d.devices[0];
   chip.textContent = dev ? (dev.online ? 'Connected' : 'Connected, offline') : (_liExtVersion() ? 'Not connected' : 'Not installed');
@@ -16808,8 +16818,11 @@ function _liAgo(iso) { if (!iso) return 'never'; var m = Math.round((Date.now() 
 function _liHour(h) { var hh = ((h + 11) % 12) + 1; return hh + (h < 12 || h === 24 ? ' am' : ' pm'); }
 async function _liRenderYou() {
   var box = document.getElementById('youLiBody'); if (!box) return;
+  await _liEnsureConfig();
+  if (_liLocked()) { box.innerHTML = _liLockedCard(false); return; }
   box.innerHTML = '<div class="sp-small">Checking…</div>';
   var d = await _liStatus(true);
+  if (d && d.locked) { box.innerHTML = _liLockedCard(false); return; }
   var ext = _liExtVersion();
   if (!d || !d.ok) { box.innerHTML = '<div class="sp-small">' + esc((d && d.error) || 'Could not load.') + '</div>'; return; }
   var devs = d.devices || [];
@@ -16834,6 +16847,8 @@ function _spRenderSeqTop(id) {
 async function _spLiDecorate(id, force) {
   var steps = document.getElementById('spLiSteps_' + id), side = document.getElementById('spLiSender_' + id);
   if (!steps && !side) return;
+  await _liEnsureConfig();
+  if (_liLocked()) { if (steps) steps.innerHTML = '<div class="sp-step" data-k="gap" style="display:block">' + _liLockedCard(true) + '</div>'; if (side) side.innerHTML = ''; return; }
   var cache = window._spLiCache = window._spLiCache || {};
   var d = cache[id];
   if (!d || force || Date.now() - d._at > 20000) {
@@ -16842,6 +16857,7 @@ async function _spLiDecorate(id, force) {
   }
   steps = document.getElementById('spLiSteps_' + id); side = document.getElementById('spLiSender_' + id);
   if (!d.ok) { if (steps) steps.innerHTML = ''; if (side) side.innerHTML = ''; return; }
+  if (d.locked) { if (steps) steps.innerHTML = '<div class="sp-step" data-k="gap" style="display:block">' + _liLockedCard(true) + '</div>'; if (side) side.innerHTML = ''; return; }
   var owner = d.is_owner, cfg = d.config, s = d.steps;
   var act = function (h) { return owner ? h : ''; };
   var html = '';
@@ -16866,7 +16882,7 @@ async function _spLiDecorate(id, force) {
     var lim = snd.limit || 10, inv = (snd.today && snd.today.invites) || 0, pct = Math.min(100, Math.round(inv / Math.max(1, lim) * 100));
     side.innerHTML = '<section class="sp-card sp-pad li-sender"><div class="sp-lbl">LinkedIn sender</div>' +
       (dev
-        ? '<div class="li-sr"><div class="li-ring" style="background:conic-gradient(var(--c-accent) 0 ' + pct + '%,var(--g-line) ' + pct + '% 100%)"><div>' + inv + '/' + lim + '</div></div><div><b><span class="li-dot ' + (dev.online ? 'on' : '') + '"></span>' + esc(dev.label || 'Chrome') + ' · ' + (dev.online ? 'online' : 'offline') + '</b><div class="sp-small">' + (snd.mode === 'autopilot' ? 'Autopilot' : 'Co-pilot') + ' · invites today' + (snd.next_due ? ' · next ' + esc(_spDate(snd.next_due, true)) : '') + '</div></div></div>' +
+        ? '<div class="li-sr"><div class="li-ring" style="background:conic-gradient(var(--c-accent) 0 ' + pct + '%,var(--g-line) ' + pct + '% 100%)"><div>' + inv + '/' + lim + '</div></div><div><b><span class="li-dot ' + (dev.online ? 'on' : '') + '"></span>' + esc(dev.label || 'Chrome') + ' · ' + (dev.online ? 'online' : 'offline') + '</b><div class="sp-small">' + (snd.mode === 'autopilot' ? 'Autopilot' : 'Co-pilot') + ' · ' + (snd.plan ? esc(snd.plan_label) + ' plan' : 'LinkedIn plan not confirmed') + ' · invites today' + (snd.next_due ? ' · next ' + esc(_spDate(snd.next_due, true)) : '') + '</div></div></div>' +
           '<div class="sp-small" style="margin-top:10px">LinkedIn steps run from the plugin on ' + (owner ? 'your' : 'the owner\'s') + ' computer, ' + _liHour(snd.window.start) + ' to ' + _liHour(snd.window.end) + '. If Chrome is closed they wait; nothing is lost.</div>'
         : '<div class="sp-small" style="margin-top:8px">' + (owner ? 'Samora for LinkedIn is not connected yet. LinkedIn steps wait until it is.' : 'The owner has not connected Samora for LinkedIn yet.') + '</div>' + (owner ? '<div class="li-btns"><button class="g-btn sp-sm sp-gold" type="button" onclick="liConnect(false)">' + (_liExtVersion() ? 'Connect this Chrome' : 'Get the plugin') + '</button></div>' : '')) +
       (owner && cfg.on ? '<div class="li-btns"><button class="g-btn sp-sm" type="button" onclick="spLiEdit(\'' + esc(id) + '\')">LinkedIn steps</button></div>' : '') +
@@ -16972,11 +16988,11 @@ function _spSeqRow(S, s, i, pos) {
   var emailsTotal = (S.steps || []).filter(function (x) { return x.kind === 'email'; }).length;
   var sub = s.kind === 'email' ? (emailIdx === 0 ? 'First email · personal, short, one ask' : 'Follow-up ' + emailIdx + ' · same thread' + (emailIdx === emailsTotal - 1 ? ', a short close' : ', adds a new reason'))
     : s.kind === 'visit' ? 'No note. They see your name in their viewers'
-    : s.kind === 'invite' ? 'SAM writes the note, under 300 characters'
+    : s.kind === 'invite' ? 'SAM writes the note to fit your LinkedIn plan'
     : 'Sent once they accept. Skipped if they already replied';
   var used = {}; (S.steps || []).forEach(function (x, j) { if (j !== i) used[x.kind] = true; });
   var opts = ['email', 'visit', 'invite', 'message'].map(function (k) {
-    var dis = k !== 'email' && used[k];
+    var dis = k !== 'email' && (used[k] || _liLocked());
     return '<option value="' + k + '"' + (k === s.kind ? ' selected' : '') + (dis ? ' disabled' : '') + '>' + SP_SEQ_KIND[k] + '</option>';
   }).join('');
   var dayCell = s.kind === 'message'
@@ -16989,8 +17005,11 @@ function _spSeqRow(S, s, i, pos) {
     '<button class="sp-x" type="button" aria-label="Remove step ' + (pos + 1) + '" onclick="_spSeqDel(' + i + ')">' + SP_ICON.x + '</button></div>';
 }
 function _spSeqHtml(S) {
+  var lockedLi = _liLocked();
   var tpl = Object.keys(SP_SEQ_TPL).map(function (k) {
-    return '<button type="button" class="sp-opt sp-tpl' + (S.tpl === k ? ' on' : '') + '" onclick="_spSeqUseTpl(\'' + k + '\')"><b>' + esc(SP_SEQ_TPL[k].label) + '</b><span>' + esc(SP_SEQ_TPL[k].desc) + '</span></button>';
+    var needsLi = SP_SEQ_TPL[k].steps.some(function (s) { return s.kind !== 'email'; });
+    var lk = lockedLi && needsLi;
+    return '<button type="button" class="sp-opt sp-tpl' + (S.tpl === k ? ' on' : '') + (lk ? ' locked' : '') + '" onclick="_spSeqUseTpl(\'' + k + '\')"' + (lk ? ' aria-disabled="true"' : '') + '><b>' + esc(SP_SEQ_TPL[k].label) + (lk ? '<span class="sp-lk">Add-on</span>' : '') + '</b><span>' + esc(SP_SEQ_TPL[k].desc) + '</span></button>';
   }).join('');
   var rows = _spSeqSorted(S).map(function (x, pos) { return _spSeqRow(S, x.s, x.i, pos); }).join('');
   var n = {}; (S.steps || []).forEach(function (s) { n[s.kind] = (n[s.kind] || 0) + 1; });
@@ -17003,8 +17022,8 @@ function _spSeqHtml(S) {
     '<div class="sp-seq">' + (rows || '<div class="sp-small">No steps yet. Add an email or a LinkedIn step.</div>') + '</div>' +
     '<div class="sp-acts" style="margin-top:12px">' +
       ((n.email || 0) < 6 ? '<button class="g-btn sp-sm" type="button" onclick="_spSeqAdd(\'email\')">' + SP_ICON.plus + ' Email</button>' : '') +
-      (nextLi ? '<button class="g-btn sp-sm" type="button" onclick="_spSeqAdd(\'' + nextLi + '\')">' + SP_ICON.plus + ' ' + esc(SP_SEQ_KIND[nextLi]) + '</button>' : '') +
-    '</div>' +
+      (nextLi && !lockedLi ? '<button class="g-btn sp-sm" type="button" onclick="_spSeqAdd(\'' + nextLi + '\')">' + SP_ICON.plus + ' ' + esc(SP_SEQ_KIND[nextLi]) + '</button>' : '') +
+    '</div>' + (lockedLi ? '<div style="margin-top:16px">' + _liLockedCard(true) + '</div>' : '') +
     (err ? '<div class="sp-seqerr" role="alert">' + esc(err) + '</div>'
       : '<div class="sp-small" style="margin-top:12px">' + (d.emails ? _spPlural(d.emails, 'email') + ', first on ' + esc(_spDate(d.first)) : 'No emails') + (hasLi ? '. LinkedIn steps run from the Samora Chrome plugin' + (_liExtVersion() ? '' : ' (get it from You, LinkedIn plugin)') : '') + '. Days are working days. A reply on any channel stops the rest for that person.</div>');
 }
@@ -17049,6 +17068,7 @@ function _spSeqDel(i) {
 }
 function _spSeqUseTpl(name) {
   var S = _spSeqState(); if (!S) return;
+  if (_liLocked() && SP_SEQ_TPL[name] && SP_SEQ_TPL[name].steps.some(function (s) { return s.kind !== 'email'; })) { showToast('LinkedIn Automation is an add-on. Ask your Samora admin to unlock it.'); return; }
   var t = _spSeqTpl(name, S.start);
   S.steps = t.steps; S.tpl = name; _spSeqRender();
 }
@@ -17060,6 +17080,7 @@ async function _spSeqSave(id, S) {
 function _spSeqWizBody() {
   var W = window._sampW;
   if (!W.seq) W.seq = _spSeqTpl('email_first', W.start || _spNextWeekday());
+  if (_liLocked() && W.seq.tpl === 'email_first' && W.seq.steps.some(function (s) { return s.kind !== 'email'; })) W.seq = _spSeqTpl('email_only', W.seq.start);
   window._spSeqCtx = { ctx: 'wiz' };
   return '<div class="sp-ih">The sequence</div><div class="sp-small" style="margin-top:4px">Pick a starting shape, then change any step. Put LinkedIn first, emails first, or both on the same day.</div><div id="spSeqBox">' + _spSeqHtml(W.seq) + '</div>';
 }
@@ -17111,7 +17132,7 @@ async function spSeqEdit(id, mode) {
   var o = (window._sampOv || {})[id]; if (!o || !o.ok) return;
   var d = await _sampEdge('get_sampaign_linkedin', { campaign_id: id });
   var S = _spSeqFromCampaign(o, d.ok ? d : null);
-  if (mode === 'add_li' && !_spSeqHas(S, 'invite')) {
+  if (mode === 'add_li' && !_liLocked() && !_spSeqHas(S, 'invite')) {
     var firstEmail = (S.steps.find(function (s) { return s.kind === 'email'; }) || { day: 1 }).day;
     S.steps.push({ kind: 'visit', day: firstEmail }, { kind: 'invite', day: firstEmail + 1 }, { kind: 'message', after: 1 });
   }
@@ -17228,4 +17249,157 @@ async function _spPace(secs, msgEl, isStopped) {
     await new Promise(function (r) { setTimeout(r, 1000); });
   }
   return true;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// LinkedIn on the SAMpaign cards, the weekly scorecard, and the LinkedIn
+// Automation add-on (2026-10-03, third drop)
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── The add-on ──────────────────────────────────────────────────────────────
+// Locked only when the server says so. Until get_org_config has answered, the
+// app shows LinkedIn as it always has; the server enforces it either way.
+function _liLocked() {
+  var c = window._orgConfig; if (!c) return false;
+  if (c.linkedinAutomation === false) return true;
+  if (c.linkedinAutomation === true) return false;
+  // Older server: read the add-on switch straight from the org's features.
+  return !!(c.features && c.features.linkedin_automation === false);
+}
+function _liApplyLock() { try { document.documentElement.classList.toggle('li-locked', _liLocked()); } catch (_e) {} }
+// The org config is read at sign-in, but Samora can switch the add-on on or
+// off at any time, so LinkedIn surfaces re-read it when it is a minute old.
+var _liCfgP = null, _liCfgAt = 0;
+function _liEnsureConfig() {
+  if (window._orgConfig && Date.now() - _liCfgAt < 60000) { _liApplyLock(); return Promise.resolve(window._orgConfig); }
+  if (!_liCfgP) _liCfgP = _sampEdge('get_org_config').then(function (cfg) {
+    if (cfg && cfg.ok) { window._orgConfig = cfg; _liCfgAt = Date.now(); }
+    _liApplyLock(); _liCfgP = null;
+    return window._orgConfig;
+  }).catch(function () { _liCfgP = null; return window._orgConfig || null; });
+  return _liCfgP;
+}
+var LI_LOCK_SVG = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V8a4 4 0 018 0v2.5"/><circle cx="12" cy="15.5" r="1.3"/></svg>';
+function _liLockedCard(compact) {
+  return '<div class="li-lock' + (compact ? ' sm' : '') + '" role="note" aria-label="LinkedIn Automation is a locked add-on">' +
+    '<span class="li-lock-sheen" aria-hidden="true"></span>' +
+    '<div class="li-lock-mark">' + LI_LOCK_SVG + '</div>' +
+    '<div class="li-lock-body"><div class="li-lock-k">Private add-on</div>' +
+      '<div class="li-lock-t">LinkedIn Automation</div>' +
+      '<div class="li-lock-s">Invites with a personal note, follow-ups after they accept, all moving in step with your SAMpaigns at a human pace. Unlocked for selected teams by Samora.</div>' +
+      '<div class="li-lock-acts"><button class="li-lock-b" type="button" onclick="_liRequestUnlock(this)">Contact Samora to unlock</button><span class="li-lock-f">Contact the Samora team to unlock LinkedIn Automation for your organisation.</span></div>' +
+    '</div></div>';
+}
+async function _liRequestUnlock(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  var d = await _sampEdge('request_addon', { addon: 'linkedin' });
+  if (btn) { btn.textContent = d.ok ? 'Samora has your request' : 'Contact Samora to unlock'; btn.disabled = !!d.ok; }
+  showToast(d.ok ? 'Sent to the Samora team. They will be in touch to unlock it.' : (d.error || 'Could not reach Samora'));
+}
+
+// ── SAMpaign cards: the LinkedIn line ───────────────────────────────────────
+// Invited, accepted (with the rate), followed up, replied, interested. The
+// bar is the LinkedIn funnel on the same scale as the email one above it.
+function _spLiCardLine(c) {
+  if (_liLocked()) return '';
+  var on = !!(c.channels && c.channels.linkedin && c.channels.linkedin.on);
+  var L = c.li_stats;
+  if (!L && !on) return '';
+  L = L || { invited: 0, accepted: 0, messaged: 0, replied: 0, interested: 0, queued: 0 };
+  var inv = L.invited || 0;
+  if (!inv) return '<div class="sp-lil"><span class="sp-lik">' + SP_ICON.li + '</span><span class="sp-small">' + (L.queued ? _spPlural(L.queued, 'LinkedIn step') + ' lined up in the plugin' : on ? 'LinkedIn on, nothing sent yet' : '') + '</span></div>';
+  var pct = function (n) { return Math.max(0, Math.round(n / inv * 1000) / 10) + '%'; };
+  var acc = Math.round((L.accepted || 0) / inv * 100);
+  var tone = inv < 10 ? '' : acc >= 35 ? 'sp-g' : acc >= 20 ? 'sp-a' : 'sp-r';
+  var interested = L.interested || 0, replied = L.replied || 0, accepted = L.accepted || 0;
+  return '<div class="sp-lil"><span class="sp-lik">' + SP_ICON.li + '</span><div style="flex:1;min-width:0">' +
+    '<div class="sp-fun sp-lifun" aria-hidden="true"><span class="sp-l1" style="width:' + pct(interested) + '"></span><span class="sp-l2" style="width:' + pct(Math.max(0, replied - interested)) + '"></span><span class="sp-l3" style="width:' + pct(Math.max(0, accepted - replied)) + '"></span><span class="sp-l4" style="width:' + pct(Math.max(0, inv - accepted)) + '"></span></div>' +
+    '<div class="sp-fl"><span><b>' + inv + '</b> invited</span><span><b>' + accepted + '</b> accepted' + (inv >= 3 ? ' <b class="' + tone + '">' + acc + '%</b>' : '') + '</span><span><b>' + (L.messaged || 0) + '</b> followed up</span><span><b>' + replied + '</b> replied</span><span class="sp-g"><b class="sp-g">' + interested + '</b> interested</span>' + (L.queued ? '<span class="sp-muted">' + L.queued + ' lined up</span>' : '') + '</div></div></div>';
+}
+
+// ── Weekly scorecard ────────────────────────────────────────────────────────
+window._sc = window._sc || { data: null, at: 0, view: 'me' };
+async function _scLoad(force) {
+  if (!currentUser || !currentUser.token) return null;
+  var S = window._sc;
+  if (!force && S.data && Date.now() - S.at < 60000 && S.view === S.dataView) { _scPaintAll(); return S.data; }
+  var d = await _sampEdge('get_scorecard', { scope: S.view === 'team' ? 'team' : 'me' });
+  if (!d || !d.ok) return null;
+  S.data = d; S.at = Date.now(); S.dataView = S.view;
+  _scPaintAll();
+  if (d.new_wins && d.new_wins.length) _scCelebrate(d.new_wins, d);
+  return d;
+}
+function _scPaintAll() {
+  var d = window._sc.data; if (!d) return;
+  var a = document.getElementById('sampScore'); if (a) a.innerHTML = _scHtml(d, false);
+  var t = document.getElementById('todayScore'); if (t) t.innerHTML = _scHtml(d, true);
+}
+var SC_ICON = {
+  invites: SP_ICON.li, li_messages: SP_ICON.chat, emails: SP_ICON.mail, followups: SP_ICON.mail,
+  meetings: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M8 3v4M16 3v4M3.5 10h17M9 14.5l2 2 4-4"/></svg>'
+};
+function _scHtml(d, compact) {
+  var rows = (d.metrics || []).map(function (m) {
+    var pct = m.target ? Math.min(100, Math.round(m.value / m.target * 100)) : 0;
+    var diff = m.value - (m.last_week || 0);
+    var trend = (m.last_week || m.value) ? '<span class="sc-tr ' + (diff > 0 ? 'up' : diff < 0 ? 'dn' : '') + '">' + (diff > 0 ? '+' + diff : diff < 0 ? String(diff) : 'same') + ' vs last week</span>' : '';
+    return '<div class="sc-m' + (m.hit ? ' hit' : '') + '"><span class="sc-ic">' + (m.hit ? '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.2 4.2L19 7"/></svg>' : (SC_ICON[m.key] || '')) + '</span>' +
+      '<div class="sc-mb"><div class="sc-mh"><span>' + esc(m.label) + '</span><b>' + m.value + '<small> / ' + m.target + '</small></b></div>' +
+      '<div class="sc-bar" role="progressbar" aria-valuemin="0" aria-valuemax="' + m.target + '" aria-valuenow="' + m.value + '" aria-label="' + esc(m.label) + '"><span style="width:' + pct + '%"></span></div>' +
+      (compact ? '' : trend) + '</div></div>';
+  }).join('');
+  var head = '<div class="sc-hd"><div><div class="sp-lbl">This week</div><div class="sc-sub">' + (d.hits ? _spPlural(d.hits, 'target') + ' reached' : 'Monday to today') + (d.streak > 1 ? ' · <span class="sc-streak">' + d.streak + '-week streak</span>' : '') + '</div></div>' +
+    '<div class="sc-ring" style="--p:' + (d.score || 0) + '"><span>' + (d.score || 0) + '<small>%</small></span></div></div>';
+  var tabs = d.can_team && !compact ? '<div class="sp-seg sc-seg" aria-label="Whose week"><button type="button" class="' + (window._sc.view !== 'team' ? 'on' : '') + '" onclick="window._sc.view=\'me\';_scLoad(true)">Me</button><button type="button" class="' + (window._sc.view === 'team' ? 'on' : '') + '" onclick="window._sc.view=\'team\';_scLoad(true)">Team</button></div>' : '';
+  var team = window._sc.view === 'team' && d.team && !compact ? '<div class="sc-team">' + d.team.map(function (t) {
+    return '<div class="sc-tr2"><span class="sp-av">' + esc(_spIni(t.name)) + '</span><div style="flex:1;min-width:0"><div class="sc-tn">' + esc(t.name) + (t.is_me ? ' <span class="sp-small">you</span>' : '') + '</div><div class="sc-bar sm"><span style="width:' + t.score + '%"></span></div><div class="sp-small">' + t.metrics.map(function (m) { return m.value + ' ' + m.label.toLowerCase(); }).join(' · ') + '</div></div><b class="sc-ts">' + t.score + '%</b></div>';
+  }).join('') + '</div>' : '';
+  var foot = !compact ? '<div class="sc-ft">' + (d.custom_targets ? 'Targets set by your admin.' : 'Samora\'s starting targets.') + (d.can_set_targets ? ' <button class="sp-lnk" type="button" onclick="_scTargets()">Set team targets</button>' : '') + '</div>' : '';
+  if (compact) return '<div class="sc-strip"><div class="sc-sh"><div class="sp-lbl">This week</div><div class="sc-ring sm" style="--p:' + (d.score || 0) + '"><span>' + (d.score || 0) + '<small>%</small></span></div>' + (d.streak > 1 ? '<span class="sc-streak">' + d.streak + '-week streak</span>' : '') + '</div><div class="sc-rows">' + rows + '</div></div>';
+  return head + tabs + (team || '<div class="sc-rows">' + rows + '</div>') + foot;
+}
+function _scTargets() {
+  var d = window._sc.data || {}, t = d.targets || {};
+  var keys = [['invites', 'LinkedIn invites'], ['li_messages', 'LinkedIn messages'], ['emails', 'First emails'], ['followups', 'Follow-ups'], ['meetings', 'Meetings booked']];
+  var m = document.createElement('div'); m.className = 'sp-modal'; m.id = 'scTargetsModal';
+  m.addEventListener('click', function (e) { if (e.target === m) m.remove(); });
+  m.innerHTML = '<div class="sp-mcard" role="dialog" aria-modal="true" aria-label="Weekly targets"><h3>Weekly targets for the team</h3><p class="sp-muted" style="margin:4px 0 0">Each person, each week. Hitting one celebrates it once.</p>' +
+    '<div class="sp-row2" style="margin-top:6px">' + keys.map(function (k) { return '<label class="sp-fld">' + k[1] + '<input type="number" min="0" max="1000" id="sct_' + k[0] + '" value="' + (t[k[0]] != null ? t[k[0]] : '') + '"></label>'; }).join('') + '</div>' +
+    '<p class="sp-small" style="margin-top:12px">LinkedIn allows about 100 invites a week on most plans. A target above that cannot be reached.</p>' +
+    '<div class="sp-foot"><button class="g-btn" type="button" onclick="document.getElementById(\'scTargetsModal\').remove()">Cancel</button><button class="g-btn sp-gold" type="button" id="sctSave">Save</button></div></div>';
+  document.body.appendChild(m);
+  document.getElementById('sctSave').onclick = async function () {
+    var v = {}; keys.forEach(function (k) { var n = parseInt(document.getElementById('sct_' + k[0]).value, 10); if (n >= 0) v[k[0]] = Math.min(1000, n); });
+    this.disabled = true;
+    var r = await _sampEdge('save_org_setting', { key: 'weekly_targets', value: v });
+    if (!r.ok) { this.disabled = false; showToast(r.error || 'Could not save'); return; }
+    m.remove(); showToast('Team targets saved'); _scLoad(true);
+  };
+}
+
+// The celebration: one quiet, gold moment per target, once a week.
+function _scCelebrate(wins, d) {
+  var old = document.getElementById('scCele'); if (old) old.remove();
+  var word = function (w) { return String(w.label || '').replace(/^(First|Follow|Meetings)/, function (x) { return x.toLowerCase(); }); };
+  var names = wins.map(word);
+  var line = names.length === 1 ? 'Weekly ' + names[0] + ' target hit' : names.length + ' weekly targets hit';
+  var detail = wins.map(function (w) { return w.value + ' ' + word(w); }).join(' · ');
+  var el = document.createElement('div'); el.id = 'scCele'; el.className = 'sc-cele'; el.setAttribute('role', 'status');
+  el.innerHTML = '<canvas aria-hidden="true"></canvas><div class="sc-cele-c"><div class="sc-cele-k">Samora quota</div><div class="sc-cele-t">' + esc(line) + '</div><div class="sc-cele-s">' + esc(detail) + (d && d.streak > 1 ? ' · ' + d.streak + '-week streak' : '') + '</div></div><button type="button" class="sc-cele-x" aria-label="Close" onclick="this.parentNode.remove()">' + SP_ICON.x + '</button>';
+  document.body.appendChild(el);
+  requestAnimationFrame(function () { el.classList.add('on'); });
+  setTimeout(function () { el.classList.remove('on'); setTimeout(function () { el.remove(); }, 500); }, 7000);
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduce) return;
+  var cv = el.querySelector('canvas'), ctx = cv.getContext && cv.getContext('2d'); if (!ctx) return;
+  var W = cv.width = el.offsetWidth * 2, H = cv.height = 260 * 2;
+  var cols = ['#D4AF37', '#E9C96A', '#B8892A', '#F4E3A1', '#2E7D4F'];
+  var ps = []; for (var i = 0; i < 70; i++) ps.push({ x: W / 2, y: H * 0.42, vx: (Math.random() - 0.5) * 22, vy: -Math.random() * 18 - 6, r: 3 + Math.random() * 5, c: cols[i % cols.length], a: 1, s: Math.random() * 6 });
+  var t0 = performance.now();
+  (function frame(t) {
+    var k = (t - t0) / 1000; ctx.clearRect(0, 0, W, H);
+    ps.forEach(function (p) { p.vy += 0.7; p.x += p.vx; p.y += p.vy; p.a = Math.max(0, 1 - k / 1.6); ctx.globalAlpha = p.a; ctx.fillStyle = p.c; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.s + k * 6); ctx.fillRect(-p.r, -p.r / 2, p.r * 2, p.r); ctx.restore(); });
+    if (k < 1.7) requestAnimationFrame(frame);
+  })(t0);
 }
