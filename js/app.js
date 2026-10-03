@@ -3,7 +3,7 @@ let SB_KEY = localStorage.getItem('dt-sb-key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6I
 let API_KEY = localStorage.getItem('dt-api-key') || '';
 var _userHabits = null;
 // Cache buster — update this string on every deploy to purge stale service worker cache
-var APP_VERSION = '20261002-04';
+var APP_VERSION = '20261002-05';
 (function() {
   if (localStorage.getItem('app-sw-version') !== APP_VERSION && 'serviceWorker' in navigator) {
     navigator.serviceWorker.getRegistrations().then(function(regs) {
@@ -3654,7 +3654,7 @@ async function loadSequencingStats() {
   } catch(e) {
     if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral)">Error: '+esc(e.message)+'</div>';
   }
- if (btn) { btn.textContent = 'Seq stats'; btn.disabled = false; }
+ if (btn) { btn.innerHTML = '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg> Analytics'; btn.disabled = false; }
 }
 
 // ── SAM Sub-tab navigation ─────────────────────────────────────────────────────
@@ -4304,8 +4304,8 @@ async function retagSeqChannels() {
 async function refreshSampaigns() {
   var btn = document.getElementById('seqSyncBtn');
   var out = document.getElementById('seqSyncOutput');
-  var label = btn ? btn.textContent : null;
-  if (btn) { btn.textContent = '↻ Refreshing…'; btn.disabled = true; }
+  var label = btn ? btn.innerHTML : null;
+  if (btn) { btn.textContent = 'Checking…'; btn.disabled = true; }
 
   // ORDER MATTERS. The common reason to press this is that a SAMpaign was
   // just created from Claude or the assistant and the page has never heard of
@@ -4343,7 +4343,8 @@ async function refreshSampaigns() {
       out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">SAMpaigns reloaded. Nothing new in your inbox.</div>';
     }
 
-    // If a campaign panel is open behind this, it is showing old numbers too.
+    // If a campaign page is open, it is showing old numbers too.
+    try { if (typeof _sampRefreshOpen === 'function') _sampRefreshOpen(); } catch(e) {}
     var overlay = document.getElementById('sampaign-detail-overlay');
     if (overlay) {
       var openEl = overlay.querySelector('[id^="sampaignContacts_"]');
@@ -4356,7 +4357,7 @@ async function refreshSampaigns() {
   } catch(e) {
     if (out) out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">SAMpaigns reloaded. <span style="color:var(--coral)">Inbox check failed: ' + esc(e.message) + '</span></div>';
   } finally {
-    if (btn) { btn.textContent = label || '↻ Refresh'; btn.disabled = false; }
+    if (btn) { if (label) btn.innerHTML = label; else btn.textContent = 'Check replies'; btn.disabled = false; }
   }
 }
 
@@ -9746,7 +9747,9 @@ function openSampaignComposer(campaignId) {
   document.getElementById('sampaign-composer-modal')?.remove();
   var c = (window._sampaignCampaignsCache || {})[campaignId] || {};
   var all = (window._sampaignContactsCache || {})[campaignId] || [];
-  var sendable = all.filter(function(x){ return x.email && x.status === 'not_contacted'; });
+  var sendable = (typeof _sampSendableFor === 'function') ? _sampSendableFor(all, window._sampComposerLaunch || 1)
+    : all.filter(function(x){ return x.email && x.status === 'not_contacted'; });
+  window._sampComposerLaunch = null;
   var noEmail = all.filter(function(x){ return !x.email; }).length;
 
   // Default to the next weekday at 9am. A default that lands on Saturday, or
@@ -9878,8 +9881,10 @@ async function submitSampaignSchedule(campaignId) {
   if (when.getTime() < Date.now()) { showToast('That time has already passed'); return; }
 
   var all = (window._sampaignContactsCache || {})[campaignId] || [];
-  var sendable = all.filter(function(x){ return x.email && x.status === 'not_contacted'; });
-  if (!sendable.length) { showToast('No contacts ready to send to'); return; }
+  var _wave = parseInt(document.getElementById('sampSendLaunch')?.value || '1', 10) || 1;
+  var sendable = (typeof _sampSendableFor === 'function') ? _sampSendableFor(all, _wave)
+    : all.filter(function(x){ return x.email && x.status === 'not_contacted'; });
+  if (!sendable.length) { showToast('No one is ready for this email yet'); return; }
 
   // Two steps on purpose, and the same two the AI path uses: write drafts,
   // then schedule them through the warm-up engine. This used to call
@@ -10237,7 +10242,8 @@ async function loadSampaignSendQueue(campaignId) {
       pending:   { label:'Queued',    color:'var(--gold)' },
       sent:      { label:'Sent',      color:'var(--green)' },
       failed:    { label:'Failed',    color:'var(--coral)' },
-      cancelled: { label:'Cancelled', color:'var(--text3)' }
+      cancelled: { label:'Cancelled', color:'var(--text3)' },
+      blocked_no_email: { label:'No email', color:'var(--text3)' }
     };
     // Summary counts the WAVE being viewed, not the campaign, so the numbers
     // agree with the rows underneath them.
@@ -12083,6 +12089,7 @@ async function syncSampaignsQuiet() {
     if (!summary) return;
  showToast('SAMpaign sync: ' + summary);
     // Refresh whatever's on screen, if anything.
+    try { if (typeof _sampRefreshOpen === 'function') _sampRefreshOpen(); } catch(e) {}
     var overlay = document.getElementById('sampaign-detail-overlay');
     if (overlay) {
       var openId = (overlay.querySelector('[id^="sampaignContacts_"]') || {}).id || '';
@@ -15897,4 +15904,783 @@ async function _acctBulkApply() {
     try { if (document.getElementById('accountRepSelect') && document.getElementById('accountRepSelect').value) loadRepAccounts(); } catch (e) {}
     try { loadMyAccounts(); } catch (e) {}
   } catch (e) { _acctBulkModal({ error: e.message }); }
+}
+
+// ══ SAMpaigns, revamped (2026-10-02) ═════════════════════════════════════════
+// Home: a portfolio band, campaign rows that say what each one needs next, and
+// a Needs you column. A full page per SAMpaign with Overview, People,
+// Sequence, Replies and Insights. A four step New SAMpaign. Email and LinkedIn
+// sit side by side; LinkedIn is marked soon until the extension ships.
+//
+// The older functions stay where they are and these later declarations win.
+// People and Sequence keep the existing contact roster, drafts review and
+// queue, so nothing those already do is lost.
+var SP_ICON = {
+  mail: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/></svg>',
+  li: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="M8 10.5v6M8 7.5v.5M11.5 16.5v-3.5a2.2 2.2 0 014.4 0v3.5M11.5 12.5v4"/></svg>',
+  arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
+  back: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>',
+  chat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16v10H8l-4 3z"/></svg>',
+  doc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5h14v14H5zM8 9h8M8 13h5"/></svg>',
+  warn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 3.9L2.6 17.4A1.6 1.6 0 004 19.8h16a1.6 1.6 0 001.4-2.4L13.7 3.9a1.6 1.6 0 00-2.8 0z"/></svg>',
+  clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>',
+  tag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 12.5V4h8.5l8.5 8.5-8 8z"/><circle cx="8" cy="8.5" r="1.3"/></svg>',
+  plus: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
+  x: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  spark: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg>'
+};
+var SP_TYPES = { interested: ['Interested', 'int'], referral: ['Referral', 'ref'], not_now: ['Not now', 'later'], not_interested: ['Not interested', 'no'], other: ['To label', ''], ooo: ['Out of office', 'warn'], bounce: ['Bounced', 'risk'] };
+
+async function _sampEdge(action, body) {
+  var r = await fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify(Object.assign({ action: action }, body || {})) });
+  var d = {}; try { d = await r.json(); } catch (e) { d = { ok: false, error: 'Unexpected response (' + r.status + ')' }; }
+  if (d.ok === undefined) d.ok = r.ok;
+  return d;
+}
+function _spIni(s) { var w = String(s || '').replace(/@.*/, '').split(/[\s._-]+/).filter(Boolean); return ((w[0] || '?')[0] + ((w[1] || '')[0] || '')).toUpperCase(); }
+function _spOwnerName(email) { var l = String(email || '').split('@')[0].split(/[._-]/)[0] || ''; return l ? l.charAt(0).toUpperCase() + l.slice(1) : ''; }
+function _spDate(iso, withTime) {
+  if (!iso) return '';
+  var d = new Date(iso); if (isNaN(d.getTime())) return '';
+  var o = { day: 'numeric', month: 'short' }; if (withTime) { o.hour = '2-digit'; o.minute = '2-digit'; }
+  return d.toLocaleString('en-GB', o);
+}
+function _spAgo(iso) {
+  if (!iso) return '';
+  var m = (Date.now() - new Date(iso).getTime()) / 60000;
+  if (m < 60) return Math.max(1, Math.round(m)) + ' min ago';
+  if (m < 1440) return Math.round(m / 60) + (Math.round(m / 60) === 1 ? ' hour ago' : ' hours ago');
+  var d = Math.round(m / 1440); return d === 1 ? 'yesterday' : d < 14 ? d + ' days ago' : _spDate(iso);
+}
+function _spWave(n) { n = Number(n) || 1; return n <= 1 ? 'First email' : 'Follow-up ' + (n - 1); }
+function _spPlural(n, one, many) { return n + ' ' + (n === 1 ? one : (many || one + 's')); }
+function _spRate(s) {
+  var del = Math.max(0, (s.sent || 0) - (s.dead || 0)), rep = (s.replied || 0) + (s.opted_out || 0);
+  return del > 0 ? Math.round(rep / del * 1000) / 10 : null;
+}
+function _spShow(view) {
+  window._sampView = view;
+  var home = document.getElementById('sampHomeView'), det = document.getElementById('sampDetailPage'), wiz = document.getElementById('sampWizardPage');
+  if (home) home.hidden = view !== 'home';
+  if (det) det.hidden = view !== 'detail';
+  if (wiz) wiz.hidden = view !== 'new';
+  try { window.scrollTo({ top: 0, behavior: 'instant' }); } catch (e) { window.scrollTo(0, 0); }
+}
+
+// ── Home ────────────────────────────────────────────────────────────────────
+async function loadSampaignWorkspace() {
+  var host = document.getElementById('sampaignManualSection');
+  if (!host) return;
+  _spShow('home');
+  host.innerHTML =
+    '<section class="sp-card sp-kpis" id="sampKpis" aria-label="Your SAMpaigns at a glance">' + _spKpisHtml(null) + '</section>' +
+    '<div class="sp-note" id="sampKpiNote" hidden></div>' +
+    '<div class="sp-two"><div><div class="sp-bar" id="sampaignListToolbar"></div><div class="sp-list" id="sampaignCampaignsList"><div class="sp-empty">Loading SAMpaigns…</div></div></div>' +
+    '<aside class="sp-card sp-pad sp-needs" id="sampNeeds" aria-label="Needs you"><div class="sp-lbl">Needs you</div><div class="sp-small" style="margin-top:10px">Checking…</div></aside></div>';
+  try { if (typeof loadGoalTemplates === 'function') loadGoalTemplates(); } catch (e) {}
+  loadSampaignCampaigns();
+}
+function _spKpisHtml(k) {
+  var v = function (x, suf) { return k ? x : '<span class="sp-muted">…</span>'; };
+  var med = k && k.median_reply_days !== null && k.median_reply_days !== undefined ? k.median_reply_days + '<small>days</small>' : (k ? '<span class="sp-muted">n/a</span>' : '');
+  return '<div class="sp-kpi"><div class="sp-lbl">Live</div><div class="n">' + v(k && k.live) + '</div><div class="d">' + (k ? (k.paused ? k.paused + ' paused, ' : '') + k.archived + ' archived' : '&nbsp;') + '</div></div>' +
+    '<div class="sp-kpi"><div class="sp-lbl">People in flight</div><div class="n">' + v(k && k.in_flight) + '</div><div class="d">' + (k ? k.reached + ' reached so far' : '&nbsp;') + '</div></div>' +
+    '<div class="sp-kpi"><div class="sp-lbl">Replies, 7 days</div><div class="n sp-g">' + v(k && k.replies_7d) + '</div><div class="d">' + (k ? k.interested_7d + ' interested' + (k.referrals_7d ? ', ' + _spPlural(k.referrals_7d, 'referral') : '') : '&nbsp;') + '</div></div>' +
+    '<div class="sp-kpi"><div class="sp-lbl">Meetings booked</div><div class="n">' + v(k && k.meetings) + '</div><div class="d">' + (k ? 'from ' + _spPlural(k.replies_total, 'reply', 'replies') + ' in all' : '&nbsp;') + '</div></div>' +
+    '<div class="sp-kpi"><div class="sp-lbl">Typical reply time</div><div class="n">' + (k ? med : '<span class="sp-muted">…</span>') + '</div><div class="d">' + (k ? (k.median_reply_days !== null ? 'half of replies come faster' : 'shows once replies are timed') : '&nbsp;') + '</div></div>';
+}
+async function _sampLoadHome() {
+  var scope = window._sampaignOwnerFilter === 'mine' ? 'mine' : 'org';
+  var d = await _sampEdge('get_sampaign_home', { scope: scope });
+  var box = document.getElementById('sampKpis'), needs = document.getElementById('sampNeeds'), note = document.getElementById('sampKpiNote');
+  if (!d.ok) { if (needs) needs.innerHTML = '<div class="sp-lbl">Needs you</div><div class="sp-small" style="margin-top:10px">' + esc(d.error || 'Could not load') + '</div>'; return; }
+  window._sampHome = d;
+  if (box) box.innerHTML = _spKpisHtml(d.kpis);
+  if (note) { note.hidden = !!d.kpis.captured; note.textContent = d.kpis.captured ? '' : 'Reply times, reply types and meetings start recording once the latest database update has run.'; }
+  if (needs) needs.innerHTML = _spNeedsHtml(d.needs || []);
+}
+function _spNeedsHtml(items) {
+  var li = function (cls, icon, title, sub, btn) { return '<li><span class="sp-ni ' + cls + '">' + icon + '</span><div class="sp-nt">' + title + (sub ? '<small>' + sub + '</small>' : '') + (btn || '') + '</div></li>'; };
+  var go = function (cid, tab, label, extra) { return '<button class="g-btn sp-sm" type="button" onclick="openSampaignDetail(\'' + esc(cid) + '\',\'' + tab + '\'' + (extra ? ',' + extra : '') + ')">' + label + '</button>'; };
+  var html = items.map(function (n) {
+    var camp = esc(n.campaign_name || '');
+    if (n.kind === 'interested') return li('g', SP_ICON.chat, '<b>' + esc(n.name) + '</b> is interested', [esc(n.company || ''), camp, _spAgo(n.at)].filter(Boolean).join(' · '), go(n.campaign_id, 'replies', 'Reply and book'));
+    if (n.kind === 'referral') return li('b', SP_ICON.chat, '<b>' + esc(n.name) + '</b> pointed you to someone', [esc(n.company || ''), camp, _spAgo(n.at)].filter(Boolean).join(' · '), go(n.campaign_id, 'replies', 'See the reply'));
+    if (n.kind === 'drafts') return li('a', SP_ICON.doc, _spPlural(n.count, 'draft') + ' ready for review', camp + ' · ' + _spWave(n.launch).toLowerCase(), go(n.campaign_id, 'sequence', 'Review drafts'));
+    if (n.kind === 'unlabelled') return li('a', SP_ICON.tag, _spPlural(n.count, 'reply', 'replies') + ' to label', camp, go(n.campaign_id, 'replies', 'Label them'));
+    if (n.kind === 'bounces') return li('r', SP_ICON.warn, _spPlural(n.count, 'email') + ' bounced', camp + ' · last 14 days', go(n.campaign_id, 'people', 'Find new addresses', '\'dead\''));
+    if (n.kind === 'failed') return li('r', SP_ICON.warn, _spPlural(n.count, 'email') + ' could not be sent', camp, go(n.campaign_id, 'sequence', 'See why'));
+    if (n.kind === 'overdue') return li('a', SP_ICON.clock, _spWave(n.stage + 1) + ' is overdue', camp + ' · ' + _spPlural(n.count, 'person', 'people') + (n.since ? ' since ' + _spDate(n.since) : ''), go(n.campaign_id, 'sequence', 'Write it'));
+    if (n.kind === 'linkedin') return li('b', SP_ICON.li, _spPlural(n.count, 'LinkedIn note') + ' written', 'Ready to send when LinkedIn automation arrives', '');
+    return '';
+  }).join('');
+  return '<div class="sp-lbl">Needs you' + (items.length ? ' · ' + items.length : '') + '</div>' + (html ? '<ul>' + html + '</ul>' : '<div class="sp-small" style="margin-top:10px">Nothing needs you right now. New replies and drafts show up here first.</div>');
+}
+
+async function loadSampaignCampaigns() {
+  var el = document.getElementById('sampaignCampaignsList');
+  if (!el || !currentUser || !currentUser.token) return;
+  var viewing = window._sampaignView || 'active';
+  try {
+    var d = await _sampEdge('list_sampaigns', { view: viewing, scope: 'org' });
+    if (!d.ok) { el.innerHTML = '<div class="sp-empty sp-r">' + esc(d.error || 'Could not load SAMpaigns') + '</div>'; return; }
+    window._sampList = d;
+    window._sampaignCampaignsCache = window._sampaignCampaignsCache || {};
+    (d.campaigns || []).forEach(function (c) { window._sampaignCampaignsCache[c.id] = c; });
+    if (viewing === 'active') { try { var swept = await _sweepOrphanFupTasks((d.campaigns || []).map(function (c) { return c.id; })); if (swept) showToast('Cleared ' + _spPlural(swept, 'follow-up task') + ' from deleted SAMpaigns'); } catch (e) {} }
+    _spRenderToolbar(d);
+    _spRenderRows();
+    _sampLoadHome();
+  } catch (e) { el.innerHTML = '<div class="sp-empty sp-r">Error: ' + esc(e.message) + '</div>'; }
+}
+function _spRenderToolbar(d) {
+  var bar = document.getElementById('sampaignListToolbar'); if (!bar) return;
+  var f = window._sampaignOwnerFilter || 'all', v = window._sampaignView || 'active';
+  var owners = d.owners || [];
+  var people = owners.length > 1 ? '<div class="sp-seg" style="position:relative" aria-label="Whose SAMpaigns">' +
+      '<button type="button" class="' + (f === 'mine' ? 'on' : '') + '" onclick="setSampaignOwnerFilter(\'mine\')">Mine</button>' +
+      '<button type="button" class="' + (f === 'all' ? 'on' : '') + '" onclick="setSampaignOwnerFilter(\'all\')">Everyone</button>' +
+      '<button type="button" id="sampaignPeopleBtn" class="' + (f === 'pick' ? 'on' : '') + '" onclick="toggleSampaignPeopleMenu(event)" aria-haspopup="true">People' + (f === 'pick' ? ' ' + (window._sampaignPicked || []).length : '') + '</button>' +
+      '<div class="sp-menu" id="sampaignPeopleMenu" style="display:' + (window._sampaignPeopleMenuOpen ? 'block' : 'none') + '">' +
+        owners.map(function (o) { var on = (window._sampaignPicked || []).indexOf(o.user_id) !== -1; return '<label><input type="checkbox" ' + (on ? 'checked ' : '') + 'onchange="toggleSampaignPicked(\'' + esc(o.user_id) + '\', this.checked)">' + esc(o.name || o.email) + '</label>'; }).join('') +
+      '</div></div>' : '';
+  bar.innerHTML =
+    '<div class="sp-seg" aria-label="Active or archived"><button type="button" class="' + (v === 'active' ? 'on' : '') + '" onclick="setSampaignView(\'active\')">Active ' + ((d.counts && d.counts.active) || 0) + '</button><button type="button" class="' + (v === 'archived' ? 'on' : '') + '" onclick="setSampaignView(\'archived\')">Archived ' + ((d.counts && d.counts.archived) || 0) + '</button></div>' +
+    people +
+    '<div class="sp-seg" aria-label="Channel"><button type="button" class="on">All channels</button><button type="button" disabled title="LinkedIn automation arrives with the Chrome extension">LinkedIn<span class="sp-soon">Soon</span></button></div>' +
+    '<input class="sp-search" type="search" id="sampSearch" aria-label="Search SAMpaigns" placeholder="Search a SAMpaign or owner" value="' + esc(window._sampSearch || '') + '" oninput="window._sampSearch=this.value;_spRenderRows()">';
+}
+function _spNextLine(c) {
+  var s = c.stats || {}, q = c.queue || {};
+  var sched = (c.followup_schedule || []).slice().sort(function (a, b) { return String(a.next_due).localeCompare(String(b.next_due)); })[0];
+  if (c.archived) return 'Archived. Nothing sends.';
+  if (c.paused) return 'Paused. Queued emails are back in drafts until you schedule them again.';
+  if (!s.total) return 'Add people to get started';
+  if (q.drafts) return _spPlural(q.drafts, 'draft') + ' ready for review';
+  if (q.failed) return _spPlural(q.failed, 'email') + ' could not be sent. Open to see why';
+  if (q.pending) return _spPlural(q.pending, 'email') + ' scheduled, next on ' + _spDate(q.next_send, true);
+  if (sched && new Date(sched.next_due).getTime() < Date.now() - 86400000) return _spWave(sched.stage + 1) + ' overdue since ' + _spDate(sched.next_due) + ', ' + _spPlural(sched.count, 'person', 'people');
+  if (sched) return _spWave(sched.stage + 1) + ' due ' + _spDate(sched.next_due) + ' for ' + _spPlural(sched.count, 'person', 'people');
+  if (!s.sent) return 'Write the first emails';
+  return 'All emails sent. Waiting for replies';
+}
+function _spRenderRows() {
+  var el = document.getElementById('sampaignCampaignsList'); var d = window._sampList; if (!el || !d) return;
+  var q = String(window._sampSearch || '').trim().toLowerCase();
+  var all = (d.campaigns || []).filter(function (c) { return _sampaignOwnerAdmits(c.owner_user_id); })
+    .filter(function (c) { return !q || (c.name + ' ' + (c.owner_email || '') + ' ' + (c.focus || '')).toLowerCase().indexOf(q) !== -1; });
+  if (!all.length) {
+    var why = window._sampaignView === 'archived' ? 'Nothing archived here.' : q ? 'No SAMpaign matches "' + esc(q) + '".' : (window._sampaignOwnerFilter === 'mine' ? 'You have no live SAMpaigns yet.' : 'No live SAMpaigns yet.');
+    el.innerHTML = '<div class="sp-card sp-empty">' + why + (window._sampaignView !== 'archived' ? '<div style="margin-top:12px"><button class="g-btn sp-gold" type="button" onclick="toggleNewSampaignForm()">' + SP_ICON.plus + ' New SAMpaign</button></div>' : '') + '</div>';
+    return;
+  }
+  el.innerHTML = all.map(function (c) {
+    var s = c.stats || {}, tot = s.total || 0, q2 = c.queue || {};
+    var rate = _spRate(s), replied = (s.replied || 0) + (s.opted_out || 0), interested = s.interested || 0;
+    var w = function (n) { return tot ? Math.max(0, Math.round(n / tot * 1000) / 10) + '%' : '0%'; };
+    var tone = rate === null ? 'sp-muted' : rate >= 12 ? 'sp-g' : rate >= 7 ? 'sp-a' : 'sp-r';
+    var note = rate === null ? (s.sent ? 'too early to tell' : 'nothing sent yet') : rate >= 12 ? 'reply rate, above 12%' : rate >= 7 ? 'reply rate, around average' : 'reply rate, below average';
+    var flags = [];
+    if (c.paused) flags.push('<span class="sp-chip warn">Paused</span>');
+    if (s.dead) flags.push('<span class="sp-chip risk">' + s.dead + ' bounced</span>');
+    if (q2.failed) flags.push('<span class="sp-chip risk">' + q2.failed + ' failed</span>');
+    if (q2.drafts) flags.push('<span class="sp-chip warn">' + q2.drafts + ' to review</span>');
+    var owner = _spOwnerName(c.owner_email) || 'Someone';
+    var acts = c.is_owner ? (window._sampaignView === 'archived'
+        ? '<button class="g-btn sp-sm" type="button" onclick="event.stopPropagation();restoreSampaignCampaign(\'' + esc(c.id) + '\',\'' + esc(c.name).replace(/'/g, '&#39;') + '\')">Restore</button>' : '') : '';
+    return '<div class="sp-row" role="link" tabindex="0" onclick="openSampaignDetail(\'' + esc(c.id) + '\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();openSampaignDetail(\'' + esc(c.id) + '\')}">' +
+      '<div><div class="sp-cn">' + esc(c.name) + '</div>' +
+        '<div class="sp-cm"><span class="sp-av">' + esc(_spIni(c.owner_email)) + '</span>' + esc(owner) + (c.is_owner ? '' : ' · view only') + ' · ' + (c.scope === 'list' ? 'a list of companies' : 'one account') + (c.focus ? ' · ' + esc(c.focus) : '') + '</div>' +
+        '<div class="sp-chips"><span class="sp-chip ' + (c.paused ? 'warn' : 'live') + '"><i></i>Email</span><span class="sp-chip soon">LinkedIn soon</span>' + flags.join('') + '</div></div>' +
+      '<div><div class="sp-fun" aria-hidden="true"><span class="sp-f1" style="width:' + w(interested) + '"></span><span class="sp-f2" style="width:' + w(Math.max(0, replied - interested)) + '"></span><span class="sp-f3" style="width:' + w(Math.max(0, (s.sent || 0) - replied)) + '"></span></div>' +
+        '<div class="sp-fl"><span><b>' + (s.sent || 0) + '</b> of ' + tot + ' reached</span><span><b>' + replied + '</b> replied</span><span class="sp-g"><b class="sp-g">' + interested + '</b> interested</span>' + (s.meetings ? '<span><b>' + s.meetings + '</b> ' + (s.meetings === 1 ? 'meeting' : 'meetings') + '</span>' : '') + '</div></div>' +
+      '<div class="sp-rate"><div class="n ' + tone + '">' + (rate === null ? 'n/a' : rate + '%') + '</div><small>' + note + '</small></div>' +
+      '<div class="sp-next">' + SP_ICON.arrow + '<span>' + esc(_spNextLine(c)) + '</span>' + (acts ? '<span class="sp-rowacts">' + acts + '</span>' : '') + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+// ── Detail page ─────────────────────────────────────────────────────────────
+var SP_TABS = [['overview', 'Overview'], ['people', 'People'], ['sequence', 'Sequence'], ['replies', 'Replies'], ['insights', 'Insights']];
+function openSampaignDetail(campaignId, tab, filter) {
+  var page = document.getElementById('sampDetailPage'); if (!page) return;
+  window._sampOpenId = campaignId;
+  window._sampTab = tab === 'contacts' ? 'people' : tab === 'queue' ? 'sequence' : tab === 'trend' ? 'insights' : (tab || 'overview');
+  window._sampaignStatusFilter = filter || null;
+  var id = esc(campaignId);
+  page.innerHTML = '<button class="sp-back" type="button" onclick="sampBackToList()">' + SP_ICON.back + 'All SAMpaigns</button>' +
+    '<div id="sampHeader_' + id + '"></div>' +
+    '<div class="sp-tabs" data-hscroll role="tablist" id="sampTabs_' + id + '"></div>' +
+    '<div id="sampBody_' + id + '"><div class="sp-empty">Loading…</div></div>';
+  _spShow('detail');
+  _spRenderHeader(campaignId);
+  _renderSampTabs(campaignId);
+  _sampLoadOverview(campaignId).then(function () { setSampTab(campaignId, window._sampTab); });
+  // The composer and the contact roster read this cache; fill it up front.
+  _sampPrimeContacts(campaignId);
+}
+function sampBackToList() {
+  window._sampOpenId = null;
+  _spShow('home');
+  loadSampaignCampaigns();
+}
+async function _sampPrimeContacts(id) {
+  try { var d = await _sampEdge('list_sampaign_contacts', { campaign_id: id }); if (d.ok) { window._sampaignContactsCache = window._sampaignContactsCache || {}; window._sampaignContactsCache[id] = d.contacts || []; } } catch (e) {}
+}
+async function _sampLoadOverview(id) {
+  var d = await _sampEdge('get_sampaign_overview', { campaign_id: id });
+  window._sampOv = window._sampOv || {};
+  if (d.ok) {
+    window._sampOv[id] = d;
+    var c = (window._sampaignCampaignsCache || {})[id] || {};
+    window._sampaignCampaignsCache[id] = Object.assign({}, c, { id: id, name: d.campaign.name, owner_email: d.campaign.owner_email, is_owner: d.campaign.is_owner, campaign_goal: d.campaign.campaign_goal, focus: d.campaign.focus, followup_dates: d.campaign.followup_dates });
+  } else window._sampOv[id] = { ok: false, error: d.error };
+  _spRenderHeader(id); _renderSampTabs(id);
+  return d;
+}
+function _sampRefreshOpen() {
+  var id = window._sampOpenId; if (!id || window._sampView !== 'detail') return;
+  _sampLoadOverview(id).then(function () { if (window._sampTab !== 'people' && window._sampTab !== 'sequence') setSampTab(id, window._sampTab); else _spRenderSeqTop(id); });
+}
+function _spStatus(o) {
+  var c = o.campaign;
+  if (c.archived) return ['Archived', 'idle'];
+  if (c.paused_at) return ['Paused', 'paused'];
+  if (!o.counts.sent && !(o.waves || []).some(function (w) { return w.pending; })) return ['Not started', 'idle'];
+  return ['Live', 'live'];
+}
+function _spRenderHeader(id) {
+  var el = document.getElementById('sampHeader_' + id); if (!el) return;
+  var o = (window._sampOv || {})[id];
+  var cached = (window._sampaignCampaignsCache || {})[id] || {};
+  if (!o || !o.ok) {
+    el.innerHTML = '<div class="sp-head"><div><h1 class="sp-title">' + esc(cached.name || 'SAMpaign') + '</h1>' + (o && o.error ? '<div class="sp-sub sp-r">' + esc(o.error) + '</div>' : '') + '</div></div>';
+    return;
+  }
+  var c = o.campaign, st = _spStatus(o), n = o.next || {};
+  var owner = _spOwnerName(c.owner_email);
+  var sub = [owner + (c.is_owner ? ' (you)' : ''), c.scope === 'list' ? 'a list of companies' : 'one account', _spPlural(o.counts.total, 'person', 'people'), c.created_at ? 'started ' + _spDate(c.created_at) : ''].filter(Boolean).join(' · ');
+  var goal = o.goal ? '<div class="sp-sub" style="margin-top:8px"><b>Goal:</b> ' + (o.goal.target ? o.goal.current + ' of ' + o.goal.target + ' ' : o.goal.current + ' ') + ({ meetings: 'meetings booked', interested: 'interested replies', replies: 'replies' })[o.goal.metric] + '</div>' : '';
+  var primary = '';
+  if (c.is_owner && !c.archived) {
+    if (n.kind === 'paused') primary = '<button class="g-btn sp-gold" type="button" onclick="sampPause(\'' + esc(id) + '\', false)">Resume</button>';
+    else if (n.kind === 'review') primary = '<button class="g-btn sp-gold" type="button" onclick="setSampTab(\'' + esc(id) + '\',\'sequence\')">' + esc(n.label) + '</button>';
+    else if (n.kind === 'write') primary = '<button class="g-btn sp-gold" type="button" onclick="sampWriteDrafts(\'' + esc(id) + '\',' + n.launch + ')">' + SP_ICON.spark + ' ' + esc(n.label) + '</button>';
+  }
+  var acts = c.is_owner && !c.archived
+    ? (c.paused_at ? '' : '<button class="g-btn" type="button" onclick="sampPause(\'' + esc(id) + '\', true)">Pause</button>') +
+      '<button class="g-btn" type="button" onclick="sampOpenEdit(\'' + esc(id) + '\')">Edit</button>' +
+      '<button class="g-btn" type="button" onclick="syncSampaignCampaign(\'' + esc(id) + '\')" title="Check the mailbox for new replies now">Check replies</button>' + primary
+    : '<span class="sp-chip">View only · syncs from ' + esc(owner || 'the owner') + '\'s mailbox</span>';
+  el.innerHTML = '<div class="sp-head"><div style="min-width:0;flex:1"><h1 class="sp-title">' + esc(c.name) + '<span class="sp-pill ' + st[1] + '"><i></i>' + st[0] + '</span></h1>' +
+    '<div class="sp-sub">' + esc(sub) + '</div>' + goal +
+    (c.campaign_goal ? '<p class="sp-goal clamp" id="sampGoal_' + esc(id) + '">' + esc(c.campaign_goal) + '</p>' + (c.campaign_goal.length > 180 ? '<button class="sp-back" style="margin:4px 0 0;font-weight:600;color:var(--c-accent-text)" type="button" onclick="var g=document.getElementById(\'sampGoal_' + esc(id) + '\');g.classList.toggle(\'clamp\');this.textContent=g.classList.contains(\'clamp\')?\'Read more\':\'Show less\'">Read more</button>' : '') : '') +
+    '</div><div class="sp-acts">' + acts + '</div></div>';
+}
+function _renderSampTabs(id) {
+  var el = document.getElementById('sampTabs_' + id); if (!el) return;
+  var o = (window._sampOv || {})[id];
+  var cnt = { people: o && o.ok ? o.counts.total : '', sequence: o && o.ok ? (o.waves || []).reduce(function (a, w) { return a + (w.draft || 0); }, 0) : 0, replies: o && o.ok ? (o.replies || []).filter(function (r) { return r.status === 'replied' || r.status === 'opted_out'; }).length : '' };
+  el.innerHTML = SP_TABS.map(function (t) {
+    var on = window._sampTab === t[0];
+    var c = cnt[t[0]];
+    var badge = t[0] === 'sequence' ? (c ? '<small class="hot">' + c + ' to review</small>' : '') : (c !== undefined && c !== '' ? '<small>' + c + '</small>' : '');
+    return '<button type="button" role="tab" aria-selected="' + on + '" class="' + (on ? 'on' : '') + '" onclick="setSampTab(\'' + esc(id) + '\',\'' + t[0] + '\')">' + t[1] + badge + '</button>';
+  }).join('');
+}
+function setSampTab(id, tab) {
+  if (tab === 'contacts') tab = 'people'; else if (tab === 'queue') tab = 'sequence'; else if (tab === 'trend') tab = 'insights';
+  window._sampTab = tab;
+  _renderSampTabs(id);
+  var body = document.getElementById('sampBody_' + id); if (!body) return;
+  var o = (window._sampOv || {})[id];
+  if (tab === 'people') {
+    body.innerHTML = _spPeopleChips(id) + '<div id="sampaignContacts_' + esc(id) + '"><div class="sp-small">Loading people…</div></div><div id="sampaignAddRows_' + esc(id) + '"></div>';
+    _loadSampaignContactsInto(id);
+    return;
+  }
+  if (tab === 'sequence') {
+    body.innerHTML = '<div id="sampSeqTop_' + esc(id) + '"></div><div class="sp-lbl" style="margin:6px 0 10px">Drafts and queue</div><div class="sp-card sp-pad" id="sampSendQueue"><div class="sp-small">Loading…</div></div>';
+    _spRenderSeqTop(id);
+    loadSampaignSendQueue(id);
+    return;
+  }
+  if (!o || !o.ok) { body.innerHTML = '<div class="sp-card sp-empty">' + esc((o && o.error) || 'Loading…') + '</div>'; return; }
+  if (tab === 'overview') body.innerHTML = _spOverviewHtml(id, o);
+  else if (tab === 'replies') body.innerHTML = _spRepliesHtml(id, o);
+  else if (tab === 'insights') body.innerHTML = _spInsightsHtml(id, o);
+}
+
+// Overview
+function _spOverviewHtml(id, o) {
+  var c = o.counts, r = o.rate, ch = o.channels, h = o.health;
+  var take = (o.take || []).length
+    ? '<ul>' + o.take.map(function (t) { return '<li class="' + esc(t.tone || '') + '"><b>' + esc(t.title) + '</b> ' + esc(t.text) + '</li>'; }).join('') + '</ul>'
+    : '<p class="sp-small" style="margin:10px 0 0">SAM writes its take once a few emails have gone out.</p>';
+  var conv = function (a, b) { return b > 0 ? Math.round(a / b * 100) + '%' : ''; };
+  var tile = function (n, label, extra, cls) { return '<div class="sp-st' + (cls ? ' ' + cls : '') + '"><div class="n">' + n + '</div><small>' + label + '</small>' + (extra ? '<em>' + extra + '</em>' : '') + '</div>'; };
+  var li = ch.linkedin || {};
+  var act = (o.act_now || []).map(function (p) { return _spPersonRow(id, o, p, true); }).join('');
+  var gaugePos = function (v) { return Math.max(0, Math.min(100, (v / 24) * 100)); };
+  var waves = (o.waves || []);
+  var tl = waves.map(function (w) {
+    var done = w.sent > 0 && !w.pending && !w.draft, cls = done ? 'done' : '';
+    var line = w.sent ? (w.first_sent ? _spDate(w.first_sent) + (w.last_sent && _spDate(w.last_sent) !== _spDate(w.first_sent) ? ' to ' + _spDate(w.last_sent) : '') + ' · ' : '') + w.sent + ' sent · ' + _spPlural(w.replies, 'reply', 'replies') : '';
+    if (w.draft) line = _spPlural(w.draft, 'draft') + ' ready for review';
+    else if (w.pending) line = (line ? line + ' · ' : '') + w.pending + ' scheduled from ' + _spDate(w.next_send, true);
+    else if (!w.sent) line = w.planned_date ? 'Planned for ' + _spDate(w.planned_date) + (w.ready ? ' · ' + w.ready + ' ready' : '') : (w.ready ? w.ready + ' ready to write' : 'Not started');
+    return '<div class="sp-tli ' + cls + '">' + esc(w.label) + '<small>' + esc(line) + '</small></div>' + (w.launch === 1 ? '<div class="sp-tli soon">LinkedIn invite with a note<small>Arrives with the Chrome extension' + (li.notes ? ' · ' + li.notes + ' notes written' : '') + '</small></div>' : '');
+  }).join('');
+  return '<div class="sp-ov"><div class="sp-col">' +
+    '<section class="sp-card sp-pad sp-take"><div class="sp-lbl">SAM\'s take</div>' + take + '<div class="sp-small">From ' + _spPlural(c.sent, 'email') + ' sent and ' + _spPlural(c.replied, 'reply', 'replies') + ', as of ' + _spDate(o.as_of, true) + '.</div></section>' +
+    '<section class="sp-card sp-pad"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><div class="sp-lbl">Outcome by channel</div><span class="sp-small">A reply on any channel stops the rest for that person</span></div>' +
+      '<div class="sp-track"><div class="sp-tk" style="color:var(--c-accent-text)">' + SP_ICON.mail + '<span style="color:var(--text)">Email</span></div>' + tile(c.sent, 'reached of ' + c.total) + tile('<span class="sp-g">' + c.replied + '</span>', 'replied', conv(c.replied, c.delivered)) + tile('<span class="sp-g">' + c.by_type.interested + '</span>', 'interested', conv(c.by_type.interested, c.replied)) + tile(c.meetings, c.meetings === 1 ? 'meeting booked' : 'meetings booked', conv(c.meetings, c.by_type.interested)) + '</div>' +
+      '<div class="sp-track"><div class="sp-tk" style="color:var(--c-info)">' + SP_ICON.li + '<span style="color:var(--text)">LinkedIn</span><span class="sp-soon">Soon</span></div>' + tile(li.notes || 0, 'notes written') + tile(li.invited || 0, 'invited', '', 'dim') + tile(li.connected || 0, 'connected', '', 'dim') + tile(li.replied || 0, 'replied', '', 'dim') + '</div>' +
+    '</section>' +
+    '<section class="sp-card sp-pad"><div class="sp-lbl">Act now' + ((o.act_now || []).length ? ' · ' + o.act_now.length : '') + '</div>' + (act || '<p class="sp-small" style="margin:10px 0 0">No replies waiting on you.</p>') + '</section>' +
+  '</div><div class="sp-col">' +
+    '<section class="sp-card sp-pad"><div class="sp-lbl">Reply rate</div>' +
+      (r.reply_rate === null ? '<p class="sp-small" style="margin:10px 0 0">Shows once emails have been delivered.</p>' :
+      '<div style="display:flex;align-items:baseline;gap:10px;margin-top:8px;flex-wrap:wrap"><span class="sp-big ' + (r.reply_rate >= 12 ? 'sp-g' : r.reply_rate >= 7 ? 'sp-a' : 'sp-r') + '">' + r.reply_rate + '%</span><span class="sp-muted">' + c.replied + ' of ' + c.delivered + ' delivered</span></div>' +
+      '<div class="sp-gauge"><div class="sp-gm" style="left:' + gaugePos(r.reply_rate) + '%"><b>' + r.reply_rate + '%</b></div><span class="sp-gt" style="left:' + gaugePos(7) + '%">Average 7%</span><span class="sp-gt" style="left:' + gaugePos(12) + '%">Good 12%</span>' + (r.org_median !== null ? '<span class="sp-gt" style="left:' + gaugePos(r.org_median) + '%;top:-20px">Your org ' + r.org_median + '%</span>' : '') + '</div>' +
+      '<div class="sp-small">Benchmarks for cold B2B email. "Your org" is the median of your organisation\'s SAMpaigns.</div>') +
+    '</section>' +
+    '<section class="sp-card sp-pad"><div class="sp-lbl">Sequence</div><div class="sp-tl">' + tl + '</div><button class="g-btn sp-sm" type="button" onclick="setSampTab(\'' + esc(id) + '\',\'sequence\')">Open the sequence</button></section>' +
+    '<section class="sp-card sp-pad"><div class="sp-lbl">Health</div>' +
+      '<div class="sp-hl" style="margin-top:6px"><span>Bounce rate</span><b class="' + (h.bounce_rate > 5 ? 'sp-r' : '') + '">' + (h.bounce_rate === null ? 'n/a' : h.bounce_rate + '%' + (h.bounce_rate > 5 ? ', check addresses' : '')) + '</b></div>' +
+      '<div class="sp-hl"><span>Sending pace</span><b>' + (h.pace_per_day ? h.pace_per_day + ' a day of ' + h.cap + ' allowed' : 'Nothing scheduled') + '</b></div>' +
+      '<div class="sp-hl"><span>Mailbox</span><b class="' + (h.mailbox_connected ? 'sp-g' : 'sp-r') + '">' + (h.mailbox_connected ? 'Connected' : 'Not connected') + '</b></div>' +
+      '<div class="sp-hl"><span>Opted out</span><b>' + h.opted_out + '</b></div>' +
+      (c.no_email ? '<div class="sp-hl"><span>Still need an email</span><b class="sp-a">' + c.no_email + '</b></div>' : '') +
+    '</section>' +
+  '</div></div>';
+}
+function _spPersonRow(id, o, p, compact) {
+  var t = SP_TYPES[p.reply_type] || ['Replied', ''];
+  var can = o.campaign.can_label && (p.status === 'replied' || p.status === 'opted_out');
+  var when = p.replied_at ? 'Replied to the ' + _spWave(p.replied_wave).toLowerCase() + ' · ' + _spAgo(p.replied_at) + (p.lag_days !== null && p.lag_days !== undefined ? ' · ' + (p.lag_days < 1 ? 'same day' : Math.round(p.lag_days) + (Math.round(p.lag_days) === 1 ? ' day' : ' days') + ' after') : '')
+    : p.bounced_at ? 'Bounced · ' + _spAgo(p.bounced_at) : p.status === 'ooo' ? 'Away message, the sequence continues after it' : 'Replied before reply times were recorded';
+  var opts = ['interested', 'referral', 'not_now', 'not_interested', 'other'].map(function (k) { return '<option value="' + k + '"' + (p.reply_type === k ? ' selected' : '') + '>' + SP_TYPES[k][0] + '</option>'; }).join('');
+  var mail = o.campaign.is_owner && p.email ? '<a class="g-btn sp-sm' + (p.reply_type === 'interested' ? ' sp-gold' : '') + '" href="https://mail.google.com/mail/u/0/#search/' + encodeURIComponent('from:' + p.email) + '" target="_blank" rel="noopener">Open the reply</a>' : '';
+  var meet = can ? (p.meeting_booked_at ? '<button class="g-btn sp-sm" type="button" onclick="sampMarkMeeting(\'' + esc(id) + '\',\'' + esc(p.contact_id) + '\',false)">Meeting booked ' + _spDate(p.meeting_booked_at) + ', undo</button>' : '<button class="g-btn sp-sm" type="button" onclick="sampMarkMeeting(\'' + esc(id) + '\',\'' + esc(p.contact_id) + '\',true)">Mark meeting booked</button>') : (p.meeting_booked_at ? '<span class="sp-chip int">Meeting booked</span>' : '');
+  var label = can ? '<label class="sp-small" style="display:inline-flex;align-items:center;gap:6px">Label <select class="sp-sel" onchange="sampSetReply(\'' + esc(id) + '\',\'' + esc(p.contact_id) + '\',this.value)">' + opts + '</select></label>' : '';
+  var liBtn = p.linkedin_url ? '<a class="g-btn sp-sm sp-ghost" href="' + esc(p.linkedin_url) + '" target="_blank" rel="noopener">LinkedIn</a>' : '';
+  return '<div class="sp-pp"><span class="sp-av lg">' + esc(_spIni(p.name || p.email)) + '</span><div class="sp-pn"><b>' + esc(p.name || p.email) + '</b> <span class="sp-chip ' + t[1] + '">' + t[0] + (p.reply_type_source === 'human' ? '' : (p.reply_type && p.reply_type !== 'bounce' && p.reply_type !== 'ooo' && p.reply_type !== 'other' ? ' · by SAM' : '')) + '</span>' +
+    '<small>' + esc([p.title, p.company].filter(Boolean).join(' · ')) + '</small><small>' + esc(when) + '</small>' +
+    ((mail || meet || label || liBtn) && p.status !== 'dead' && p.status !== 'ooo' ? '<div class="sp-pa">' + mail + meet + label + liBtn + '</div>' : '') + '</div></div>';
+}
+async function sampSetReply(id, contactId, type) {
+  var d = await _sampEdge('set_sampaign_reply', { contact_id: contactId, reply_type: type });
+  if (!d.ok) { showToast(d.error || 'Could not save the label'); return; }
+  showToast('Label saved');
+  _sampRefreshOpen();
+}
+async function sampMarkMeeting(id, contactId, booked) {
+  var d = await _sampEdge('mark_sampaign_meeting', { contact_id: contactId, booked: booked });
+  if (!d.ok) { showToast(d.error || 'Could not save'); return; }
+  showToast(booked ? 'Meeting recorded' : 'Meeting removed');
+  _sampRefreshOpen();
+}
+
+// People: the existing roster, with quick filters on top
+function _spPeopleChips(id) {
+  var o = (window._sampOv || {})[id]; var c = o && o.ok ? o.counts : null;
+  var f = window._sampaignStatusFilter || null, tab = (typeof _sampaignContactTab !== 'undefined') ? _sampaignContactTab : 'active';
+  var b = function (key, label, n) { var on = key === 'prospective' ? (!f && tab === 'prospective') : key === 'all' ? (!f && tab !== 'prospective') : f === key; return '<button type="button" class="' + (on ? 'on' : '') + '" onclick="sampPeopleFilter(\'' + esc(id) + '\',\'' + key + '\')">' + label + (n !== null && n !== undefined ? '<b>' + n + '</b>' : '') + '</button>'; };
+  return '<div class="sp-pf" id="sampPeopleChips_' + esc(id) + '">' + b('all', 'Reached', c ? c.sent : null) + b('replied', 'Replied', c ? c.replied : null) + b('sent', 'In sequence', null) + b('ooo', 'Away', c ? c.ooo : null) + b('dead', 'Bounced', c ? c.bounced : null) + b('prospective', 'Not reached', c ? c.not_reached : null) + '</div>';
+}
+function sampPeopleFilter(id, key) {
+  if (key === 'prospective') { window._sampaignStatusFilter = null; try { _sampaignContactTab = 'prospective'; } catch (e) {} }
+  else if (key === 'all') { window._sampaignStatusFilter = null; try { _sampaignContactTab = 'active'; } catch (e) {} }
+  else { window._sampaignStatusFilter = key; }
+  var chips = document.getElementById('sampPeopleChips_' + id);
+  if (chips) chips.outerHTML = _spPeopleChips(id);
+  _renderSampaignContacts(id);
+}
+// The old status filter also redrew the old overview; here it only filters.
+function setSampaignStatusFilter(campaignId, status) {
+  window._sampaignStatusFilter = (window._sampaignStatusFilter === status) ? null : status;
+  _renderSampaignContacts(campaignId);
+}
+
+// Sequence: what each email did, what is next, and the mailbox calendar
+function _spRenderSeqTop(id) {
+  var box = document.getElementById('sampSeqTop_' + id); if (!box) return;
+  var o = (window._sampOv || {})[id];
+  if (!o || !o.ok) { box.innerHTML = ''; return; }
+  var owner = o.campaign.is_owner && !o.campaign.archived;
+  var totalReplies = (o.waves || []).reduce(function (a, w) { return a + w.replies; }, 0);
+  var li = o.channels.linkedin || {};
+  var steps = (o.waves || []).map(function (w) {
+    var share = totalReplies ? Math.round(w.replies / totalReplies * 100) : 0;
+    var bits = [];
+    if (w.sent) bits.push(w.sent + ' sent' + (w.first_sent ? ' from ' + _spDate(w.first_sent) : ''));
+    if (w.sent) bits.push(_spPlural(w.replies, 'reply', 'replies') + (w.bounces ? ', ' + w.bounces + ' bounced' : ''));
+    if (w.pending) bits.push(w.pending + ' scheduled from ' + _spDate(w.next_send, true));
+    if (!w.sent && !w.pending && w.planned_date) bits.push('planned for ' + _spDate(w.planned_date));
+    if (w.failed) bits.push(w.failed + ' failed');
+    var acts = '';
+    if (owner) {
+      if (w.draft) acts = '<button class="g-btn sp-sm sp-gold" type="button" onclick="sampReviewWave(\'' + esc(id) + '\',' + w.launch + ')">Review ' + w.draft + '</button><button class="g-btn sp-sm" type="button" onclick="planSampaignDrafts(\'' + esc(id) + '\',null,' + w.launch + ')">Schedule</button>';
+      else if (w.ready && !w.pending) acts = '<button class="g-btn sp-sm sp-gold" type="button" onclick="sampWriteDrafts(\'' + esc(id) + '\',' + w.launch + ')">' + SP_ICON.spark + ' Write ' + w.ready + ' with SAM</button><button class="g-btn sp-sm" type="button" onclick="sampOpenComposer(\'' + esc(id) + '\',' + w.launch + ')">One email for all</button>';
+      else if (w.sent || w.pending) acts = '<button class="g-btn sp-sm" type="button" onclick="sampReviewWave(\'' + esc(id) + '\',' + w.launch + ')">See emails</button>';
+    }
+    var row = '<div class="sp-step"><span class="sp-sn">' + SP_ICON.mail + '</span><div><div class="sp-sh">' + esc(w.label) + (w.draft ? ' <span class="sp-chip warn">' + w.draft + ' to review</span>' : '') + (w.launch > 1 ? ' <span class="sp-small">· same thread</span>' : '') + '</div>' +
+      '<div class="sp-sm2">' + esc(bits.join(' · ') || (w.ready ? w.ready + ' ready to write' : 'Nobody is waiting for this email yet')) + '</div>' +
+      (w.sent ? '<div class="sp-rb"><span style="width:' + share + '%"></span></div><div class="sp-sm2">' + share + '% of replies</div>' : '') + '</div><div class="sp-acts">' + acts + '</div></div>';
+    if (w.launch === 1) row += '<div class="sp-step"><span class="sp-sn li">' + SP_ICON.li + '</span><div><div class="sp-sh">LinkedIn invite with a note <span class="sp-soon">Soon</span></div><div class="sp-sm2">For people with no email reply' + (li.notes ? ' · ' + li.notes + ' notes written' : ' · write notes in People') + '</div></div><div></div></div>';
+    return row;
+  }).join('');
+  var cal = o.calendar || { days: [], cap: 25 };
+  var maxV = Math.max(cal.cap, 1) * 1.2;
+  var bars = (cal.days || []).map(function (d) {
+    var other = Math.max(0, d.all - d.mine);
+    var lbl = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.dow] || '';
+    return '<div class="sp-cb" title="' + esc(_spDate(d.date) + ': ' + d.mine + ' from this SAMpaign, ' + other + ' from others') + '"><div class="bars"><span class="o" style="height:' + Math.round(other / maxV * 100) + '%"></span><span class="m" style="height:' + Math.round(d.mine / maxV * 100) + '%"></span></div><small>' + lbl + '</small></div>';
+  }).join('');
+  box.innerHTML = '<div class="sp-wv"><section class="sp-card"><div class="sp-pad" style="padding-bottom:6px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><div class="sp-lbl">Sequence · email live, LinkedIn soon</div>' + (owner ? '<button class="g-btn sp-sm sp-ghost" type="button" onclick="sampOpenEdit(\'' + esc(id) + '\')">' + SP_ICON.plus + ' Add a follow-up</button>' : '') + '</div>' + steps + '</section>' +
+    '<div class="sp-col"><section class="sp-card sp-pad"><div class="sp-lbl">Sends from this mailbox, next 10 weekdays</div><div class="sp-cal"><div class="sp-cap" style="bottom:' + Math.round(cal.cap / maxV * 100) + '%"><b>Limit ' + cal.cap + '</b></div>' + bars + '</div>' +
+      '<div class="sp-small" style="margin-top:10px">Gold is this SAMpaign, pale is the owner\'s other SAMpaigns. A full day pushes emails to the next free day.</div></section>' +
+      '<section class="sp-card sp-pad"><div class="sp-lbl">Rules</div>' +
+        '<div class="sp-rule" style="margin-top:6px"><span>Stop for anyone who replies, bounces or opts out, on every channel</span><span class="sp-on">Always on</span></div>' +
+        '<div class="sp-rule"><span>Follow-ups go in the same email thread</span><span class="sp-on">On</span></div>' +
+        '<div class="sp-rule"><span>Nothing sends until you approve the drafts</span><span class="sp-on">Always on</span></div>' +
+      '</section></div></div>';
+}
+function sampReviewWave(id, launch) {
+  window._sampLaunch = launch;
+  loadSampaignSendQueue(id);
+  var q = document.getElementById('sampSendQueue'); if (q) q.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function sampOpenComposer(id, launch) {
+  window._sampComposerLaunch = launch || 1;
+  openSampaignComposer(id);
+  var sel = document.getElementById('sampSendLaunch');
+  if (sel) { sel.value = String(launch || 1); try { _sampComposerLaunchChanged(id); } catch (e) {} }
+}
+function _sampSendableFor(all, launch) {
+  launch = Number(launch) || 1;
+  return (all || []).filter(function (x) {
+    if (!x.email || /^scouted\./i.test(x.email) || /@linkedin\.invalid$/i.test(x.email)) return false;
+    return launch === 1 ? x.status === 'not_contacted' : ['sent', 'opened', 'no_response', 'ooo'].indexOf(x.status) !== -1;
+  });
+}
+
+// Write drafts with SAM, a few people at a time, with progress
+async function sampWriteDrafts(id, launch) {
+  if (window._sampWriting) return;
+  window._sampWriting = true;
+  var o = (window._sampOv || {})[id];
+  var w = o && o.ok ? (o.waves || []).find(function (x) { return x.launch === launch; }) : null;
+  var total = (w && w.ready) || 0;
+  var m = document.createElement('div'); m.className = 'sp-modal'; m.id = 'sampWriteModal';
+  m.innerHTML = '<div class="sp-mcard" role="dialog" aria-modal="true" aria-label="Writing drafts"><h3>SAM is writing ' + esc(_spWave(launch).toLowerCase()) + '</h3><div class="sp-small" id="sampWriteMsg">Starting…</div><div class="sp-progress"><span id="sampWriteBar" style="width:4%"></span></div><div class="sp-small" style="margin-top:10px">One email per person, from their role and company. Nothing sends until you review and schedule.</div><div class="sp-foot"><span></span><button class="g-btn" type="button" id="sampWriteStop">Stop</button></div></div>';
+  document.body.appendChild(m);
+  var stop = false; document.getElementById('sampWriteStop').onclick = function () { stop = true; this.textContent = 'Stopping…'; };
+  var written = 0, skip = [], err = null, guard = 0;
+  var name = (currentUser && currentUser.user_metadata && currentUser.user_metadata.full_name) || '';
+  try {
+    while (!stop && guard++ < 40) {
+      var d = await _sampEdge('write_sampaign_drafts', { campaign_id: id, launch: launch, batch: 6, skip_ids: skip, sender_name: name.split(' ')[0] || '' });
+      if (!d.ok) { err = d.error || 'Could not write drafts'; break; }
+      written += d.written || 0;
+      (d.missed || []).forEach(function (x) { skip.push(x); });
+      var done = total ? Math.min(100, Math.round(written / total * 100)) : 100;
+      var msg = document.getElementById('sampWriteMsg'); if (msg) msg.textContent = 'Written ' + written + (total ? ' of ' + total : '') + (d.remaining ? '…' : '.');
+      var bar = document.getElementById('sampWriteBar'); if (bar) bar.style.width = Math.max(4, done) + '%';
+      if (!d.remaining || (!d.written && !(d.missed || []).length)) break;
+    }
+  } catch (e) { err = e.message; }
+  window._sampWriting = false;
+  m.remove();
+  if (err) {
+    var mm = document.createElement('div'); mm.className = 'sp-modal';
+    mm.innerHTML = '<div class="sp-mcard" role="dialog" aria-modal="true"><h3>' + (written ? 'Wrote ' + written + ', then stopped' : 'SAM could not write these') + '</h3><p class="sp-muted" style="margin:6px 0 0">' + esc(err) + '</p><div class="sp-foot"><button class="g-btn" type="button" onclick="this.closest(\'.sp-modal\').remove()">Close</button><button class="g-btn sp-gold" type="button" onclick="this.closest(\'.sp-modal\').remove();sampOpenComposer(\'' + esc(id) + '\',' + launch + ')">Write one email for all</button></div></div>';
+    document.body.appendChild(mm);
+  } else showToast(written ? 'SAM wrote ' + _spPlural(written, 'draft') + '. Review them, then schedule.' : 'Nobody was waiting for this email.');
+  await _sampLoadOverview(id);
+  if (window._sampTab !== 'sequence') setSampTab(id, 'sequence'); else { _spRenderSeqTop(id); }
+  window._sampLaunch = launch; loadSampaignSendQueue(id);
+}
+
+// Scheduling plan, shown in the app instead of a browser dialog
+async function planSampaignDrafts(campaignId, startAt, launch) {
+  launch = launch || window._sampLaunch || 1;
+  var d = await _sampEdge('schedule_sampaign_drafts', { campaign_id: campaignId, start_at: startAt || null, launch: launch, dry_run: true });
+  if (!d.ok) { showToast(d.error || 'Could not plan'); return; }
+  var days = Object.keys(d.per_day || {}).sort();
+  var m = document.createElement('div'); m.className = 'sp-modal'; m.id = 'sampPlanModal';
+  m.addEventListener('click', function (e) { if (e.target === m) m.remove(); });
+  m.innerHTML = '<div class="sp-mcard" role="dialog" aria-modal="true" aria-label="Send plan"><h3>Schedule ' + _spPlural(d.scheduled || d.drafts || 0, 'email') + '</h3>' +
+    '<div class="sp-muted" style="font-size:13.5px">' + esc(_spWave(launch)) + ' over ' + _spPlural(d.days || days.length, 'day') + ', first ' + esc(_spDate(d.first_send, true)) + ', last ' + esc(_spDate(d.last_send, true)) + '.</div>' +
+    '<div class="sp-days">' + days.map(function (k) { return '<div class="sp-day"><span>' + esc(new Date(k + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })) + '</span><b>' + d.per_day[k] + '</b></div>'; }).join('') + '</div>' +
+    '<div class="sp-small" style="margin-top:12px">Today this mailbox can send ' + (d.today_limit || (d.policy && d.policy.daily_cap) || '') + ' (' + esc(d.ramp_reason || 'current limit') + '). ' +
+      (d.policy ? 'Sending between ' + d.policy.window_start_hour + ':00 and ' + d.policy.window_end_hour + ':00' + (d.policy.skip_weekends ? ', weekdays only' : '') + '. ' : '') +
+      (d.rolled ? 'The day you picked is already full, so this starts on the next free day. ' : '') + 'Spacing sends out is what keeps the mailbox out of spam.</div>' +
+    '<div class="sp-foot"><button class="g-btn" type="button" onclick="document.getElementById(\'sampPlanModal\').remove()">Not yet</button><button class="g-btn sp-gold" type="button" id="sampPlanGo">Schedule</button></div></div>';
+  document.body.appendChild(m);
+  document.getElementById('sampPlanGo').onclick = async function () {
+    this.disabled = true; this.textContent = 'Scheduling…';
+    var d2 = await _sampEdge('schedule_sampaign_drafts', { campaign_id: campaignId, start_at: startAt || null, launch: launch, allow_roll: !!d.rolled });
+    m.remove();
+    if (!d2.ok) { showToast(d2.error || 'Could not schedule'); return; }
+    showToast('Scheduled ' + d2.scheduled + ' over ' + _spPlural(d2.days, 'day'));
+    loadSampaignSendQueue(campaignId);
+    if (window._sampOpenId === campaignId) _sampRefreshOpen();
+  };
+}
+
+// Pause and resume
+async function sampPause(id, pause) {
+  var d = await _sampEdge('pause_sampaign', { campaign_id: id, paused: pause });
+  if (!d.ok) { showToast(d.error || 'Could not change this'); return; }
+  if (pause) showToast('Paused.' + (d.moved_to_drafts ? ' ' + _spPlural(d.moved_to_drafts, 'queued email') + ' moved back to drafts.' : ' Nothing was queued.'));
+  else showToast(d.drafts ? 'Resumed. Schedule the ' + _spPlural(d.drafts, 'draft') + ' when ready.' : 'Resumed.');
+  await _sampLoadOverview(id);
+  setSampTab(id, pause ? window._sampTab : (d.drafts ? 'sequence' : window._sampTab));
+}
+
+// Edit: name, goal, focus, goal measure and follow-up dates
+function sampOpenEdit(id) {
+  var o = (window._sampOv || {})[id]; if (!o || !o.ok) return;
+  var c = o.campaign;
+  var dates = (c.followup_dates || []).slice();
+  window._sampEditDates = dates;
+  var m = document.createElement('div'); m.className = 'sp-modal'; m.id = 'sampEditModal';
+  m.addEventListener('click', function (e) { if (e.target === m) m.remove(); });
+  m.innerHTML = '<div class="sp-mcard" role="dialog" aria-modal="true" aria-label="Edit SAMpaign"><h3>Edit SAMpaign</h3>' +
+    '<label class="sp-fld">Name<input id="spEdName" value="' + esc(c.name) + '"></label>' +
+    '<label class="sp-fld">Goal<textarea id="spEdGoal">' + esc(c.campaign_goal || '') + '</textarea></label>' +
+    '<label class="sp-fld">Focus, shown on the card<input id="spEdFocus" maxlength="48" value="' + esc(c.focus || '') + '"></label>' +
+    '<div class="sp-row2"><label class="sp-fld">Success is measured in<select id="spEdMetric"><option value="">Not set</option><option value="meetings"' + (c.goal_metric === 'meetings' ? ' selected' : '') + '>Meetings booked</option><option value="interested"' + (c.goal_metric === 'interested' ? ' selected' : '') + '>Interested replies</option><option value="replies"' + (c.goal_metric === 'replies' ? ' selected' : '') + '>Replies</option></select></label>' +
+      '<label class="sp-fld">Target<input id="spEdTarget" type="number" min="1" value="' + esc(c.goal_target || '') + '"></label></div>' +
+    '<div class="sp-fld">Follow-up dates<small>Each date is one follow-up, in the same thread.</small><div id="spEdDates"></div><button class="g-btn sp-sm" type="button" onclick="sampEditAddDate()">' + SP_ICON.plus + ' Add a follow-up</button></div>' +
+    '<div class="sp-foot"><button class="g-btn sp-ghost sp-r" type="button" onclick="document.getElementById(\'sampEditModal\').remove();deleteSampaignCampaign(\'' + esc(id) + '\',\'' + esc(c.name).replace(/'/g, '&#39;') + '\').then(function(){sampBackToList()})">Archive</button><span class="sp-acts"><button class="g-btn" type="button" onclick="document.getElementById(\'sampEditModal\').remove()">Cancel</button><button class="g-btn sp-gold" type="button" id="spEdSave">Save</button></span></div></div>';
+  document.body.appendChild(m);
+  _sampEditDatesRender();
+  document.getElementById('spEdSave').onclick = async function () {
+    var name = document.getElementById('spEdName').value.trim();
+    if (!name) { showToast('Give it a name'); return; }
+    var newDates = (window._sampEditDates || []).filter(Boolean).sort();
+    var metric = document.getElementById('spEdMetric').value || null;
+    var target = parseInt(document.getElementById('spEdTarget').value, 10) || null;
+    this.disabled = true;
+    var d = await _sampEdge('update_sampaign', { campaign_id: id, name: name, campaign_goal: document.getElementById('spEdGoal').value, focus: document.getElementById('spEdFocus').value, followup_dates: newDates, goal_metric: metric, goal_target: metric ? target : null });
+    if (!d.ok) { this.disabled = false; showToast(d.error || 'Could not save'); return; }
+    try { await _syncSampaignFupTasks(id, name, dates, newDates); } catch (e) {}
+    m.remove(); showToast('Saved');
+    await _sampLoadOverview(id); setSampTab(id, window._sampTab);
+  };
+}
+function _sampEditDatesRender() {
+  var box = document.getElementById('spEdDates'); if (!box) return;
+  box.innerHTML = (window._sampEditDates || []).map(function (dt, i) {
+    return '<div style="display:flex;gap:8px;align-items:center;margin-top:6px"><span class="sp-small" style="width:92px">Follow-up ' + (i + 1) + '</span><input type="date" value="' + esc(dt) + '" onchange="window._sampEditDates[' + i + ']=this.value" style="flex:1"><button class="sp-x" type="button" aria-label="Remove follow-up ' + (i + 1) + '" onclick="window._sampEditDates.splice(' + i + ',1);_sampEditDatesRender()">' + SP_ICON.x + '</button></div>';
+  }).join('') || '<div class="sp-small" style="margin-top:6px">No follow-ups yet.</div>';
+}
+function sampEditAddDate() {
+  var list = window._sampEditDates || (window._sampEditDates = []);
+  var last = list.length ? new Date(list[list.length - 1] + 'T12:00:00') : new Date();
+  last.setDate(last.getDate() + 5); while (last.getDay() === 0 || last.getDay() === 6) last.setDate(last.getDate() + 1);
+  list.push(last.toISOString().slice(0, 10)); _sampEditDatesRender();
+}
+
+// Replies
+function _spRepliesHtml(id, o) {
+  var f = window._sampReplyFilter || 'all';
+  var rows = o.replies || [];
+  var cnt = function (k) { return rows.filter(function (r) { return r.reply_type === k; }).length; };
+  var keys = [['all', 'All', rows.length], ['interested', 'Interested', cnt('interested')], ['referral', 'Referral', cnt('referral')], ['not_now', 'Not now', cnt('not_now')], ['not_interested', 'Not interested', cnt('not_interested')], ['other', 'To label', cnt('other')], ['ooo', 'Away', cnt('ooo')], ['bounce', 'Bounced', cnt('bounce')]];
+  var chips = keys.filter(function (k) { return k[0] === 'all' || k[2]; }).map(function (k) { return '<button type="button" class="' + (f === k[0] ? 'on' : '') + '" onclick="window._sampReplyFilter=\'' + k[0] + '\';setSampTab(\'' + esc(id) + '\',\'replies\')">' + k[1] + '<b>' + k[2] + '</b></button>'; }).join('');
+  var list = rows.filter(function (r) { return f === 'all' || r.reply_type === f; });
+  return '<div class="sp-bar" style="justify-content:space-between"><div class="sp-pf" style="margin:0">' + chips + '</div><span class="sp-small">SAM labels each reply from its opening lines. Change any label; the text stays in the mailbox.</span></div>' +
+    '<section class="sp-card" style="padding:4px 18px">' + (list.length ? list.map(function (p) { return _spPersonRow(id, o, p); }).join('') : '<div class="sp-empty">No replies here yet.</div>') + '</section>';
+}
+
+// Insights
+function _spInsightsHtml(id, o) {
+  var ins = o.insights || {}, c = o.counts;
+  if (!c.sent) return '<div class="sp-card sp-empty">Insights appear once the first emails have gone out.</div>';
+  var bar = function (label, val, max, v, tone) { var w = max ? Math.round(val / max * 100) : 0; return '<div class="sp-hb"><span>' + esc(label) + '</span><div class="t"><span style="width:' + w + '%;' + (tone ? 'background:' + tone : '') + '"></span></div><span class="v">' + v + '</span></div>'; };
+  var waves = (ins.by_wave || []).filter(function (w) { return w.sent; });
+  var maxW = Math.max.apply(null, waves.map(function (w) { return w.rate || 0; }).concat([1]));
+  var waveCard = '<section class="sp-card sp-pad"><div class="sp-ih">Which email works</div>' + waves.map(function (w) { return bar(w.label, w.rate || 0, maxW, w.replies + ' of ' + w.sent + ' · ' + (w.rate || 0) + '%'); }).join('') +
+    (function () { var tot = waves.reduce(function (a, w) { return a + w.replies; }, 0); if (tot < 2) return '<div class="sp-small" style="margin-top:12px">Each reply is credited to the email it answered. More replies make this clearer.</div>'; var top = waves.slice().sort(function (a, b) { return b.replies - a.replies; })[0]; return '<div class="sp-tk2">' + esc(top.label) + ' earns ' + Math.round(top.replies / tot * 100) + '% of replies. ' + (top.launch === 1 ? 'Lead with the strongest line, not a warm-up.' : 'The follow-ups are pulling their weight; keep them adding something new.') + '</div>'; })() + '</section>';
+  var sen = ins.by_seniority || [];
+  var maxS = Math.max.apply(null, sen.map(function (s) { return s.rate || 0; }).concat([1]));
+  var senCard = '<section class="sp-card sp-pad"><div class="sp-ih">Who replies</div>' + (sen.length ? sen.map(function (s) { return bar(s.band, s.rate || 0, maxS, s.replied + ' of ' + s.reached + ' · ' + (s.rate || 0) + '%'); }).join('') : '<div class="sp-small" style="margin-top:10px">Shows once people with titles have been reached.</div>') +
+    (function () { var solid = sen.filter(function (s) { return s.reached >= 4; }); if (solid.length < 2) return '<div class="sp-small" style="margin-top:12px">Grouped by the seniority in each person\'s title.</div>'; var b = solid.slice().sort(function (x, y) { return (y.rate || 0) - (x.rate || 0); })[0]; return '<div class="sp-tk2">' + esc(b.band) + ' reply most here, at ' + (b.rate || 0) + '%. <a href="#" onclick="event.preventDefault();setSampTab(\'' + esc(id) + '\',\'people\');setTimeout(function(){try{openSampaignScoutProfile(\'' + esc(id) + '\')}catch(e){}},400)">Aim the next scout at them</a></div>'; })() + '</section>';
+  var comp = (ins.by_company || []);
+  var orgs = comp.slice(0, 14).map(function (x) { var cls = x.replied ? 'sp-o1' : x.reached ? 'sp-o2' : 'sp-o3'; var t = x.replied ? _spPlural(x.replied, 'reply', 'replies') + (x.interested ? ', ' + x.interested + ' interested' : '') : x.reached ? x.reached + ' reached, none yet' : (x.people ? 'not reached yet' : 'no people yet'); return '<div class="sp-org"><i class="' + cls + '"></i><span>' + esc(x.company) + ' · ' + esc(t) + '</span></div>'; }).join('');
+  var engaged = comp.filter(function (x) { return x.replied; }).length;
+  var gap = comp.filter(function (x) { return x.reached >= 3 && !x.replied; }).sort(function (a, b) { return b.reached - a.reached; })[0];
+  var compCard = '<section class="sp-card sp-pad"><div class="sp-ih">Which companies engage</div><div class="sp-orgs">' + orgs + '</div><div class="sp-tk2">' + engaged + ' of ' + comp.length + ' ' + (comp.length === 1 ? 'company is' : 'companies are') + ' talking.' + (gap ? ' ' + esc(gap.company) + ' has ' + gap.reached + ' people reached and nothing back: try a different person or angle.' : '') + '</div></section>';
+  var lag = ins.reply_lag || { bins: [] }, maxL = Math.max.apply(null, (lag.bins || []).concat([1]));
+  var lagLbl = ['Same day', 'Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5', 'Day 6', '7+'];
+  var lagCard = '<section class="sp-card sp-pad"><div class="sp-ih">How fast people reply</div>' + (lag.n ? '<div class="sp-hist">' + (lag.bins || []).map(function (b, i) { return '<div><span style="height:' + Math.max(3, Math.round(b / maxL * 100)) + '%"></span><small>' + lagLbl[i] + '</small></div>'; }).join('') + '</div><div class="sp-tk2">Half reply within ' + lag.median_days + (lag.median_days === 1 ? ' day' : ' days') + '; ' + lag.within_3_days + '% within 3 days of an email. ' + (lag.within_3_days >= 80 ? 'A 4 to 5 day gap between emails loses nothing.' : 'Leave room between emails; some replies take a while.') + '</div>' : '<div class="sp-small" style="margin-top:10px">Shows once replies are timed. Reply times are recorded from the latest update on.</div>') + '</section>';
+  var heat = ins.heat || { counts: [] }, flat = [].concat.apply([], heat.counts || []), maxH = Math.max.apply(null, flat.concat([1]));
+  var cell = function (v) { var a = v ? 0.18 + 0.62 * (v / maxH) : 0; return '<i style="background:' + (v ? 'rgba(59,109,17,' + a.toFixed(2) + ')' : 'rgba(127,127,127,.08)') + '" title="' + v + '"></i>'; };
+  var heatCard = '<section class="sp-card sp-pad"><div class="sp-ih">When replies arrive</div>' + (flat.some(Boolean) ? '<div class="sp-heat"><span></span>' + (heat.cols || []).map(function (c) { return '<span>' + c + '</span>'; }).join('') + (heat.rows || []).map(function (r, i) { return '<span>' + r + '</span>' + heat.counts[i].map(cell).join(''); }).join('') + '</div>' : '<div class="sp-small" style="margin-top:10px">Shows once replies are timed.</div>') + '</section>';
+  var del = ins.deliverability || {};
+  var delCard = '<section class="sp-card sp-pad"><div class="sp-ih">Deliverability</div><div style="display:flex;align-items:baseline;gap:10px;margin-top:8px;flex-wrap:wrap"><span class="sp-big ' + ((del.rate || 0) > 5 ? 'sp-r' : 'sp-g') + '">' + (del.rate || 0) + '%</span><span class="sp-muted">' + del.bounced + ' of ' + del.sent + ' bounced; the safe line is 3%</span></div>' +
+    ((del.rate || 0) > 3 ? '<div class="sp-tk2">Verify addresses before the next email. Above 5%, Gmail and Outlook start trusting the mailbox less. <a href="#" onclick="event.preventDefault();sampPeopleFilterGo(\'' + esc(id) + '\')">See who bounced</a></div>' : '<div class="sp-small" style="margin-top:12px">Healthy. Keep using found or verified addresses.</div>') + '</section>';
+  return '<div class="sp-ins">' + waveCard + senCard + compCard + lagCard + heatCard + delCard + '</div>';
+}
+function sampPeopleFilterGo(id) { window._sampaignStatusFilter = 'dead'; setSampTab(id, 'people'); }
+
+// Refresh hooks used by the inbox sync elsewhere in the app
+async function syncSampaignCampaign(campaignId) {
+  showToast('Checking the mailbox…');
+  var d = await _sampEdge('sync_sampaigns', { campaign_id: campaignId });
+  if (!d.ok) { showToast(d.error || 'Could not check the mailbox'); return; }
+  var s = (typeof _sampaignSyncSummary === 'function') ? _sampaignSyncSummary(d) : '';
+  showToast(s ? 'Updated: ' + s : 'Nothing new in the mailbox');
+  if (window._sampOpenId === campaignId) { await _sampLoadOverview(campaignId); setSampTab(campaignId, window._sampTab); }
+}
+
+// ── New SAMpaign ────────────────────────────────────────────────────────────
+function toggleNewSampaignForm() { sampOpenWizard(); }
+function _spNextWeekday(from) { var d = from ? new Date(from) : new Date(); d.setDate(d.getDate() + 1); while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); }
+function _spAddWorkdays(iso, n) { var d = new Date(iso + 'T12:00:00'); var left = n; while (left > 0) { d.setDate(d.getDate() + 1); if (d.getDay() !== 0 && d.getDay() !== 6) left--; } return d.toISOString().slice(0, 10); }
+function sampOpenWizard() {
+  window._sampW = { step: 1, scope: 'account', name: '', domain: '', region: '', listName: '', companies: '', people: '', goal: '', metric: 'meetings', target: '', focus: '', start: _spNextWeekday(), ups: [4, 9], li: true, writeNow: true };
+  var page = document.getElementById('sampWizardPage'); if (!page) return;
+  _spShow('new');
+  _spWizRender();
+  _sampEdge('get_org_setting', { key: 'campaign_goal_templates' }).then(function (d) { try { var v = d.value; window._sampGoalTpl = Array.isArray(v) ? v : (typeof v === 'string' ? JSON.parse(v) : []); if (window._sampW && window._sampW.step === 2) _spWizRender(); } catch (e) {} });
+}
+function _spWizSave() {
+  var W = window._sampW; if (!W) return;
+  var v = function (id) { var el = document.getElementById(id); return el ? el.value : undefined; };
+  ['name', 'domain', 'region', 'listName', 'companies', 'people', 'goal', 'metric', 'target', 'focus', 'start'].forEach(function (k) { var x = v('spw_' + k); if (x !== undefined) W[k] = x; });
+  var csv = document.getElementById('spw_csv'); if (csv && csv.files && csv.files[0]) W.csv = csv.files[0];
+  var wn = document.getElementById('spw_writeNow'); if (wn) W.writeNow = wn.checked;
+  var li = document.getElementById('spw_li'); if (li) W.li = li.checked;
+  document.querySelectorAll('[data-spw-up]').forEach(function (inp) { W.ups[Number(inp.getAttribute('data-spw-up'))] = Math.max(1, parseInt(inp.value, 10) || 1); });
+}
+function _spWizParsePeople(text) {
+  var out = [], bad = 0;
+  String(text || '').split(/\r?\n/).forEach(function (line) {
+    var parts = line.split(/[,\t;]/).map(function (s) { return s.trim(); }).filter(Boolean);
+    if (!parts.length) return;
+    var email = parts.find(function (p) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p); });
+    var rest = parts.filter(function (p) { return p !== email; });
+    if (!email && !rest.length) return;
+    if (!rest[0]) { bad++; return; }
+    out.push({ name: rest[0], email: email || '', title: rest[1] || '', company: rest[2] || '' });
+  });
+  return { rows: out, bad: bad };
+}
+function _spWizParseCompanies(text) {
+  return String(text || '').split(/\r?\n/).map(function (line) {
+    var p = line.split(/[,\t;]/).map(function (s) { return s.trim(); }).filter(Boolean);
+    if (!p.length) return null;
+    var dom = p.find(function (x) { return /\.[a-z]{2,}$/i.test(x) && !/\s/.test(x); }) || '';
+    var name = p.find(function (x) { return x !== dom; }) || dom.replace(/\..*$/, '');
+    return { name: name, domain: dom };
+  }).filter(Boolean);
+}
+function _spWizDates() { var W = window._sampW; return W.ups.map(function (n) { return _spAddWorkdays(W.start, n); }); }
+function _spWizRender() {
+  var W = window._sampW, page = document.getElementById('sampWizardPage'); if (!W || !page) return;
+  var steps = ['Who', 'Goal', 'Sequence', 'Review'];
+  var stepper = '<div class="sp-stepper">' + steps.map(function (s, i) { var n = i + 1, cls = n === W.step ? 'on' : n < W.step ? 'done' : ''; return '<div class="' + cls + '"><b>' + (n < W.step ? '✓' : n) + '</b>' + s + '</div>'; }).join('') + '</div>';
+  var body = '';
+  if (W.step === 1) {
+    body = '<div class="sp-ih">Who are you reaching?</div><div class="sp-opts">' +
+      '<button type="button" class="sp-opt ' + (W.scope === 'account' ? 'on' : '') + '" onclick="_spWizSave();window._sampW.scope=\'account\';_spWizRender()"><b>One account</b><span>Several people inside one company. Replies feed that account in Pipeline.</span></button>' +
+      '<button type="button" class="sp-opt ' + (W.scope === 'list' ? 'on' : '') + '" onclick="_spWizSave();window._sampW.scope=\'list\';_spWizRender()"><b>A list of companies</b><span>The same outreach to many companies, like 10 institutes or 40 FMCG brands.</span></button></div>' +
+      (W.scope === 'account'
+        ? '<div class="sp-row3"><label class="sp-fld">Company<input id="spw_name" value="' + esc(W.name) + '" placeholder="Jotun Paints"></label><label class="sp-fld">Website<input id="spw_domain" value="' + esc(W.domain) + '" placeholder="jotun.com"></label><label class="sp-fld">Region <small>optional</small><input id="spw_region" value="' + esc(W.region) + '" placeholder="UAE"></label></div>'
+        : '<label class="sp-fld">Name of the list<input id="spw_listName" value="' + esc(W.listName) + '" placeholder="Karnataka top 10 institutes"></label><label class="sp-fld">Companies, one per line<small>Name and website, for example: Marico, marico.com</small><textarea id="spw_companies" placeholder="Marico, marico.com&#10;Dabur, dabur.com">' + esc(W.companies) + '</textarea></label>') +
+      '<div class="sp-ih" style="margin-top:22px">Who inside them?</div>' +
+      '<label class="sp-fld">Upload a CSV <small>Columns like name, email, title, company. Header names are flexible.</small><input id="spw_csv" type="file" accept=".csv,text/csv"></label>' + (W.csv ? '<div class="sp-small">Chosen: ' + esc(W.csv.name) + '</div>' : '') +
+      '<label class="sp-fld">Or type people, one per line <small>Name, email, title, company. Email can be left out and found later.</small><textarea id="spw_people" placeholder="Anita Rao, anita@nlsiu.ac.in, Registrar">' + esc(W.people) + '</textarea></label>' +
+      '<div class="sp-small" style="margin-top:10px">You can also let SAM scout people by title after creating, from the People tab.</div>';
+  } else if (W.step === 2) {
+    var tpl = (window._sampGoalTpl || []).slice(0, 6).map(function (t, i) { return '<button type="button" class="sp-chip" style="cursor:pointer;border:0" onclick="var g=document.getElementById(\'spw_goal\');g.value=window._sampGoalTpl[' + i + '].goal||\'\';">' + esc(t.label || t.goal || '') + '</button>'; }).join('');
+    body = '<div class="sp-ih">What should it achieve?</div>' +
+      '<label class="sp-fld">Goal, in one or two sentences <small>SAM writes every email towards this.</small><textarea id="spw_goal" placeholder="Introduce Rewardify to Jotun\'s UAE leadership and ask for a 25 minute call.">' + esc(W.goal) + '</textarea></label>' +
+      (tpl ? '<div class="sp-chips" style="margin-top:8px">' + tpl + '</div>' : '') +
+      '<div class="sp-row2"><label class="sp-fld">Success is measured in<select id="spw_metric"><option value="meetings"' + (W.metric === 'meetings' ? ' selected' : '') + '>Meetings booked</option><option value="interested"' + (W.metric === 'interested' ? ' selected' : '') + '>Interested replies</option><option value="replies"' + (W.metric === 'replies' ? ' selected' : '') + '>Replies</option></select></label>' +
+      '<label class="sp-fld">Target <small>optional</small><input id="spw_target" type="number" min="1" value="' + esc(W.target) + '" placeholder="3"></label></div>' +
+      '<label class="sp-fld">Focus, shown on the card <small>optional, short</small><input id="spw_focus" maxlength="48" value="' + esc(W.focus) + '" placeholder="UAE trade marketing"></label>';
+  } else if (W.step === 3) {
+    var dates = _spWizDates();
+    body = '<div class="sp-ih">The sequence</div><div class="sp-small" style="margin-top:4px">Days are working days after the first email. A reply on any channel stops the rest for that person.</div>' +
+      '<label class="sp-fld" style="max-width:240px">First email goes out<input id="spw_start" type="date" value="' + esc(W.start) + '" onchange="_spWizSave();_spWizRender()"></label>' +
+      '<div class="sp-seq">' +
+        '<div class="sp-sq"><span class="sp-sn" style="width:40px;height:40px">' + SP_ICON.mail + '</span><div><b>Email</b> · first touch<div class="sp-sm2">Personal, short, one ask</div></div><span class="sp-small sp-dayin">Day 0</span><span class="sp-small sp-date">' + esc(_spDate(W.start)) + '</span><span></span></div>' +
+        '<div class="sp-sq dim"><span class="sp-sn li" style="width:40px;height:40px">' + SP_ICON.li + '</span><div><b>LinkedIn</b> · invite with a note <span class="sp-soon">Soon</span><div class="sp-sm2"><label style="display:inline-flex;gap:6px;align-items:center"><input id="spw_li" type="checkbox"' + (W.li ? ' checked' : '') + '> Plan it, so notes can be written now</label></div></div><span class="sp-small sp-dayin">Day 1</span><span class="sp-small sp-date">sent when automation arrives</span><span></span></div>' +
+        W.ups.map(function (n, i) { return '<div class="sp-sq"><span class="sp-sn" style="width:40px;height:40px">' + SP_ICON.mail + '</span><div><b>Email</b> · follow-up ' + (i + 1) + (i === W.ups.length - 1 ? ', the last' : '') + '<div class="sp-sm2">' + (i === W.ups.length - 1 ? 'A short close: right person, or not now' : 'Same thread, adds a new reason') + '</div></div><label class="sp-dayin" style="display:flex;align-items:center;gap:6px"><span class="sp-small">Day</span><input type="number" min="1" max="60" value="' + n + '" data-spw-up="' + i + '" onchange="_spWizSave();_spWizRender()" aria-label="Working days after the first email"></label><span class="sp-small sp-date">' + esc(_spDate(dates[i])) + '</span><button class="sp-x" type="button" aria-label="Remove follow-up ' + (i + 1) + '" onclick="_spWizSave();window._sampW.ups.splice(' + i + ',1);_spWizRender()">' + SP_ICON.x + '</button></div>'; }).join('') +
+      '</div>' +
+      (W.ups.length < 5 ? '<div class="sp-acts" style="margin-top:12px"><button class="g-btn sp-sm" type="button" onclick="_spWizSave();var u=window._sampW.ups;u.push((u[u.length-1]||0)+5);_spWizRender()">' + SP_ICON.plus + ' Email follow-up</button><button class="g-btn sp-sm" type="button" disabled>' + SP_ICON.plus + ' LinkedIn step, soon</button></div>' : '');
+  } else {
+    var ppl = _spWizParsePeople(W.people).rows;
+    var withEmail = ppl.filter(function (p) { return p.email; }).length;
+    var who = W.scope === 'account' ? (W.name || 'one account') : (W.listName || 'a list') + ' · ' + _spPlural(_spWizParseCompanies(W.companies).length, 'company', 'companies');
+    var dates2 = _spWizDates();
+    body = '<div class="sp-ih">Ready to create</div>' +
+      '<div class="sp-sum" style="margin-top:14px"><div><span class="sp-lbl">Reaching</span><b style="font-size:16px">' + esc(who) + '</b><span class="sp-small">' + (ppl.length ? _spPlural(ppl.length, 'person', 'people') + ' typed' : '') + (W.csv ? (ppl.length ? ' and ' : '') + 'a CSV' : '') + (!ppl.length && !W.csv ? 'add people after creating' : '') + '</span></div>' +
+      '<div><span class="sp-lbl">Emails</span><b>' + (1 + W.ups.length) + ' per person</b><span class="sp-small">over ' + (W.ups[W.ups.length - 1] || 0) + ' working days</span></div>' +
+      '<div><span class="sp-lbl">First email</span><b>' + esc(_spDate(W.start)) + '</b><span class="sp-small">last follow-up ' + esc(_spDate(dates2[dates2.length - 1] || W.start)) + '</span></div></div>' +
+      '<div class="sp-sum" style="margin-top:12px"><div><span class="sp-lbl">Goal</span><b style="font-size:16px">' + esc(W.target ? W.target + ' ' : '') + ({ meetings: 'meetings booked', interested: 'interested replies', replies: 'replies' })[W.metric] + '</b></div>' +
+      '<div><span class="sp-lbl">Mailbox</span><b style="font-size:16px">Yours</b><span class="sp-small">sends are spread to protect it</span></div>' +
+      '<div><span class="sp-lbl">LinkedIn</span><b style="font-size:16px">' + (W.li ? 'Planned' : 'Off') + '</b><span class="sp-small">sends when automation arrives</span></div></div>' +
+      '<label class="sp-check"><input id="spw_writeNow" type="checkbox"' + (W.writeNow ? ' checked' : '') + '><span>Have SAM write the first emails right after creating' + (W.csv || withEmail ? '' : ' (once people with emails are added)') + '. You review and edit every one; nothing sends until you press Schedule.</span></label>';
+  }
+  page.innerHTML = '<div class="sp-wiz"><button class="sp-back" type="button" onclick="sampBackToList()">' + SP_ICON.back + 'All SAMpaigns</button>' +
+    '<h1 class="sp-title">New SAMpaign</h1><div class="sp-sub">Four short steps. Nothing is sent until you approve the drafts.</div>' + stepper +
+    '<section class="sp-card" style="padding:24px 26px">' + body +
+    '<div class="sp-foot"><button class="g-btn" type="button" onclick="_spWizBack()">' + (W.step === 1 ? 'Cancel' : 'Back') + '</button><button class="g-btn sp-gold" type="button" id="spw_next" onclick="_spWizNext()">' + (W.step === 4 ? 'Create SAMpaign' : 'Continue') + '</button></div></section></div>';
+}
+function _spWizBack() { var W = window._sampW; _spWizSave(); if (W.step === 1) { sampBackToList(); return; } W.step--; _spWizRender(); }
+function _spWizNext() {
+  var W = window._sampW; _spWizSave();
+  if (W.step === 1) {
+    if (W.scope === 'account') {
+      if (!String(W.name).trim()) { showToast('Add the company name'); return; }
+      if (!String(W.domain).trim()) { showToast('Add the company website, it links replies to the right account'); return; }
+    } else {
+      if (!String(W.listName).trim()) { showToast('Give the list a name'); return; }
+      if (!_spWizParseCompanies(W.companies).length) { showToast('Add at least one company'); return; }
+    }
+    var pp = _spWizParsePeople(W.people);
+    if (pp.bad) { showToast('Some lines have an email but no name. Put the name first.'); return; }
+  }
+  if (W.step === 2 && !String(W.goal).trim()) { showToast('Write the goal in a sentence, SAM writes towards it'); return; }
+  if (W.step < 4) { W.step++; _spWizRender(); return; }
+  _spWizCreate();
+}
+async function _spWizCreate() {
+  var W = window._sampW, btn = document.getElementById('spw_next');
+  if (window._spCreating) return; window._spCreating = true;
+  if (btn) { btn.disabled = true; btn.textContent = 'Creating…'; }
+  try {
+    var dates = _spWizDates();
+    var base = { campaign_goal: String(W.goal).trim(), focus: String(W.focus).trim() || null, followup_dates: dates, goal_metric: W.metric, goal_target: parseInt(W.target, 10) || null, channels: { email: true, linkedin: !!W.li }, alerts_enabled: { ooo: true, replied: true, no_response: true, dead: true } };
+    var d = W.scope === 'account'
+      ? await _sampEdge('create_sampaign', Object.assign({ account_name: String(W.name).trim(), domain: String(W.domain).trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, ''), region: String(W.region).trim() || null }, base))
+      : await _sampEdge('create_sampaign', Object.assign({ scope: 'list', list_name: String(W.listName).trim(), accounts: _spWizParseCompanies(W.companies) }, base));
+    if (!d.ok || !d.campaign) { showToast(d.error || 'Could not create the SAMpaign'); return; }
+    var id = d.campaign.id, name = d.campaign.name;
+    try { await _syncSampaignFupTasks(id, name, [], dates); } catch (e) {}
+    var pp = _spWizParsePeople(W.people).rows;
+    if (pp.length) {
+      var up = await _sampEdge('upload_sampaign_contacts', { campaign_id: id, contacts: pp });
+      if (!up.ok) showToast('Created, but adding people failed: ' + (up.error || ''));
+    }
+    if (W.csv) { try { await _uploadSampaignCsvFile(id, W.csv); } catch (e) { showToast('Created, but the CSV failed: ' + e.message); } }
+    showToast('SAMpaign created');
+    window._sampaignCampaignsCache = window._sampaignCampaignsCache || {};
+    window._sampaignCampaignsCache[id] = Object.assign({}, d.campaign, { is_owner: true, owner_email: currentUser.email });
+    openSampaignDetail(id, 'sequence');
+    if (W.writeNow) {
+      var o = await _sampLoadOverview(id);
+      var w1 = o && o.ok ? (o.waves || [])[0] : null;
+      if (w1 && w1.ready) sampWriteDrafts(id, 1);
+      else showToast('Add people with emails, then write the first emails from Sequence.');
+    }
+  } catch (e) { showToast('Error: ' + e.message); }
+  finally { window._spCreating = false; if (btn) { btn.disabled = false; btn.textContent = 'Create SAMpaign'; } }
 }
