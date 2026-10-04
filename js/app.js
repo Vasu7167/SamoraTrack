@@ -3,7 +3,7 @@ let SB_KEY = localStorage.getItem('dt-sb-key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6I
 let API_KEY = localStorage.getItem('dt-api-key') || '';
 var _userHabits = null;
 // Cache buster — update this string on every deploy to purge stale service worker cache
-var APP_VERSION = '20261003-03';
+var APP_VERSION = '20261003-05';
 (function() {
   if (localStorage.getItem('app-sw-version') !== APP_VERSION && 'serviceWorker' in navigator) {
     navigator.serviceWorker.getRegistrations().then(function(regs) {
@@ -223,12 +223,11 @@ function showMsg(msg, isErr) {
 // listed below added there. Until that is done these buttons will return a
 // provider-not-enabled error rather than silently doing nothing.
 const SSO_SCOPES = {
-  google: [
-    'https://www.googleapis.com/auth/gmail.readonly',
-    'https://www.googleapis.com/auth/gmail.send',
-    'https://www.googleapis.com/auth/calendar.readonly',
-    'email', 'profile'
-  ].join(' '),
+  // Sign in only proves who you are. Gmail and Calendar are connected
+  // separately (connectGmail), on our own domain, so the sign in screen never
+  // carries a restricted Google scope. The mail tokens this used to request
+  // were stored and never used.
+  google: 'openid email profile',
   // Supabase calls the Microsoft provider "azure".
   microsoft: 'openid email profile offline_access Mail.Read Mail.Send Calendars.ReadWrite User.Read'
 };
@@ -2113,6 +2112,8 @@ async function refreshYouTabConnections() {
       setChip('warn', 'Not connected');
       _youSetupSet('email', false);
     }
+    var disc = document.getElementById('youMailDisconnect');
+    if (disc) disc.hidden = !(d.connected && !d.demo);
     // Also update SAM tab label
     var samLbl = document.getElementById('samGmailLabel'); var samSub = document.getElementById('samGmailSub');
     if (d.connected) {
@@ -2506,8 +2507,38 @@ function renderMarketSignalCard(s) {
   '</div>';
 }
 
+// Ends Samora's access to your mailbox: Google's grant is revoked, the stored
+// tokens are deleted, and emails still queued from this mailbox are cancelled.
+async function disconnectMailbox() {
+  if (!currentUser || !currentUser.token) return;
+  var post = function (body) {
+    return fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify(body) }).then(function (r) { return r.json(); });
+  };
+  var pending = 0;
+  try { var p = await post({ action: 'disconnect_mailbox', preview: true }); pending = (p && p.pending) || 0; } catch (_e) {}
+  var line = 'Disconnect your mailbox? Samora stops using your mail and calendar right away.' +
+    (pending ? '\n\n' + pending + (pending === 1 ? ' scheduled email' : ' scheduled emails') + ' from this mailbox will be cancelled.' : '') +
+    '\n\nYou can connect again at any time.';
+  if (!confirm(line)) return;
+  var btn = document.getElementById('youMailDisconnect'); if (btn) btn.disabled = true;
+  try {
+    var d = await post({ action: 'disconnect_mailbox' });
+    if (!d || !d.ok) throw new Error((d && d.error) || 'Could not disconnect');
+    showToast('Mailbox disconnected' + (d.cancelled ? ', ' + d.cancelled + (d.cancelled === 1 ? ' scheduled email' : ' scheduled emails') + ' cancelled' : '') + '.');
+  } catch (e) {
+    showToast('Could not disconnect: ' + e.message);
+  } finally {
+    if (btn) btn.disabled = false;
+    try { refreshYouTabConnections(); } catch (_e) {}
+  }
+}
+
 function connectGmail() {
-  const scope = encodeURIComponent('https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/userinfo.email');
+  // The narrowest scopes the server uses, and exactly the ones listed for
+  // Google verification: read mail (replies, out of office, meeting notes),
+  // send the mail the rep schedules, read the calendar. Nothing modifies or
+  // labels mail, so gmail.modify is not asked for.
+  const scope = encodeURIComponent('openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/calendar.readonly');
   // Follows whichever host the app is open on (os.samoraglobal.com or
   // samoratrack.vercel.app). Both must be listed as authorised redirect URIs on
   // the SamoraStack Google OAuth client, or Google answers redirect_uri_mismatch.
