@@ -3,7 +3,37 @@ let SB_KEY = localStorage.getItem('dt-sb-key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6I
 let API_KEY = localStorage.getItem('dt-api-key') || '';
 var _userHabits = null;
 // Cache buster — update this string on every deploy to purge stale service worker cache
-var APP_VERSION = '20261003-05';
+var APP_VERSION = '20261004-01';
+
+// ── Money in the org's own currency (2026-10-04) ───────────────────────────
+// Amounts are stored in USD (deal_value_usd) and shown in the org's currency
+// at today's rate from get_org_config. INR reads in lakh and crore.
+var CUR_SYM = { USD: '$', INR: '\u20b9', EUR: '\u20ac', GBP: '\u00a3', AED: 'AED ', SGD: 'S$', AUD: 'A$', CAD: 'C$', JPY: '\u00a5', SAR: 'SAR ', MYR: 'RM ', IDR: 'Rp ', THB: '\u0e3f', ZAR: 'R ', NZD: 'NZ$', CHF: 'CHF ' };
+function fmtMoneyIn(amount, cur) {
+  cur = String(cur || 'USD').toUpperCase();
+  var n = Number(amount);
+  if (amount == null || !isFinite(n)) return '';
+  var a = Math.abs(n), sign = n < 0 ? '-' : '';
+  var one = function (x) { var r = Math.round(x * 10) / 10; return r % 1 === 0 ? String(r) : r.toFixed(1); };
+  var sym = CUR_SYM[cur] || (cur + ' ');
+  if (cur === 'INR') {
+    if (a >= 1e7) return sign + sym + one(a / 1e7) + 'Cr';
+    if (a >= 1e5) return sign + sym + one(a / 1e5) + 'L';
+    if (a >= 1e3) return sign + sym + one(a / 1e3) + 'K';
+    return sign + sym + Math.round(a);
+  }
+  if (a >= 1e9) return sign + sym + one(a / 1e9) + 'B';
+  if (a >= 1e6) return sign + sym + one(a / 1e6) + 'M';
+  if (a >= 1e3) return sign + sym + one(a / 1e3) + 'K';
+  return sign + sym + Math.round(a);
+}
+function orgCur() { return String((window._orgConfig && window._orgConfig.defaultCurrency) || 'USD').toUpperCase(); }
+function orgUsdRate() { var r = Number(window._orgConfig && window._orgConfig.usdRate); return r > 0 ? r : 1; }
+function fmtOrgMoney(usd) {
+  if (usd == null || !isFinite(Number(usd))) return '';
+  var c = orgCur();
+  return fmtMoneyIn(c === 'USD' ? Number(usd) : Number(usd) * orgUsdRate(), c);
+}
 (function() {
   if (localStorage.getItem('app-sw-version') !== APP_VERSION && 'serviceWorker' in navigator) {
     navigator.serviceWorker.getRegistrations().then(function(regs) {
@@ -2787,7 +2817,7 @@ async function loadMyAccounts() {
       var hasValue = r.deal_value != null;
       var extraDomains = (r.additional_domains || []).length;
       var valueTag = hasValue
-        ? '<span style="font-size:11px;color:var(--green);font-weight:500">$' + (r.deal_value_usd ? Math.round(r.deal_value_usd/1000)+'K' : r.deal_value) + '</span>'
+        ? '<span style="font-size:11px;color:var(--green);font-weight:500">' + (r.deal_value_usd ? fmtOrgMoney(r.deal_value_usd) : fmtMoneyIn(r.deal_value, r.deal_currency || orgCur())) + '</span>'
         : '';
       return '<div style="display:flex;align-items:center;gap:6px;padding:5px 10px;background:var(--surface2);border-radius:var(--r-md)">' +
         '<span style="font-size:12px;color:var(--text)">' + esc(r.account_name) + '</span>' +
@@ -6739,7 +6769,7 @@ async function openDealDetail(dealId, accountName, initialTab) {
 }
 
 function _buildDealDetailHTML(deal) {
-  var fmtUsd = function(v) { return !v ? '—' : v>=1e6 ? '$'+(v/1e6).toFixed(1)+'M' : '$'+Math.round(v/1e3)+'K'; };
+  var fmtUsd = function(v) { return !v ? 'Not set' : fmtOrgMoney(v); };
   return '<div style="background:var(--bg);border-radius:3px 16px 0 0;width:100%;max-width:540px;max-height:85vh;overflow-y:auto" onclick="event.stopPropagation()">' +
     '<div style="padding:16px 16px 0;position:sticky;top:0;background:var(--bg);border-bottom:1px solid var(--border);z-index:1">' +
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">' +
@@ -6839,7 +6869,7 @@ async function _renderWeeklyCheckPane(deal, forceRefresh) {
     needs_attention: { label: 'Needs attention', color: 'var(--amber)', bg: 'rgba(var(--c-accent-rgb),0.14)', icon: '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg>' },
     at_risk:         { label: 'At risk',          color: 'var(--coral)', bg: 'rgba(200,80,70,0.12)',  icon: '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>' }
   }[d.verdict] || { label: 'Reviewed', color: 'var(--text2)', bg: 'var(--surface2)', icon: '•' };
-  var fmtUsd = function(v){ return !v ? '—' : v>=1e6 ? '$'+(v/1e6).toFixed(1)+'M' : '$'+Math.round(v/1e3)+'K'; };
+  var fmtUsd = function(v){ return !v ? 'Not set' : fmtOrgMoney(v); };
 
   var html = '<div style="margin-bottom:10px">' + _samoraIntelLabel('Weekly account check · every line shows its receipt') + '</div>';
 
@@ -7230,7 +7260,7 @@ function _switchSignalScope(scope) {
 
 function _buildDealOverviewHTML(deal) {
   if (!deal) return '';
-  var fmtUsd = function(v) { return !v ? '—' : v>=1e6 ? '$'+(v/1e6).toFixed(1)+'M' : '$'+Math.round(v/1e3)+'K'; };
+  var fmtUsd = function(v) { return !v ? 'Not set' : fmtOrgMoney(v); };
   var rows = [['Deal value', fmtUsd(deal.deal_value_usd)],['Weighted', fmtUsd(deal.weighted_value_usd)],['Signal score', deal.signal_score!=null ? deal.signal_score+' / 100' : '—'],['Expected close', deal.expected_close||'—'],['Probability', deal.close_probability ? deal.close_probability+'%':'—'],['Rep', (deal.rep_email||'').split('@')[0]||'—'],['Region', deal.region||'—'],['ICP score', deal.icp_score!=null ? deal.icp_score+' / 100':'Not scored']];
   var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">';
   rows.forEach(function(r){ html += '<div style="background:var(--surface2);border-radius:var(--r-sm);padding:9px 11px"><div style="font-size:11px;color:var(--text3);margin-bottom:2px">'+r[0]+'</div><div style="font-size:14px;font-weight:500;color:var(--text)">'+esc(String(r[1]))+'</div></div>'; });
@@ -8102,7 +8132,7 @@ async function loadForecastPanel() {
     var d = _forecastData;
     if (!d.ok) { container.innerHTML = ''; return; }
 
-    var fmt = function(v) { return !v ? '$0' : v >= 1000000 ? '$' + (v/1000000).toFixed(1) + 'M' : '$' + Math.round(v/1000) + 'K'; };
+    var fmt = function(v) { return fmtOrgMoney(v || 0); };
     var trend = function(v) { return !v ? '' : v > 0 ? '<span style="color:var(--green)">↑' + fmt(Math.abs(v)) + '</span>' : '<span style="color:var(--coral)">↓' + fmt(Math.abs(v)) + '</span>'; };
 
     var html = '<div style="margin-bottom:14px">';
@@ -9026,7 +9056,7 @@ function populatePipelineFilters(data) {
 function renderPipelineDashboard(data) {
   var el = document.getElementById('pipelineDashboard');
   if (!el) return;
-  var fmtUsd = function(v) { return !v ? '$0' : v >= 1000000 ? '$'+(v/1000000).toFixed(1)+'M' : v >= 1000 ? '$'+Math.round(v/1000)+'K' : '$'+v; };
+  var fmtUsd = function(v) { return fmtOrgMoney(v || 0); };
   var deals = getFilteredDeals(data);
   var html = '';
 
@@ -9633,7 +9663,7 @@ async function loadSdrPanel() {
     var chip = function(num, label, col) {
       return '<div style="flex:1;min-width:80px;background:var(--surface2);border-radius:var(--r-md);padding:10px;text-align:center"><div style="font-size:20px;font-weight:700;color:'+(col||'var(--text)')+'">'+num+'</div><div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-top:2px">'+label+'</div></div>';
     };
-    var pipeK = d.pipeline_generated_usd >= 1000000 ? '$'+(d.pipeline_generated_usd/1000000).toFixed(1)+'M' : '$'+Math.round(d.pipeline_generated_usd/1000)+'K';
+    var pipeK = fmtOrgMoney(d.pipeline_generated_usd || 0);
     var html = '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-md);padding:14px;margin-bottom:14px">';
     html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">';
     html += '<img src="icons/icon-48.png" style="width:16px;height:16px;border-radius:50%"/>';
@@ -9674,7 +9704,7 @@ async function loadSdrPanel() {
 // the manager. Leads = accounts where they are the assigned SDR (sdr_user_id).
 window._sdrDeals = {};
 function _sdrDealCard(a, kind) {
-  var v = a.deal_value_usd ? (a.deal_value_usd>=1e6 ? '$'+(a.deal_value_usd/1e6).toFixed(1)+'M' : '$'+Math.round(a.deal_value_usd/1e3)+'K') : '';
+  var v = a.deal_value_usd ? fmtOrgMoney(a.deal_value_usd) : '';
   var owner = (a._owner_email||'').split('@')[0];
   var meta = [a.region?esc(a.region):'', owner?('AE: '+esc(owner)):'', v].filter(Boolean).join(' · ');
   return '<div onclick="openSdrScout(\''+esc(a.id)+'\',\''+esc(a.account_name)+'\')" style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-md);padding:10px 12px;margin-bottom:6px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px">' +
@@ -12884,7 +12914,7 @@ function renderPipelineChart(data) {
   // Stage colours from org config
   var stageColors = { prospective: '#888780', value_prop: '#A07824', commercial: '#3B6D11', unknown: '#555' };
   var dealStages = data.dealStages || [{ key:'prospective',label:'Prospective' },{ key:'value_prop',label:'Value Prop' },{ key:'commercial',label:'Commercial' }];
-  var fmtUsd = function(v) { return v >= 1000000 ? '$'+(v/1000000).toFixed(1)+'M' : '$'+Math.round(v/1000)+'K'; };
+  var fmtUsd = function(v) { return fmtOrgMoney(v || 0); };
 
   // Filter by current view
   var filteredRegions = regions.map(function(r) {
@@ -12968,7 +12998,7 @@ function renderPipelineDeals(data) {
   if (!deals.length) { el.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:16px 0;text-align:center">No deals in this view yet.</div>'; return; }
 
   var stageColors = { prospective: '#888780', value_prop: '#A07824', commercial: '#3B6D11', unknown: '#555' };
-  var fmtUsd = function(v) { if (!v) return '—'; return v >= 1000000 ? '$'+(v/1000000).toFixed(1)+'M' : '$'+Math.round(v/1000)+'K'; };
+  var fmtUsd = function(v) { if (!v) return 'Not set'; return fmtOrgMoney(v); };
   var tierConfig = {
     verified:   { icon: '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg>', label: 'Verified',   color: 'var(--green)' },
     partial:    { icon: '<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg>', label: 'Partial',    color: 'var(--amber)' },
@@ -13619,7 +13649,7 @@ function renderDealModal() {
   var CCY = ['USD','INR','EUR','GBP','AED','SAR','SGD','AUD','CAD','MXN','BRL'];
   var TYPE_C = {MRR:'#3A6EA8',QRR:'#4A8C5C',ARR:'#7B5EA7',one_time:'#A07824'};
 
-  function fmt(v) { return !v?'$0':v>=1e6?'$'+(v/1e6).toFixed(1)+'M':v>=1000?'$'+Math.round(v/1000)+'K':'$'+Math.round(v); }
+  function fmt(v) { return fmtOrgMoney(v || 0); }
 
   function getType(name) {
     var d = ST.find(function(t){return (t.key||t.label)===name;});
@@ -13801,6 +13831,7 @@ function renderDealModal() {
 
 function updateDealTotal() {
   var FX = {USD:1,INR:0.012,EUR:1.08,GBP:1.27,AED:0.272,SAR:0.267,SGD:0.74,AUD:0.65,CAD:0.73,MXN:0.058,BRL:0.19};
+  if (orgCur() !== 'USD') FX[orgCur()] = 1 / orgUsdRate();
   var total = 0;
   _dealGroups.forEach(function(g){
     g.streams.forEach(function(s){
@@ -13811,13 +13842,14 @@ function updateDealTotal() {
     });
   });
   var el = document.getElementById('deal-total-display');
-  if (el) el.textContent = total>=1000000?'$'+(total/1000000).toFixed(1)+'M':total>=1000?'$'+Math.round(total/1000)+'K':'$'+Math.round(total);
+  if (el) el.textContent = fmtOrgMoney(total);
   return total;
 }
 
 async function saveDealValue() {
   var statusEl = document.getElementById('dv-status');
   var FX = {USD:1,INR:0.012,EUR:1.08,GBP:1.27,AED:0.272,SAR:0.267,SGD:0.74,AUD:0.65,CAD:0.73,MXN:0.058,BRL:0.19};
+  if (orgCur() !== 'USD') FX[orgCur()] = 1 / orgUsdRate();
   var dealType  = document.getElementById('dv-type')?.value  || 'new_business';
   var closeDate = document.getElementById('dv-close')?.value || null;
 
@@ -13984,7 +14016,7 @@ async function loadVelocityForecast() {
     if (!d.ok) { box.innerHTML = ''; return; }
     var f = d.forecast || {};
     var vel = d.velocity || [];
-    var fmtK = function(v){ return v >= 1000000 ? '$' + (v/1000000).toFixed(1) + 'M' : '$' + Math.round(v/1000) + 'K'; };
+    var fmtK = function(v){ return fmtOrgMoney(v || 0); };
 
     var h = '<div style="margin-bottom:10px">' + _samoraIntelLabel('Forecast integrity, deterministic') + '</div>';
 
@@ -14065,7 +14097,7 @@ async function loadIntelConsole() {
     var d = await r.json();
     if (!d.ok) { box.innerHTML = ''; return; }
     var st = d.strip || {};
-    var fmtK = function(v){ return v >= 1000000 ? '$' + (v/1000000).toFixed(1) + 'M' : '$' + Math.round(v/1000) + 'K'; };
+    var fmtK = function(v){ return fmtOrgMoney(v || 0); };
     var fd = st.forecast_delta;
     var fdVal = fd ? (fd.verified_change >= 0 ? '+' : '') + fmtK(Math.abs(fd.verified_change)).replace('$', fd.verified_change < 0 ? '-$' : '$') : 'n/a';
     var fdCol = fd ? (fd.verified_change >= 0 ? 'var(--green)' : 'var(--coral)') : 'var(--text3)';
@@ -15076,6 +15108,7 @@ function joinOrgCancel() {
     var tabs = [['people', 'People'], ['tree', 'Reporting lines'], ['access', 'Data access']];
     this.extraTabs.forEach(function (x) { tabs.push([x.key, x.label]); });
     if (this.showProfile) tabs.push(['profile', 'Company profile']);
+    tabs.push(['calendar', 'Work calendar']);
     tabs.push(['log', 'Activity']);
     this._parkHosted();
     var self = this;
@@ -15128,6 +15161,7 @@ function joinOrgCancel() {
       return;
     }
     if (this.tab === 'profile') { this._renderProfile(body); return; }
+    if (this.tab === 'calendar') { this._renderCalendar(body); return; }
     if (this.tab === 'people') body.innerHTML = this._people();
     else if (this.tab === 'tree') body.innerHTML = this._tree();
     else if (this.tab === 'access') body.innerHTML = this._access();
@@ -15348,6 +15382,7 @@ function joinOrgCancel() {
     else if (a === 'prod-add') this._productModal(null);
     else if (a === 'prod-edit') this._productModal(t.getAttribute('data-id'));
     else if (a === 'prod-del') this._productRemove(t.getAttribute('data-id'));
+    else if (a.indexOf('cal-') === 0) this._calClick(a, t);
   };
 
   Console.prototype._change = function (e) {
@@ -15475,6 +15510,158 @@ function joinOrgCancel() {
       // Deferred, so a click on Save that caused this blur still lands.
       el.addEventListener('blur', function () { if (commit()) setTimeout(function () { if (self.tab === 'profile') self._renderProfile(body); }, 180); });
     });
+  };
+
+  // ── Work calendar (2026-10-04) ─────────────────────────────────────────
+  // Working days, hours, time zone, the morning digest hour and holidays.
+  // Samora sends no notifications on days off and holidays, and outreach
+  // waits for the next working day.
+  var CAL_DAYS = [[1, 'Mon'], [2, 'Tue'], [3, 'Wed'], [4, 'Thu'], [5, 'Fri'], [6, 'Sat'], [0, 'Sun']];
+  var CAL_TZ = ['Asia/Kolkata', 'Asia/Dubai', 'Asia/Riyadh', 'Asia/Singapore', 'Asia/Jakarta', 'Asia/Tokyo', 'Australia/Sydney', 'Europe/London', 'Europe/Berlin', 'Europe/Paris', 'Africa/Johannesburg', 'America/New_York', 'America/Chicago', 'America/Los_Angeles', 'America/Sao_Paulo', 'UTC'];
+  function calHour(n) { n = Number(n); if (n === 0 || n === 24) return '12 am'; if (n === 12) return '12 pm'; return n < 12 ? n + ' am' : (n - 12) + ' pm'; }
+  function calDateLabel(iso) {
+    try { return new Date(iso + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }); } catch (e) { return iso; }
+  }
+  function calParseDate(s) {
+    s = String(s || '').trim().replace(/^["']|["']$/g, '');
+    var m, pad = function (x) { return String(x).padStart(2, '0'); };
+    var ok = function (y, mo, d) { var iso = y + '-' + pad(mo) + '-' + pad(d); var t = Date.parse(iso + 'T12:00:00Z'); return isNaN(t) || new Date(t).toISOString().slice(0, 10) !== iso ? null : iso; };
+    if ((m = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})$/))) return ok(m[1], m[2], m[3]);
+    // Day first, the way Indian and European lists are written.
+    if ((m = s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})$/))) return ok(m[3], m[2], m[1]);
+    var t = Date.parse(s + ' 12:00 UTC');
+    return isNaN(t) ? null : new Date(t).toISOString().slice(0, 10);
+  }
+  // "date, name" per line; a header row or blank lines are skipped.
+  function calParseList(text) {
+    var out = [], bad = 0, first = true;
+    String(text || '').split(/\r?\n/).forEach(function (line) {
+      if (!line.trim()) return;
+      var isFirst = first; first = false;
+      var cells = line.split(/\t|;|,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(function (c) { return c.trim().replace(/^"|"$/g, ''); });
+      var date = null, name = '';
+      for (var i = 0; i < cells.length; i++) { var d = calParseDate(cells[i]); if (d) { date = d; name = cells.filter(function (_, j) { return j !== i; }).join(' ').trim(); break; } }
+      if (date) out.push({ date: date, name: name.slice(0, 80) });
+      else if (!(isFirst && /date|holiday|name|day/i.test(line))) bad++;
+    });
+    return { rows: out, bad: bad };
+  }
+
+  Console.prototype._renderCalendar = async function (body) {
+    var self = this;
+    if (!this.cal) {
+      body.innerHTML = '<div class="sxa-empty">Loading your work calendar…</div>';
+      var d;
+      try { d = await this.call('org_admin_calendar_get', this._body()); } catch (e) { d = { ok: false, error: e.message }; }
+      if (this.tab !== 'calendar') return;
+      if (!d || !d.ok) { body.innerHTML = '<div class="sxa-empty sxa-err">' + h((d && d.error) || 'Could not load the calendar.') + '</div>'; return; }
+      this.cal = d.calendar; this.calDirty = false;
+    }
+    var c = this.cal;
+    var today = new Date().toISOString().slice(0, 10);
+    var upcoming = c.holidays.filter(function (x) { return x.date >= today; });
+    var past = c.holidays.length - upcoming.length;
+    var tzs = CAL_TZ.indexOf(c.timezone) === -1 ? [c.timezone].concat(CAL_TZ) : CAL_TZ;
+    var hours = function (from, to, sel) { var o = ''; for (var i = from; i <= to; i++) o += '<option value="' + i + '"' + (i === sel ? ' selected' : '') + '>' + calHour(i) + '</option>'; return o; };
+    body.innerHTML =
+      '<div class="sxa-pf">' +
+        '<div class="sxa-sec" style="margin-top:4px">Working days</div>' +
+        '<div class="sxa-note">Samora sends nothing on days off and holidays. SAMpaign emails and LinkedIn steps wait for the next working day.</div>' +
+        '<div class="sxa-cal-days" role="group" aria-label="Working days">' + CAL_DAYS.map(function (x) {
+          var on = c.work_days.indexOf(x[0]) !== -1;
+          return '<button type="button" class="sxa-cal-day' + (on ? ' on' : '') + '" data-sxa="cal-day" data-v="' + x[0] + '" aria-pressed="' + on + '">' + x[1] + '</button>';
+        }).join('') + '</div>' +
+        '<div class="sxa-f2">' +
+          '<label class="sxa-f"><span class="sxa-lbl">Time zone</span><select class="sxa-in" data-cal="timezone">' + tzs.map(function (z) { return '<option' + (z === c.timezone ? ' selected' : '') + '>' + h(z) + '</option>'; }).join('') + '</select></label>' +
+          '<label class="sxa-f"><span class="sxa-lbl">Morning digest at</span><select class="sxa-in" data-cal="digest_hour">' + hours(c.start_hour, c.end_hour - 1, c.digest_hour) + '</select></label>' +
+        '</div>' +
+        '<div class="sxa-f2">' +
+          '<label class="sxa-f"><span class="sxa-lbl">Day starts</span><select class="sxa-in" data-cal="start_hour">' + hours(0, 23, c.start_hour) + '</select></label>' +
+          '<label class="sxa-f"><span class="sxa-lbl">Day ends</span><select class="sxa-in" data-cal="end_hour">' + hours(1, 24, c.end_hour) + '</select></label>' +
+        '</div>' +
+        '<div class="sxa-sec" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span>Holidays (' + upcoming.length + ' coming up)</span>' +
+          '<span style="display:flex;gap:6px;flex-wrap:wrap"><button class="sxa-btn sxa-btn-ghost" data-sxa="cal-upload">Upload a list</button><input type="file" accept=".csv,.txt,text/csv,text/plain" data-sxa-file="cal" hidden/></span></div>' +
+        '<div class="sxa-note">Beyond the weekly days off. Upload a CSV or text file with a date and a name on each line, for example <b>26/01/2027, Republic Day</b>.</div>' +
+        '<div class="sxa-cal-add">' +
+          '<input class="sxa-in" type="date" data-cal-new="date" aria-label="Holiday date"/>' +
+          '<input class="sxa-in" data-cal-new="name" placeholder="Name, e.g. Diwali" aria-label="Holiday name"/>' +
+          '<button class="sxa-btn sxa-btn-ghost" data-sxa="cal-add">Add</button>' +
+        '</div>' +
+        (upcoming.length ? '<div class="sxa-list sxa-cal-list">' + upcoming.map(function (x) {
+          return '<div class="sxa-cal-row"><span class="sxa-cal-date">' + h(calDateLabel(x.date)) + '</span><span class="sxa-cal-name">' + h(x.name || 'Holiday') + '</span>' +
+            '<button class="sxa-btn sxa-btn-ghost" data-sxa="cal-del" data-v="' + h(x.date) + '" aria-label="Remove ' + h(x.name || x.date) + '">Remove</button></div>';
+        }).join('') + '</div>' : '<div class="sxa-empty sxa-empty-s">No holidays added yet.</div>') +
+        (past ? '<div class="sxa-note">' + past + ' past ' + (past === 1 ? 'holiday is' : 'holidays are') + ' kept for the record.</div>' : '') +
+        '<div class="sxa-actions" style="justify-content:flex-start">' +
+          '<button class="sxa-btn sxa-btn-gold" data-sxa="cal-save"' + (this.calDirty ? '' : ' disabled') + '>' + (this.calDirty ? 'Save calendar' : 'Saved') + '</button>' +
+        '</div>' +
+      '</div>';
+    var mark = function () { self.calDirty = true; var b = body.querySelector('[data-sxa="cal-save"]'); if (b) { b.disabled = false; b.textContent = 'Save calendar'; } };
+    body.querySelectorAll('[data-cal]').forEach(function (el) {
+      el.addEventListener('change', function () {
+        var k = el.getAttribute('data-cal');
+        c[k] = k === 'timezone' ? el.value : parseInt(el.value, 10);
+        if (k === 'start_hour' || k === 'end_hour') {
+          if (c.end_hour <= c.start_hour) c.end_hour = Math.min(24, c.start_hour + 1);
+          if (c.digest_hour < c.start_hour || c.digest_hour >= c.end_hour) c.digest_hour = c.start_hour;
+          mark(); self._renderCalendar(body); return;
+        }
+        mark();
+      });
+    });
+    var file = body.querySelector('[data-sxa-file="cal"]');
+    if (file) file.addEventListener('change', function () {
+      var f = file.files && file.files[0]; if (!f) return;
+      var rd = new FileReader();
+      rd.onload = function () {
+        var res = calParseList(rd.result);
+        if (!res.rows.length) { self.toast('No dates found in that file. Use one holiday per line: date, name.', true); return; }
+        var have = {}; c.holidays.forEach(function (x) { have[x.date] = x; });
+        var added = 0;
+        res.rows.forEach(function (x) { if (!have[x.date]) { c.holidays.push(x); have[x.date] = x; added++; } else if (x.name && !have[x.date].name) have[x.date].name = x.name; });
+        c.holidays.sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+        mark(); self._renderCalendar(body);
+        self.toast(added + (added === 1 ? ' holiday' : ' holidays') + ' added' + (res.bad ? ', ' + res.bad + (res.bad === 1 ? ' line' : ' lines') + ' skipped' : '') + '. Save to keep them.');
+      };
+      rd.readAsText(f);
+    });
+  };
+
+  Console.prototype._calClick = function (a, t) {
+    var c = this.cal, body = this.el.querySelector('#sxa-body');
+    if (!c) return;
+    if (a === 'cal-day') {
+      var v = parseInt(t.getAttribute('data-v'), 10), i = c.work_days.indexOf(v);
+      if (i === -1) c.work_days.push(v); else if (c.work_days.length > 1) c.work_days.splice(i, 1); else { this.toast('Keep at least one working day.', true); return; }
+      c.work_days.sort(); this.calDirty = true; this._renderCalendar(body);
+    } else if (a === 'cal-add') {
+      var dEl = body.querySelector('[data-cal-new="date"]'), nEl = body.querySelector('[data-cal-new="name"]');
+      var d = calParseDate(dEl && dEl.value);
+      if (!d) { this.toast('Pick a date first.', true); return; }
+      var ex = c.holidays.filter(function (x) { return x.date === d; })[0];
+      if (ex) { if (nEl && nEl.value.trim()) ex.name = nEl.value.trim().slice(0, 80); }
+      else c.holidays.push({ date: d, name: (nEl && nEl.value.trim().slice(0, 80)) || '' });
+      c.holidays.sort(function (x, y) { return x.date < y.date ? -1 : 1; });
+      this.calDirty = true; this._renderCalendar(body);
+    } else if (a === 'cal-del') {
+      var dd = t.getAttribute('data-v');
+      c.holidays = c.holidays.filter(function (x) { return x.date !== dd; });
+      this.calDirty = true; this._renderCalendar(body);
+    } else if (a === 'cal-upload') {
+      var f = body.querySelector('[data-sxa-file="cal"]'); if (f) f.click();
+    } else if (a === 'cal-save') {
+      this._saveCalendar(t);
+    }
+  };
+
+  Console.prototype._saveCalendar = async function (btn) {
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+    var d;
+    try { d = await this.call('org_admin_calendar_save', this._body({ calendar: this.cal })); } catch (e) { d = { ok: false, error: e.message }; }
+    if (!d || !d.ok) { this.toast((d && d.error) || 'Could not save.', true); if (btn) { btn.disabled = false; btn.textContent = 'Save calendar'; } return; }
+    this.cal = d.calendar; this.calDirty = false;
+    this.toast('Calendar saved');
+    this._renderCalendar(this.el.querySelector('#sxa-body'));
   };
 
   Console.prototype._chipRemove = function (btn) {
