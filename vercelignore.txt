@@ -1,0 +1,8 @@
+# Working files that must never be served from os.samoraglobal.com.
+# The edge function source is deployed to Supabase, not to the website.
+/*.ts
+/*.py
+/*.txt
+/*.md
+/index.html.pre-*
+.DS_Store
