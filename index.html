@@ -2133,6 +2133,16 @@ body[data-tab]:not([data-tab="today"]) .metric-wrap{display:none}
 .auth-legal{display:flex;justify-content:center;gap:8px;margin-top:18px;font-size:12px;color:var(--text3)}.auth-legal a{color:var(--text3);text-decoration:underline;text-underline-offset:2px}.auth-legal a:hover{color:var(--text)}
 
 .you-disc{margin-top:10px;background:none;border:none;padding:0;font-family:var(--sans);font-size:12px;color:var(--text3);text-decoration:underline;text-underline-offset:2px;cursor:pointer}.you-disc:hover{color:var(--coral)}.you-disc[hidden]{display:none}
+.sxa-cal-days{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 14px}
+.sxa-cal-day{min-width:52px;padding:8px 10px;border-radius:999px;border:1px solid var(--border,#e6e1d4);background:transparent;color:var(--text2,#5f5e5a);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.sxa-cal-day.on{background:rgba(212,175,55,.16);border-color:var(--gold,#b8860b);color:var(--text,#1a1a18)}
+.sxa-cal-day:focus-visible{outline:2px solid var(--gold,#b8860b);outline-offset:2px}
+.sxa-cal-add{display:grid;grid-template-columns:170px 1fr auto;gap:8px;margin:10px 0}
+.sxa-cal-list{margin-top:6px}
+.sxa-cal-row{display:grid;grid-template-columns:150px 1fr auto;gap:10px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--border,#e6e1d4)}
+.sxa-cal-date{font-weight:600;font-size:13px;font-variant-numeric:tabular-nums}
+.sxa-cal-name{font-size:13px;color:var(--text2,#5f5e5a);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (max-width:640px){.sxa-cal-add{grid-template-columns:1fr 1fr}.sxa-cal-add .sxa-btn{grid-column:1/-1}.sxa-cal-row{grid-template-columns:1fr auto}.sxa-cal-name{grid-column:1/-1;grid-row:2}}
 </style>
 <script src="/js/vendor/sortable.min.js"></script>
 </head>
