@@ -4701,8 +4701,19 @@ function _ownIdentityTokens() {
   try {
     var email = ((typeof currentUser !== 'undefined' && currentUser && currentUser.email) || '').toLowerCase();
     (email.split('@')[0] || '').split(/[._\-+]+/).forEach(function(t) { if (t.length >= 3) toks.push(t); });
+    // The company too: its email domain ("samoraglobal") and its name ("Samora Global").
+    var dom = (email.split('@')[1] || '').split('.')[0] || '';
+    if (dom.length >= 3) toks.push(dom);
+    var orgName = ((typeof profile !== 'undefined' && profile && profile.org_name) || '').toLowerCase();
+    orgName.replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).forEach(function(t) { if (t.length >= 4 && ['global','india','group','private','limited','technologies','solutions'].indexOf(t) === -1) toks.push(t); });
+    if (dom.length >= 6) ['global','india','group','tech','labs','hq'].forEach(function(sfx) { if (dom.slice(-sfx.length) === sfx && dom.length - sfx.length >= 4) toks.push(dom.slice(0, dom.length - sfx.length)); });
   } catch (e) {}
   return toks;
+}
+// Participants from outside your company only: your own address is on every recap you receive.
+function _outsideParticipants(list) {
+  var dom = ((((typeof currentUser !== 'undefined' && currentUser && currentUser.email) || '').toLowerCase()).split('@')[1]) || '';
+  return (list || []).filter(function (e) { var x = String(e || '').toLowerCase(); return x && (!dom || x.split('@')[1] !== dom); });
 }
 function _distinctiveWords(taskText) {
   var own = _ownIdentityTokens();
@@ -4783,7 +4794,7 @@ async function autoCompleteTasks(silent) {
         // recorded TODAY, sharing a DISTINCTIVE token, naming the right person,
         // in the right region.
         var ev = hasIdentity && transcripts.find(function(t) {
-          var tt = ((t.title||'') + ' ' + (t.participants||[]).join(' ')).toLowerCase();
+          var tt = ((t.title||'') + ' ' + _outsideParticipants(t.participants).join(' ')).toLowerCase();
           if (!distinct.some(function(w){ return tt.includes(w); })) return false;
           var td = _evDate(t);
           if (td && !_isToday(td)) return false;         // never a prior-day transcript
@@ -4797,7 +4808,7 @@ async function autoCompleteTasks(silent) {
         // Evidence 1b: notetaker recap email in the inbox (today only, distinctive
         // token required so a digest/notification never verifies a meeting).
         var note = hasIdentity && inboxNotes.find(function(n) {
-          var nt = ((n.title||'') + ' ' + (n.participants||[]).join(' ')).toLowerCase();
+          var nt = ((n.title||'') + ' ' + _outsideParticipants(n.participants).join(' ')).toLowerCase();
           if (!distinct.some(function(w){ return nt.includes(w); })) return false;
           if (!_isToday(_evDate(n))) return false;        // recap must be dated today
           return _matchGatesOk(task.text, nt);
