@@ -2156,6 +2156,164 @@ body[data-tab]:not([data-tab="today"]) .metric-wrap{display:none}
 .sxa-mb-st.off{color:var(--text2,#5f5e5a)}
 .sxa-mb-why{grid-column:1/-1;font-size:12.5px;color:#b3261e;padding-left:44px}
 @media (max-width:640px){.sxa-mb-blank{display:none}.sxa-mb-row{grid-template-columns:1fr 1fr}.sxa-mb-why{padding-left:0}.sxa-mb-sum .sxa-btn{margin-left:0}}
+
+/* ══ Drop C: SAM, Open deals, SAMagic board (2026-10-06) ══ */
+.rv-view{margin-bottom:8px}
+.rv-red{color:var(--c-risk)!important}
+.rv-banner{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 18px;margin-bottom:16px;font-size:13.5px;border-color:rgba(var(--c-accent-rgb),.35)}
+.sp-chip.crit{font-weight:700}
+.sp-chip:not(.live):not(.warn):not(.risk):not(.soon) i{opacity:.55}
+.rv-link{all:unset;cursor:pointer;color:var(--c-accent-text);font-weight:600;font-size:12.5px}
+.rv-link:focus-visible,.rv-plain:focus-visible,.rv-name:focus-visible{outline:2px solid var(--c-focus);outline-offset:2px;border-radius:6px}
+.rv-plain{all:unset;cursor:pointer;font-size:13.5px;line-height:1.4}
+.rv-plain:hover b{text-decoration:underline}
+/* Needs you today */
+.rv-needs .sp-empty{padding:22px 0 6px;text-align:left}
+.rv-nlist{list-style:none;margin:8px 0 0;padding:0}
+.rv-nlist li{display:flex;gap:12px;align-items:flex-start;padding:13px 0;border-top:1px solid var(--g-line)}
+.rv-nlist li:first-child{border-top:0}
+.rv-nmain{flex:1;min-width:0}
+.rv-nt{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.rv-name{all:unset;cursor:pointer;font-weight:650;font-size:14.5px;color:var(--text)}
+.rv-name:hover{text-decoration:underline}
+.rv-val{font-size:12.5px;font-weight:600;color:var(--text2);font-variant-numeric:tabular-nums}
+.rv-owner{font-size:11.5px;color:var(--text3);border:1px solid var(--g-line);border-radius:999px;padding:1px 8px}
+.rv-why{font-size:13.5px;color:var(--text);margin:3px 0 2px;line-height:1.45}
+.rv-act{flex:none;align-self:center;white-space:nowrap}
+/* All accounts */
+.rv-all{margin-top:20px}
+.rv-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.rv-tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;flex:1;justify-content:flex-end;min-width:0}
+.rv-tools .sp-seg{max-width:100%;overflow-x:auto;scrollbar-width:none}
+.rv-tools .sp-seg::-webkit-scrollbar{display:none}
+.rv-tools .sp-search{max-width:240px}
+.rv-rows{display:flex;flex-direction:column}
+.rv-arow{all:unset;box-sizing:border-box;cursor:pointer;display:grid;width:100%;grid-template-columns:minmax(0,1.3fr) 110px minmax(0,1.6fr) 90px 120px;gap:12px;align-items:center;padding:10px 8px;border-top:1px solid var(--g-line);font-size:13px;border-radius:10px}
+.rv-arow:hover{background:rgba(127,127,127,.06)}
+.rv-arow:focus-visible{outline:2px solid var(--c-focus);outline-offset:-2px}
+.rv-an{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rv-an small{display:block;font-weight:400;font-size:11.5px;color:var(--text3)}
+.rv-al{color:var(--text2);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rv-av{text-align:right;font-variant-numeric:tabular-nums;color:var(--text2)}
+/* How SAM decides */
+.rv-how{margin:18px 2px 8px;font-size:12.5px;color:var(--text2)}
+.rv-how summary{cursor:pointer;color:var(--text3);font-weight:600}
+.rv-how dl{display:grid;grid-template-columns:120px minmax(0,1fr);gap:6px 14px;margin:12px 0 8px}
+.rv-how dt{font-weight:650;color:var(--text)}
+.rv-how dd{margin:0}
+.rv-how p{margin:0;color:var(--text3)}
+/* Open deals */
+.rv-filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.rv-filters .sp-search{max-width:280px}
+.rv-sel{height:34px;border-radius:999px;border:1px solid var(--c-line-strong);background:var(--surface);color:var(--text);font:13px var(--font);padding:0 12px;max-width:190px}
+.rv-sel:focus-visible{outline:2px solid var(--c-focus);outline-offset:1px}
+.rv-dtable{padding:6px 10px 4px;overflow:hidden}
+.rv-dhead,.rv-drow{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,.9fr) 100px 120px minmax(0,1.3fr) minmax(0,1.1fr);gap:14px;align-items:center}
+.rv-dhead{padding:10px 10px 8px;font-size:11px;font-weight:650;letter-spacing:.08em;text-transform:uppercase;color:var(--text3)}
+.rv-dhead .r,.rv-drow .r{text-align:right}
+.rv-drow{all:unset;box-sizing:border-box;display:grid;width:100%;grid-template-columns:minmax(0,1.7fr) minmax(0,.9fr) 100px 120px minmax(0,1.3fr) minmax(0,1.1fr);gap:14px;align-items:center;cursor:pointer;padding:12px 10px;border-top:1px solid var(--g-line);font-size:13px;border-radius:12px}
+.rv-drow:hover{background:rgba(127,127,127,.06)}
+.rv-drow:focus-visible{outline:2px solid var(--c-focus);outline-offset:-2px}
+.rv-dn{min-width:0}
+.rv-dn b{display:block;font-weight:650;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rv-dn small,.rv-dh small,.rv-dl small{display:block;font-size:11.5px;color:var(--text3);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rv-ds{color:var(--text2)}
+.rv-dv{font-weight:650;font-variant-numeric:tabular-nums}
+.rv-dc{color:var(--text2)}
+.rv-dh,.rv-dl{min-width:0}
+.rv-dfoot{padding:12px 10px 10px;border-top:1px solid var(--g-line);font-size:12.5px;color:var(--text3);text-align:right}
+/* SAMagic */
+.rv-k4.sp-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}
+.rv-team{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-bottom:16px}
+.rv-tm{all:unset;box-sizing:border-box;cursor:pointer;display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:16px;background:var(--g-fill-strong);border:1px solid var(--g-line)}
+.rv-tm:hover{box-shadow:var(--g-card-shadow-hi)}
+.rv-tm.on{border-color:var(--c-accent-line);box-shadow:0 0 0 2px rgba(var(--c-accent-rgb),.25)}
+.rv-tm:focus-visible{outline:2px solid var(--c-focus);outline-offset:2px}
+.rv-tav{position:relative;flex:none;width:34px;height:34px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:rgba(var(--c-accent-rgb),.16);color:var(--c-accent-text)}
+.rv-tav .mb{position:absolute;right:-1px;bottom:-1px;width:10px;height:10px;border-radius:50%;border:2px solid var(--surface);background:var(--text3)}
+.rv-tav .mb.ok{background:var(--c-verified)}.rv-tav .mb.reconnect{background:var(--c-risk)}.rv-tav .mb.stale{background:var(--c-partial)}
+.rv-tw{min-width:0;display:flex;flex-direction:column;gap:2px;font-size:13px}
+.rv-tw small{color:var(--text2);font-size:12px}
+.rv-tc{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+.rv-tc .sp-chip{font-size:10.5px;padding:2px 7px}
+.rv-bbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.rv-board{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(250px,1fr);gap:12px;overflow-x:auto;padding:2px 2px 12px;scroll-snap-type:x proximity;overscroll-behavior-x:contain}
+.rv-col{scroll-snap-align:start;background:rgba(127,127,127,.06);border:1px solid var(--g-line);border-radius:18px;padding:10px;min-width:0;display:flex;flex-direction:column;gap:8px;align-self:start}
+.rv-col header{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:4px 6px 6px;font-size:13px}
+.rv-col header span{font-size:12px;color:var(--text3);font-variant-numeric:tabular-nums;white-space:nowrap}
+.rv-card{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;gap:6px;padding:11px 12px;border-radius:14px;background:var(--surface);border:1px solid var(--g-line);border-left:3px solid var(--g-line);font-size:12.5px}
+.rv-card.live{border-left-color:var(--c-verified)}.rv-card.warn{border-left-color:var(--c-partial)}.rv-card.risk{border-left-color:var(--c-risk)}
+.rv-card:hover{box-shadow:var(--g-card-shadow-hi)}
+.rv-card:focus-visible{outline:2px solid var(--c-focus);outline-offset:1px}
+.rv-ct{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.rv-ct b{font-size:13.5px;font-weight:650;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rv-ct span{font-weight:650;font-variant-numeric:tabular-nums;white-space:nowrap}
+.rv-cm{color:var(--text2);display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.rv-ini{width:18px;height:18px;border-radius:50%;font-size:9px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;background:rgba(127,127,127,.14)}
+.rv-cb{display:flex;gap:5px;flex-wrap:wrap}
+.rv-cb .sp-chip{font-size:10.5px;padding:2px 7px}
+.rv-cr{font-size:11.5px;color:var(--text3);line-height:1.35}
+.rv-cempty{font-size:12px;color:var(--text3);padding:10px 6px}
+/* More tools */
+.rv-more{margin-top:22px;border-top:1px solid var(--g-line);padding-top:6px}
+.rv-more>summary{cursor:pointer;list-style:none;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;padding:12px 2px;font-weight:650;font-size:14px;color:var(--text2)}
+.rv-more>summary::-webkit-details-marker{display:none}
+.rv-more>summary::before{content:'+';display:inline-block;width:16px;color:var(--c-accent-text);font-weight:700}
+.rv-more[open]>summary::before{content:'\2212'}
+.rv-more>summary small{font-weight:400;font-size:12.5px;color:var(--text3)}
+.rv-more-body{padding-top:8px}
+/* The deal sheet */
+.rv-sheet-wrap{position:fixed;inset:0;z-index:9300;background:rgba(16,18,24,.32);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);display:flex;justify-content:flex-end}
+.rv-sheet{width:min(480px,100%);height:100%;overflow:auto;background:var(--surface);border-left:1px solid var(--g-line);box-shadow:-30px 0 80px -30px rgba(16,18,24,.45);padding:22px 22px 30px;box-sizing:border-box;animation:scIn .18s var(--ease,ease-out)}
+@keyframes scIn{from{transform:translateX(24px);opacity:.4}to{transform:none;opacity:1}}
+.rv-sheet-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.rv-sheet h2{margin:4px 0 2px;font-size:22px;font-weight:650;letter-spacing:-.02em;overflow-wrap:anywhere}
+.rv-x{all:unset;cursor:pointer;width:34px;height:34px;flex:none;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:22px;color:var(--text2);border:1px solid var(--g-line)}
+.rv-x:focus-visible{outline:2px solid var(--c-focus);outline-offset:2px}
+.rv-sheet-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:18px}
+.rv-sheet-kpis div{background:rgba(127,127,127,.07);border-radius:12px;padding:10px 12px}
+.rv-sheet-kpis b{display:block;font-size:15px;margin-top:4px;font-variant-numeric:tabular-nums}
+.rv-reason{margin:12px 0 0;font-size:13.5px;color:var(--text)}
+.rv-p{margin:6px 0 0;font-size:13.5px;color:var(--text2);line-height:1.5}
+.rv-needlist{list-style:none;margin:8px 0 0;padding:0}
+.rv-needlist li{display:flex;gap:10px;align-items:center;padding:7px 0;font-size:13.5px}
+.rv-people{list-style:none;margin:6px 0 0;padding:0}
+.rv-people li{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--g-line);font-size:13.5px}
+.rv-people li:first-child{border-top:0}
+.rv-people li>div{min-width:0}
+.rv-people .sp-small{overflow:hidden;text-overflow:ellipsis}
+.rv-sheet-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:22px;padding-top:16px;border-top:1px solid var(--g-line)}
+@media (max-width:1100px){
+  .rv-arow{grid-template-columns:minmax(0,1.2fr) 100px minmax(0,1.4fr) 80px}
+  .rv-arow>span:last-child{display:none}
+}
+@media (max-width:900px){
+  .rv-team{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .rv-tm{padding:10px;gap:8px}
+  .rv-k4.sp-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .rv-dhead{display:none}
+  .rv-drow{grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;padding:14px 8px}
+  .rv-drow .rv-dn{grid-column:1/2}
+  .rv-drow .rv-dv{grid-column:2/3;grid-row:1}
+  .rv-drow .rv-ds,.rv-drow .rv-dc{font-size:12.5px}
+  .rv-drow .rv-ds{grid-column:1/2}.rv-drow .rv-dc{grid-column:2/3;text-align:right}
+  .rv-drow .rv-dh,.rv-drow .rv-dl{grid-column:1/-1}
+  .rv-dh small,.rv-dl small{display:inline;margin:0 0 0 6px;white-space:normal}
+  .rv-arow{grid-template-columns:minmax(0,1fr) auto;gap:4px 10px}
+  .rv-arow .rv-al{grid-column:1/-1;grid-row:2;white-space:normal}
+  .rv-arow .rv-av{display:none}
+  .rv-tools{justify-content:flex-start}
+  .rv-tools .sp-search{max-width:none}
+  .rv-filters .sp-search{max-width:none;flex:1 1 100%}
+  .rv-sel{flex:1 1 calc(50% - 8px);max-width:none}
+  .rv-board{grid-auto-columns:minmax(78%,1fr)}
+  .rv-banner{flex-direction:column;align-items:flex-start}
+  .rv-how dl{grid-template-columns:minmax(0,1fr)}
+  .rv-how dd{margin-bottom:6px}
+  .rv-sheet{width:100%;padding:18px 16px 28px}
+  .rv-nlist li{flex-wrap:wrap}
+  .rv-act{margin-left:42px}
+}
 </style>
 <script src="/js/vendor/sortable.min.js"></script>
 </head>
@@ -2567,15 +2725,10 @@ body[data-tab]:not([data-tab="today"]) .metric-wrap{display:none}
     </div>
   </div>
   <div class="panel" id="panel-pipeline" style="padding-bottom:120px">
-    <div class="page-head">
-      <div>
-        <div class="page-title">Pipeline</div>
-        <div class="page-sub">Every deal marked verified, partial or AI-extracted, by region and product</div> </div>
-      <div class="page-actions">
-        <button onclick="openCrmImport()" id="crmImportBtn" class="g-btn" title="Upload a CRM deals export (Zoho, HubSpot, Salesforce…) and verify it against real activity">⇪ CRM audit</button>
-        <button onclick="loadPipeline()" id="pipelineRefreshBtn" class="g-btn">↻ Refresh</button> </div> </div>
+    <div class="page-shell"><div id="scDeals" class="rv-view"></div></div>
     <input type="file" id="crmCsvInput" accept=".csv,text/csv" style="display:none" onchange="handleCrmCsv(this.files[0]);this.value=''"/>
     <div id="crmAuditSection" style="margin-bottom:14px"></div>
+    <details class="rv-more" id="scDealsMore"><summary><span>More views</span><small>by product, region and revenue stream, win and loss, needs attention</small></summary><div class="rv-more-body">
 
     <!-- Intelligent prompts -->
     <div id="pipelinePrompts" style="margin-bottom:14px"></div>
@@ -2623,7 +2776,8 @@ body[data-tab]:not([data-tab="today"]) .metric-wrap{display:none}
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
       <div id="pipelineHealthNote" style="font-size:11px;color:var(--text3)"></div>
       <button onclick="runDealHealth().then(function(){if(_pipelineData)renderPipelineDeals(_pipelineData);})" style="font-size:11px;padding:3px 10px;border-radius:var(--r-sm);background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-family:var(--sans);cursor:pointer" title="Compute health scores and velocity trend"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.8l2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 10l5.9-.8z"/></svg> Update health</button> </div>
-    <div id="pipelineDeals"></div> </div>
+    <div id="pipelineDeals"></div> </div></details>
+  </div>
 
   <div class="panel" id="panel-review" style="display:none">
     <div class="sum-card"><div class="sum-title">Day at a glance</div><div class="sum-grid" id="sumGrid"></div></div>
@@ -2643,7 +2797,8 @@ body[data-tab]:not([data-tab="today"]) .metric-wrap{display:none}
 
   <!-- ── SAM Agent ── -->
   <div class="panel" id="panel-signals" style="padding-bottom:160px">
-    <div class="page-head"><div><div class="page-title">SAM</div><div class="page-sub">What changed in your accounts, and the next move for each</div></div></div>
+    <div class="page-shell"><div id="scSam" class="rv-view"></div></div>
+    <details class="rv-more" id="scSamMore"><summary><span>More from SAM</span><small>SAM brief, scan channels, coverage, intent vs reality, team digest</small></summary><div class="rv-more-body">
 
     <!-- Self / Team toggle (managers only) -->
     <div id="samModeToggle" style="display:none;margin-bottom:14px">
@@ -2801,10 +2956,13 @@ body[data-tab]:not([data-tab="today"]) .metric-wrap{display:none}
         <span class="filter-label">Viewing date:</span>
         <input type="date" class="date-input" id="teamDateInput" onchange="renderTeam()"/>
         <button class="filter-btn" onclick="document.getElementById('teamDateInput').value=todayKey();renderTeam()">Today</button> </div>
-      <div id="teamList"><div class="empty"><div class="empty-icon"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM2.5 20v-1.5A4.5 4.5 0 017 14h4a4.5 4.5 0 014.5 4.5V20M16 4.3a3.5 3.5 0 010 6.4M18 14.3a4.5 4.5 0 013.5 4.2V20"/></svg></div>Loading team…</div></div> </div> </div>
+      <div id="teamList"><div class="empty"><div class="empty-icon"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM2.5 20v-1.5A4.5 4.5 0 017 14h4a4.5 4.5 0 014.5 4.5V20M16 4.3a3.5 3.5 0 010 6.4M18 14.3a4.5 4.5 0 013.5 4.2V20"/></svg></div>Loading team…</div></div> </div> </div></details>
+  </div>
 
   <!-- ── SAMagic ── -->
   <div class="panel" id="panel-exec" style="padding-bottom:100px">
+    <div class="page-shell"><div id="scBoard" class="rv-view"></div></div>
+    <details class="rv-more" id="scBoardMore"><summary><span>Team activity</span><small>tasks, wins and issues by person</small></summary><div class="rv-more-body">
     <div style="margin-bottom:14px">
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
         <span style="font-size:11px;color:var(--text3)">Period:</span>
@@ -2821,7 +2979,8 @@ body[data-tab]:not([data-tab="today"]) .metric-wrap{display:none}
     <div id="execDashboard">
       <div style="text-align:center;padding:40px 20px;color:var(--text3)">
         <div style="font-size:34px;margin-bottom:12px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg></div>
-        <div style="font-size:14px;color:var(--text2)">Loading SAMagic…</div> </div> </div> </div>
+        <div style="font-size:14px;color:var(--text2)">Loading SAMagic…</div> </div> </div> </div></details>
+  </div>
 
   <!-- ── Intelligence ── -->
   <div class="panel" id="panel-intel">
