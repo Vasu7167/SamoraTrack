@@ -3,7 +3,7 @@ let SB_KEY = localStorage.getItem('dt-sb-key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6I
 let API_KEY = localStorage.getItem('dt-api-key') || '';
 var _userHabits = null;
 // Cache buster — update this string on every deploy to purge stale service worker cache
-var APP_VERSION = '20261005-01';
+var APP_VERSION = '20261006-01';
 
 // ── Money in the org's own currency (2026-10-04) ───────────────────────────
 // Amounts are stored in USD (deal_value_usd) and shown in the org's currency
@@ -564,7 +564,7 @@ function _applyRoleChrome() {
   const orgEl = document.getElementById('uOrg'); if (orgEl) orgEl.textContent = profile?.org_name || '';
   const seniorRole = ['super_admin','admin','manager','director','executive'].includes(role);
   const navExec = document.getElementById('nav-exec');
-  if (navExec) navExec.style.display = ['director','executive','admin','super_admin'].includes(role) ? '' : 'none';
+  if (navExec) navExec.style.display = ['manager','director','executive','admin','super_admin'].includes(role) ? '' : 'none';
   const navIntelBtn = document.getElementById('nav-intel');
   if (navIntelBtn) navIntelBtn.style.display = seniorRole ? '' : 'none';
 }
@@ -1209,13 +1209,19 @@ function switchTab(tab) {
   if (tab === 'settings') { renderSettings(); if (currentUser?.token && _isOrgAdmin()) { loadNotificationRules(); } }
   if (tab === 'you') { renderYouPanel(); refreshYouTabConnections(); loadHabitsSection(); loadEnrichmentStatus(); }
   if (tab === 'review') renderSummary();
-  if (tab === 'exec') loadExecDashboard();
+  if (tab === 'exec') { scWireMore(); renderScBoard(); const bm = document.getElementById('scBoardMore'); if (bm && bm.open) loadExecDashboard(); }
   if (tab === 'signals') {
-    const seniorRole = ['super_admin','admin','manager','director','executive'].includes(profile?.role);
-    const toggleEl = document.getElementById('samModeToggle');
-    if (toggleEl) toggleEl.style.display = seniorRole ? 'block' : 'none';
-    const mode = (seniorRole && _samMode === 'team') ? 'team' : 'self';
-    setSamMode(mode);
+    // The new SAM screen loads first; the older SAM tools load only when
+    // their section is opened.
+    scWireMore(); renderScSam();
+    const samMore = document.getElementById('scSamMore');
+    if (samMore && samMore.open) {
+      const seniorRole = ['super_admin','admin','manager','director','executive'].includes(profile?.role);
+      const toggleEl = document.getElementById('samModeToggle');
+      if (toggleEl) toggleEl.style.display = seniorRole ? 'block' : 'none';
+      const mode = (seniorRole && _samMode === 'team') ? 'team' : 'self';
+      setSamMode(mode);
+    }
   }
   // SAMpaign is its own tab now. It used to be populated lazily when the SAM
   // tab's "signal" sub-tab was opened, which no longer happens, so it loads
@@ -1226,7 +1232,7 @@ function switchTab(tab) {
     if (spSec && !spSec.innerHTML.trim()) loadSampaignWorkspace();
   }
   if (tab === 'intel') { loadIntelligence(); }
-  if (tab === 'pipeline') { loadPipeline(); loadMeetingsKpiSelf(); }
+  if (tab === 'pipeline') { scWireMore(); renderScDeals(); const pm = document.getElementById('scDealsMore'); if (pm && pm.open) _scOldPipeline(); }
   if (tab === 'org') { if (currentUser?.refresh_token) { refreshToken().then(() => renderOrg()); } else { renderOrg(); } }
 }
 let _samMode = 'self';
@@ -12868,7 +12874,13 @@ async function createSdrLead() {
   } catch(e) { if ((e.message||'').match(/duplicate|unique/)) showToast(name+' already exists'); else showToast('Error: '+e.message); }
 }
 
-async function loadPipeline() {
+function loadPipeline() {
+  scRefreshCurrent();
+  var m = document.getElementById('scDealsMore');
+  if (m && m.open) return _scOldPipeline();
+  return Promise.resolve();
+}
+async function _scOldPipeline() {
   var btn = document.getElementById('pipelineRefreshBtn');
   if (btn) btn.textContent = '↻ Loading…';
   var promptsEl = document.getElementById('pipelinePrompts');
@@ -17704,4 +17716,394 @@ function _scCelebrate(wins, d) {
     ps.forEach(function (p) { p.vy += 0.7; p.x += p.vx; p.y += p.vy; p.a = Math.max(0, 1 - k / 1.6); ctx.globalAlpha = p.a; ctx.fillStyle = p.c; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.s + k * 6); ctx.fillRect(-p.r, -p.r / 2, p.r * 2, p.r); ctx.restore(); });
     if (k < 1.7) requestAnimationFrame(frame);
   })(t0);
+}
+
+// ══ Drop C (2026-10-06): SAM, Open deals and the SAMagic board ═════════════
+// Three screens, one read (get_deal_board), one set of words. "Active",
+// "Quiet", "Unknown", "At risk" mean the same thing on every screen because
+// the server decides them once and all three render that answer.
+var _sc = { data: {}, at: {}, view: { sam: 'all', samScope: 'mine', dealsScope: 'mine', boardBy: 'stage', boardFilter: 'all', boardRep: '' },
+  f: { q: '', owner: '', stage: '', band: '', product: '', close: '', sort: 'value' }, samQ: '', current: '' };
+var SC_ACT = { active: ['Active', 'live'], cooling: ['Cooling', 'warn'], quiet: ['Quiet', 'risk'], unknown: ['Unknown', ''], none: ['Not started', ''] };
+var SC_BAND = { healthy: ['Healthy', 'live'], watch: ['Watch', 'warn'], at_risk: ['At risk', 'risk'], critical: ['Critical', 'risk crit'], unknown: ['Unknown', ''] };
+var SC_ICO = {
+  reply: '<path d="M10 8L5 12.5 10 17"/><path d="M5.5 12.5H14a5 5 0 015 5V19"/>',
+  past: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  closing_quiet: '<path d="M12 4l9 15.5H3z"/><path d="M12 10v4.5M12 17.2v.3"/>',
+  champion: '<circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c.8-3.6 3.6-5.5 7-5.5s6.2 1.9 7 5.5"/>',
+  commit: '<path d="M4 12.5l5 5L20 6.5"/>',
+  quiet: '<path d="M4 12h3l2-4 3 8 2-4h6"/>',
+  noreply: '<path d="M4 6.5h16v11H4z"/><path d="M4 7l8 6 8-6"/>'
+};
+function scIco(k) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (SC_ICO[k] || SC_ICO.quiet) + '</svg>'; }
+function scMoney(usd) { return usd ? fmtOrgMoney(usd) : ''; }
+function scMoney0(usd) { return fmtOrgMoney(usd || 0) || '0'; }
+function scAgo(iso) {
+  if (!iso) return '';
+  var d = Math.floor((Date.now() - Date.parse(iso)) / 86400000);
+  return d <= 0 ? 'today' : d === 1 ? 'yesterday' : d + ' days ago';
+}
+function scInit(n) { return String(n || '?').split(/[\s._-]+/).map(function (w) { return w.charAt(0); }).join('').slice(0, 2).toUpperCase(); }
+function scPlural(n, one, many) { return n + ' ' + (n === 1 ? one : (many || one + 's')); }
+function scCloseText(a) {
+  if (a.d2c === null || a.d2c === undefined) return a.is_deal ? 'No close date' : '';
+  if (a.d2c < 0) return Math.abs(a.d2c) + (a.d2c === -1 ? ' day late' : ' days late');
+  if (a.d2c === 0) return 'Closes today';
+  return 'Closes in ' + a.d2c + (a.d2c === 1 ? ' day' : ' days');
+}
+function scLast(a) {
+  if (!a.last_at) return a.activity === 'unknown' ? 'SAM cannot see this account yet' : 'No contact yet';
+  return 'Last contact ' + scAgo(a.last_at) + (a.last_by ? ' by ' + a.last_by : '') + (a.last_channel === 'meeting' ? ', in a meeting' : '');
+}
+function scActChip(a) {
+  var m = SC_ACT[a.activity] || SC_ACT.unknown;
+  var t = m[0] + (a.activity === 'quiet' && a.quiet !== null ? ' ' + a.quiet + 'd' : a.activity === 'cooling' ? ' ' + a.quiet + 'd' : '');
+  return '<span class="sp-chip ' + m[1] + '" title="' + esc((_sc.defs || {})[a.activity] || '') + '"><i></i>' + esc(t) + '</span>';
+}
+function scBandChip(a) {
+  if (!a.band) return a.is_deal ? '<span class="sp-chip" title="Scored every night at 2 am">Not scored yet</span>' : '';
+  var m = SC_BAND[a.band] || SC_BAND.unknown;
+  return '<span class="sp-chip ' + m[1] + '" title="' + esc(a.band_reason || '') + '"><i></i>' + esc(m[0]) + '</span>';
+}
+
+async function scFetch(scope, force) {
+  var key = scope || 'mine';
+  if (!force && _sc.data[key] && Date.now() - _sc.at[key] < 60000) return _sc.data[key];
+  var r = await fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY },
+    body: JSON.stringify({ action: 'get_deal_board', scope: key }) });
+  var d = await r.json();
+  if (!d || !d.ok) throw new Error((d && d.error) || 'Could not load your accounts.');
+  _sc.data[key] = d; _sc.at[key] = Date.now();
+  _sc.defs = (d.definitions && d.definitions.words) || {};
+  return d;
+}
+function scInvalidate() { _sc.data = {}; _sc.at = {}; }
+function scRefreshCurrent() {
+  scInvalidate();
+  if (_sc.current === 'sam') renderScSam(true);
+  else if (_sc.current === 'deals') renderScDeals(true);
+  else if (_sc.current === 'board') renderScBoard(true);
+}
+function scLoading(el, what) { if (el && !el.querySelector('.rv-loaded')) el.innerHTML = '<div class="sp-card sp-empty">Loading ' + what + '…</div>'; }
+function scError(el, e, retry) {
+  el.innerHTML = '<div class="sp-card sp-empty">' + esc(e.message || String(e)) + ' <button class="g-btn" onclick="' + retry + '">Try again</button></div>';
+}
+function scSeg(items, on, handler) {
+  return '<div class="sp-seg" role="group">' + items.map(function (x) {
+    return '<button type="button" class="' + (x[0] === on ? 'on' : '') + '" aria-pressed="' + (x[0] === on) + '" onclick="' + handler + '(\'' + x[0] + '\')">' + x[1] + '</button>';
+  }).join('') + '</div>';
+}
+function scHow() {
+  var w = _sc.defs || {};
+  var rows = [['Active', w.active], ['Cooling', w.cooling], ['Quiet', w.quiet], ['Unknown', w.unknown], ['Not started', w.none], ['At risk', w.at_risk], ['Reply waiting', w.reply_waiting]]
+    .filter(function (x) { return x[1]; });
+  return '<details class="rv-how"><summary>How SAM decides these words</summary><dl>' + rows.map(function (x) { return '<dt>' + x[0] + '</dt><dd>' + esc(x[1]) + '</dd>'; }).join('') +
+    '</dl><p>The same words mean the same thing on SAM, Open deals and SAMagic. Health is scored every night at 2 am.</p></details>';
+}
+function scMailboxBanner(d) {
+  if (!d.me || d.me.mailbox === 'ok') return '';
+  var txt = d.me.mailbox === 'reconnect' ? 'Your mailbox connection has expired. Reconnect it so SAM can see your accounts.' : 'Connect your mailbox so SAM can see who you speak to. Until then, your accounts show as Unknown.';
+  return '<div class="sp-card rv-banner"><span>' + esc(txt) + '</span><button class="g-btn sp-gold" onclick="switchTab(\'you\')">' + (d.me.mailbox === 'reconnect' ? 'Reconnect' : 'Connect mailbox') + '</button></div>';
+}
+
+// ── The deal sheet: one place to see an account and act on it ───────────────
+function scFind(id) {
+  for (var k in _sc.data) { var a = (_sc.data[k].accounts || []).find(function (x) { return x.id === id; }); if (a) return a; }
+  return null;
+}
+function scOpen(id) {
+  var a = scFind(id); if (!a) return;
+  scCloseSheet();
+  var nm = esc(a.name).replace(/'/g, '&#39;'), idq = esc(a.id);
+  var people = (a.people || []).map(function (p) {
+    return '<li><div><b>' + esc(p.name) + '</b>' + (p.role === 'champion' ? ' <span class="sp-chip live">Champion</span>' : '') +
+      '<div class="sp-small">' + esc(p.email || '') + (p.last ? ' · last contact ' + scAgo(p.last) : '') + '</div></div>' +
+      (p.email ? '<a class="g-btn" href="mailto:' + esc(p.email) + '">Email</a>' : '') + '</li>';
+  }).join('');
+  var needs = (a.needs || []).map(function (n) { return '<li><span class="sp-ni ' + (n.tone === 'good' ? 'g' : n.tone === 'bad' ? 'r' : 'a') + '">' + scIco(n.key) + '</span><span>' + esc(n.text) + '</span></li>'; }).join('');
+  var sig = (a.signals || []).map(function (s) { return '<span class="sp-chip ' + (s.tone === 'good' ? 'live' : 'risk') + '">' + esc(s.label) + '</span>'; }).join('');
+  var el = document.createElement('div');
+  el.id = 'scSheet'; el.className = 'rv-sheet-wrap';
+  el.innerHTML = '<div class="rv-sheet" role="dialog" aria-modal="true" aria-labelledby="scSheetTitle">' +
+    '<div class="rv-sheet-head"><div><div class="sp-lbl">' + (a.is_deal ? 'Deal' : 'Account') + (a.owner_name ? ' · ' + esc(a.owner_name) : '') + (a.sdr_name ? ' with ' + esc(a.sdr_name) : '') + '</div>' +
+      '<h2 id="scSheetTitle">' + esc(a.name) + '</h2>' +
+      '<div class="sp-chips">' + scActChip(a) + scBandChip(a) + (a.is_deal ? '<span class="sp-chip">' + esc(a.stage_label) + '</span>' : '') + (a.products || []).map(function (p) { return '<span class="sp-chip">' + esc(p) + '</span>'; }).join('') + '</div></div>' +
+      '<button class="rv-x" onclick="scCloseSheet()" aria-label="Close">×</button></div>' +
+    (a.is_deal ? '<div class="rv-sheet-kpis"><div><span class="sp-lbl">Value</span><b>' + esc(scMoney(a.value_usd) || 'Not set') + '</b></div><div><span class="sp-lbl">Close</span><b>' + esc(a.close ? scCloseText(a) : 'Not set') + '</b></div><div><span class="sp-lbl">Health</span><b>' + (a.health !== null && a.health !== undefined ? a.health : 'Not scored') + '</b></div></div>' : '') +
+    (a.band_reason ? '<p class="rv-reason">' + esc(a.band_reason) + (a.is_deal ? ' <button class="rv-link" onclick="openHealthBreakdown(\'' + idq + '\',\'' + nm + '\')">See the score</button>' : '') + '</p>' : '') +
+    (needs ? '<div class="sp-lbl" style="margin-top:16px">Needs you</div><ul class="rv-needlist">' + needs + '</ul>' : '') +
+    '<div class="sp-lbl" style="margin-top:16px">Contact</div><p class="rv-p">' + esc(scLast(a)) + '.' + (a.last_reply_at ? ' Their last reply: ' + esc(scAgo(a.last_reply_at)) + '.' : '') + '</p>' +
+    (sig ? '<div class="sp-chips">' + sig + '</div>' : '') +
+    '<div class="sp-lbl" style="margin-top:16px">People ' + (a.people_total ? '· ' + a.people_active + ' of ' + a.people_total + ' active in 30 days' : '') + '</div>' +
+    (people ? '<ul class="rv-people">' + people + '</ul>' : '<p class="rv-p">Nobody on record yet. People appear here once they are on an email or meeting.</p>') +
+    '<div class="rv-sheet-acts">' +
+      '<button class="g-btn sp-gold" onclick="openDealValueForm(\'' + idq + '\',\'' + nm + '\')">' + (a.is_deal ? 'Update deal' : 'Add a deal') + '</button>' +
+      '<button class="g-btn" onclick="openAccountTimeline(\'' + idq + '\',\'' + nm + '\')">Timeline</button>' +
+      (a.is_deal ? '<button class="g-btn" onclick="openCloseDeal(\'' + idq + '\',\'' + nm + '\')">Mark won or lost</button>' : '') +
+    '</div></div>';
+  el.addEventListener('click', function (e) { if (e.target === el) scCloseSheet(); });
+  document.body.appendChild(el);
+  document.addEventListener('keydown', scSheetKey);
+  setTimeout(function () { var x = el.querySelector('.rv-x'); if (x) x.focus(); }, 30);
+}
+function scSheetKey(e) { if (e.key === 'Escape' && !document.getElementById('health-breakdown-modal')) scCloseSheet(); }
+function scCloseSheet() { var el = document.getElementById('scSheet'); if (el) el.remove(); document.removeEventListener('keydown', scSheetKey); }
+
+// ══ SAM: your accounts today ═══════════════════════════════════════════════
+function scSamScope(s) { _sc.view.samScope = s; _sc._samFocus = 0; renderScSam(); }
+function scSamFilter(f) { _sc.view.sam = f; _sc._samFocus = 0; renderScSam(); }
+async function scSamRefresh(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Checking your mailbox…'; }
+  try {
+    await fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify({ action: 'mailbox_pass' }) });
+  } catch (e) {}
+  scInvalidate(); await renderScSam(true);
+}
+async function renderScSam(force) {
+  _sc.current = 'sam';
+  var el = document.getElementById('scSam'); if (!el) return;
+  scLoading(el, 'your accounts');
+  var d;
+  try { d = await scFetch(_sc.view.samScope, force); } catch (e) { return scError(el, e, 'renderScSam(true)'); }
+  if (_sc.current !== 'sam') return;
+  var s = d.summary, team = d.scope === 'team';
+  var accts = d.accounts || [];
+  var need = accts.filter(function (a) { return a.needs && a.needs.length; });
+  // What changed this week, newest first.
+  var wk = Date.now() - 7 * 86400000, changes = [];
+  accts.forEach(function (a) {
+    if (a.last_reply_at && Date.parse(a.last_reply_at) >= wk) {
+      var who = (a.people || []).find(function (p) { return p.last && Math.abs(Date.parse(p.last) - Date.parse(a.last_reply_at)) < 120000; });
+      changes.push({ t: Date.parse(a.last_reply_at), tone: 'g', ico: 'reply', id: a.id, text: '<b>' + esc(who ? who.name : 'Someone') + '</b> at ' + esc(a.name) + ' wrote', sub: scAgo(a.last_reply_at) });
+    } else if (a.last_at && a.last_channel === 'meeting' && Date.parse(a.last_at) >= wk) {
+      changes.push({ t: Date.parse(a.last_at), tone: 'b', ico: 'champion', id: a.id, text: 'Meeting with <b>' + esc(a.name) + '</b>' + (a.last_by ? ' (' + esc(a.last_by) + ')' : ''), sub: scAgo(a.last_at) });
+    }
+    (a.signals || []).forEach(function (g) {
+      if (g.date && Date.parse(g.date) >= wk - 86400000) changes.push({ t: Date.parse(g.date), tone: g.tone === 'good' ? 'g' : 'r', ico: g.tone === 'good' ? 'commit' : 'closing_quiet', id: a.id, text: '<b>' + esc(a.name) + '</b>: ' + esc(g.label), sub: scAgo(g.date + 'T12:00:00Z') });
+    });
+  });
+  changes.sort(function (x, y) { return y.t - x.t; });
+  var counts = { all: accts.length, need: need.length, active: s.active, quiet: s.quiet, unknown: s.unknown, none: accts.filter(function (a) { return a.activity === 'none'; }).length };
+  var f = _sc.view.sam, q = (_sc.samQ || '').toLowerCase();
+  var list = accts.filter(function (a) {
+    if (q && (a.name + ' ' + (a.owner_name || '') + ' ' + (a.domain || '')).toLowerCase().indexOf(q) === -1) return false;
+    if (f === 'need') return a.needs && a.needs.length;
+    if (f === 'all') return true;
+    return a.activity === f;
+  });
+  var shown = list.slice(0, 200);
+  el.innerHTML = '<div class="rv-loaded"></div>' +
+    '<div class="page-head"><div><div class="page-title">Your accounts today</div><div class="page-sub">Who needs you, what changed, and who last spoke to each customer, from ' + (team ? 'your team\u2019s' : 'your') + ' mail and meetings.</div></div>' +
+    '<div class="page-actions">' + (d.team_capable ? scSeg([['mine', 'Mine'], ['team', 'My team']], d.scope, 'scSamScope') : '') +
+    '<button class="g-btn" onclick="scSamRefresh(this)">Refresh</button></div></div>' +
+    scMailboxBanner(d) +
+    '<section class="sp-card sp-kpis" aria-label="Today at a glance">' +
+      '<div class="sp-kpi"><div class="sp-lbl">Need you today</div><div class="n">' + s.needs_you + '</div><div class="d">' + scPlural(s.replies_waiting, 'reply', 'replies') + ' waiting</div></div>' +
+      '<div class="sp-kpi"><div class="sp-lbl">Active</div><div class="n sp-g">' + s.active + '</div><div class="d">contact in 7 days</div></div>' +
+      '<div class="sp-kpi"><div class="sp-lbl">Quiet</div><div class="n' + (s.quiet ? ' rv-red' : '') + '">' + s.quiet + '</div><div class="d">' + d.definitions.quiet_days + ' days or more</div></div>' +
+      '<div class="sp-kpi"><div class="sp-lbl">Closing in 30 days</div><div class="n">' + s.closing_30 + '</div><div class="d">' + (s.past_due ? scPlural(s.past_due, 'deal') + ' past due' : 'none past due') + '</div></div>' +
+      '<div class="sp-kpi"><div class="sp-lbl">Unknown</div><div class="n">' + s.unknown + '</div><div class="d">' + (s.unknown ? 'SAM cannot see these yet' : 'SAM can see them all') + '</div></div>' +
+    '</section>' +
+    '<div class="sp-two">' +
+      '<section class="sp-card sp-pad rv-needs" aria-label="Needs you today"><div class="sp-lbl">Needs you today · ' + need.length + '</div>' +
+      (need.length ? '<ul class="rv-nlist">' + need.slice(0, 12).map(function (a) {
+        var n = a.needs[0];
+        return '<li><span class="sp-ni ' + (n.tone === 'good' ? 'g' : n.tone === 'bad' ? 'r' : 'a') + '">' + scIco(n.key) + '</span>' +
+          '<div class="rv-nmain"><div class="rv-nt"><button class="rv-name" onclick="scOpen(\'' + esc(a.id) + '\')">' + esc(a.name) + '</button>' + (a.value_usd ? ' <span class="rv-val">' + esc(scMoney(a.value_usd)) + '</span>' : '') + (team && a.owner_name ? ' <span class="rv-owner">' + esc(a.owner_name) + '</span>' : '') + '</div>' +
+          '<div class="rv-why">' + esc(n.text) + '</div><div class="sp-small">' + esc(scLast(a)) + (a.needs.length > 1 ? ' · ' + (a.needs.length - 1) + ' more' : '') + '</div></div>' +
+          '<button class="g-btn rv-act" onclick="scOpen(\'' + esc(a.id) + '\')">' + esc(n.act || 'Open') + '</button></li>';
+      }).join('') + '</ul>' + (need.length > 12 ? '<button class="rv-link" onclick="scSamFilter(\'need\');document.getElementById(\'scSamAll\').scrollIntoView({behavior:\'smooth\'})">See all ' + need.length + '</button>' : '')
+        : '<div class="sp-empty">Nothing needs you right now. ' + (s.unknown ? 'Some accounts are Unknown, so SAM may be missing something.' : 'Good place to be.') + '</div>') +
+      '</section>' +
+      '<aside class="sp-card sp-pad sp-needs" aria-label="This week"><div class="sp-lbl">This week</div>' +
+      (changes.length ? '<ul>' + changes.slice(0, 8).map(function (c) {
+        return '<li><span class="sp-ni ' + c.tone + '">' + scIco(c.ico) + '</span><div><button class="rv-plain" onclick="scOpen(\'' + esc(c.id) + '\')">' + c.text + '</button><div class="sp-small">' + esc(c.sub) + '</div></div></li>';
+      }).join('') + '</ul>' : '<div class="sp-small" style="margin-top:10px">No replies or meetings yet this week.</div>') +
+      '</aside>' +
+    '</div>' +
+    '<section class="sp-card sp-pad rv-all" id="scSamAll" aria-label="All accounts">' +
+      '<div class="rv-bar"><div class="sp-lbl">All ' + (team ? 'team ' : '') + 'accounts · ' + accts.length + '</div>' +
+      '<div class="rv-tools">' + scSeg([['all', 'All ' + counts.all], ['need', 'Need you ' + counts.need], ['active', 'Active ' + counts.active], ['quiet', 'Quiet ' + counts.quiet], ['unknown', 'Unknown ' + counts.unknown], ['none', 'Not started ' + counts.none]], f, 'scSamFilter') +
+      '<input class="sp-search" placeholder="Find an account" value="' + esc(_sc.samQ || '') + '" oninput="_sc.samQ=this.value;_sc._samFocus=1;clearTimeout(_sc._sq);_sc._sq=setTimeout(function(){renderScSam()},250)" aria-label="Find an account"/></div></div>' +
+      (shown.length ? '<div class="rv-rows">' + shown.map(function (a) {
+        return '<button class="rv-arow" onclick="scOpen(\'' + esc(a.id) + '\')"><span class="rv-an">' + esc(a.name) + (team && a.owner_name ? '<small>' + esc(a.owner_name) + '</small>' : '') + '</span>' +
+          '<span>' + scActChip(a) + '</span><span class="rv-al">' + esc(scLast(a)) + '</span><span class="rv-av">' + esc(scMoney(a.value_usd)) + '</span><span>' + scBandChip(a) + '</span></button>';
+      }).join('') + '</div>' + (list.length > shown.length ? '<div class="sp-small" style="margin-top:10px">Showing 200 of ' + list.length + '. Search to find the rest.</div>' : '')
+        : '<div class="sp-empty">' + (accts.length ? 'Nothing matches.' : 'No accounts yet. Accounts assigned to you appear here.') + '</div>') +
+    '</section>' + scHow();
+  if (_sc._samFocus) { var inp = el.querySelector('.rv-all .sp-search'); if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); } }
+}
+
+// ══ Open deals ═════════════════════════════════════════════════════════════
+function scDealsScope(s) { _sc.view.dealsScope = s; _sc.f.owner = ''; renderScDeals(); }
+function scSetF(k, v) { _sc.f[k] = v; renderScDeals(); }
+function scDealsFiltered(d) {
+  var f = _sc.f, q = (f.q || '').toLowerCase();
+  var today = new Date(), ym = today.toISOString().slice(0, 7);
+  var qEnd = new Date(Date.UTC(today.getUTCFullYear(), Math.floor(today.getUTCMonth() / 3) * 3 + 3, 0)).toISOString().slice(0, 10);
+  var xs = (d.accounts || []).filter(function (a) {
+    if (!a.is_deal) return false;
+    if (q && (a.name + ' ' + (a.owner_name || '') + ' ' + (a.products || []).join(' ')).toLowerCase().indexOf(q) === -1) return false;
+    if (f.owner && a.owner !== f.owner) return false;
+    if (f.stage && (a.stage || '_none') !== f.stage) return false;
+    if (f.band && (a.band || 'unscored') !== f.band) return false;
+    if (f.product && (a.products || []).indexOf(f.product) === -1) return false;
+    if (f.close === 'month' && !(a.close && a.close.slice(0, 7) === ym && a.d2c >= 0)) return false;
+    if (f.close === 'quarter' && !(a.close && a.close <= qEnd && a.d2c >= 0)) return false;
+    if (f.close === 'late' && !(a.d2c !== null && a.d2c < 0)) return false;
+    if (f.close === 'none' && a.close) return false;
+    return true;
+  });
+  var bandRank = { critical: 0, at_risk: 1, unknown: 2, watch: 3, healthy: 4 };
+  xs.sort(function (x, y) {
+    if (f.sort === 'close') return (x.d2c === null ? 99999 : x.d2c) - (y.d2c === null ? 99999 : y.d2c);
+    if (f.sort === 'health') return (bandRank[x.band] !== undefined ? bandRank[x.band] : 5) - (bandRank[y.band] !== undefined ? bandRank[y.band] : 5) || (x.health || 0) - (y.health || 0);
+    if (f.sort === 'quiet') return (y.quiet === null ? 9999 : y.quiet) - (x.quiet === null ? 9999 : x.quiet);
+    return y.value_usd - x.value_usd;
+  });
+  return xs;
+}
+function scSel(k, opts, label) {
+  return '<select class="rv-sel" aria-label="' + esc(label) + '" onchange="scSetF(\'' + k + '\',this.value)">' + opts.map(function (o) {
+    return '<option value="' + esc(o[0]) + '"' + (String(_sc.f[k]) === String(o[0]) ? ' selected' : '') + '>' + esc(o[1]) + '</option>';
+  }).join('') + '</select>';
+}
+async function renderScDeals(force) {
+  _sc.current = 'deals';
+  var el = document.getElementById('scDeals'); if (!el) return;
+  scLoading(el, 'your open deals');
+  var d;
+  try { d = await scFetch(_sc.view.dealsScope, force); } catch (e) { return scError(el, e, 'renderScDeals(true)'); }
+  if (_sc.current !== 'deals') return;
+  var s = d.summary, team = d.scope === 'team';
+  var xs = scDealsFiltered(d);
+  var tot = xs.reduce(function (n, a) { return n + a.value_usd; }, 0);
+  var stOpts = [['', 'All stages']].concat((d.stages || []).map(function (x) { return [x.key, x.label]; })).concat([['_none', 'No stage']]);
+  var bandOpts = [['', 'Any health'], ['healthy', 'Healthy'], ['watch', 'Watch'], ['at_risk', 'At risk'], ['critical', 'Critical'], ['unknown', 'Unknown'], ['unscored', 'Not scored yet']];
+  var closeOpts = [['', 'Any close date'], ['month', 'Closing this month'], ['quarter', 'Closing this quarter'], ['late', 'Past the close date'], ['none', 'No close date']];
+  var sortOpts = [['value', 'Biggest first'], ['close', 'Closing soonest'], ['health', 'Least healthy first'], ['quiet', 'Quiet longest']];
+  var ownerOpts = [['', 'Everyone']].concat((d.by_owner || []).filter(function (o) { return o.deals; }).map(function (o) { return [o.user_id, o.name || 'Someone']; }));
+  var prodOpts = [['', 'All products']].concat((d.products || []).map(function (p) { return [p, p]; }));
+  el.innerHTML = '<div class="rv-loaded"></div>' +
+    '<div class="page-head"><div><div class="page-title">Open deals</div><div class="page-sub">Every open deal, how healthy it is, and who last spoke to the customer.</div></div>' +
+    '<div class="page-actions">' + (d.team_capable ? scSeg([['mine', 'Mine'], ['team', 'My team']], d.scope, 'scDealsScope') : '') +
+    '<button class="g-btn" onclick="openCrmImport()" title="Upload a CRM deals export and check it against real activity">CRM audit</button>' +
+    '<button class="g-btn" onclick="renderScDeals(true)">Refresh</button></div></div>' +
+    '<section class="sp-card sp-kpis" aria-label="Pipeline at a glance">' +
+      '<div class="sp-kpi"><div class="sp-lbl">Open pipeline</div><div class="n">' + esc(scMoney0(s.value_usd)) + '</div><div class="d">' + scPlural(s.deals, 'deal') + '</div></div>' +
+      '<div class="sp-kpi"><div class="sp-lbl">Weighted</div><div class="n">' + esc(scMoney0(s.weighted_usd)) + '</div><div class="d">by each deal\u2019s chance to close</div></div>' +
+      '<div class="sp-kpi"><div class="sp-lbl">Closing this quarter</div><div class="n">' + esc(scMoney0(s.closing_quarter_usd)) + '</div><div class="d">' + s.closing_30 + ' in the next 30 days</div></div>' +
+      '<div class="sp-kpi"><div class="sp-lbl">At risk</div><div class="n' + (s.at_risk ? ' rv-red' : '') + '">' + esc(scMoney0(s.at_risk_usd)) + '</div><div class="d">' + scPlural(s.at_risk, 'deal') + '</div></div>' +
+      '<div class="sp-kpi"><div class="sp-lbl">Past close date</div><div class="n' + (s.past_due ? ' rv-red' : '') + '">' + s.past_due + '</div><div class="d">move the date or close them</div></div>' +
+    '</section>' +
+    '<div class="rv-filters">' +
+      '<input class="sp-search" placeholder="Find a deal, person or product" value="' + esc(_sc.f.q) + '" oninput="_sc.f.q=this.value;clearTimeout(_sc._dq);_sc._dq=setTimeout(function(){renderScDeals();var i=document.querySelector(\'#scDeals .sp-search\');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},250)" aria-label="Find a deal"/>' +
+      (team ? scSel('owner', ownerOpts, 'Owner') : '') + scSel('stage', stOpts, 'Stage') + scSel('band', bandOpts, 'Health') +
+      (prodOpts.length > 1 ? scSel('product', prodOpts, 'Product') : '') + scSel('close', closeOpts, 'Close date') + scSel('sort', sortOpts, 'Sort') +
+    '</div>' +
+    '<section class="sp-card rv-dtable" aria-label="Open deals">' +
+      '<div class="rv-dhead"><span>Deal</span><span>Stage</span><span class="r">Value</span><span>Close</span><span>Health</span><span>Last contact</span></div>' +
+      (xs.length ? xs.map(function (a) {
+        var late = a.d2c !== null && a.d2c < 0;
+        return '<button class="rv-drow" onclick="scOpen(\'' + esc(a.id) + '\')">' +
+          '<span class="rv-dn"><b>' + esc(a.name) + '</b><small>' + esc([team ? a.owner_name : '', (a.products || []).join(', ')].filter(Boolean).join(' · ')) + '</small></span>' +
+          '<span class="rv-ds">' + esc(a.stage_label) + '</span>' +
+          '<span class="rv-dv r">' + esc(scMoney(a.value_usd) || 'Not set') + '</span>' +
+          '<span class="rv-dc' + (late ? ' rv-red' : '') + '">' + esc(scCloseText(a)) + '</span>' +
+          '<span class="rv-dh">' + scBandChip(a) + (a.band_reason && a.band !== 'healthy' ? '<small>' + esc(a.band_reason) + '</small>' : '') + '</span>' +
+          '<span class="rv-dl">' + scActChip(a) + '<small>' + esc(a.last_at ? scAgo(a.last_at) + (a.last_by ? ' · ' + a.last_by : '') : a.activity === 'unknown' ? 'not visible' : 'none yet') + '</small></span>' +
+        '</button>';
+      }).join('') + '<div class="rv-dfoot">' + scPlural(xs.length, 'deal') + ' · ' + esc(scMoney0(tot)) + '</div>'
+        : '<div class="sp-empty">' + (s.deals ? 'No deal matches these filters. <button class="rv-link" onclick="_sc.f={q:\'\',owner:\'\',stage:\'\',band:\'\',product:\'\',close:\'\',sort:\'value\'};renderScDeals()">Clear filters</button>' : 'No open deals yet. Add a deal value to an account to see it here.') + '</div>') +
+    '</section>' + scHow();
+}
+
+// ══ SAMagic: the board ═════════════════════════════════════════════════════
+function scBoardBy(b) { _sc.view.boardBy = b; renderScBoard(); }
+function scBoardFilter(f) { _sc.view.boardFilter = f; renderScBoard(); }
+function scBoardRep(u) { _sc.view.boardRep = _sc.view.boardRep === u ? '' : u; renderScBoard(); }
+async function renderScBoard(force) {
+  _sc.current = 'board';
+  var el = document.getElementById('scBoard'); if (!el) return;
+  scLoading(el, 'the board');
+  var d;
+  try { d = await scFetch('team', force); } catch (e) { return scError(el, e, 'renderScBoard(true)'); }
+  if (_sc.current !== 'board') return;
+  var s = d.summary, v = _sc.view;
+  var deals = (d.accounts || []).filter(function (a) {
+    if (!a.is_deal) return false;
+    if (v.boardRep && a.owner !== v.boardRep) return false;
+    if (v.boardFilter === 'risk') return a.band === 'at_risk' || a.band === 'critical';
+    if (v.boardFilter === 'quiet') return a.activity === 'quiet' || a.activity === 'unknown';
+    if (v.boardFilter === 'closing') return a.d2c !== null && a.d2c <= 30;
+    return true;
+  }).sort(function (x, y) { return y.value_usd - x.value_usd; });
+  var cols;
+  if (v.boardBy === 'person') {
+    cols = (d.by_owner || []).map(function (o) { return { key: o.user_id, label: o.name || 'Someone', items: deals.filter(function (a) { return a.owner === o.user_id; }) }; }).filter(function (c) { return c.items.length || !v.boardRep; });
+  } else {
+    var known = {}; (d.stages || []).forEach(function (x) { known[x.key] = 1; });
+    cols = (d.stages || []).map(function (x) { return { key: x.key, label: x.label, items: deals.filter(function (a) { return a.stage === x.key; }) }; });
+    var rest = deals.filter(function (a) { return !known[a.stage]; });
+    if (rest.length) cols.push({ key: '', label: 'No stage', items: rest });
+  }
+  var team = (d.by_owner || []).filter(function (o) { return o.deals || o.mailbox !== 'ok'; });
+  var mbTxt = { ok: 'Mailbox working', none: 'No mailbox connected', reconnect: 'Mailbox needs reconnecting', stale: 'Mailbox not checked lately' };
+  el.innerHTML = '<div class="rv-loaded"></div>' +
+    '<div class="page-head"><div><div class="page-title">SAMagic</div><div class="page-sub">Every open deal ' + (d.scope === 'team' ? 'in your team ' : '') + 'on one board. Click a person to see only their deals.</div></div>' +
+    '<div class="page-actions">' + scSeg([['stage', 'By stage'], ['person', 'By person']], v.boardBy, 'scBoardBy') +
+    '<button class="g-btn" onclick="renderScBoard(true)">Refresh</button></div></div>' +
+    '<section class="sp-card sp-kpis rv-k4" aria-label="Team pipeline">' +
+      '<div class="sp-kpi"><div class="sp-lbl">Open pipeline</div><div class="n">' + esc(scMoney0(s.value_usd)) + '</div><div class="d">' + scPlural(s.deals, 'deal') + '</div></div>' +
+      '<div class="sp-kpi"><div class="sp-lbl">Weighted</div><div class="n">' + esc(scMoney0(s.weighted_usd)) + '</div><div class="d">by chance to close</div></div>' +
+      '<div class="sp-kpi"><div class="sp-lbl">At risk</div><div class="n' + (s.at_risk ? ' rv-red' : '') + '">' + esc(scMoney0(s.at_risk_usd)) + '</div><div class="d">' + scPlural(s.at_risk, 'deal') + '</div></div>' +
+      '<div class="sp-kpi"><div class="sp-lbl">Closing this quarter</div><div class="n">' + esc(scMoney0(s.closing_quarter_usd)) + '</div><div class="d">' + s.past_due + ' past due</div></div>' +
+    '</section>' +
+    (team.length > 1 || d.scope === 'team' ? '<div class="rv-team" role="group" aria-label="People">' + team.map(function (o) {
+      return '<button class="sp-card rv-tm' + (v.boardRep === o.user_id ? ' on' : '') + '" aria-pressed="' + (v.boardRep === o.user_id) + '" onclick="scBoardRep(\'' + esc(o.user_id) + '\')">' +
+        '<span class="rv-tav">' + esc(scInit(o.name)) + '<i class="mb ' + o.mailbox + '" title="' + esc(mbTxt[o.mailbox] || '') + '"></i></span>' +
+        '<span class="rv-tw"><b>' + esc(o.name || 'Someone') + '</b><small>' + scPlural(o.deals, 'deal') + ' · ' + esc(scMoney0(o.value_usd)) + '</small>' +
+        '<span class="rv-tc">' + (o.at_risk ? '<span class="sp-chip risk">' + o.at_risk + ' at risk</span>' : '') + (o.quiet ? '<span class="sp-chip warn">' + o.quiet + ' quiet</span>' : '') + (o.unknown ? '<span class="sp-chip">' + o.unknown + ' unknown</span>' : '') + (o.mailbox !== 'ok' ? '<span class="sp-chip">' + esc(mbTxt[o.mailbox]) + '</span>' : '') + '</span></span></button>';
+    }).join('') + '</div>' : '') +
+    '<div class="rv-bbar">' + scSeg([['all', 'All deals'], ['risk', 'At risk'], ['quiet', 'Quiet or unknown'], ['closing', 'Closing in 30 days']], v.boardFilter, 'scBoardFilter') +
+    (v.boardRep ? '<button class="rv-link" onclick="scBoardRep(\'' + esc(v.boardRep) + '\')">Show everyone</button>' : '') + '</div>' +
+    '<div class="rv-board" role="list">' + cols.map(function (c) {
+      var val = c.items.reduce(function (n, a) { return n + a.value_usd; }, 0);
+      return '<section class="rv-col" role="listitem" aria-label="' + esc(c.label) + '"><header><b>' + esc(c.label) + '</b><span>' + c.items.length + ' · ' + esc(scMoney0(val)) + '</span></header>' +
+        (c.items.length ? c.items.map(function (a) {
+          var b = SC_BAND[a.band] || null;
+          return '<button class="rv-card ' + (b ? b[1].split(' ')[0] : '') + '" onclick="scOpen(\'' + esc(a.id) + '\')">' +
+            '<span class="rv-ct"><b>' + esc(a.name) + '</b><span>' + esc(scMoney(a.value_usd) || 'No value') + '</span></span>' +
+            '<span class="rv-cm">' + (v.boardBy === 'person' ? esc(a.stage_label) : '<span class="rv-ini" title="' + esc(a.owner_name) + '">' + esc(scInit(a.owner_name)) + '</span>' + esc(a.owner_name)) + ' · <span class="' + (a.d2c !== null && a.d2c < 0 ? 'rv-red' : '') + '">' + esc(scCloseText(a)) + '</span></span>' +
+            '<span class="rv-cb">' + scBandChip(a) + scActChip(a) + '</span>' +
+            (a.band_reason && a.band !== 'healthy' ? '<span class="rv-cr">' + esc(a.band_reason) + '</span>' : '') +
+          '</button>';
+        }).join('') : '<div class="rv-cempty">No deals</div>') + '</section>';
+    }).join('') + '</div>' + scHow();
+}
+
+// The old screens' tools stay one click away, loaded only when opened.
+function scWireMore() {
+  var bind = function (id, fn) { var d = document.getElementById(id); if (d && !d._scBound) { d._scBound = 1; d.addEventListener('toggle', function () { if (d.open) { try { fn(); } catch (e) {} } }); } };
+  bind('scSamMore', function () {
+    var seniorRole = ['super_admin', 'admin', 'manager', 'director', 'executive'].includes(profile && profile.role);
+    var t = document.getElementById('samModeToggle'); if (t) t.style.display = seniorRole ? 'block' : 'none';
+    setSamMode((seniorRole && _samMode === 'team') ? 'team' : 'self');
+  });
+  bind('scDealsMore', function () { _scOldPipeline(); });
+  bind('scBoardMore', function () { loadExecDashboard(); });
+  // Ask SAM stays on the SAM screen itself, not inside More.
+  var panel = document.getElementById('panel-signals');
+  ['samChatOutput', 'samChatBar', 'samChatFab'].forEach(function (id) { var x = document.getElementById(id); if (panel && x && x.closest('details')) panel.appendChild(x); });
+}
+// A rep breakdown was called on Pipeline for every manager but never written,
+// so Pipeline crashed for managers ("renderRepBreakdown is not defined").
+function renderRepBreakdown(data, deals, fmt) {
+  var by = {};
+  (deals || []).forEach(function (d) { var k = d.rep_email || 'Unassigned'; var b = by[k] || (by[k] = { n: 0, v: 0, w: 0 }); b.n++; b.v += d.deal_value_usd || 0; b.w += d.weighted_value_usd || 0; });
+  var rows = Object.keys(by).sort(function (a, b) { return by[b].v - by[a].v; });
+  if (!rows.length) return '';
+  return '<div class="sp-card sp-pad" style="margin-top:12px"><div class="sp-lbl">By person</div>' + rows.map(function (k) {
+    return '<div style="display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--g-line);font-size:13px"><span>' + esc(k.split('@')[0]) + ' · ' + by[k].n + ' deal' + (by[k].n === 1 ? '' : 's') + '</span><b>' + esc((fmt || fmtOrgMoney)(by[k].v)) + '</b></div>';
+  }).join('') + '</div>';
 }
