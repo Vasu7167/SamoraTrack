@@ -3,7 +3,7 @@ let SB_KEY = localStorage.getItem('dt-sb-key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6I
 let API_KEY = localStorage.getItem('dt-api-key') || '';
 var _userHabits = null;
 // Cache buster — update this string on every deploy to purge stale service worker cache
-var APP_VERSION = '20261004-01';
+var APP_VERSION = '20261005-01';
 
 // ── Money in the org's own currency (2026-10-04) ───────────────────────────
 // Amounts are stored in USD (deal_value_usd) and shown in the org's currency
@@ -4898,6 +4898,9 @@ async function runLocalIntelligence(repId, resultElId) {
   if (!out) return;
   if (btn) { btn.textContent = 'Scanning…'; btn.disabled = true; }
   out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0">Scanning all channels \u2014 email, calendar, notetaker\u2026</div>';
+  // The mailbox pass runs alongside: it credits every account in the org
+  // that this mailbox spoke to, including teammates' deals.
+  try { fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify({ action: 'mailbox_pass', rep_user_id: isManager ? repId : undefined }) }).catch(function () {}); } catch (e) {}
   try {
     const r = await fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify({ action: 'local_intelligence', rep_user_id: isManager ? repId : undefined }) });
     const data = await r.json();
@@ -15109,6 +15112,7 @@ function joinOrgCancel() {
     this.extraTabs.forEach(function (x) { tabs.push([x.key, x.label]); });
     if (this.showProfile) tabs.push(['profile', 'Company profile']);
     tabs.push(['calendar', 'Work calendar']);
+    tabs.push(['mailboxes', 'Mailboxes']);
     tabs.push(['log', 'Activity']);
     this._parkHosted();
     var self = this;
@@ -15162,6 +15166,7 @@ function joinOrgCancel() {
     }
     if (this.tab === 'profile') { this._renderProfile(body); return; }
     if (this.tab === 'calendar') { this._renderCalendar(body); return; }
+    if (this.tab === 'mailboxes') { this._renderMailboxes(body); return; }
     if (this.tab === 'people') body.innerHTML = this._people();
     else if (this.tab === 'tree') body.innerHTML = this._tree();
     else if (this.tab === 'access') body.innerHTML = this._access();
@@ -15383,6 +15388,8 @@ function joinOrgCancel() {
     else if (a === 'prod-edit') this._productModal(t.getAttribute('data-id'));
     else if (a === 'prod-del') this._productRemove(t.getAttribute('data-id'));
     else if (a.indexOf('cal-') === 0) this._calClick(a, t);
+    else if (a === 'mb-refresh') this._renderMailboxes(this.el.querySelector('#sxa-body'), true);
+    else if (a === 'mb-scan') this._mbScan(t);
   };
 
   Console.prototype._change = function (e) {
@@ -15662,6 +15669,83 @@ function joinOrgCancel() {
     this.cal = d.calendar; this.calDirty = false;
     this.toast('Calendar saved');
     this._renderCalendar(this.el.querySelector('#sxa-body'));
+  };
+
+  // ── Mailboxes (2026-10-05) ─────────────────────────────────────────────
+  // Whose mailbox SAM can check, when it last did, and what it found. Every
+  // connected mailbox credits every account in the org, so one person's
+  // missing mailbox is why a whole set of deals looks quiet.
+  var MB_STATUS = {
+    ok: ['Working', 'ok'], partial: ['Partly checked', 'warn'], error: ['Could not check', 'bad'],
+    reconnect: ['Reconnect needed', 'bad'], no_mailbox: ['Not connected', 'off'], waiting: ['Not checked yet', 'off']
+  };
+  function mbAgo(iso) {
+    if (!iso) return 'Never';
+    var m = Math.round((Date.now() - Date.parse(iso)) / 60000);
+    if (m < 1) return 'Just now';
+    if (m < 60) return m + ' min ago';
+    var hr = Math.round(m / 60);
+    if (hr < 24) return hr + (hr === 1 ? ' hour ago' : ' hours ago');
+    var d = Math.round(hr / 24);
+    return d + (d === 1 ? ' day ago' : ' days ago');
+  }
+
+  Console.prototype._renderMailboxes = async function (body, fresh) {
+    var self = this;
+    if (!this.mb || fresh) {
+      if (!this.mb) body.innerHTML = '<div class="sxa-empty">Loading mailboxes…</div>';
+      var d;
+      try { d = await this.call('org_admin_mailboxes', this._body()); } catch (e) { d = { ok: false, error: e.message }; }
+      if (this.tab !== 'mailboxes') return;
+      if (!d || !d.ok) { body.innerHTML = '<div class="sxa-empty sxa-err">' + h((d && d.error) || 'Could not load mailboxes.') + '</div>'; return; }
+      this.mb = d.people || [];
+    }
+    var nameOf = {};
+    ((this.data && this.data.people) || []).forEach(function (p) { nameOf[p.user_id] = p.name || ''; });
+    var rows = this.mb.slice().sort(function (a, b) {
+      var rank = function (x) { return x.status === 'reconnect' || x.status === 'error' ? 0 : x.status === 'no_mailbox' ? 1 : 2; };
+      return rank(a) - rank(b) || String(a.email).localeCompare(String(b.email));
+    });
+    var count = function (f) { return rows.filter(f).length; };
+    var nOk = count(function (x) { return x.status === 'ok' || x.status === 'partial'; });
+    var nFix = count(function (x) { return x.status === 'reconnect' || x.status === 'error'; });
+    var nNone = count(function (x) { return x.status === 'no_mailbox'; });
+    body.innerHTML =
+      '<div class="sxa-pf">' +
+        '<div class="sxa-note">SAM checks each connected mailbox and calendar every two hours. Whoever spoke to a customer, every deal with that customer gets the credit, so one missing mailbox can make a whole set of deals look quiet.</div>' +
+        '<div class="sxa-mb-sum">' +
+          '<span class="sxa-mb-n"><b>' + nOk + '</b> working</span>' +
+          '<span class="sxa-mb-n' + (nFix ? ' bad' : '') + '"><b>' + nFix + '</b> need attention</span>' +
+          '<span class="sxa-mb-n"><b>' + nNone + '</b> not connected</span>' +
+          '<button type="button" class="sxa-btn sxa-btn-ghost" data-sxa="mb-refresh">Refresh</button>' +
+        '</div>' +
+        (rows.length ? '<div class="sxa-list">' + rows.map(function (x) {
+          var s = MB_STATUS[x.status] || MB_STATUS.waiting;
+          var nm = nameOf[x.user_id] || x.name || x.email;
+          var found = x.accounts == null ? '' : !x.accounts ? 'Nothing new' : x.accounts + (x.accounts === 1 ? ' account' : ' accounts') + (x.teammate_accounts ? ', ' + x.teammate_accounts + ' of a teammate' : '');
+          return '<div class="sxa-row sxa-mb-row">' +
+            '<div class="sxa-person"><span class="sxa-av">' + h(initials({ name: nm, email: x.email })) + '</span><div class="sxa-pw">' +
+              '<div class="sxa-pn">' + h(nm) + '</div><div class="sxa-pe">' + h(x.mailbox ? x.provider + ' · ' + x.mailbox : x.email) + '</div></div></div>' +
+            '<div class="sxa-cell' + (x.provider ? '' : ' sxa-mb-blank') + '"><span class="sxa-lbl">Last checked</span><span class="sxa-static" title="' + h(x.last_pass_at ? fmtWhen(x.last_pass_at) : '') + '">' + h(x.provider ? mbAgo(x.last_ok_at || x.last_pass_at) : '') + '</span></div>' +
+            '<div class="sxa-cell' + (x.provider ? '' : ' sxa-mb-blank') + '"><span class="sxa-lbl">Last check found</span><span class="sxa-static">' + h(found) + '</span></div>' +
+            '<div class="sxa-cell"><span class="sxa-mb-st ' + s[1] + '" title="' + h(x.error || '') + '">' + h(s[0]) + '</span></div>' +
+            '<div class="sxa-cell sxa-cell-act">' + (x.provider && x.status !== 'reconnect' ? '<button type="button" class="sxa-btn sxa-btn-ghost" data-sxa="mb-scan" data-id="' + h(x.user_id) + '">Check now</button>' : '') + '</div>' +
+            (x.status === 'reconnect' || x.status === 'error' ? '<div class="sxa-mb-why">' + h(x.status === 'reconnect' ? (nm + ' needs to reconnect their mailbox under You, Email.') : (x.error || 'The last check failed.')) + '</div>' : '') +
+          '</div>';
+        }).join('') + '</div>' : '<div class="sxa-empty">Nobody here yet.</div>') +
+      '</div>';
+  };
+
+  Console.prototype._mbScan = async function (btn) {
+    var id = btn.getAttribute('data-id');
+    btn.disabled = true; var was = btn.textContent; btn.textContent = 'Checking…';
+    var d;
+    try { d = await this.call('org_admin_mailbox_scan', this._body({ user_id: id })); } catch (e) { d = { ok: false, error: e.message }; }
+    if (d && d.ok) this.toast('Checked: ' + (d.messages || 0) + ' emails, ' + (d.accounts_credited || 0) + ' accounts credited');
+    else if (d && d.skipped) this.toast('Already being checked. Try again in a minute.');
+    else this.toast((d && d.error) || 'Could not check this mailbox.', true);
+    btn.disabled = false; btn.textContent = was;
+    if (this.tab === 'mailboxes') this._renderMailboxes(this.el.querySelector('#sxa-body'), true);
   };
 
   Console.prototype._chipRemove = function (btn) {
