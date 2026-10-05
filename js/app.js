@@ -4770,16 +4770,14 @@ async function autoCompleteTasks(silent) {
         var distinct = _distinctiveWords(task.text);
         var hasIdentity = distinct.length > 0 || _personsIn(task.text).length > 0;
 
-        // Match the task to a verified calendar event by title-word overlap
-        var calEv = verifiedMeetings.find(function(m) {
-          var mt = ((m.title||'') + ' ' + (m.external_attendees||[]).join(' ')).toLowerCase();
-          return words.some(function(w){ return mt.includes(w); });
-        });
-        // Negative evidence: cancelled or rescheduled → never auto-complete
-        if (calEv && (calEv.cancelled || calEv.rescheduled)) {
-          task.meetingFlag = calEv.cancelled ? 'cancelled' : 'rescheduled';
-          return;
-        }
+        // Match the task to its own calendar event first; otherwise by
+        // distinctive words (never the user's own name).
+        var matchWords = distinct.length ? distinct : words;
+        var calEv = (task.calendarEventId && verifiedMeetings.find(function(m) { return m.id && m.id === task.calendarEventId; })) ||
+          verifiedMeetings.find(function(m) {
+            var mt = ((m.title||'') + ' ' + (m.external_attendees||[]).join(' ')).toLowerCase();
+            return matchWords.some(function(w){ return mt.includes(w); });
+          });
 
         // Evidence 1 (strongest): notetaker transcript exists — but only one
         // recorded TODAY, sharing a DISTINCTIVE token, naming the right person,
@@ -4806,8 +4804,13 @@ async function autoCompleteTasks(silent) {
         });
         if (note) {
           task.done = true; task.autoCompleted = true; task.verifiedVia = 'notetaker_email';
-          task.verifiedSource = note.provider || 'notetaker'; count++;
+          task.verifiedSource = note.provider || 'notetaker'; delete task.meetingFlag; count++;
           autoLog.push('<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5a2.8 2.8 0 00-2.8 2.8v5.4a2.8 2.8 0 005.6 0V6.3A2.8 2.8 0 0012 3.5zM5.5 11a6.5 6.5 0 0013 0M12 17.5V21"/></svg> ' + esc(task.text.slice(0,50)) + ' → meeting notes "' + esc((note.title||'').slice(0,40)) + '"');
+          return;
+        }
+        // No recap or transcript: a cancelled or moved meeting never completes.
+        if (calEv && (calEv.cancelled || calEv.rescheduled)) {
+          task.meetingFlag = calEv.rescheduled ? 'rescheduled' : 'cancelled';
           return;
         }
         // Evidence 2: Post-Meeting-FollowUp-Sent — rep emailed an external
@@ -4886,8 +4889,11 @@ async function autoCompleteTasks(silent) {
 }
 
 // Hourly silent auto-complete while the app is open (+ one pass 2 min after load)
-setInterval(function(){ try { if (typeof currentUser !== 'undefined' && currentUser && currentUser.token) autoCompleteTasks(true); } catch(e) {} }, 3600000);
-setTimeout(function(){ try { if (typeof currentUser !== 'undefined' && currentUser && currentUser.token) autoCompleteTasks(true); } catch(e) {} }, 120000);
+var _autoCompleteAt = 0;
+function _autoCompleteSoon() { try { if (typeof currentUser !== 'undefined' && currentUser && currentUser.token && Date.now() - _autoCompleteAt > 600000) { _autoCompleteAt = Date.now(); autoCompleteTasks(true); } } catch(e) {} }
+setInterval(function(){ _autoCompleteAt = 0; _autoCompleteSoon(); }, 1200000);
+setTimeout(_autoCompleteSoon, 15000);
+document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') _autoCompleteSoon(); });
 
 // SAMpaign inbox sync rides the exact same cadence as auto-complete: both are
 // "scan my own mailbox for evidence and update state accordingly", both run
