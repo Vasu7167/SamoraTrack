@@ -3,7 +3,7 @@ let SB_KEY = localStorage.getItem('dt-sb-key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6I
 let API_KEY = localStorage.getItem('dt-api-key') || '';
 var _userHabits = null;
 // Cache buster — update this string on every deploy to purge stale service worker cache
-var APP_VERSION = '20261006-01';
+var APP_VERSION = '20261006-02';
 
 // ── Money in the org's own currency (2026-10-04) ───────────────────────────
 // Amounts are stored in USD (deal_value_usd) and shown in the org's currency
@@ -1658,6 +1658,7 @@ async function handleMicrosoftCallback(code) {
     var d = await r.json();
     if (d.ok) {
  showToast('Outlook connected: ' + d.email);
+      try { _spAfterMailboxConnected(); } catch (_e) {}
       try { refreshYouTabConnections(); } catch (_e) {}
       var sub = document.getElementById('samGmailSub');
  if (sub) sub.textContent = 'Outlook connected · ' + d.email;
@@ -2598,6 +2599,7 @@ function connectGmail() {
       if (data.ok || data.success) {
  if (label) label.textContent = 'Gmail connected' + (data.email ? ': ' + data.email : '');
         try { showToast('Gmail connected'); refreshYouTabConnections(); } catch (_e) {}
+        try { _spAfterMailboxConnected(); } catch (_e) {}
         const sub = document.getElementById('samGmailSub'); if (sub) sub.textContent = 'Signals loading…';
         if (btn) { btn.textContent = 'Refresh'; btn.disabled = false; btn.onclick = loadSamSignals; }
         loadSamSignals();
@@ -10329,7 +10331,7 @@ async function loadSampaignSendQueue(campaignId) {
     var META = {
       pending:   { label:'Queued',    color:'var(--gold)' },
       sent:      { label:'Sent',      color:'var(--green)' },
-      failed:    { label:'Failed',    color:'var(--coral)' },
+      failed:    { label:'Not sent',  color:'var(--coral)' },
       cancelled: { label:'Cancelled', color:'var(--text3)' },
       blocked_no_email: { label:'No email', color:'var(--text3)' }
     };
@@ -10346,7 +10348,8 @@ async function loadSampaignSendQueue(campaignId) {
         Object.keys(META).filter(function(k){ return s[k]; }).map(function(k){
           return '<span style="font-size:11px;font-weight:600;color:'+META[k].color+'">'+s[k]+' '+META[k].label.toLowerCase()+'</span>';
         }).join('<span style="color:var(--text3)">·</span>') +
-        (s.pending ? '<span onclick="cancelSampaignSends(\''+esc(campaignId)+'\',null)" style="margin-left:auto;font-size:11px;color:var(--coral);cursor:pointer">Cancel all queued</span>' : '') +
+        (s.failed && d.is_owner ? '<button type="button" class="g-btn sp-sm sp-gold" onclick="sampRetryFailed(\''+esc(campaignId)+'\','+(window._sampLaunch||1)+')" style="margin-left:auto">Send again</button>' : '') +
+        (s.pending ? '<span onclick="cancelSampaignSends(\''+esc(campaignId)+'\',null)" style="'+(s.failed && d.is_owner ? '' : 'margin-left:auto;')+'font-size:11px;color:var(--coral);cursor:pointer">Cancel all queued</span>' : '') +
       '</div>' +
       // Grouped by send day. A flat list of 48 rows spanning four dates makes
       // the reader parse every timestamp to work out where one day ends; a
@@ -10416,7 +10419,7 @@ async function loadSampaignSendQueue(campaignId) {
                          : !d.is_owner ? 'Read only, this is '+esc((camp.owner_email||'the owner').split('@')[0])+'’s campaign'
                          : 'Read only')+'</div>') +
                 '</div>' +
-                (x.error ? '<div style="font-size:11px;color:var(--coral);padding:0 10px 8px 46px">'+esc(x.error)+'</div>' : '');
+                (x.error ? '<div style="font-size:11px;color:var(--coral);padding:0 10px 8px 46px" title="'+esc(x.error)+'">'+esc(x.status === 'failed' ? _spFailText(x.error) : x.error)+'</div>' : '');
             }).join('');
         }).join('');
       })() +
@@ -16343,7 +16346,7 @@ function _spNeedsHtml(items) {
     if (n.kind === 'drafts') return li('a', SP_ICON.doc, _spPlural(n.count, 'draft') + ' ready for review', camp + ' · ' + _spWave(n.launch).toLowerCase(), go(n.campaign_id, 'sequence', 'Review drafts'));
     if (n.kind === 'unlabelled') return li('a', SP_ICON.tag, _spPlural(n.count, 'reply', 'replies') + ' to label', camp, go(n.campaign_id, 'replies', 'Label them'));
     if (n.kind === 'bounces') return li('r', SP_ICON.warn, _spPlural(n.count, 'email') + ' bounced', camp + ' · last 14 days', go(n.campaign_id, 'people', 'Find new addresses', '\'dead\''));
-    if (n.kind === 'failed') return li('r', SP_ICON.warn, _spPlural(n.count, 'email') + ' could not be sent', camp, go(n.campaign_id, 'sequence', 'See why'));
+    if (n.kind === 'failed') return li('r', SP_ICON.warn, _spPlural(n.count, 'email') + ' did not go out', camp + (n.mailbox ? ' · mailbox disconnected' : ''), '<button class="g-btn sp-sm sp-gold" type="button" onclick="openSampaignDetail(\'' + esc(n.campaign_id) + '\',\'sequence\');sampRetryFailed(\'' + esc(n.campaign_id) + '\',' + (Number(n.launch) || 1) + ')">' + (n.mailbox ? 'Fix and send again' : 'Send again') + '</button>');
     if (n.kind === 'overdue') return li('a', SP_ICON.clock, _spWave(n.stage + 1) + ' is overdue', camp + ' · ' + _spPlural(n.count, 'person', 'people') + (n.since ? ' since ' + _spDate(n.since) : ''), go(n.campaign_id, 'sequence', 'Write it'));
     if (n.kind === 'linkedin') return li('b', SP_ICON.li, _spPlural(n.count, 'LinkedIn note') + ' written', 'Waiting in the LinkedIn plugin', '');
     return '';
@@ -16509,7 +16512,7 @@ function _spRenderHeader(id) {
       '<button class="g-btn" type="button" onclick="syncSampaignCampaign(\'' + esc(id) + '\')" title="Check the mailbox for new replies now">Check replies</button>' + primary
     : '<span class="sp-chip">View only · syncs from ' + esc(owner || 'the owner') + '\'s mailbox</span>';
   el.innerHTML = '<div class="sp-head"><div style="min-width:0;flex:1"><h1 class="sp-title">' + esc(c.name) + '<span class="sp-pill ' + st[1] + '"><i></i>' + st[0] + '</span></h1>' +
-    '<div class="sp-sub">' + esc(sub) + '</div>' + goal +
+    '<div class="sp-sub">' + esc(sub) + '</div>' + goal + _spFailedBanner(id, o) +
     (c.campaign_goal ? '<p class="sp-goal clamp" id="sampGoal_' + esc(id) + '">' + esc(c.campaign_goal) + '</p>' + (c.campaign_goal.length > 180 ? '<button class="sp-back" style="margin:4px 0 0;font-weight:600;color:var(--c-accent-text)" type="button" onclick="var g=document.getElementById(\'sampGoal_' + esc(id) + '\');g.classList.toggle(\'clamp\');this.textContent=g.classList.contains(\'clamp\')?\'Read more\':\'Show less\'">Read more</button>' : '') : '') +
     '</div><div class="sp-acts">' + acts + '</div></div>';
 }
@@ -16654,12 +16657,15 @@ function _spRenderSeqTopBase(id) {
     if (w.sent) bits.push(_spPlural(w.replies, 'reply', 'replies') + (w.bounces ? ', ' + w.bounces + ' bounced' : ''));
     if (w.pending) bits.push(w.pending + ' scheduled from ' + _spDate(w.next_send, true));
     if (!w.sent && !w.pending && w.planned_date) bits.push('planned for ' + _spDate(w.planned_date));
-    if (w.failed) bits.push(w.failed + ' failed');
+    if (w.retry) bits.push(w.retry + ' did not go out' + (w.failed_reason === 'mailbox' ? ': mailbox disconnected' : ''));
+    else if (w.failed && !w.retry_waiting) bits.push(w.failed + ' failed');
+    if (w.waiting_on && !w.sent && !w.pending) bits.push('waiting for ' + _spWave(w.launch - 1).toLowerCase() + ' to go out to ' + _spPlural(w.waiting_on, 'person', 'people'));
     var acts = '';
     if (owner) {
       if (w.draft) acts = '<button class="g-btn sp-sm sp-gold" type="button" onclick="sampReviewWave(\'' + esc(id) + '\',' + w.launch + ')">Review ' + w.draft + '</button><button class="g-btn sp-sm" type="button" onclick="planSampaignDrafts(\'' + esc(id) + '\',null,' + w.launch + ')">Schedule</button>';
       else if (w.ready && !w.pending) acts = '<button class="g-btn sp-sm sp-gold" type="button" onclick="sampWriteDrafts(\'' + esc(id) + '\',' + w.launch + ')">' + SP_ICON.spark + ' Write ' + w.ready + ' with SAM</button><button class="g-btn sp-sm" type="button" onclick="sampOpenComposer(\'' + esc(id) + '\',' + w.launch + ')">One email for all</button>';
-      else if (w.sent || w.pending) acts = '<button class="g-btn sp-sm" type="button" onclick="sampReviewWave(\'' + esc(id) + '\',' + w.launch + ')">See emails</button>';
+      else if (w.sent || w.pending || w.retry) acts = '<button class="g-btn sp-sm" type="button" onclick="sampReviewWave(\'' + esc(id) + '\',' + w.launch + ')">See emails</button>';
+      if (w.retry) acts = '<button class="g-btn sp-sm sp-gold" type="button" onclick="sampRetryFailed(\'' + esc(id) + '\',' + w.launch + ')">Send ' + w.retry + ' again</button>' + acts;
     }
     var row = '<div class="sp-step"><span class="sp-sn">' + SP_ICON.mail + '</span><div><div class="sp-sh">' + esc(w.label) + (w.draft ? ' <span class="sp-chip warn">' + w.draft + ' to review</span>' : '') + (w.launch > 1 ? ' <span class="sp-small">· same thread</span>' : '') + '</div>' +
       '<div class="sp-sm2">' + esc(bits.join(' · ') || (w.ready ? w.ready + ' ready to write' : 'Nobody is waiting for this email yet')) + '</div>' +
@@ -16755,7 +16761,7 @@ async function planSampaignDrafts(campaignId, startAt, launch) {
     '<div class="sp-days">' + days.map(function (k) { return '<div class="sp-day"><span>' + esc(new Date(k + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })) + '</span><b>' + d.per_day[k] + '</b></div>'; }).join('') + '</div>' +
     '<div class="sp-small" style="margin-top:12px">Today this mailbox can send ' + (d.today_limit || (d.policy && d.policy.daily_cap) || '') + ' (' + esc(d.ramp_reason || 'current limit') + '). ' +
       (d.policy ? 'Sending between ' + d.policy.window_start_hour + ':00 and ' + d.policy.window_end_hour + ':00' + (d.policy.skip_weekends ? ', weekdays only' : '') + '. ' : '') +
-      (d.rolled ? 'The day you picked is already full, so this starts on the next free day. ' : '') + 'Spacing sends out is what keeps the mailbox out of spam.</div>' +
+      (d.late ? 'This was planned for ' + esc(_spDate(d.planned_for)) + ', which has passed, so it starts at the next free slot. ' : d.rolled ? 'The day you picked is already full, so this starts on the next free day. ' : '') + 'Spacing sends out is what keeps the mailbox out of spam.</div>' +
     '<div class="sp-foot"><button class="g-btn" type="button" onclick="document.getElementById(\'sampPlanModal\').remove()">Not yet</button><button class="g-btn sp-gold" type="button" id="sampPlanGo">Schedule</button></div></div>';
   document.body.appendChild(m);
   document.getElementById('sampPlanGo').onclick = async function () {
@@ -18123,4 +18129,111 @@ function renderRepBreakdown(data, deals, fmt) {
   return '<div class="sp-card sp-pad" style="margin-top:12px"><div class="sp-lbl">By person</div>' + rows.map(function (k) {
     return '<div style="display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--g-line);font-size:13px"><span>' + esc(k.split('@')[0]) + ' · ' + by[k].n + ' deal' + (by[k].n === 1 ? '' : 's') + '</span><b>' + esc((fmt || fmtOrgMoney)(by[k].v)) + '</b></div>';
   }).join('') + '</div>';
+}
+
+// ── SAMpaign: emails that did not go out (6 Oct) ────────────────────────────
+// A mailbox disconnects (its password changed), the queued emails fail, and
+// the rep needs one clear fix: reconnect, then send them again. Nothing is
+// rewritten: the same emails go back to drafts and the scheduler spaces them
+// out within the mailbox's daily limit.
+function _spFailText(err) {
+  var s = String(err || '');
+  if (/no email address/i.test(s)) return 'Not sent: no email address.';
+  if (/campaign owner|invalid_grant|token|reconnect|send permission|no mailbox|revoked|unauthori[sz]ed|\b401\b/i.test(s)) return 'Not sent: the mailbox was disconnected (its password changed or access was removed).';
+  return 'Not sent: ' + s;
+}
+function _spFailedTotals(o) {
+  var t = { retry: 0, launch: null, at: null, reason: null };
+  (o && o.waves || []).forEach(function (w) {
+    if (!w.retry) return;
+    t.retry += w.retry;
+    if (t.launch === null) { t.launch = w.launch; t.reason = w.failed_reason; }
+    if (w.failed_at && (!t.at || w.failed_at < t.at)) t.at = w.failed_at;
+  });
+  return t;
+}
+function _spFailedBanner(id, o) {
+  var t = _spFailedTotals(o); if (!t.retry) return '';
+  var c = o.campaign, mb = o.mailbox || {};
+  var when = t.at ? ' on ' + _spDate(t.at) : '';
+  var head = '<b>' + _spPlural(t.retry, 'email') + ' did not go out' + when + '.</b> ';
+  if (!c.is_owner || c.archived) return '<div class="sp-alert" role="status"><div>' + head + 'They were due from ' + esc(_spOwnerName(c.owner_email) || 'the owner') + '\'s mailbox, which needs reconnecting.</div></div>';
+  var btn = function (label, gold, fn) { return '<button class="g-btn sp-sm' + (gold ? ' sp-gold' : '') + '" type="button" onclick="' + fn + '">' + label + '</button>'; };
+  var send = btn('Send ' + (t.retry === 1 ? 'it' : 'them') + ' again', true, 'sampRetryFailed(\'' + esc(id) + '\',' + t.launch + ')');
+  var who = mb.email ? ' (' + esc(mb.email) + ')' : '';
+  if (mb.status === 'reconnect' || mb.status === 'none') {
+    return '<div class="sp-alert" role="alert"><div>' + head + (mb.status === 'none' ? 'No mailbox is connected.' : 'Your mailbox' + who + ' is disconnected, usually after a password change.') + ' Reconnect it, then send them again. Nothing is lost: the same emails go out, spaced within your daily limit.</div>' +
+      '<div class="sp-acts">' + btn('Reconnect mailbox', true, '_spReconnect(\'' + esc(id) + '\',' + t.launch + ',\'' + (mb.provider === 'microsoft' ? 'microsoft' : 'google') + '\')') + '</div></div>';
+  }
+  var why = t.reason === 'mailbox' ? (mb.reconnected ? 'The mailbox was disconnected then; it is connected again now.' : 'The mailbox refused to send them.') : t.reason === 'other' ? 'The mailbox refused them. Sending again usually works.' : '';
+  return '<div class="sp-alert ok" role="status"><div>' + head + why + ' The same emails go out again, spaced within your daily limit.</div><div class="sp-acts">' + send + '</div></div>';
+}
+async function sampRetryFailed(id, launch) {
+  if (window._spRetrying) return;
+  window._spRetrying = true;
+  try {
+    var d = await _sampEdge('retry_failed_sends', { campaign_id: id, launch: launch || null });
+    if (!d.ok && d.needs_reconnect) { _spReconnectModal(id, launch, d); return; }
+    if (!d.ok) { showToast(d.error || 'Could not do that'); return; }
+    await _sampLoadOverview(id);
+    if (!d.drafts) {
+      showToast(d.cancelled ? _spPlural(d.cancelled, 'email') + ' no longer needed, cleared.' : (d.has_draft ? 'These people already have a newer draft. Schedule or delete that first.' : 'Nothing to send again.'));
+      if (window._sampOpenId === id) { if (window._sampTab !== 'sequence') setSampTab(id, 'sequence'); else { _spRenderSeqTop(id); loadSampaignSendQueue(id); } }
+      return;
+    }
+    var extra = d.cancelled ? ' ' + _spPlural(d.cancelled, 'person', 'people') + ' replied or bounced meanwhile, so theirs were cleared.' : '';
+    showToast(_spPlural(d.drafts, 'email') + ' ready to go again. Pick when they go out.' + extra);
+    window._sampLaunch = d.launch;
+    if (window._sampOpenId === id) { if (window._sampTab !== 'sequence') setSampTab(id, 'sequence'); else { _spRenderSeqTop(id); loadSampaignSendQueue(id); } }
+    planSampaignDrafts(id, null, d.launch);
+  } catch (e) { showToast('Could not do that: ' + e.message); }
+  finally { window._spRetrying = false; }
+}
+function _spReconnect(id, launch, provider) {
+  window._spRetryAfterConnect = { id: id, launch: launch || null };
+  try { if (provider === 'microsoft') connectOutlook(); else connectGmail(); } catch (e) { showToast('Open You, then reconnect your mailbox.'); }
+}
+function _spReconnectModal(id, launch, d) {
+  var m = document.createElement('div'); m.className = 'sp-modal'; m.id = 'spReconnModal';
+  m.addEventListener('click', function (e) { if (e.target === m) m.remove(); });
+  var prov = d.provider === 'microsoft' ? 'microsoft' : 'google';
+  m.innerHTML = '<div class="sp-mcard" role="dialog" aria-modal="true" aria-label="Reconnect your mailbox"><h3>Reconnect your mailbox first</h3>' +
+    '<p class="sp-muted" style="margin:6px 0 0;font-size:13.5px;line-height:1.55">' + esc(d.error || 'The mailbox cannot send right now.') + '</p>' +
+    '<p class="sp-muted" style="margin:10px 0 0;font-size:13.5px;line-height:1.55">' + (d.count ? 'Your ' + _spPlural(d.count, 'email') + ' are kept. ' : '') + 'As soon as it is connected, SAM picks up from here and asks when to send them.</p>' +
+    '<div class="sp-foot"><button class="g-btn" type="button" onclick="document.getElementById(\'spReconnModal\').remove()">Not now</button><button class="g-btn sp-gold" type="button" id="spReconnGo">Reconnect ' + (prov === 'microsoft' ? 'Outlook' : 'Gmail') + '</button></div></div>';
+  document.body.appendChild(m);
+  document.getElementById('spReconnGo').onclick = function () { m.remove(); _spReconnect(id, launch, prov); };
+}
+// Right after a mailbox connects: pick up a send-again that was waiting on
+// it, or offer it for every SAMpaign that has emails that did not go out.
+async function _spAfterMailboxConnected() {
+  try {
+    var want = window._spRetryAfterConnect; window._spRetryAfterConnect = null;
+    if (want && want.id) {
+      if (window._sampOpenId !== want.id || window._sampView !== 'detail') { try { switchTab('sampaign'); } catch (e) {} await new Promise(function (r) { setTimeout(r, 500); }); openSampaignDetail(want.id, 'sequence'); }
+      await sampRetryFailed(want.id, want.launch);
+      return;
+    }
+    var s = await _sampEdge('failed_sends_summary', {});
+    if (!s.ok || !s.total) return;
+    var old = document.getElementById('spAfterConn'); if (old) old.remove();
+    var m = document.createElement('div'); m.className = 'sp-modal'; m.id = 'spAfterConn';
+    m.addEventListener('click', function (e) { if (e.target === m) m.remove(); });
+    var rows = (s.campaigns || []).slice(0, 6).map(function (c) {
+      return '<div class="sp-day" style="align-items:center"><span><b>' + esc(c.name || 'SAMpaign') + '</b><br><small class="sp-muted">' + _spPlural(c.count, 'email') + ' · ' + esc(String(c.label || '').toLowerCase()) + (c.since ? ' · since ' + esc(_spDate(c.since)) : '') + '</small></span>' +
+        '<button class="g-btn sp-sm sp-gold" type="button" onclick="_spAfterConnGo(\'' + esc(c.campaign_id) + '\',' + (Number(c.launch) || 1) + ')">Send again</button></div>';
+    }).join('');
+    m.innerHTML = '<div class="sp-mcard" role="dialog" aria-modal="true" aria-label="Emails that did not go out"><h3>' + _spPlural(s.total, 'email') + ' did not go out</h3>' +
+      '<p class="sp-muted" style="margin:6px 0 0;font-size:13.5px;line-height:1.55">Your mailbox is connected again. These were due while it was disconnected. Send them again: the same emails, spaced within your daily limit.</p>' +
+      '<div class="sp-days" style="grid-template-columns:1fr">' + rows + '</div>' +
+      '<div class="sp-foot"><span></span><button class="g-btn" type="button" onclick="document.getElementById(\'spAfterConn\').remove()">Later</button></div></div>';
+    document.body.appendChild(m);
+  } catch (e) {}
+}
+async function _spAfterConnGo(id, launch) {
+  var m = document.getElementById('spAfterConn'); if (m) m.remove();
+  try { switchTab('sampaign'); } catch (e) {}
+  await new Promise(function (r) { setTimeout(r, 500); });
+  openSampaignDetail(id, 'sequence');
+  sampRetryFailed(id, launch);
 }
