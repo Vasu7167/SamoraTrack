@@ -3,7 +3,7 @@ let SB_KEY = localStorage.getItem('dt-sb-key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6I
 let API_KEY = localStorage.getItem('dt-api-key') || '';
 var _userHabits = null;
 // Cache buster — update this string on every deploy to purge stale service worker cache
-var APP_VERSION = '20261007-02';
+var APP_VERSION = '20261008-01';
 
 // ── Money in the org's own currency (2026-10-04) ───────────────────────────
 // Amounts are stored in USD (deal_value_usd) and shown in the org's currency
@@ -17212,6 +17212,8 @@ async function _liRenderYou() {
   var ext = _liExtVersion();
   if (!d || !d.ok) { box.innerHTML = '<div class="sp-small">' + esc((d && d.error) || 'Could not load.') + '</div>'; return; }
   var devs = d.devices || [];
+  var _liOld = (ext && _liVerLt(ext, LI_EXT_LATEST)) || devs.some(function (v) { return v.version && _liVerLt(v.version, LI_EXT_LATEST); });
+  var _liUpd = _liOld ? '<div class="li-note" style="margin-bottom:10px"><b>Update to ' + LI_EXT_LATEST + '.</b> It sends messages on LinkedIn’s new pages, finds Connect when LinkedIn hides it, checks accepts and replies on its own and lets you set the order. <button class="rv-link" type="button" onclick="_liSheet(_liInstallHtml())">Get the update</button></div>' : '';
   var head = devs.length
     ? devs.map(function (v) {
         return '<div class="li-dev"><span class="li-dot ' + (v.online ? 'on' : '') + '"></span><div><b>' + esc(v.label || 'Chrome') + '</b><small>' + (v.online ? 'Online now' : 'Last seen ' + _liAgo(v.last_seen_at)) + (v.linkedin_name ? ' · LinkedIn: ' + esc(v.linkedin_name) : '') + (v.version ? ' · v' + esc(v.version) : '') + '</small></div></div>';
@@ -17219,6 +17221,7 @@ async function _liRenderYou() {
       '<div class="li-meta"><span><b>' + (d.mode === 'autopilot' ? 'Autopilot' : 'Co-pilot') + '</b> mode</span><span>' + (d.today.invites || 0) + ' of ' + d.limit + ' invites today</span><span>' + _liHour(d.window.start) + ' to ' + _liHour(d.window.end) + (d.window.skip_weekends ? ', weekdays' : ', every day') + '</span>' + (d.queued ? '<span>' + d.queued + ' queued</span>' : '') + '</div>' +
       (d.paused_until ? '<div class="li-note">Paused until ' + esc(new Date(d.paused_until).toLocaleString()) + ' because LinkedIn showed a warning.</div>' : '')
     : '<div class="you-conn"><div class="you-conn-state">' + (ext ? 'Installed, not connected' : 'Not installed') + '</div><div class="you-conn-sub">Samora for LinkedIn runs the LinkedIn steps of your SAMpaigns from Chrome: profile visits, invites with a note, and a message once they accept. Mode, hours and limits are set in the plugin.</div></div>';
+  head = _liUpd + head;
   var btns = ext
     ? '<button class="g-btn' + (devs.length ? '' : ' sp-gold') + '" type="button" onclick="liConnect(false)">' + (devs.length ? 'Reconnect this Chrome' : 'Connect this Chrome') + '</button>'
     : '<button class="g-btn sp-gold" type="button" onclick="_liSheet(_liInstallHtml())">Get the plugin</button>';
@@ -18906,3 +18909,100 @@ function scWireMore() {
   bind('scDealsMore', function () { _scOldPipeline(); });
   bind('scBoardMore', function () { loadExecDashboard(); });
 }
+
+// ══ Drop E (2026-10-08): SAMpaign tasks on Today ═══════════════════════════
+// What each SAMpaign needs from the rep today, on email and LinkedIn, and
+// whether the numbers add up (who should have had a first email, an invite or
+// a message by now and has not). The same list the LinkedIn panel shows and
+// the morning push names, from get_sampaign_tasks.
+window._tds = window._tds || { data: null, at: 0, open: {}, touched: false };
+var LI_EXT_LATEST = '1.3.0';
+function _liVerLt(a, b) { var x = String(a || '0').split('.').map(Number), y = String(b || '0').split('.').map(Number); for (var i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; }
+var TDS_ICON = {
+  email: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M4 7l8 6 8-6"/></svg>',
+  linkedin: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="3.5"/><path d="M8 10.5V16M8 7.8v.1M11.5 16v-3.2a2.3 2.3 0 014.6 0V16M11.5 10.5V16"/></svg>',
+  all: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.6L18 9.4l-4.2 1.8L12 16l-1.8-4.8L6 9.4l4.2-1.8z"/></svg>',
+  done: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.2 4.2L19 7"/></svg>',
+  chev: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>'
+};
+function _tdsPl(n, one, many) { return n + ' ' + (n === 1 ? one : (many || one + 's')); }
+async function tdSampLoad(force) {
+  var el = document.getElementById('todaySamp');
+  if (!el || typeof currentUser === 'undefined' || !currentUser || !currentUser.token) return;
+  try { if (typeof viewDate !== 'undefined' && viewDate && viewDate !== todayKey()) { el.innerHTML = ''; return; } } catch (_e) {}
+  if (!force && window._tds.data && Date.now() - window._tds.at < 45000) { tdSampRender(); return; }
+  window._tds.at = Date.now();
+  if (!window._tds.data) el.innerHTML = '<div class="g-card tds" aria-busy="true"><div class="sp-lbl">Your SAMpaigns today</div><div class="tds-sk"></div><div class="tds-sk" style="width:60%"></div></div>';
+  try {
+    var r = await fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify({ action: 'get_sampaign_tasks' }) });
+    var d = await r.json();
+    if (d && d.ok) window._tds.data = d;
+  } catch (_e) { /* keep what we had */ }
+  if (!window._tds.data) { el.innerHTML = ''; return; }
+  tdSampRender();
+}
+function tdsGo(kind, a, b) {
+  if (kind === 'sampaign') { try { switchTab('sampaign'); } catch (_e) {} setTimeout(function () { openSampaignDetail(a, b || 'overview'); }, 350); return; }
+  if (kind === 'linkedin') { window.open(a || 'https://www.linkedin.com/feed/', '_blank', 'noopener'); return; }
+  if (kind === 'app') { try { switchTab(a || 'you'); } catch (_e) {} }
+}
+function tdsToggle(id) {
+  var d = window._tds;
+  if (!d.touched) { d.touched = true; document.querySelectorAll('#todaySamp .tds-c.open').forEach(function (x) { d.open[x.dataset.id] = true; }); }
+  d.open[id] = !d.open[id];
+  tdSampRender();
+}
+function _tdsAct(t, c) {
+  var a = t.act || {}, L = { sequence: 'Open sequence', replies: 'Open replies', people: 'Open people', overview: 'Open' };
+  if (a.type === 'sampaign') return '<button class="tds-a" type="button" onclick="tdsGo(\'sampaign\',\'' + esc(c.id) + '\',\'' + esc(a.tab || 'overview') + '\')">' + (L[a.tab] || 'Open') + '</button>';
+  if (a.type === 'plugin') return '<button class="tds-a" type="button" title="Samora\'s panel opens from the S on any LinkedIn page" onclick="tdsGo(\'linkedin\')">Open LinkedIn</button>';
+  if (a.type === 'linkedin') return '<button class="tds-a" type="button" onclick="tdsGo(\'linkedin\',\'' + esc(a.url || '') + '\')">Open</button>';
+  if (a.type === 'app') return '<button class="tds-a" type="button" onclick="tdsGo(\'app\',\'' + esc(a.tab || 'you') + '\')">Open</button>';
+  return '';
+}
+function _tdsTask(t, c) {
+  var ic = t.tone === 'done' ? TDS_ICON.done : (TDS_ICON[t.channel] || TDS_ICON.all);
+  var bar = t.total ? '<span class="tds-bar" aria-hidden="true"><i style="width:' + Math.round((t.done || 0) / t.total * 100) + '%"></i></span>' : '';
+  return '<li class="tds-t ' + esc(t.tone) + '"><span class="tds-ic ' + esc(t.channel) + '">' + ic + '</span><span class="tds-tx"><span>' + esc(t.text) + '</span>' + bar + '</span>' + _tdsAct(t, c) + '</li>';
+}
+function _tdsCheck(k) {
+  var pct = function (n) { return k.expected ? Math.round(n / k.expected * 100) : 0; };
+  var tag = k.missing ? '<span class="sp-chip risk">' + k.missing + ' pending</span>' : k.queued ? '<span class="sp-chip li">' + k.queued + ' queued</span>' : '<span class="sp-chip live">All done</span>';
+  return '<div class="tds-k"><div class="tds-kh"><span>' + esc(k.label) + '</span><b>' + k.done + ' of ' + k.expected + '</b>' + tag + '</div><div class="tds-kb" aria-hidden="true"><i style="width:' + pct(k.done) + '%"></i><i class="q" style="width:' + pct(k.queued) + '%"></i></div>' + (k.missing && k.who ? '<div class="sp-small">Pending: ' + esc(k.who) + '</div>' : '') + '</div>';
+}
+function tdSampRender() {
+  var el = document.getElementById('todaySamp'), d = window._tds.data;
+  if (!el || !d) return;
+  var cs = d.campaigns || [];
+  if (!cs.length) { el.innerHTML = ''; return; }
+  var sm = d.summary || {}, li = d.linkedin;
+  var chips = (sm.risk ? '<span class="sp-chip risk"><i></i>' + _tdsPl(sm.risk, 'thing') + ' at risk</span>' : '') +
+    (sm.do ? '<span class="sp-chip warn"><i></i>' + _tdsPl(sm.do, 'task') + ' for you</span>' : '') +
+    (sm.wait ? '<span class="sp-chip">' + sm.wait + ' running on their own</span>' : '') +
+    (!sm.do && !sm.risk ? '<span class="sp-chip live"><i></i>All clear</span>' : '');
+  var liLine = '';
+  if (li) {
+    var pl = li.plugin;
+    liLine = '<div class="tds-li"><span class="tds-ic linkedin">' + TDS_ICON.linkedin + '</span><span>LinkedIn today: <b>' + (li.today.invites || 0) + ' of ' + li.limits.invites + '</b> invites and <b>' + (li.today.messages || 0) + '</b> messages sent' + (li.ready ? ', <b>' + li.ready + '</b> ready' : '') + '. ' +
+      (pl ? (pl.online ? 'Samora in Chrome is on.' : 'Samora in Chrome was last on ' + esc(_spAgo(pl.last_seen_at)) + '; LinkedIn steps go while Chrome is open.') : 'Add Samora for LinkedIn in Chrome to run these.') +
+      (pl && pl.version && _liVerLt(pl.version, LI_EXT_LATEST) ? ' <b>Update the plugin to ' + LI_EXT_LATEST + '</b> (You, LinkedIn plugin) so messages send on LinkedIn\u2019s new pages.' : '') +
+      (li.synced_at ? ' Accepts and replies checked ' + esc(_spAgo(li.synced_at)) + '.' : '') + '</span></div>';
+  }
+  var list = cs.map(function (c, i) {
+    var open = window._tds.touched ? !!window._tds.open[c.id] : ((c.risk || c.todo) && i < 3);
+    var cnt = (c.risk ? '<span class="sp-chip risk">' + c.risk + ' at risk</span>' : '') + (c.todo ? '<span class="sp-chip warn">' + _tdsPl(c.todo, 'task') + '</span>' : '') + (!c.risk && !c.todo ? '<span class="sp-chip live">Clear</span>' : '');
+    var ch = (c.email ? '<span class="tds-ch">' + TDS_ICON.email + '</span>' : '') + (c.linkedin ? '<span class="tds-ch li">' + TDS_ICON.linkedin + '</span>' : '');
+    var miss = (c.checks || []).some(function (k) { return k.missing; });
+    var checks = (c.checks || []).length ? '<details class="tds-adds"' + (miss ? ' open' : '') + '><summary>Does it add up? ' + (miss ? '<span class="sp-chip risk">pending</span>' : '<span class="sp-chip live">yes</span>') + '</summary>' + c.checks.map(_tdsCheck).join('') + '</details>' : '';
+    return '<div class="tds-c' + (open ? ' open' : '') + '" data-id="' + esc(c.id) + '">' +
+      '<button class="tds-ch-h" type="button" aria-expanded="' + (open ? 'true' : 'false') + '" onclick="tdsToggle(\'' + esc(c.id) + '\')"><span class="tds-n">' + esc(c.name) + '</span><span class="tds-chs">' + ch + '</span><span class="tds-cnt">' + cnt + '</span><span class="tds-chev">' + TDS_ICON.chev + '</span></button>' +
+      (open ? '<ul class="tds-l">' + (c.tasks || []).map(function (t) { return _tdsTask(t, c); }).join('') + '</ul>' + checks : '') + '</div>';
+  }).join('');
+  el.innerHTML = '<section class="g-card tds" aria-labelledby="tdsTitle"><div class="tds-h"><div><div class="sp-lbl" id="tdsTitle">Your SAMpaigns today</div><div class="tds-sub">Email and LinkedIn, per SAMpaign. SAM checks the numbers add up so nothing is left pending.</div></div><div class="tds-chips">' + chips + '<button class="tds-a" type="button" onclick="tdSampLoad(true)" aria-label="Refresh SAMpaign tasks">Refresh</button></div></div>' + liLine + '<div class="tds-cs">' + list + '</div></section>';
+}
+(function () {
+  if (typeof renderToday !== 'function' || renderToday._tds) return;
+  var orig = renderToday;
+  renderToday = function () { var r = orig.apply(this, arguments); try { tdSampLoad(); } catch (_e) {} return r; };
+  renderToday._tds = true;
+})();
