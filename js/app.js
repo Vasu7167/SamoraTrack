@@ -3,7 +3,7 @@ let SB_KEY = localStorage.getItem('dt-sb-key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6I
 let API_KEY = localStorage.getItem('dt-api-key') || '';
 var _userHabits = null;
 // Cache buster — update this string on every deploy to purge stale service worker cache
-var APP_VERSION = '20261007-01';
+var APP_VERSION = '20261007-02';
 
 // ── Money in the org's own currency (2026-10-04) ───────────────────────────
 // Amounts are stored in USD (deal_value_usd) and shown in the org's currency
@@ -15147,6 +15147,7 @@ function joinOrgCancel() {
     this.extraTabs.forEach(function (x) { tabs.push([x.key, x.label]); });
     if (this.showProfile) tabs.push(['profile', 'Company profile']);
     tabs.push(['calendar', 'Work calendar']);
+    tabs.push(['currency', 'Currency']);
     tabs.push(['mailboxes', 'Mailboxes']);
     tabs.push(['log', 'Activity']);
     this._parkHosted();
@@ -15201,6 +15202,7 @@ function joinOrgCancel() {
     }
     if (this.tab === 'profile') { this._renderProfile(body); return; }
     if (this.tab === 'calendar') { this._renderCalendar(body); return; }
+    if (this.tab === 'currency') { this._renderCurrency(body); return; }
     if (this.tab === 'mailboxes') { this._renderMailboxes(body); return; }
     if (this.tab === 'people') body.innerHTML = this._people();
     else if (this.tab === 'tree') body.innerHTML = this._tree();
@@ -15425,6 +15427,7 @@ function joinOrgCancel() {
     else if (a.indexOf('cal-') === 0) this._calClick(a, t);
     else if (a === 'mb-refresh') this._renderMailboxes(this.el.querySelector('#sxa-body'), true);
     else if (a === 'mb-scan') this._mbScan(t);
+    else if (a === 'cur-save') this._saveCurrency(t);
   };
 
   Console.prototype._change = function (e) {
@@ -15694,6 +15697,49 @@ function joinOrgCancel() {
     } else if (a === 'cal-save') {
       this._saveCalendar(t);
     }
+  };
+
+  // ── Currency (2026-10-07) ──────────────────────────────────────────────
+  // The currency every amount in SamoraOS is shown in. Deals are stored in
+  // US dollars as well, so this changes how they read, never their value.
+  var CUR_NAMES = { INR: 'Indian rupee', USD: 'US dollar', EUR: 'Euro', GBP: 'British pound', AED: 'UAE dirham', SAR: 'Saudi riyal', QAR: 'Qatari riyal', KWD: 'Kuwaiti dinar', BHD: 'Bahraini dinar', OMR: 'Omani rial',
+    SGD: 'Singapore dollar', AUD: 'Australian dollar', NZD: 'New Zealand dollar', CAD: 'Canadian dollar', JPY: 'Japanese yen', CNY: 'Chinese yuan', HKD: 'Hong Kong dollar', IDR: 'Indonesian rupiah', MYR: 'Malaysian ringgit',
+    THB: 'Thai baht', PHP: 'Philippine peso', VND: 'Vietnamese dong', BDT: 'Bangladeshi taka', LKR: 'Sri Lankan rupee', NPR: 'Nepalese rupee', PKR: 'Pakistani rupee', ZAR: 'South African rand', KES: 'Kenyan shilling',
+    NGN: 'Nigerian naira', EGP: 'Egyptian pound', CHF: 'Swiss franc', SEK: 'Swedish krona', NOK: 'Norwegian krone', DKK: 'Danish krone', BRL: 'Brazilian real', MXN: 'Mexican peso' };
+  Console.prototype._renderCurrency = async function (body) {
+    var self = this;
+    if (!this.cur) {
+      body.innerHTML = '<div class="sxa-empty">Loading your currency…</div>';
+      var d;
+      try { d = await this.call('org_admin_currency_get', this._body()); } catch (e) { d = { ok: false, error: e.message }; }
+      if (this.tab !== 'currency') return;
+      if (!d || !d.ok) { body.innerHTML = '<div class="sxa-empty sxa-err">' + h((d && d.error) || 'Could not load the currency.') + '</div>'; return; }
+      this.cur = d;
+    }
+    var c = this.cur;
+    body.innerHTML =
+      '<div class="sxa-pf">' +
+        '<div class="sxa-sec" style="margin-top:4px">Currency</div>' +
+        '<div class="sxa-note">Every amount in SamoraOS is shown in this currency: deal values, pipeline, the morning digest and SAM. Deals keep their value; only how they read changes.</div>' +
+        '<label class="sxa-f" style="max-width:420px"><span class="sxa-lbl">Show amounts in</span><select class="sxa-in" data-sxa="cur-pick" id="sxaCurPick">' +
+          (c.currencies || []).map(function (k) { return '<option value="' + k + '"' + (k === c.currency ? ' selected' : '') + '>' + k + ' · ' + h(CUR_NAMES[k] || k) + '</option>'; }).join('') +
+        '</select></label>' +
+        '<div class="sxa-note">Now: <b>' + h(c.currency) + '</b>' + (c.currency !== 'USD' && c.usd_rate ? ', 1 US dollar = ' + h(String(Math.round(c.usd_rate * 100) / 100)) + ' ' + h(c.currency) + '. A deal of 100,000 US dollars reads ' + h(c.example || '') + '.' : '.') + ' Rates update daily.</div>' +
+        '<div class="sxa-actions" style="justify-content:flex-start"><button class="sxa-btn sxa-btn-gold" data-sxa="cur-save">Save currency</button></div>' +
+      '</div>';
+  };
+  Console.prototype._saveCurrency = async function (btn) {
+    var pick = this.el.querySelector('#sxaCurPick'); if (!pick) return;
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+    var d;
+    try { d = await this.call('org_admin_currency_save', this._body({ currency: pick.value })); } catch (e) { d = { ok: false, error: e.message }; }
+    if (!d || !d.ok) { this.toast((d && d.error) || 'Could not save.', true); if (btn) { btn.disabled = false; btn.textContent = 'Save currency'; } return; }
+    this.cur = Object.assign({}, this.cur, d);
+    // This org's own app re-reads money at once.
+    try { var mine = !this.orgId || (typeof profile !== 'undefined' && profile && String(profile.org_id) === String(this.orgId)); if (mine) { window._orgConfig = window._orgConfig || {}; window._orgConfig.defaultCurrency = d.currency; window._orgConfig.usdRate = d.usd_rate; } } catch (e) {}
+    try { if (typeof scInvalidate === 'function') scInvalidate(); } catch (e) {}
+    this.toast('Amounts now show in ' + d.currency);
+    this._renderCurrency(this.el.querySelector('#sxa-body'));
   };
 
   Console.prototype._saveCalendar = async function (btn) {
@@ -18383,7 +18429,7 @@ async function renderScSam(force) {
     var pulse = (d.by_owner || []).slice();
     var busiest = pulse.filter(function (o) { return o.replies_waiting; }).sort(function (x, y) { return y.replies_waiting - x.replies_waiting; })[0];
     if (busiest && replies.length > 1) lines.push(esc(busiest.name || 'Someone') + ' has the most waiting: ' + scPlural(busiest.replies_waiting, 'reply', 'replies') + '.');
-    var broken = pulse.filter(function (o) { return o.mailbox === 'reconnect' || o.mailbox === 'none'; });
+    var broken = pulse.filter(function (o) { return o.is_active !== false && (o.mailbox === 'reconnect' || o.mailbox === 'none'); });
     if (broken.length) lines.push(esc(sdList(broken.map(function (o) { return (o.name || 'Someone') + '’s'; }), 3)) + (broken.length > 3 ? ' and ' + (broken.length - 3) + ' more' : '') + (broken.length === 1 ? ' mailbox is' : ' mailboxes are') + ' not connected, so SAM cannot see all of the team’s accounts.');
   }
   if (!lines.length) lines.push(s.active ? 'Nothing urgent. ' + scPlural(s.active, 'account') + ' had contact this week.' : 'Nothing urgent today.');
@@ -18394,10 +18440,10 @@ async function renderScSam(force) {
   if (team && (d.by_owner || []).length) {
     var mbTxt = { ok: 'Mailbox working', none: 'No mailbox connected', reconnect: 'Mailbox needs reconnecting', stale: 'Mailbox not checked lately' };
     var rows = (d.by_owner || []).slice().sort(function (x, y) { return ((y.needs || 0) - (x.needs || 0)) || (y.value_usd - x.value_usd); });
-    pulseHtml = '<section class="sp-card sp-pad sd-pulse" aria-label="Team pulse"><div class="sd-sh"><div class="sp-lbl">Team pulse</div><button class="rv-link" onclick="sdGoDeals(\'person\')">Deals by person</button></div>' +
+    pulseHtml = '<section class="sp-card sp-pad sd-pulse" aria-label="Team pulse"><div class="sd-sh"><div><div class="sp-lbl">Team pulse</div><div class="sp-small" style="margin-top:4px">Click a person for their week: intent vs reality, coverage and what needs them.</div></div><button class="rv-link" onclick="sdGoDeals(\'person\')">Deals by person</button></div>' +
       '<div class="sd-ptab" role="table"><div class="sd-prow sd-phead" role="row"><span>Person</span><span>Need them</span><span>Replies waiting</span><span>Quiet deals</span><span>Past close</span><span class="r">Pipeline</span></div>' +
       rows.map(function (o) {
-        return '<button class="sd-prow" role="row" onclick="sdGoDeals(\'list\',\'' + esc(o.user_id) + '\')"><span class="sd-pn"><span class="rv-tav">' + esc(scInit(o.name)) + '<i class="mb ' + esc(o.mailbox) + '" title="' + esc(mbTxt[o.mailbox] || '') + '"></i></span><b>' + esc(o.name || 'Someone') + '</b>' + (o.mailbox !== 'ok' ? '<small class="rv-red">' + esc(mbTxt[o.mailbox] || '') + '</small>' : '') + '</span>' +
+        return '<button class="sd-prow" role="row" title="Their week: intent vs reality" onclick="sdPerson(\'' + esc(o.user_id) + '\')"><span class="sd-pn"><span class="rv-tav">' + esc(scInit(o.name)) + '<i class="mb ' + esc(o.mailbox) + '" title="' + esc(mbTxt[o.mailbox] || '') + '"></i></span><b>' + esc(o.name || 'Someone') + '</b>' + (o.mailbox !== 'ok' ? '<small class="rv-red">' + esc(mbTxt[o.mailbox] || '') + '</small>' : '') + '</span>' +
           '<span data-l="Need them">' + (o.needs || 0) + '</span><span data-l="Replies waiting" class="' + (o.replies_waiting ? 'sp-g' : '') + '">' + (o.replies_waiting || 0) + '</span><span data-l="Quiet deals" class="' + (o.quiet ? 'rv-red' : '') + '">' + (o.quiet || 0) + '</span><span data-l="Past close" class="' + (o.past_due ? 'rv-red' : '') + '">' + (o.past_due || 0) + '</span><span data-l="Pipeline" class="r">' + esc(scMoney0(o.value_usd)) + '</span></button>';
       }).join('') + '</div></section>';
   }
@@ -18799,4 +18845,64 @@ function _spWizParseCompanies(text) {
     var region = rest[1] || listRegion;
     return { name: name, domain: dom, region: region || null };
   }).filter(Boolean);
+}
+
+// ══ Drop D.1 (2026-10-07): a person's week, for managers ═══════════════════
+// From SAM's Team pulse, one click on a person opens their week: what needs
+// them, and intent vs reality (what they planned with customers against what
+// their mail and calendar show actually happened), with coverage one more
+// click away. The old SAM tools are gone from Deals.
+function sdPerson(uid) {
+  var d = _sc.data[_sc.view.samScope] || _sc.data.team || {};
+  var o = (d.by_owner || []).find(function (x) { return x.user_id === uid; }); if (!o) return;
+  scCloseSheet();
+  var mine = (d.accounts || []).filter(function (a) { return a.owner === uid || a.sdr === uid; });
+  var need = mine.filter(function (a) { return a.needs && a.needs.length; }).slice(0, 6);
+  var mbTxt = { ok: 'Mailbox working', none: 'No mailbox connected', reconnect: 'Mailbox needs reconnecting', stale: 'Mailbox not checked lately' };
+  var first = String(o.name || 'They').split(' ')[0];
+  var ivrId = 'sdIvr_' + uid, covId = 'sdCov_' + uid;
+  var el = document.createElement('div');
+  el.id = 'scSheet'; el.className = 'rv-sheet-wrap';
+  el.innerHTML = '<div class="rv-sheet sd-psheet" role="dialog" aria-modal="true" aria-labelledby="sdPersonTitle">' +
+    '<div class="rv-sheet-head"><div><div class="sp-lbl">Their week</div><h2 id="sdPersonTitle">' + esc(o.name || 'Someone') + '</h2>' +
+      '<div class="sp-chips"><span class="sp-chip ' + (o.mailbox === 'ok' ? 'live' : 'risk') + '"><i></i>' + esc(mbTxt[o.mailbox] || '') + '</span>' + (o.is_active === false ? '<span class="sp-chip">Deactivated</span>' : '') + '</div></div>' +
+      '<button class="rv-x" onclick="scCloseSheet()" aria-label="Close">×</button></div>' +
+    '<div class="rv-sheet-kpis sd-pk"><div><span class="sp-lbl">Need them</span><b>' + (o.needs || 0) + '</b></div><div><span class="sp-lbl">Replies waiting</span><b>' + (o.replies_waiting || 0) + '</b></div><div><span class="sp-lbl">Quiet deals</span><b>' + (o.quiet || 0) + '</b></div><div><span class="sp-lbl">Pipeline</span><b>' + esc(scMoney0(o.value_usd)) + '</b></div></div>' +
+    '<div class="sp-lbl" style="margin-top:18px">Intent vs reality</div>' +
+    '<p class="rv-p">What ' + esc(first) + ' planned with customers, against what ' + (o.mailbox === 'ok' ? 'their mail and calendar show actually happened' : 'SAM can check') + '.</p>' +
+    '<div id="' + esc(ivrId) + '" class="sd-ivr"></div>' +
+    (need.length ? '<div class="sp-lbl" style="margin-top:18px">Needs ' + esc(first) + ' today</div><ul class="rv-needlist">' + need.map(function (a) {
+      var n = a.needs[0];
+      return '<li><span class="sp-ni ' + (n.tone === 'good' ? 'g' : n.tone === 'bad' ? 'r' : 'a') + '">' + scIco(n.key) + '</span><span><button class="rv-plain" onclick="scOpen(\'' + esc(a.id) + '\')"><b>' + esc(a.name) + '</b></button> ' + esc(n.text) + '</span></li>';
+    }).join('') + '</ul>' : '') +
+    '<details class="sd-cov"><summary>Account coverage: which of their accounts they reached</summary><div id="' + esc(covId) + '"></div></details>' +
+    '<div class="rv-sheet-acts"><button class="g-btn sp-gold" onclick="scCloseSheet();sdGoDeals(\'list\',\'' + esc(uid) + '\')">' + esc(first) + '’s deals</button><button class="g-btn" onclick="scCloseSheet()">Close</button></div></div>';
+  el.addEventListener('click', function (e) { if (e.target === el) scCloseSheet(); });
+  document.body.appendChild(el);
+  document.addEventListener('keydown', scSheetKey);
+  var det = el.querySelector('.sd-cov');
+  det.addEventListener('toggle', function () { if (det.open && !det._ran) { det._ran = 1; try { runCoverageCheck(uid, o.email || '', covId); } catch (e) {} } });
+  try { if (typeof _ivrPeriod !== 'undefined' && !_ivrPeriod[ivrId]) _ivrPeriod[ivrId] = 'wtd'; runIntentVsReality(uid, ivrId); } catch (e) { var x = document.getElementById(ivrId); if (x) x.innerHTML = '<div class="sp-small">Could not check: ' + esc(e.message) + '</div>'; }
+  setTimeout(function () { var b = el.querySelector('.rv-x'); if (b) b.focus(); }, 30);
+}
+
+// The old SAM tools are retired: scanning and call sync run on their own.
+// Intent vs reality and coverage now live on each person, from Team pulse.
+function scWireMore() {
+  var deals = document.getElementById('panel-pipeline');
+  var anchor = document.getElementById('scDealsMore');
+  var bm = document.getElementById('scBoardMore');
+  if (bm && deals && anchor && !bm._sdMoved) {
+    anchor.parentElement.insertBefore(bm, anchor.nextSibling); bm._sdMoved = 1;
+    var s = bm.querySelector('summary'); if (s) s.innerHTML = '<span>Team activity</span><small>tasks, wins and issues by person</small>';
+  }
+  if (bm) bm.style.display = sdSenior() ? '' : 'none';
+  // Ask SAM stays on SAM; the rest of the old SAM block is parked, unseen.
+  var panel = document.getElementById('panel-signals');
+  ['samChatOutput', 'samChatBar', 'samChatFab'].forEach(function (id) { var x = document.getElementById(id); if (panel && x && x.closest('details')) panel.appendChild(x); });
+  var old = document.getElementById('scSamMore');
+  if (old) { old.style.display = 'none'; old.open = false; }
+  var bind = function (id, fn) { var d = document.getElementById(id); if (d && !d._scBound) { d._scBound = 1; d.addEventListener('toggle', function () { if (d.open) { try { fn(); } catch (e) {} } }); } };
+  bind('scDealsMore', function () { _scOldPipeline(); });
+  bind('scBoardMore', function () { loadExecDashboard(); });
 }
