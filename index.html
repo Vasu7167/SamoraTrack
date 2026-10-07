@@ -2322,6 +2322,75 @@ body[data-tab]:not([data-tab="today"]) .metric-wrap{display:none}
 .sp-alert b{font-weight:700}
 .sp-alert .sp-acts{flex-shrink:0}
 #spAfterConn .sp-day{gap:10px}
+
+/* ══ Drop D (7 Oct): SAM, Deals, people journey ══ */
+.sd-top{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:20px;align-items:start;margin-bottom:20px}
+.sd-read .sd-lines{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+.sd-read .sd-lines li{font-size:15px;line-height:1.5;color:var(--text);padding-left:16px;position:relative}
+.sd-read .sd-lines li::before{content:"";position:absolute;left:2px;top:.62em;width:6px;height:6px;border-radius:50%;background:var(--gold)}
+.sd-meet{margin-top:18px;padding-top:14px;border-top:1px solid var(--g-line)}
+.sd-mlist{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:10px}
+.sd-mlist li{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:10px;align-items:start}
+.sd-mt{font-size:12.5px;font-weight:650;color:var(--text2);padding-top:2px;font-variant-numeric:tabular-nums}
+.sd-mn{font-size:13.5px;font-weight:600;color:var(--text)}
+.sd-sh{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.sd-pulse{margin-bottom:20px}
+.sd-ptab{margin-top:10px;display:flex;flex-direction:column}
+.sd-prow{all:unset;box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1.6fr) repeat(4,minmax(0,.8fr)) minmax(0,1fr);gap:10px;align-items:center;padding:10px 6px;border-top:1px solid var(--g-line);font-size:13.5px;color:var(--text);cursor:pointer;border-radius:8px}
+.sd-prow:hover{background:rgba(127,127,127,.06)}
+.sd-prow:focus-visible{outline:2px solid var(--gold);outline-offset:1px}
+.sd-phead{cursor:default;border-top:0;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text3)}
+.sd-phead:hover{background:none}
+.sd-prow .r{text-align:right}
+.sd-pn{display:flex;align-items:center;gap:10px;min-width:0;flex-wrap:wrap}
+.sd-pn small{flex-basis:100%;margin-left:44px;font-size:11.5px}
+.sd-voice .sd-vk{margin-top:10px}
+.sd-vlist{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:12px}
+.sd-vlist li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:start}
+.sd-vt{font-size:13.5px;line-height:1.45;color:var(--text)}
+.sd-view{display:inline-flex}
+.sd-top > .sp-needs{order:2}
+/* People journey */
+.sd-journey{margin-bottom:16px}
+.sd-funnel{display:flex;align-items:stretch;gap:6px;margin-top:12px;flex-wrap:wrap}
+.sd-fs{all:unset;box-sizing:border-box;cursor:pointer;flex:1 1 0;min-width:96px;padding:10px 12px;border-radius:12px;border:1px solid var(--g-line);background:var(--surface);display:flex;flex-direction:column;gap:2px}
+.sd-fs b{font-size:22px;line-height:1.1;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums}
+.sd-fs span{font-size:12px;color:var(--text2)}
+.sd-fs.zero b{color:var(--text3)}
+.sd-fs:hover{border-color:var(--gold)}
+.sd-fs.on{border-color:var(--gold);background:rgba(var(--c-accent-rgb),.10)}
+.sd-fs:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.sd-fs.sd-drop{flex:0 1 auto}
+.sd-fa{align-self:center;color:var(--text3);font-size:18px}
+.sd-pbar{display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap}
+.sd-ptools{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.sd-ptools label.g-btn{cursor:pointer}
+.sd-pmode{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.sd-cos{display:flex;flex-direction:column;gap:12px}
+.sd-co{background:var(--surface);border:1px solid var(--g-line);border-radius:14px;padding:12px 14px}
+.sd-co header{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;padding-bottom:6px}
+.sd-co header b{font-size:14.5px}
+.sd-co ul{list-style:none;margin:0;padding:0}
+.sd-prs{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 10px;align-items:center;padding:9px 0;border-top:1px solid var(--g-line)}
+.sd-pm{min-width:0}
+.sd-pt{font-size:13.5px;color:var(--text);overflow-wrap:anywhere}
+.sd-pa{grid-column:2 / -1;display:flex;gap:6px;flex-wrap:wrap}
+.sd-li{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:3px;background:#0a66c2;color:#fff;font-size:9px;font-weight:700;text-decoration:none;vertical-align:1px}
+@media (max-width:900px){
+  .sd-top{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:640px){
+  .sd-read .sd-lines li{font-size:14px}
+  .sd-prow{grid-template-columns:repeat(3,minmax(0,1fr));gap:4px 8px}
+  .sd-prow .sd-pn{grid-column:1 / -1}
+  .sd-prow span[data-l]::before{content:attr(data-l);display:block;font-size:10.5px;color:var(--text3);font-weight:600}
+  .sd-prow .r{text-align:left}
+  .sd-phead{display:none}
+  .sd-fa{display:none}
+  .sd-fs{min-width:calc(33% - 6px)}
+  .sd-mlist li{grid-template-columns:44px minmax(0,1fr)}
+  .sd-mlist li .g-btn{grid-column:2}
+}
 </style>
 <script src="/js/vendor/sortable.min.js"></script>
 </head>
@@ -3494,7 +3563,7 @@ body[data-tab]:not([data-tab="today"]) .metric-wrap{display:none}
       <span class="nav-label">SAMpaign</span> </button>
     <button class="nav-btn" onclick="switchTab('pipeline')" id="nav-pipeline">
       <span class="nav-icon">◈</span>
-      <span class="nav-label">Pipeline</span> </button>
+      <span class="nav-label">Deals</span> </button>
 
     <button class="nav-btn" onclick="switchTab('exec')" id="nav-exec" style="display:none">
       <span class="nav-icon">◈</span>
