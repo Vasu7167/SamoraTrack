@@ -2391,6 +2391,14 @@ body[data-tab]:not([data-tab="today"]) .metric-wrap{display:none}
   .sd-mlist li{grid-template-columns:44px minmax(0,1fr)}
   .sd-mlist li .g-btn{grid-column:2}
 }
+
+/* Drop D.1: a person's week */
+.sd-psheet .sd-pk{grid-template-columns:repeat(4,minmax(0,1fr))}
+.sd-ivr{margin-top:8px}
+.sd-cov{margin-top:18px;border-top:1px solid var(--g-line);padding-top:12px}
+.sd-cov summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--text2)}
+.sd-cov > div{margin-top:10px}
+@media (max-width:640px){.sd-psheet .sd-pk{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 <script src="/js/vendor/sortable.min.js"></script>
 </head>
