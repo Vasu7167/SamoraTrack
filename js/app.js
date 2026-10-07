@@ -3,7 +3,7 @@ let SB_KEY = localStorage.getItem('dt-sb-key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6I
 let API_KEY = localStorage.getItem('dt-api-key') || '';
 var _userHabits = null;
 // Cache buster — update this string on every deploy to purge stale service worker cache
-var APP_VERSION = '20261006-02';
+var APP_VERSION = '20261007-01';
 
 // ── Money in the org's own currency (2026-10-04) ───────────────────────────
 // Amounts are stored in USD (deal_value_usd) and shown in the org's currency
@@ -564,9 +564,10 @@ function _applyRoleChrome() {
   const orgEl = document.getElementById('uOrg'); if (orgEl) orgEl.textContent = profile?.org_name || '';
   const seniorRole = ['super_admin','admin','manager','director','executive'].includes(role);
   const navExec = document.getElementById('nav-exec');
-  if (navExec) navExec.style.display = ['manager','director','executive','admin','super_admin'].includes(role) ? '' : 'none';
+  // Pipeline and SAMagic are one tab, Deals; customer signals (Intel) are on SAM.
+  if (navExec) navExec.style.display = 'none';
   const navIntelBtn = document.getElementById('nav-intel');
-  if (navIntelBtn) navIntelBtn.style.display = seniorRole ? '' : 'none';
+  if (navIntelBtn) navIntelBtn.style.display = 'none';
 }
 // ── Needs attention + metric drill-downs ──────────────────────────────────
 // Both read from these two caches, which are filled by the loaders that
@@ -1186,6 +1187,8 @@ function _landOnToday() {
 }
 
 function switchTab(tab) {
+  // SAMagic is the board inside Deals now.
+  if (tab === 'exec') { try { _sc.view.dealsView = 'stage'; } catch (e) {} tab = 'pipeline'; }
   currentTab = tab;
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -1193,7 +1196,7 @@ function switchTab(tab) {
   const actualPanel = panelMap[tab] || tab;
   const panel = document.getElementById('panel-' + actualPanel);
   if (panel) panel.classList.add('active');
-  const navMap = { tasks:'today', issues:'today', wins:'today', misses:'today', settings:'you', org:'you', intel:'intel' };
+  const navMap = { tasks:'today', issues:'today', wins:'today', misses:'today', settings:'you', org:'you', intel:'signals' };
   const navId = navMap[tab] || tab;
   const navBtn = document.getElementById('nav-' + navId);
   if (navBtn) navBtn.classList.add('active');
@@ -11694,7 +11697,7 @@ async function deleteSampaignCampaign(campaignId, name) {
 // below), same "just target the id" pattern _renderSampaignContacts already
 // uses. Shared by openSampaignDetail (initial load) and anywhere else that
 // needs a post-mutation refresh (CSV upload, scout, enrich).
-async function _loadSampaignContactsInto(campaignId) {
+async function _loadSampaignContactsIntoOld(campaignId) {
   var box = document.getElementById('sampaignContacts_'+campaignId);
   if (!box) return;
   box.innerHTML = '<div style="font-size:11px;color:var(--text3)">Loading contacts…</div>';
@@ -12208,7 +12211,7 @@ function setSampaignContactTab(campaignId, tab) {
   _renderSampaignContacts(campaignId);
 }
 
-function _renderSampaignContacts(campaignId) {
+function _renderSampaignContactsOld(campaignId) {
   var box = document.getElementById('sampaignContacts_'+campaignId);
   if (!box) return;
   var all = window._sampaignContactsCache[campaignId] || [];
@@ -16534,8 +16537,8 @@ function setSampTab(id, tab) {
   var body = document.getElementById('sampBody_' + id); if (!body) return;
   var o = (window._sampOv || {})[id];
   if (tab === 'people') {
-    body.innerHTML = _spPeopleChips(id) + '<div id="sampaignContacts_' + esc(id) + '"><div class="sp-small">Loading people…</div></div><div id="sampaignAddRows_' + esc(id) + '"></div>';
-    _loadSampaignContactsInto(id);
+    body.innerHTML = '';
+    _spRenderPeople(id);
     return;
   }
   if (tab === 'sequence') {
@@ -16890,7 +16893,7 @@ function _spAddWorkdays(iso, n) { var d = new Date(iso + 'T12:00:00'); var left 
 function sampOpenWizard() {
   // Re-read the add-on first, so a switch Samora just made shows here.
   if (!window._spWizCfgChecked) { window._spWizCfgChecked = true; _liEnsureConfig().then(function () { window._spWizCfgChecked = false; var W = window._sampW; if (W && W.step === 3) _spWizRender(); }); }
-  window._sampW = { step: 1, scope: 'account', name: '', domain: '', region: '', listName: '', companies: '', people: '', goal: '', metric: 'meetings', target: '', focus: '', start: _spNextWeekday(), ups: [4, 9], li: true, writeNow: true, seq: _spSeqTpl('email_first', _spNextWeekday()) };
+  window._sampW = { step: 1, scope: 'account', name: '', domain: '', region: '', listName: '', listRegion: '', companies: '', people: '', goal: '', metric: 'meetings', target: '', focus: '', start: _spNextWeekday(), ups: [4, 9], li: true, writeNow: true, seq: _spSeqTpl('email_first', _spNextWeekday()) };
   var page = document.getElementById('sampWizardPage'); if (!page) return;
   _spShow('new');
   _spWizRender();
@@ -16899,7 +16902,7 @@ function sampOpenWizard() {
 function _spWizSave() {
   var W = window._sampW; if (!W) return;
   var v = function (id) { var el = document.getElementById(id); return el ? el.value : undefined; };
-  ['name', 'domain', 'region', 'listName', 'companies', 'people', 'goal', 'metric', 'target', 'focus', 'start'].forEach(function (k) { var x = v('spw_' + k); if (x !== undefined) W[k] = x; });
+  ['name', 'domain', 'region', 'listName', 'listRegion', 'companies', 'people', 'goal', 'metric', 'target', 'focus', 'start'].forEach(function (k) { var x = v('spw_' + k); if (x !== undefined) W[k] = x; });
   var csv = document.getElementById('spw_csv'); if (csv && csv.files && csv.files[0]) W.csv = csv.files[0];
   var wn = document.getElementById('spw_writeNow'); if (wn) W.writeNow = wn.checked;
   var li = document.getElementById('spw_li'); if (li) W.li = li.checked;
@@ -16918,7 +16921,7 @@ function _spWizParsePeople(text) {
   });
   return { rows: out, bad: bad };
 }
-function _spWizParseCompanies(text) {
+function _spWizParseCompaniesOld(text) {
   return String(text || '').split(/\r?\n/).map(function (line) {
     var p = line.split(/[,\t;]/).map(function (s) { return s.trim(); }).filter(Boolean);
     if (!p.length) return null;
@@ -16939,7 +16942,7 @@ function _spWizRender() {
       '<button type="button" class="sp-opt ' + (W.scope === 'list' ? 'on' : '') + '" onclick="_spWizSave();window._sampW.scope=\'list\';_spWizRender()"><b>A list of companies</b><span>The same outreach to many companies, like 10 institutes or 40 FMCG brands.</span></button></div>' +
       (W.scope === 'account'
         ? '<div class="sp-row3"><label class="sp-fld">Company<input id="spw_name" value="' + esc(W.name) + '" placeholder="Jotun Paints"></label><label class="sp-fld">Website<input id="spw_domain" value="' + esc(W.domain) + '" placeholder="jotun.com"></label><label class="sp-fld">Region <small>optional</small><input id="spw_region" value="' + esc(W.region) + '" placeholder="UAE"></label></div>'
-        : '<label class="sp-fld">Name of the list<input id="spw_listName" value="' + esc(W.listName) + '" placeholder="Karnataka top 10 institutes"></label><label class="sp-fld">Companies, one per line<small>Name and website, for example: Marico, marico.com</small><textarea id="spw_companies" placeholder="Marico, marico.com&#10;Dabur, dabur.com">' + esc(W.companies) + '</textarea></label>') +
+        : '<div class="sp-row2"><label class="sp-fld">Name of the list<input id="spw_listName" value="' + esc(W.listName) + '" placeholder="Karnataka top 10 institutes"></label><label class="sp-fld">Region <small>optional, for the whole list</small><input id="spw_listRegion" value="' + esc(W.listRegion || '') + '" placeholder="India"></label></div><label class="sp-fld">Companies, one per line<small>Name and website, and a region if it differs: Marico, marico.com, UAE. SAM scouts people in each company\u2019s region.</small><textarea id="spw_companies" placeholder="Marico, marico.com&#10;Dabur, dabur.com, UAE">' + esc(W.companies) + '</textarea></label>') +
       '<div class="sp-ih" style="margin-top:22px">Who inside them?</div>' +
       '<label class="sp-fld">Upload a CSV <small>Columns like name, email, title, company. Header names are flexible.</small><input id="spw_csv" type="file" accept=".csv,text/csv"></label>' + (W.csv ? '<div class="sp-small">Chosen: ' + esc(W.csv.name) + '</div>' : '') +
       '<label class="sp-fld">Or type people, one per line <small>Name, email, title, company. Email can be left out and found later.</small><textarea id="spw_people" placeholder="Anita Rao, anita@nlsiu.ac.in, Registrar">' + esc(W.people) + '</textarea></label>' +
@@ -17000,7 +17003,7 @@ async function _spWizCreate() {
     var base = { campaign_goal: String(W.goal).trim(), focus: String(W.focus).trim() || null, followup_dates: dates, goal_metric: W.metric, goal_target: parseInt(W.target, 10) || null, channels: { email: !W.seq || _spSeqHas(W.seq, 'email'), linkedin: !!W.li }, alerts_enabled: { ooo: true, replied: true, no_response: true, dead: true } };
     var d = W.scope === 'account'
       ? await _sampEdge('create_sampaign', Object.assign({ account_name: String(W.name).trim(), domain: String(W.domain).trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, ''), region: String(W.region).trim() || null }, base))
-      : await _sampEdge('create_sampaign', Object.assign({ scope: 'list', list_name: String(W.listName).trim(), accounts: _spWizParseCompanies(W.companies) }, base));
+      : await _sampEdge('create_sampaign', Object.assign({ scope: 'list', list_name: String(W.listName).trim(), region: String(W.listRegion || '').trim() || null, accounts: _spWizParseCompanies(W.companies) }, base));
     if (!d.ok || !d.campaign) { showToast(d.error || 'Could not create the SAMpaign'); return; }
     var id = d.campaign.id, name = d.campaign.name;
     try { await _syncSampaignFupTasks(id, name, [], dates); } catch (e) {}
@@ -17834,7 +17837,7 @@ function scFind(id) {
   for (var k in _sc.data) { var a = (_sc.data[k].accounts || []).find(function (x) { return x.id === id; }); if (a) return a; }
   return null;
 }
-function scOpen(id) {
+function _scOpenC(id) {
   var a = scFind(id); if (!a) return;
   scCloseSheet();
   var nm = esc(a.name).replace(/'/g, '&#39;'), idq = esc(a.id);
@@ -17991,7 +17994,7 @@ function scSel(k, opts, label) {
     return '<option value="' + esc(o[0]) + '"' + (String(_sc.f[k]) === String(o[0]) ? ' selected' : '') + '>' + esc(o[1]) + '</option>';
   }).join('') + '</select>';
 }
-async function renderScDeals(force) {
+async function _scListDeals(force) {
   _sc.current = 'deals';
   var el = document.getElementById('scDeals'); if (!el) return;
   scLoading(el, 'your open deals');
@@ -18236,4 +18239,564 @@ async function _spAfterConnGo(id, launch) {
   await new Promise(function (r) { setTimeout(r, 500); });
   openSampaignDetail(id, 'sequence');
   sampRetryFailed(id, launch);
+}
+
+// ══ Drop D (2026-10-07): SAM revamp, Deals, people journey, toasts ════════
+// SAM is the screen a manager opens first: what SAM sees today in plain
+// words, who needs you, your meetings with customers, how the team is doing
+// and what customers are saying. Pipeline and the SAMagic board are one tab,
+// Deals. The old SAM tools live in Deals, under Reports.
+
+// ── Toasts that always go away ──────────────────────────────────────────────
+// A toast raised while the tab was in the background showed itself only
+// when the tab came back (requestAnimationFrame waits for a visible tab),
+// after its hide timer had already run, so it stayed on screen until a
+// refresh. The hide timer now starts when the toast is actually shown, and
+// a click dismisses it.
+function _toastShow(t, msg, ms) {
+  t.textContent = msg;
+  t._seq = (t._seq || 0) + 1;
+  var seq = t._seq;
+  clearTimeout(t._timer);
+  var hide = function () { if (t._seq !== seq) return; t.style.opacity = '0'; t.style.transform = 'translateX(-50%) translateY(10px)'; t.style.pointerEvents = 'none'; };
+  var show = function () {
+    if (t._seq !== seq) return;
+    t.style.opacity = '1'; t.style.transform = 'translateX(-50%) translateY(0)'; t.style.pointerEvents = 'auto';
+    clearTimeout(t._timer); t._timer = setTimeout(hide, ms);
+  };
+  if (document.visibilityState === 'hidden') {
+    // Hidden tab: show it on return, for its full time.
+    var onVis = function () { if (document.visibilityState === 'visible') { document.removeEventListener('visibilitychange', onVis); show(); } };
+    document.addEventListener('visibilitychange', onVis);
+  } else requestAnimationFrame(show);
+  t._timer = setTimeout(hide, ms + 1500);
+  t.onclick = hide;
+}
+function showToast(msg) {
+  var t = document.getElementById('samora-global-toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'samora-global-toast';
+    t.setAttribute('role', 'status'); t.setAttribute('aria-live', 'polite');
+    t.title = 'Click to dismiss';
+    t.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surface);border:1px solid var(--gold);padding:10px 18px;border-radius:var(--r-md);font-size:13px;color:var(--text);z-index:100001;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;max-width:min(560px,calc(100vw - 32px));text-align:center;font-family:var(--sans);box-shadow:var(--shadow-2);cursor:pointer';
+    document.body.appendChild(t);
+  }
+  var s = String(msg == null ? '' : msg);
+  _toastShow(t, s, Math.min(9000, 3000 + Math.max(0, s.length - 60) * 40));
+}
+function showCFToast(msg) { showToast(msg); }
+
+// ── Shared bits ─────────────────────────────────────────────────────────────
+var _sd = { meet: null, meetAt: 0, scoped: false, dscoped: false };
+function sdSenior() { return ['super_admin', 'admin', 'manager', 'director', 'executive'].indexOf((typeof profile !== 'undefined' && profile && profile.role) || '') !== -1; }
+function sdFirst() {
+  var n = (typeof currentUser !== 'undefined' && currentUser && currentUser.user_metadata && currentUser.user_metadata.full_name) || '';
+  if (!n && typeof currentUser !== 'undefined' && currentUser && currentUser.email) n = currentUser.email.split('@')[0].split(/[._-]/)[0];
+  n = String(n).trim().split(/\s+/)[0] || '';
+  return n ? n.charAt(0).toUpperCase() + n.slice(1) : '';
+}
+function sdHello() {
+  var h = new Date().getHours();
+  var g = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+  var f = sdFirst();
+  return g + (f ? ', ' + f : '') + '. ' + new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }) + '.';
+}
+function sdList(xs, max) {
+  xs = xs.slice(0, max || 3);
+  if (xs.length <= 1) return xs.join('');
+  return xs.slice(0, -1).join(', ') + ' and ' + xs[xs.length - 1];
+}
+function sdWho(a) {
+  var f = a.last_reply_from;
+  return f && f.name ? f.name : '';
+}
+function sdTime(iso) { if (!iso) return ''; var d = new Date(iso); return isNaN(d.getTime()) ? '' : d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); }
+function sdDom(x) { return String(x || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, ''); }
+
+// Today's meetings from the calendar, matched to accounts on the board.
+async function sdLoadMeetings(force) {
+  if (!force && _sd.meet && Date.now() - _sd.meetAt < 10 * 60000) return _sd.meet;
+  var t = new Date(), key = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
+  try {
+    var r = await fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify({ action: 'verify_meetings', date: key }) });
+    var d = await r.json();
+    _sd.meet = (d && d.ok && Array.isArray(d.meetings)) ? d.meetings.filter(function (m) { return !m.cancelled; }) : [];
+    _sd.meetReason = (d && d.reason) || (d && d.ok ? '' : 'error');
+  } catch (e) { _sd.meet = []; _sd.meetReason = 'error'; }
+  _sd.meetAt = Date.now();
+  return _sd.meet;
+}
+function sdMatchMeeting(m, accts) {
+  var doms = (m.external_attendees || []).map(function (e) { return sdDom(String(e).split('@')[1] || ''); }).filter(Boolean);
+  var emails = (m.external_attendees || []).map(function (e) { return String(e).toLowerCase(); });
+  var title = String(m.title || '').toLowerCase();
+  return accts.find(function (a) {
+    var ad = sdDom(a.domain);
+    if (ad && doms.some(function (d) { return d === ad || d.slice(-(ad.length + 1)) === '.' + ad; })) return true;
+    if ((a.people || []).some(function (p) { return p.email && emails.indexOf(String(p.email).toLowerCase()) !== -1; })) return true;
+    var nm = String(a.name || '').toLowerCase().replace(/\b(pvt|private|ltd|limited|inc|llc|india|group)\b\.?/g, '').trim();
+    return nm.length >= 4 && title.indexOf(nm) !== -1;
+  }) || null;
+}
+
+// ══ SAM ═════════════════════════════════════════════════════════════════════
+function scSamScope(s) { _sc.view.samScope = s; _sc._samFocus = 0; renderScSam(); }
+async function renderScSam(force) {
+  _sc.current = 'sam';
+  var el = document.getElementById('scSam'); if (!el) return;
+  if (!_sd.scoped) { _sd.scoped = true; if (sdSenior()) _sc.view.samScope = 'team'; }
+  scLoading(el, 'what SAM sees today');
+  var d;
+  try { d = await scFetch(_sc.view.samScope, force); } catch (e) { return scError(el, e, 'renderScSam(true)'); }
+  if (_sc.current !== 'sam') return;
+  var s = d.summary, team = d.scope === 'team';
+  var accts = d.accounts || [];
+  var need = accts.filter(function (a) { return a.needs && a.needs.length; });
+
+  // What changed this week, newest first, with names.
+  var wk = Date.now() - 7 * 86400000, changes = [];
+  accts.forEach(function (a) {
+    if (a.last_reply_at && Date.parse(a.last_reply_at) >= wk) {
+      if (a.last_reply_kind === 'meeting') changes.push({ t: Date.parse(a.last_reply_at), tone: 'b', ico: 'champion', id: a.id, text: 'Meeting with <b>' + esc(a.name) + '</b>' + (a.last_by ? ' (' + esc(a.last_by) + ')' : ''), sub: scAgo(a.last_reply_at) });
+      else {
+        var who = sdWho(a);
+        changes.push({ t: Date.parse(a.last_reply_at), tone: 'g', ico: 'reply', id: a.id, text: who ? '<b>' + esc(who) + '</b> at ' + esc(a.name) + ' wrote' : '<b>' + esc(a.name) + '</b> wrote', sub: scAgo(a.last_reply_at) + (a.last_reply_from && a.last_reply_from.email && !who ? ' · ' + a.last_reply_from.email : '') });
+      }
+    } else if (a.last_at && a.last_channel === 'meeting' && Date.parse(a.last_at) >= wk) {
+      changes.push({ t: Date.parse(a.last_at), tone: 'b', ico: 'champion', id: a.id, text: 'Meeting with <b>' + esc(a.name) + '</b>' + (a.last_by ? ' (' + esc(a.last_by) + ')' : ''), sub: scAgo(a.last_at) });
+    }
+  });
+  changes.sort(function (x, y) { return y.t - x.t; });
+
+  // SAM's read: the day in a few plain sentences, built from the board.
+  var replies = need.filter(function (a) { return a.needs.some(function (n) { return n.key === 'reply'; }); });
+  var past = accts.filter(function (a) { return a.is_deal && a.d2c !== null && a.d2c < 0; });
+  var closingQuiet = need.filter(function (a) { return a.needs.some(function (n) { return n.key === 'closing_quiet'; }); });
+  var quietDeals = accts.filter(function (a) { return a.is_deal && a.activity === 'quiet'; }).sort(function (x, y) { return (y.value_usd - x.value_usd) || ((y.quiet || 0) - (x.quiet || 0)); });
+  var lines = [];
+  if (replies.length) lines.push('<b>' + scPlural(replies.length, 'customer') + '</b> wrote and ' + (replies.length === 1 ? 'is' : 'are') + ' waiting for a reply: ' + esc(sdList(replies.map(function (a) { return a.name + (sdWho(a) ? ' (' + sdWho(a).split(' ')[0] + ')' : ''); }), 3)) + (replies.length > 3 ? ' and ' + (replies.length - 3) + ' more' : '') + '.');
+  if (past.length) lines.push('<b>' + scPlural(past.length, 'deal') + '</b> ' + (past.length === 1 ? 'is' : 'are') + ' past the close date' + (past.length <= 3 ? ': ' + esc(sdList(past.map(function (a) { return a.name; }))) : '') + '. Move the date or close ' + (past.length === 1 ? 'it' : 'them') + '.');
+  if (closingQuiet.length) lines.push(esc(sdList(closingQuiet.map(function (a) { return a.name; }), 2)) + ' close' + (closingQuiet.length === 1 ? 's' : '') + ' within 30 days and ' + (closingQuiet.length === 1 ? 'has' : 'have') + ' gone quiet.');
+  else if (quietDeals.length) lines.push(esc(quietDeals[0].name) + (quietDeals[0].value_usd ? ' (' + esc(scMoney(quietDeals[0].value_usd)) + ')' : '') + ' has been quiet for ' + quietDeals[0].quiet + ' days' + (quietDeals.length > 1 ? ', with ' + (quietDeals.length - 1) + ' more quiet deal' + (quietDeals.length > 2 ? 's' : '') : '') + '.');
+  if (team) {
+    var pulse = (d.by_owner || []).slice();
+    var busiest = pulse.filter(function (o) { return o.replies_waiting; }).sort(function (x, y) { return y.replies_waiting - x.replies_waiting; })[0];
+    if (busiest && replies.length > 1) lines.push(esc(busiest.name || 'Someone') + ' has the most waiting: ' + scPlural(busiest.replies_waiting, 'reply', 'replies') + '.');
+    var broken = pulse.filter(function (o) { return o.mailbox === 'reconnect' || o.mailbox === 'none'; });
+    if (broken.length) lines.push(esc(sdList(broken.map(function (o) { return (o.name || 'Someone') + '’s'; }), 3)) + (broken.length > 3 ? ' and ' + (broken.length - 3) + ' more' : '') + (broken.length === 1 ? ' mailbox is' : ' mailboxes are') + ' not connected, so SAM cannot see all of the team’s accounts.');
+  }
+  if (!lines.length) lines.push(s.active ? 'Nothing urgent. ' + scPlural(s.active, 'account') + ' had contact this week.' : 'Nothing urgent today.');
+  if (s.unknown) lines.push('SAM cannot see ' + scPlural(s.unknown, 'account') + ' yet: nobody’s connected mailbox has mail with ' + (s.unknown === 1 ? 'it' : 'them') + '.');
+
+  // Team pulse: one row per person, most to do first.
+  var pulseHtml = '';
+  if (team && (d.by_owner || []).length) {
+    var mbTxt = { ok: 'Mailbox working', none: 'No mailbox connected', reconnect: 'Mailbox needs reconnecting', stale: 'Mailbox not checked lately' };
+    var rows = (d.by_owner || []).slice().sort(function (x, y) { return ((y.needs || 0) - (x.needs || 0)) || (y.value_usd - x.value_usd); });
+    pulseHtml = '<section class="sp-card sp-pad sd-pulse" aria-label="Team pulse"><div class="sd-sh"><div class="sp-lbl">Team pulse</div><button class="rv-link" onclick="sdGoDeals(\'person\')">Deals by person</button></div>' +
+      '<div class="sd-ptab" role="table"><div class="sd-prow sd-phead" role="row"><span>Person</span><span>Need them</span><span>Replies waiting</span><span>Quiet deals</span><span>Past close</span><span class="r">Pipeline</span></div>' +
+      rows.map(function (o) {
+        return '<button class="sd-prow" role="row" onclick="sdGoDeals(\'list\',\'' + esc(o.user_id) + '\')"><span class="sd-pn"><span class="rv-tav">' + esc(scInit(o.name)) + '<i class="mb ' + esc(o.mailbox) + '" title="' + esc(mbTxt[o.mailbox] || '') + '"></i></span><b>' + esc(o.name || 'Someone') + '</b>' + (o.mailbox !== 'ok' ? '<small class="rv-red">' + esc(mbTxt[o.mailbox] || '') + '</small>' : '') + '</span>' +
+          '<span data-l="Need them">' + (o.needs || 0) + '</span><span data-l="Replies waiting" class="' + (o.replies_waiting ? 'sp-g' : '') + '">' + (o.replies_waiting || 0) + '</span><span data-l="Quiet deals" class="' + (o.quiet ? 'rv-red' : '') + '">' + (o.quiet || 0) + '</span><span data-l="Past close" class="' + (o.past_due ? 'rv-red' : '') + '">' + (o.past_due || 0) + '</span><span data-l="Pipeline" class="r">' + esc(scMoney0(o.value_usd)) + '</span></button>';
+      }).join('') + '</div></section>';
+  }
+
+  // What customers are saying (was the Intel tab).
+  var KIND = { Commitment: 'live', Expansion: 'live', Pricing: 'warn', Product: '', Competitor: 'risk', Risk: 'risk' };
+  var voice = (d.voice || []);
+  var vk = _sc.view.voice || 'all';
+  var kinds = []; voice.forEach(function (v) { if (kinds.indexOf(v.kind) === -1) kinds.push(v.kind); });
+  var vshown = voice.filter(function (v) { return vk === 'all' || v.kind === vk; }).slice(0, 8);
+  var voiceHtml = '<section class="sp-card sp-pad sd-voice" aria-label="What customers are saying"><div class="sd-sh"><div class="sp-lbl">What customers are saying · last 14 days</div><button class="rv-link" onclick="switchTab(\'intel\')">All customer signals</button></div>' +
+    (voice.length ? (kinds.length > 1 ? '<div class="sd-vk">' + scSeg([['all', 'All']].concat(kinds.map(function (k) { return [k, k]; })), vk, 'sdVoiceKind') + '</div>' : '') +
+      '<ul class="sd-vlist">' + vshown.map(function (v) {
+        return '<li><span class="sp-chip ' + (KIND[v.kind] || '') + '">' + esc(v.kind) + '</span><div><div class="sd-vt">' + esc(v.label) + '</div><div class="sp-small"><button class="rv-plain" onclick="scOpen(\'' + esc(v.account_id) + '\')">' + esc(v.account) + '</button>' + (team && v.owner_name ? ' · ' + esc(v.owner_name) : '') + (v.date ? ' · ' + esc(scAgo(v.date + 'T12:00:00Z')) : '') + '</div></div></li>';
+      }).join('') + '</ul>'
+      : '<div class="sp-small" style="margin-top:10px">Nothing from meeting notes in the last 14 days. Signals appear here once your notetaker sends recaps.</div>') + '</section>';
+
+  var f = _sc.view.sam, q = (_sc.samQ || '').toLowerCase();
+  var counts = { all: accts.length, need: need.length, active: s.active, quiet: s.quiet, unknown: s.unknown, none: accts.filter(function (a) { return a.activity === 'none'; }).length };
+  var list = accts.filter(function (a) {
+    if (q && (a.name + ' ' + (a.owner_name || '') + ' ' + (a.domain || '')).toLowerCase().indexOf(q) === -1) return false;
+    if (f === 'need') return a.needs && a.needs.length;
+    if (f === 'all') return true;
+    return a.activity === f;
+  });
+  var shown = list.slice(0, 200);
+  el.innerHTML = '<div class="rv-loaded"></div>' +
+    '<div class="page-head"><div><div class="page-title">SAM</div><div class="page-sub">' + esc(sdHello()) + '</div></div>' +
+    '<div class="page-actions">' + (d.team_capable ? scSeg([['mine', 'Mine'], ['team', 'My team']], d.scope, 'scSamScope') : '') +
+    '<button class="g-btn" onclick="scSamRefresh(this)">Refresh</button></div></div>' +
+    scMailboxBanner(d) +
+    '<div class="sd-top">' +
+      '<section class="sp-card sp-pad sd-read" aria-label="SAM’s read"><div class="sp-lbl">SAM’s read' + (team ? ' · your team' : '') + '</div>' +
+        '<ul class="sd-lines">' + lines.map(function (l) { return '<li>' + l + '</li>'; }).join('') + '</ul>' +
+        '<div class="sd-meet" id="sdMeet"><div class="sp-lbl">Today’s meetings</div><div class="sp-small">Checking your calendar…</div></div>' +
+      '</section>' +
+      '<aside class="sp-card sp-pad sp-needs" aria-label="This week"><div class="sp-lbl">This week</div>' +
+      (changes.length ? '<ul>' + changes.slice(0, 8).map(function (c) {
+        return '<li><span class="sp-ni ' + c.tone + '">' + scIco(c.ico) + '</span><div><button class="rv-plain" onclick="scOpen(\'' + esc(c.id) + '\')">' + c.text + '</button><div class="sp-small">' + esc(c.sub) + '</div></div></li>';
+      }).join('') + '</ul>' : '<div class="sp-small" style="margin-top:10px">No replies or meetings yet this week.</div>') +
+      '</aside>' +
+    '</div>' +
+    '<section class="sp-card sp-kpis" aria-label="At a glance">' +
+      '<div class="sp-kpi"><div class="sp-lbl">Need you today</div><div class="n">' + s.needs_you + '</div><div class="d">' + scPlural(s.replies_waiting, 'reply', 'replies') + ' waiting</div></div>' +
+      '<div class="sp-kpi"><div class="sp-lbl">Active</div><div class="n sp-g">' + s.active + '</div><div class="d">contact in 7 days</div></div>' +
+      '<div class="sp-kpi"><div class="sp-lbl">Quiet</div><div class="n' + (s.quiet ? ' rv-red' : '') + '">' + s.quiet + '</div><div class="d">' + d.definitions.quiet_days + ' days or more</div></div>' +
+      '<div class="sp-kpi"><div class="sp-lbl">Open pipeline</div><div class="n">' + esc(scMoney0(s.value_usd)) + '</div><div class="d">' + scPlural(s.deals, 'deal') + (s.at_risk ? ', ' + s.at_risk + ' at risk' : '') + '</div></div>' +
+      '<div class="sp-kpi"><div class="sp-lbl">Closing in 30 days</div><div class="n">' + s.closing_30 + '</div><div class="d">' + (s.past_due ? scPlural(s.past_due, 'deal') + ' past due' : 'none past due') + '</div></div>' +
+    '</section>' +
+    pulseHtml +
+    '<div class="sp-two">' +
+      '<section class="sp-card sp-pad rv-needs" aria-label="Needs you today"><div class="sp-lbl">' + (team ? 'Needs your team today' : 'Needs you today') + ' · ' + need.length + '</div>' +
+      (need.length ? '<ul class="rv-nlist">' + need.slice(0, 10).map(function (a) {
+        var n = a.needs[0];
+        return '<li><span class="sp-ni ' + (n.tone === 'good' ? 'g' : n.tone === 'bad' ? 'r' : 'a') + '">' + scIco(n.key) + '</span>' +
+          '<div class="rv-nmain"><div class="rv-nt"><button class="rv-name" onclick="scOpen(\'' + esc(a.id) + '\')">' + esc(a.name) + '</button>' + (a.value_usd ? ' <span class="rv-val">' + esc(scMoney(a.value_usd)) + '</span>' : '') + (team && a.owner_name ? ' <span class="rv-owner">' + esc(a.owner_name) + '</span>' : '') + '</div>' +
+          '<div class="rv-why">' + esc(n.text) + '</div><div class="sp-small">' + esc(scLast(a)) + (a.needs.length > 1 ? ' · ' + (a.needs.length - 1) + ' more' : '') + '</div></div>' +
+          '<button class="g-btn rv-act" onclick="scOpen(\'' + esc(a.id) + '\')">' + esc(n.act || 'Open') + '</button></li>';
+      }).join('') + '</ul>' + (need.length > 10 ? '<button class="rv-link" onclick="scSamFilter(\'need\');document.getElementById(\'scSamAll\').scrollIntoView({behavior:\'smooth\'})">See all ' + need.length + '</button>' : '')
+        : '<div class="sp-empty">Nothing needs ' + (team ? 'your team' : 'you') + ' right now. ' + (s.unknown ? 'Some accounts are Unknown, so SAM may be missing something.' : 'Good place to be.') + '</div>') +
+      '</section>' + voiceHtml +
+    '</div>' +
+    '<section class="sp-card sp-pad rv-all" id="scSamAll" aria-label="All accounts">' +
+      '<div class="rv-bar"><div class="sp-lbl">All ' + (team ? 'team ' : '') + 'accounts · ' + accts.length + '</div>' +
+      '<div class="rv-tools">' + scSeg([['all', 'All ' + counts.all], ['need', 'Need you ' + counts.need], ['active', 'Active ' + counts.active], ['quiet', 'Quiet ' + counts.quiet], ['unknown', 'Unknown ' + counts.unknown], ['none', 'Not started ' + counts.none]], f, 'scSamFilter') +
+      '<input class="sp-search" placeholder="Find an account" value="' + esc(_sc.samQ || '') + '" oninput="_sc.samQ=this.value;_sc._samFocus=1;clearTimeout(_sc._sq);_sc._sq=setTimeout(function(){renderScSam()},250)" aria-label="Find an account"/></div></div>' +
+      (shown.length ? '<div class="rv-rows">' + shown.map(function (a) {
+        return '<button class="rv-arow" onclick="scOpen(\'' + esc(a.id) + '\')"><span class="rv-an">' + esc(a.name) + (team && a.owner_name ? '<small>' + esc(a.owner_name) + '</small>' : '') + '</span>' +
+          '<span>' + scActChip(a) + '</span><span class="rv-al">' + esc(scLast(a)) + '</span><span class="rv-av">' + esc(scMoney(a.value_usd)) + '</span><span>' + scBandChip(a) + '</span></button>';
+      }).join('') + '</div>' + (list.length > shown.length ? '<div class="sp-small" style="margin-top:10px">Showing 200 of ' + list.length + '. Search to find the rest.</div>' : '')
+        : '<div class="sp-empty">' + (accts.length ? 'Nothing matches.' : 'No accounts yet. Accounts assigned to you appear here.') + '</div>') +
+    '</section>' + scHow();
+  if (_sc._samFocus) { var inp = el.querySelector('.rv-all .sp-search'); if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); } }
+  sdFillMeetings(d);
+}
+function sdVoiceKind(k) { _sc.view.voice = k; renderScSam(); }
+async function sdFillMeetings(d, force) {
+  var box = document.getElementById('sdMeet'); if (!box) return;
+  var ms = await sdLoadMeetings(force);
+  box = document.getElementById('sdMeet'); if (!box || _sc.current !== 'sam') return;
+  var all = []; for (var k in _sc.data) (_sc.data[k].accounts || []).forEach(function (a) { if (!all.some(function (x) { return x.id === a.id; })) all.push(a); });
+  var ext = ms.filter(function (m) { return (m.external_attendees || []).length; });
+  var internal = ms.length - ext.length;
+  if (!ms.length) { box.innerHTML = '<div class="sp-lbl">Today’s meetings</div><div class="sp-small">' + (_sd.meetReason === 'not_connected' ? 'Connect your mailbox to see today’s meetings here.' : _sd.meetReason === 'error' ? 'Could not read your calendar just now.' : 'No meetings on your calendar today.') + '</div>'; return; }
+  box.innerHTML = '<div class="sp-lbl">Today’s meetings · ' + ms.length + '</div>' +
+    (ext.length ? '<ul class="sd-mlist">' + ext.slice(0, 6).map(function (m) {
+      var a = sdMatchMeeting(m, all);
+      var prep = a ? [a.is_deal ? (scMoney(a.value_usd) || 'Deal, no value yet') + (a.stage_label && a.stage ? ', ' + a.stage_label.toLowerCase() : '') : '', scLast(a), a.last_reply_at && a.last_reply_kind !== 'meeting' ? 'last reply ' + scAgo(a.last_reply_at) + (sdWho(a) ? ' from ' + sdWho(a).split(' ')[0] : '') : ''].filter(Boolean).join(' · ')
+        : 'With ' + sdList((m.external_attendees || []).map(function (e) { return String(e).split('@')[1] || e; }).filter(function (x, i, arr) { return arr.indexOf(x) === i; }), 2) + '. Not an account yet.';
+      return '<li><span class="sd-mt">' + esc(sdTime(m.startTime)) + '</span><div><div class="sd-mn">' + esc(m.title || 'Meeting') + (m.ended ? ' <span class="sp-chip">Done</span>' : '') + '</div><div class="sp-small">' + esc(prep) + '</div></div>' +
+        (a ? '<button class="g-btn sp-sm" onclick="scOpen(\'' + esc(a.id) + '\')">Prep</button>' : '') + '</li>';
+    }).join('') + '</ul>' : '') +
+    (internal ? '<div class="sp-small" style="margin-top:6px">' + (ext.length ? 'Plus ' : '') + scPlural(internal, 'internal meeting') + '.</div>' : '');
+}
+async function scSamRefresh(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Checking your mailbox…'; }
+  try { await fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify({ action: 'mailbox_pass' }) }); } catch (e) {}
+  scInvalidate(); _sd.meet = null; await renderScSam(true);
+}
+
+// ══ Deals: the list, the board by stage and by person ══════════════════════
+function sdGoDeals(view, owner) {
+  _sc.view.dealsView = view || 'list';
+  if (owner) { _sc.view.dealsScope = 'team'; _sc.f.owner = owner; }
+  if (view === 'person') _sc.view.dealsScope = 'team';
+  switchTab('pipeline');
+}
+function scDealsView(v) { _sc.view.dealsView = v; renderScDeals(); }
+async function renderScDeals(force) {
+  if (!_sd.dscoped) { _sd.dscoped = true; if (sdSenior()) _sc.view.dealsScope = 'team'; }
+  var v = _sc.view.dealsView || 'list';
+  if (v === 'list') { await _scListDeals(force); sdDealsChrome(); return; }
+  _sc.current = 'deals';
+  var el = document.getElementById('scDeals'); if (!el) return;
+  scLoading(el, 'the board');
+  var d;
+  try { d = await scFetch(_sc.view.dealsScope, force); } catch (e) { return scError(el, e, 'renderScDeals(true)'); }
+  if (_sc.current !== 'deals') return;
+  el.innerHTML = '<div class="rv-loaded"></div>' + sdBoardHtml(d, v === 'person' ? 'person' : 'stage', 'deals');
+  sdDealsChrome();
+}
+// The list keeps its page head; the view switch goes beside Mine / My team.
+function sdDealsChrome() {
+  var el = document.getElementById('scDeals'); if (!el) return;
+  var title = el.querySelector('.page-title'); if (title) title.textContent = 'Deals';
+  var acts = el.querySelector('.page-actions'); if (!acts || acts.querySelector('.sd-view')) return;
+  var d = _sc.data[_sc.view.dealsScope] || {};
+  var views = [['list', 'List'], ['stage', 'By stage']].concat(d.team_capable ? [['person', 'By person']] : []);
+  var w = document.createElement('span'); w.className = 'sd-view'; w.innerHTML = scSeg(views, _sc.view.dealsView || 'list', 'scDealsView');
+  acts.insertBefore(w, acts.firstChild);
+}
+function sdBoardHtml(d, by, where) {
+  var s = d.summary, v = _sc.view;
+  var rep = where === 'deals' ? (_sc.f.owner || '') : v.boardRep;
+  var deals = (d.accounts || []).filter(function (a) {
+    if (!a.is_deal) return false;
+    if (rep && a.owner !== rep) return false;
+    if (v.boardFilter === 'risk') return a.band === 'at_risk' || a.band === 'critical';
+    if (v.boardFilter === 'quiet') return a.activity === 'quiet' || a.activity === 'unknown';
+    if (v.boardFilter === 'closing') return a.d2c !== null && a.d2c <= 30;
+    return true;
+  }).sort(function (x, y) { return y.value_usd - x.value_usd; });
+  var cols;
+  if (by === 'person') {
+    cols = (d.by_owner || []).map(function (o) { return { key: o.user_id, label: o.name || 'Someone', items: deals.filter(function (a) { return a.owner === o.user_id; }) }; }).filter(function (c) { return c.items.length || !rep; });
+  } else {
+    var known = {}; (d.stages || []).forEach(function (x) { known[x.key] = 1; });
+    cols = (d.stages || []).map(function (x) { return { key: x.key, label: x.label, items: deals.filter(function (a) { return a.stage === x.key; }) }; });
+    var rest = deals.filter(function (a) { return !known[a.stage]; });
+    if (rest.length) cols.push({ key: '', label: 'No stage', items: rest });
+  }
+  var team = (d.by_owner || []).filter(function (o) { return o.deals || o.mailbox !== 'ok'; });
+  var mbTxt = { ok: 'Mailbox working', none: 'No mailbox connected', reconnect: 'Mailbox needs reconnecting', stale: 'Mailbox not checked lately' };
+  var repFn = where === 'deals' ? 'sdBoardRep' : 'scBoardRep';
+  var head = where === 'deals'
+    ? '<div class="page-head"><div><div class="page-title">Deals</div><div class="page-sub">Every open deal ' + (d.scope === 'team' ? 'in your team ' : '') + 'on one board. Click a person to see only their deals.</div></div>' +
+      '<div class="page-actions">' + (d.team_capable ? scSeg([['mine', 'Mine'], ['team', 'My team']], d.scope, 'scDealsScope') : '') + '<button class="g-btn" onclick="renderScDeals(true)">Refresh</button></div></div>'
+    : '<div class="page-head"><div><div class="page-title">SAMagic</div><div class="page-sub">Every open deal ' + (d.scope === 'team' ? 'in your team ' : '') + 'on one board. Click a person to see only their deals.</div></div>' +
+      '<div class="page-actions">' + scSeg([['stage', 'By stage'], ['person', 'By person']], by, 'scBoardBy') + '<button class="g-btn" onclick="renderScBoard(true)">Refresh</button></div></div>';
+  return head +
+    '<section class="sp-card sp-kpis rv-k4" aria-label="Pipeline">' +
+      '<div class="sp-kpi"><div class="sp-lbl">Open pipeline</div><div class="n">' + esc(scMoney0(s.value_usd)) + '</div><div class="d">' + scPlural(s.deals, 'deal') + '</div></div>' +
+      '<div class="sp-kpi"><div class="sp-lbl">Weighted</div><div class="n">' + esc(scMoney0(s.weighted_usd)) + '</div><div class="d">by chance to close</div></div>' +
+      '<div class="sp-kpi"><div class="sp-lbl">At risk</div><div class="n' + (s.at_risk ? ' rv-red' : '') + '">' + esc(scMoney0(s.at_risk_usd)) + '</div><div class="d">' + scPlural(s.at_risk, 'deal') + '</div></div>' +
+      '<div class="sp-kpi"><div class="sp-lbl">Closing this quarter</div><div class="n">' + esc(scMoney0(s.closing_quarter_usd)) + '</div><div class="d">' + s.past_due + ' past due</div></div>' +
+    '</section>' +
+    (d.scope === 'team' && team.length ? '<div class="rv-team" role="group" aria-label="People">' + team.map(function (o) {
+      return '<button class="sp-card rv-tm' + (rep === o.user_id ? ' on' : '') + '" aria-pressed="' + (rep === o.user_id) + '" onclick="' + repFn + '(\'' + esc(o.user_id) + '\')">' +
+        '<span class="rv-tav">' + esc(scInit(o.name)) + '<i class="mb ' + o.mailbox + '" title="' + esc(mbTxt[o.mailbox] || '') + '"></i></span>' +
+        '<span class="rv-tw"><b>' + esc(o.name || 'Someone') + '</b><small>' + scPlural(o.deals, 'deal') + ' · ' + esc(scMoney0(o.value_usd)) + '</small>' +
+        '<span class="rv-tc">' + (o.at_risk ? '<span class="sp-chip risk">' + o.at_risk + ' at risk</span>' : '') + (o.quiet ? '<span class="sp-chip warn">' + o.quiet + ' quiet</span>' : '') + (o.unknown ? '<span class="sp-chip">' + o.unknown + ' unknown</span>' : '') + (o.mailbox !== 'ok' ? '<span class="sp-chip">' + esc(mbTxt[o.mailbox]) + '</span>' : '') + '</span></span></button>';
+    }).join('') + '</div>' : '') +
+    '<div class="rv-bbar">' + scSeg([['all', 'All deals'], ['risk', 'At risk'], ['quiet', 'Quiet or unknown'], ['closing', 'Closing in 30 days']], v.boardFilter, where === 'deals' ? 'sdBoardFilter' : 'scBoardFilter') +
+    (rep ? '<button class="rv-link" onclick="' + repFn + '(\'' + esc(rep) + '\')">Show everyone</button>' : '') + '</div>' +
+    '<div class="rv-board" role="list">' + cols.map(function (c) {
+      var val = c.items.reduce(function (n, a) { return n + a.value_usd; }, 0);
+      return '<section class="rv-col" role="listitem" aria-label="' + esc(c.label) + '"><header><b>' + esc(c.label) + '</b><span>' + c.items.length + ' · ' + esc(scMoney0(val)) + '</span></header>' +
+        (c.items.length ? c.items.map(function (a) {
+          var b = SC_BAND[a.band] || null;
+          return '<button class="rv-card ' + (b ? b[1].split(' ')[0] : '') + '" onclick="scOpen(\'' + esc(a.id) + '\')">' +
+            '<span class="rv-ct"><b>' + esc(a.name) + '</b><span>' + esc(scMoney(a.value_usd) || 'No value') + '</span></span>' +
+            '<span class="rv-cm">' + (by === 'person' ? esc(a.stage_label) : '<span class="rv-ini" title="' + esc(a.owner_name) + '">' + esc(scInit(a.owner_name)) + '</span>' + esc(a.owner_name)) + ' · <span class="' + (a.d2c !== null && a.d2c < 0 ? 'rv-red' : '') + '">' + esc(scCloseText(a)) + '</span></span>' +
+            '<span class="rv-cb">' + scBandChip(a) + scActChip(a) + '</span>' +
+            (a.band_reason && a.band !== 'healthy' ? '<span class="rv-cr">' + esc(a.band_reason) + '</span>' : '') +
+          '</button>';
+        }).join('') : '<div class="rv-cempty">No deals</div>') + '</section>';
+    }).join('') + '</div>' + scHow();
+}
+function sdBoardRep(u) { _sc.f.owner = _sc.f.owner === u ? '' : u; renderScDeals(); }
+function sdBoardFilter(f) { _sc.view.boardFilter = f; renderScDeals(); }
+async function renderScBoard(force) {
+  _sc.current = 'board';
+  var el = document.getElementById('scBoard'); if (!el) return;
+  scLoading(el, 'the board');
+  var d;
+  try { d = await scFetch('team', force); } catch (e) { return scError(el, e, 'renderScBoard(true)'); }
+  if (_sc.current !== 'board') return;
+  el.innerHTML = '<div class="rv-loaded"></div>' + sdBoardHtml(d, _sc.view.boardBy, 'board');
+}
+function scRefreshCurrent() {
+  scInvalidate();
+  if (_sc.current === 'sam') renderScSam(true);
+  else if (_sc.current === 'deals') renderScDeals(true);
+  else if (_sc.current === 'board') renderScBoard(true);
+}
+
+// The old tools move to Deals: Reports (the classic SAM brief, scan,
+// call sync, coverage, intent vs reality, time by account, ICP fit) and,
+// for managers, Team activity.
+function scWireMore() {
+  var deals = document.getElementById('panel-pipeline');
+  var anchor = document.getElementById('scDealsMore');
+  var move = function (id, label, sub) {
+    var x = document.getElementById(id); if (!x || !deals || !anchor) return;
+    if (x.parentElement !== anchor.parentElement || !x._sdMoved) { anchor.parentElement.insertBefore(x, anchor.nextSibling); x._sdMoved = 1; }
+    var sum = x.querySelector('summary');
+    if (sum && label) sum.innerHTML = '<span>' + label + '</span><small>' + sub + '</small>';
+  };
+  move('scBoardMore', 'Team activity', 'tasks, wins and issues by person');
+  move('scSamMore', 'Reports', 'classic SAM brief, scan channels, call sync, coverage, intent vs reality, time by account, ICP fit');
+  var bm = document.getElementById('scBoardMore'); if (bm) bm.style.display = sdSenior() ? '' : 'none';
+  var bind = function (id, fn) { var d = document.getElementById(id); if (d && !d._scBound) { d._scBound = 1; d.addEventListener('toggle', function () { if (d.open) { try { fn(); } catch (e) {} } }); } };
+  bind('scSamMore', function () {
+    var seniorRole = sdSenior();
+    var t = document.getElementById('samModeToggle'); if (t) t.style.display = seniorRole ? 'block' : 'none';
+    setSamMode((seniorRole && _samMode === 'team') ? 'team' : 'self');
+  });
+  bind('scDealsMore', function () { _scOldPipeline(); });
+  bind('scBoardMore', function () { loadExecDashboard(); });
+  // Ask SAM stays on the SAM screen.
+  var panel = document.getElementById('panel-signals');
+  ['samChatOutput', 'samChatBar', 'samChatFab'].forEach(function (id) { var x = document.getElementById(id); if (panel && x && x.closest('details')) panel.appendChild(x); });
+}
+
+// ══ The deal sheet: who wrote, by name ═════════════════════════════════════
+function scOpen(id) {
+  _scOpenC(id);
+  var a = scFind(id), el = document.getElementById('scSheet'); if (!a || !el) return;
+  var p = [].slice.call(el.querySelectorAll('.rv-p')).find(function (x) { return /Their last reply/.test(x.textContent); });
+  if (p) {
+    var who = sdWho(a);
+    p.textContent = scLast(a) + '. ' + (a.last_reply_kind === 'meeting' ? 'Last met: ' + scAgo(a.last_reply_at) + '.' : 'Their last reply: ' + scAgo(a.last_reply_at) + (who ? ', from ' + who : '') + '.');
+  }
+}
+
+// ══ SAMpaign People: the journey (7 Oct) ═══════════════════════════════════
+// One look tells you who is in the SAMpaign and how far each person got:
+// not reached, in the sequence, replied, meeting, in a deal. Grouped by
+// company. Someone who replied or booked a meeting moves to the deal in one
+// click, and the conversation carries on there.
+var SP_STAGES = [
+  ['not_reached', 'Not reached', 'Not written to yet'],
+  ['sequence', 'In sequence', 'Emails going out, no reply yet'],
+  ['replied', 'Replied', 'Wrote back'],
+  ['meeting', 'Meeting', 'Meeting booked'],
+  ['deal', 'In a deal', 'On a deal’s account']
+];
+var SP_STAGE_CHIP = { not_reached: '', sequence: 'warn', replied: 'live', meeting: 'int', deal: 'live', dropped: 'risk' };
+window._spPeople = window._spPeople || {};
+window._spPeopleMode = window._spPeopleMode || {};
+window._spPeopleF = window._spPeopleF || {};
+
+function _spPeopleHost(id) { return document.getElementById('spPeople_' + id); }
+async function _spRenderPeople(id, keepScroll) {
+  var body = document.getElementById('sampBody_' + id); if (!body) return;
+  if (window._spPeopleMode[id] === 'manage') {
+    body.innerHTML = '<div class="sd-pmode"><button class="g-btn sp-sm" type="button" onclick="_spPeopleSetMode(\'' + esc(id) + '\',\'journey\')">Back to the journey</button><span class="sp-small">Change statuses, remove people, add notes.</span></div>' +
+      _spPeopleChips(id) + '<div id="sampaignContacts_' + esc(id) + '"><div class="sp-small">Loading people…</div></div><div id="sampaignAddRows_' + esc(id) + '"></div>';
+    _loadSampaignContactsIntoOld(id);
+    return;
+  }
+  if (!_spPeopleHost(id)) body.innerHTML = '<div id="spPeople_' + esc(id) + '" class="sd-people"><div class="sp-card sp-empty">Loading people…</div></div>';
+  var d;
+  try { d = await _sampEdge('get_sampaign_people', { campaign_id: id }); } catch (e) { d = { ok: false, error: e.message }; }
+  var host = _spPeopleHost(id); if (!host) return;
+  if (!d.ok) { host.innerHTML = '<div class="sp-card sp-empty">' + esc(d.error || 'Could not load the people.') + ' <button class="g-btn" onclick="_spRenderPeople(\'' + esc(id) + '\')">Try again</button></div>'; return; }
+  window._spPeople[id] = d;
+  _spPaintPeople(id);
+}
+function _spPeopleSetMode(id, m) { window._spPeopleMode[id] = m; var b = document.getElementById('sampBody_' + id); if (b) b.innerHTML = ''; _spRenderPeople(id); }
+function _spPeopleStage(id, st) { var f = window._spPeopleF[id] = window._spPeopleF[id] || {}; f.stage = f.stage === st ? '' : st; f.more = {}; _spPaintPeople(id); }
+function _spPeopleMore(id, key) { var f = window._spPeopleF[id] = window._spPeopleF[id] || {}; f.more = f.more || {}; f.more[key] = 1; _spPaintPeople(id); }
+function _spPaintPeople(id) {
+  var host = _spPeopleHost(id), d = window._spPeople[id]; if (!host || !d) return;
+  var f = window._spPeopleF[id] = window._spPeopleF[id] || {};
+  var c = d.counts || {}, owner = d.is_owner;
+  var total = (d.people || []).length;
+  var q = String(f.q || '').toLowerCase();
+  var people = (d.people || []).filter(function (p) {
+    if (f.stage && p.stage !== f.stage) return false;
+    if (q && (p.name + ' ' + p.email + ' ' + p.company + ' ' + p.title).toLowerCase().indexOf(q) === -1) return false;
+    return true;
+  });
+  var RANK = { deal: 0, meeting: 1, replied: 2, sequence: 3, not_reached: 4, dropped: 5 };
+  var groups = {};
+  people.forEach(function (p) { var k = p.account_name || p.company || 'Other'; (groups[k] = groups[k] || []).push(p); });
+  var keys = Object.keys(groups).sort(function (a, b) {
+    var ra = Math.min.apply(null, groups[a].map(function (p) { return RANK[p.stage]; })), rb = Math.min.apply(null, groups[b].map(function (p) { return RANK[p.stage]; }));
+    return (ra - rb) || (groups[b].length - groups[a].length) || a.localeCompare(b);
+  });
+  var funnel = '<div class="sd-funnel" role="group" aria-label="Where people are">' + SP_STAGES.map(function (s, i) {
+    var n = c[s[0]] || 0, on = f.stage === s[0];
+    return (i ? '<span class="sd-fa" aria-hidden="true">›</span>' : '') + '<button type="button" class="sd-fs' + (on ? ' on' : '') + (n ? '' : ' zero') + '" aria-pressed="' + on + '" onclick="_spPeopleStage(\'' + esc(id) + '\',\'' + s[0] + '\')" title="' + esc(s[2]) + '"><b>' + n + '</b><span>' + s[1] + '</span></button>';
+  }).join('') + (c.dropped ? '<button type="button" class="sd-fs sd-drop' + (f.stage === 'dropped' ? ' on' : '') + '" onclick="_spPeopleStage(\'' + esc(id) + '\',\'dropped\')" title="Bounced, opted out or not interested"><b>' + c.dropped + '</b><span>Dropped</span></button>' : '') + '</div>';
+  var reached = total - (c.not_reached || 0) - (c.dropped || 0);
+  var conv = reached ? Math.round(((c.replied || 0) + (c.meeting || 0) + (c.deal || 0)) / Math.max(1, reached + (c.dropped || 0)) * 100) : 0;
+  var tools = owner ? '<div class="sd-ptools">' +
+      '<label class="g-btn sp-sm">Upload CSV<input type="file" accept=".csv,text/csv" style="display:none" onchange="handleSampaignCsv(\'' + esc(id) + '\',this.files[0]);this.value=\'\'"/></label>' +
+      '<button class="g-btn sp-sm" type="button" onclick="scoutSampaignContacts(\'' + esc(id) + '\')">Scout more contacts</button>' +
+      '<button class="g-btn sp-sm" type="button" onclick="openSampaignScoutProfile(\'' + esc(id) + '\')">Who to hunt</button>' +
+      '<button class="g-btn sp-sm" type="button" onclick="addSampaignContactRows(\'' + esc(id) + '\')">Add people</button>' +
+      '<button class="g-btn sp-sm" type="button" onclick="enrichSampaignContacts(\'' + esc(id) + '\')">Enrich</button>' +
+      '<button class="g-btn sp-sm sp-ghost" type="button" onclick="_spPeopleSetMode(\'' + esc(id) + '\',\'manage\')">Manage list</button></div>' : '';
+  var shownGroups = 0, rowsOut = 0;
+  var list = keys.map(function (k) {
+    if (rowsOut > 400) return '';
+    shownGroups++;
+    var ps = groups[k].slice().sort(function (x, y) { return (RANK[x.stage] - RANK[y.stage]) || String(y.last_at || '').localeCompare(String(x.last_at || '')); });
+    var lim = (f.more && f.more[k]) ? ps.length : 5;
+    var head = ps.find(function (p) { return p.account_name; }) || ps[0];
+    var dealP = ps.find(function (p) { return p.stage === 'deal' && p.deal_value_usd !== null; });
+    var cnt = {}; ps.forEach(function (p) { cnt[p.stage] = (cnt[p.stage] || 0) + 1; });
+    var sumTxt = SP_STAGES.concat([['dropped', 'Dropped']]).filter(function (s) { return cnt[s[0]]; }).map(function (s) { return cnt[s[0]] + ' ' + s[1].toLowerCase(); }).join(' · ');
+    var rows = ps.slice(0, lim).map(function (p) {
+      rowsOut++;
+      var lab = (SP_STAGES.find(function (s) { return s[0] === p.stage; }) || ['dropped', 'Dropped'])[1];
+      var when = p.last_at ? _spAgo(p.last_at) : '';
+      var acts = '';
+      if ((p.stage === 'replied' || p.stage === 'meeting') && d.can_move) acts += '<button class="g-btn sp-sm sp-gold" type="button" onclick="_spMoveToDeal(\'' + esc(id) + '\',\'' + esc(p.id) + '\',this)">Move to deal</button>';
+      if (p.stage === 'deal' && p.account_id) acts += '<button class="g-btn sp-sm" type="button" onclick="_spOpenDeal(\'' + esc(p.account_id) + '\',\'' + esc(String(p.account_name || '').replace(/'/g, '')) + '\')">Open deal</button>';
+      if ((p.stage === 'replied' || p.stage === 'meeting') && owner && p.email) acts += '<a class="g-btn sp-sm sp-ghost" href="https://mail.google.com/mail/u/0/#search/' + encodeURIComponent('from:' + p.email) + '" target="_blank" rel="noopener">Open the reply</a>';
+      return '<li class="sd-prs"><span class="sp-av">' + esc(_spIni(p.name || p.email)) + '</span>' +
+        '<div class="sd-pm"><div class="sd-pt"><b>' + esc(p.name || p.email || 'Unnamed') + '</b>' + (p.title ? '<span class="sp-small"> · ' + esc(p.title) + '</span>' : '') + (p.linkedin_url ? ' <a class="sd-li" href="' + esc(p.linkedin_url) + '" target="_blank" rel="noopener" aria-label="LinkedIn">in</a>' : '') + '</div>' +
+        '<div class="sp-small">' + esc([p.last + (when ? ' ' + when : ''), p.next].filter(Boolean).join(' · ')) + '</div></div>' +
+        '<span class="sp-chip ' + (SP_STAGE_CHIP[p.stage] || '') + '">' + esc(lab) + '</span>' +
+        (acts ? '<div class="sd-pa">' + acts + '</div>' : '') + '</li>';
+    }).join('');
+    return '<section class="sd-co"><header><div><b>' + esc(k) + '</b>' + (dealP ? ' <span class="sp-chip live">Deal' + (dealP.deal_value_usd ? ' ' + esc(scMoney(dealP.deal_value_usd)) : '') + '</span>' : '') + '<div class="sp-small">' + scPlural(ps.length, 'person', 'people') + ' · ' + esc(sumTxt) + '</div></div></header>' +
+      '<ul>' + rows + '</ul>' + (ps.length > lim ? '<button class="rv-link" type="button" onclick="_spPeopleMore(\'' + esc(id) + '\',\'' + esc(k.replace(/'/g, '')) + '\')">Show ' + (ps.length - lim) + ' more at ' + esc(k) + '</button>' : '') + '</section>';
+  }).join('');
+  host.innerHTML = '<section class="sp-card sp-pad sd-journey">' +
+      '<div class="sd-sh"><div class="sp-lbl">Where people are · ' + scPlural(total, 'person', 'people') + '</div>' + (reached ? '<span class="sp-small">' + conv + '% of people reached wrote back</span>' : '') + '</div>' + funnel +
+      '<div class="sd-pbar"><input class="sp-search" placeholder="Find a person or company" value="' + esc(f.q || '') + '" aria-label="Find a person or company" oninput="var F=window._spPeopleF[\'' + esc(id) + '\'];F.q=this.value;clearTimeout(F._t);F._t=setTimeout(function(){_spPaintPeople(\'' + esc(id) + '\');var i=document.querySelector(\'#spPeople_' + esc(id) + ' .sp-search\');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},250)"/>' +
+        (f.stage ? '<button class="rv-link" type="button" onclick="_spPeopleStage(\'' + esc(id) + '\',\'' + esc(f.stage) + '\')">Show everyone</button>' : '') + '</div>' + tools +
+      '<div id="sampaignAddRows_' + esc(id) + '"></div></section>' +
+    (people.length ? '<div class="sd-cos">' + list + '</div>' + (shownGroups < keys.length ? '<div class="sp-small" style="margin:10px 2px">Search to find the rest.</div>' : '')
+      : '<div class="sp-card sp-empty">' + (total ? 'Nobody here yet.' : 'No people in this SAMpaign yet. ' + (owner ? 'Scout contacts, upload a CSV or add people.' : '')) + '</div>');
+}
+function _spAgo(iso) { var d = Math.floor((Date.now() - Date.parse(iso)) / 86400000); return d <= 0 ? 'today' : d === 1 ? 'yesterday' : d < 14 ? d + ' days ago' : 'on ' + _spDate(iso); }
+async function _spMoveToDeal(id, contactId, btn, create) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Moving…'; }
+  var d = await _sampEdge('move_sampaign_contact_to_deal', { contact_id: contactId, create_account: !!create });
+  if (!d.ok && d.needs_account) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Move to deal'; }
+    var m = document.createElement('div'); m.className = 'sp-modal'; m.id = 'spNeedAcct';
+    m.addEventListener('click', function (e) { if (e.target === m) m.remove(); });
+    m.innerHTML = '<div class="sp-mcard" role="dialog" aria-modal="true" aria-label="Track this company"><h3>Track ' + esc(d.company) + ' as an account?</h3><p class="sp-muted" style="margin:6px 0 0;font-size:13.5px;line-height:1.55">' + esc(d.company) + (d.domain ? ' (' + esc(d.domain) + ')' : '') + ' is not one of your accounts yet. Add it, with this person on it, and start the deal there.</p>' +
+      '<div class="sp-foot"><button class="g-btn" type="button" onclick="document.getElementById(\'spNeedAcct\').remove()">Not now</button><button class="g-btn sp-gold" type="button" id="spNeedAcctGo">Add the account</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById('spNeedAcctGo').onclick = function () { m.remove(); _spMoveToDeal(id, contactId, null, true); };
+    return;
+  }
+  if (!d.ok) { if (btn) { btn.disabled = false; btn.textContent = 'Move to deal'; } showToast(d.error || 'Could not move them'); return; }
+  try { scInvalidate(); } catch (e) {}
+  if (d.is_deal) showToast((d.already ? 'Already on ' : 'Added to the ') + d.account_name + ' deal.');
+  else {
+    showToast('Added to ' + d.account_name + '. Set the deal value to start the deal.');
+    try { openDealValueForm(d.account_id, d.account_name); } catch (e) {}
+  }
+  _spRenderPeople(id);
+}
+async function _spOpenDeal(accountId, name) {
+  try { await scFetch(_sc.view.dealsScope || 'mine'); } catch (e) {}
+  if (scFind(accountId)) { scOpen(accountId); return; }
+  try { await scFetch('team'); } catch (e) {}
+  if (scFind(accountId)) scOpen(accountId); else openDealValueForm(accountId, name);
+}
+// Anything that reloads the roster (CSV, scouting, enrichment, adding
+// people) refreshes the journey when the journey is what is on screen.
+async function _loadSampaignContactsInto(campaignId) {
+  if (_spPeopleHost(campaignId)) { clearTimeout(window['_spPR' + campaignId]); window['_spPR' + campaignId] = setTimeout(function () { _spRenderPeople(campaignId); }, 300); _sampPrimeContacts(campaignId); return; }
+  return _loadSampaignContactsIntoOld(campaignId);
+}
+function _renderSampaignContacts(campaignId) {
+  if (_spPeopleHost(campaignId)) { clearTimeout(window['_spPR' + campaignId]); window['_spPR' + campaignId] = setTimeout(function () { _spRenderPeople(campaignId); }, 300); return; }
+  return _renderSampaignContactsOld(campaignId);
+}
+
+// ── New SAMpaign: a list of companies takes a region ───────────────────────
+function _spWizParseCompanies(text) {
+  var W = window._sampW || {};
+  var listRegion = String(W.listRegion || '').trim();
+  return String(text || '').split(/\r?\n/).map(function (line) {
+    var p = line.split(/[,\t;]/).map(function (s) { return s.trim(); }).filter(Boolean);
+    if (!p.length) return null;
+    var dom = p.find(function (x) { return /\.[a-z]{2,}$/i.test(x) && !/\s/.test(x); }) || '';
+    var rest = p.filter(function (x) { return x !== dom; });
+    var name = rest[0] || dom.replace(/\..*$/, '');
+    var region = rest[1] || listRegion;
+    return { name: name, domain: dom, region: region || null };
+  }).filter(Boolean);
 }
