@@ -3,7 +3,7 @@ let SB_KEY = localStorage.getItem('dt-sb-key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6I
 let API_KEY = localStorage.getItem('dt-api-key') || '';
 var _userHabits = null;
 // Cache buster — update this string on every deploy to purge stale service worker cache
-var APP_VERSION = '20261008-01';
+var APP_VERSION = '20261008-02';
 
 // ── Money in the org's own currency (2026-10-04) ───────────────────────────
 // Amounts are stored in USD (deal_value_usd) and shown in the org's currency
@@ -15148,6 +15148,7 @@ function joinOrgCancel() {
     if (this.showProfile) tabs.push(['profile', 'Company profile']);
     tabs.push(['calendar', 'Work calendar']);
     tabs.push(['currency', 'Currency']);
+    tabs.push(['reveals', 'Contact reveals']);
     tabs.push(['mailboxes', 'Mailboxes']);
     tabs.push(['log', 'Activity']);
     this._parkHosted();
@@ -15203,6 +15204,7 @@ function joinOrgCancel() {
     if (this.tab === 'profile') { this._renderProfile(body); return; }
     if (this.tab === 'calendar') { this._renderCalendar(body); return; }
     if (this.tab === 'currency') { this._renderCurrency(body); return; }
+    if (this.tab === 'reveals') { this._renderReveals(body); return; }
     if (this.tab === 'mailboxes') { this._renderMailboxes(body); return; }
     if (this.tab === 'people') body.innerHTML = this._people();
     else if (this.tab === 'tree') body.innerHTML = this._tree();
@@ -15428,6 +15430,7 @@ function joinOrgCancel() {
     else if (a === 'mb-refresh') this._renderMailboxes(this.el.querySelector('#sxa-body'), true);
     else if (a === 'mb-scan') this._mbScan(t);
     else if (a === 'cur-save') this._saveCurrency(t);
+    else if (a === 'rev-save') this._saveReveals(t);
   };
 
   Console.prototype._change = function (e) {
@@ -15740,6 +15743,43 @@ function joinOrgCancel() {
     try { if (typeof scInvalidate === 'function') scInvalidate(); } catch (e) {}
     this.toast('Amounts now show in ' + d.currency);
     this._renderCurrency(this.el.querySelector('#sxa-body'));
+  };
+
+  // ── Contact reveals (2026-10-08) ───────────────────────────────────────
+  // Each rep's daily limit for revealing a phone and email from the LinkedIn
+  // panel, and this month's reveals by person. A reveal is saved for the
+  // whole org, so the same person is never paid for twice.
+  Console.prototype._renderReveals = async function (body) {
+    if (!this.rev) {
+      body.innerHTML = '<div class="sxa-empty">Loading…</div>';
+      var d;
+      try { d = await this.call('org_admin_reveals_get', this._body()); } catch (e) { d = { ok: false, error: e.message }; }
+      if (this.tab !== 'reveals') return;
+      if (!d || !d.ok) { body.innerHTML = '<div class="sxa-empty sxa-err">' + h((d && d.error) || 'Could not load.') + '</div>'; return; }
+      this.rev = d;
+    }
+    var r = this.rev;
+    var rows = (r.month || []).map(function (m) { return '<tr><td>' + h(m.name) + '</td><td style="text-align:right">' + m.paid + '</td><td style="text-align:right">' + m.free + '</td><td style="text-align:right">' + m.found + '</td></tr>'; }).join('');
+    body.innerHTML =
+      '<div class="sxa-pf">' +
+        '<div class="sxa-sec" style="margin-top:4px">Contact reveals</div>' +
+        '<div class="sxa-note">Reps reveal a person’s phone and email with one click in Samora for LinkedIn. Samora checks its own records first, then Lusha and Apollo. A reveal is saved for the whole team, so nobody pays for the same person twice.</div>' +
+        '<label class="sxa-f" style="max-width:260px"><span class="sxa-lbl">Reveals per rep per day</span><input class="sxa-in" type="number" min="0" max="1000" id="sxaRevCap" value="' + h(String(r.cap)) + '"></label>' +
+        '<div class="sxa-note">0 switches reveals off. Each paid reveal usually uses one Lusha or Apollo credit.</div>' +
+        '<div class="sxa-actions" style="justify-content:flex-start"><button class="sxa-btn sxa-btn-gold" data-sxa="rev-save">Save limit</button></div>' +
+        '<div class="sxa-sec">This month</div>' +
+        (rows ? '<table class="sxa-tbl" style="width:100%;max-width:560px"><thead><tr><th style="text-align:left">Person</th><th style="text-align:right">Paid</th><th style="text-align:right">Free</th><th style="text-align:right">With a phone</th></tr></thead><tbody>' + rows + '</tbody></table><div class="sxa-note">' + r.total_paid + (r.total_paid === 1 ? ' paid reveal, ' : ' paid reveals, ') + r.total_found + ' with a phone number.</div>' : '<div class="sxa-note">No reveals yet this month.</div>') +
+      '</div>';
+  };
+  Console.prototype._saveReveals = async function (btn) {
+    var inp = this.el.querySelector('#sxaRevCap'); if (!inp) return;
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+    var d;
+    try { d = await this.call('org_admin_reveals_save', this._body({ cap: inp.value })); } catch (e) { d = { ok: false, error: e.message }; }
+    if (!d || !d.ok) { this.toast((d && d.error) || 'Could not save.', true); if (btn) { btn.disabled = false; btn.textContent = 'Save limit'; } return; }
+    this.rev = d;
+    this.toast(d.cap ? 'Each rep can reveal ' + d.cap + ' a day' : 'Reveals are off');
+    this._renderReveals(this.el.querySelector('#sxa-body'));
   };
 
   Console.prototype._saveCalendar = async function (btn) {
@@ -17213,7 +17253,7 @@ async function _liRenderYou() {
   if (!d || !d.ok) { box.innerHTML = '<div class="sp-small">' + esc((d && d.error) || 'Could not load.') + '</div>'; return; }
   var devs = d.devices || [];
   var _liOld = (ext && _liVerLt(ext, LI_EXT_LATEST)) || devs.some(function (v) { return v.version && _liVerLt(v.version, LI_EXT_LATEST); });
-  var _liUpd = _liOld ? '<div class="li-note" style="margin-bottom:10px"><b>Update to ' + LI_EXT_LATEST + '.</b> It sends messages on LinkedIn’s new pages, finds Connect when LinkedIn hides it, checks accepts and replies on its own and lets you set the order. <button class="rv-link" type="button" onclick="_liSheet(_liInstallHtml())">Get the update</button></div>' : '';
+  var _liUpd = _liOld ? '<div class="li-note" style="margin-bottom:10px"><b>Update to ' + LI_EXT_LATEST + '.</b> It reads every profile you open, writes SAM’s read of how to approach them, reveals their phone and email in one click, and sends messages on LinkedIn’s new pages. <button class="rv-link" type="button" onclick="_liSheet(_liInstallHtml())">Get the update</button></div>' : '';
   var head = devs.length
     ? devs.map(function (v) {
         return '<div class="li-dev"><span class="li-dot ' + (v.online ? 'on' : '') + '"></span><div><b>' + esc(v.label || 'Chrome') + '</b><small>' + (v.online ? 'Online now' : 'Last seen ' + _liAgo(v.last_seen_at)) + (v.linkedin_name ? ' · LinkedIn: ' + esc(v.linkedin_name) : '') + (v.version ? ' · v' + esc(v.version) : '') + '</small></div></div>';
@@ -18916,7 +18956,7 @@ function scWireMore() {
 // a message by now and has not). The same list the LinkedIn panel shows and
 // the morning push names, from get_sampaign_tasks.
 window._tds = window._tds || { data: null, at: 0, open: {}, touched: false };
-var LI_EXT_LATEST = '1.3.0';
+var LI_EXT_LATEST = '1.4.0';
 function _liVerLt(a, b) { var x = String(a || '0').split('.').map(Number), y = String(b || '0').split('.').map(Number); for (var i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; }
 var TDS_ICON = {
   email: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M4 7l8 6 8-6"/></svg>',
