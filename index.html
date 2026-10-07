@@ -2399,6 +2399,50 @@ body[data-tab]:not([data-tab="today"]) .metric-wrap{display:none}
 .sd-cov summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--text2)}
 .sd-cov > div{margin-top:10px}
 @media (max-width:640px){.sd-psheet .sd-pk{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Drop E: SAMpaign tasks on Today */
+.tds{padding:16px 18px;margin-bottom:12px}
+.tds-h{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.tds-sub{font-size:12.5px;color:var(--text2);margin-top:4px;max-width:52ch}
+.tds-chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.tds-li{display:flex;gap:10px;align-items:flex-start;margin-top:12px;padding:10px 12px;border-radius:12px;background:var(--c-info-wash);font-size:12.5px;line-height:1.5;color:var(--text)}
+.tds-cs{display:flex;flex-direction:column;margin-top:10px}
+.tds-c{border-top:1px solid var(--g-line)}
+.tds-c:first-child{border-top:0}
+.tds-ch-h{all:unset;box-sizing:border-box;width:100%;display:flex;align-items:center;gap:10px;padding:11px 2px;cursor:pointer;border-radius:10px}
+.tds-ch-h:hover{background:var(--g-fill)}
+.tds-ch-h:focus-visible{outline:2px solid var(--c-focus,var(--gold));outline-offset:2px}
+.tds-n{font-weight:650;font-size:14px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tds-chs{display:flex;gap:4px;color:var(--text3)}
+.tds-ch{display:inline-flex}.tds-ch.li{color:var(--c-info)}
+.tds-cnt{margin-left:auto;display:flex;gap:6px;flex:none}
+.tds-chev{display:inline-flex;color:var(--text3);transition:transform .15s;flex:none}
+.tds-c.open .tds-chev{transform:rotate(90deg)}
+.tds-l{list-style:none;margin:0 0 6px;padding:0}
+.tds-t{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:10px;align-items:start;padding:8px 2px}
+.tds-ic{width:28px;height:28px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;flex:none;background:var(--g-fill);color:var(--text2)}
+.tds-ic.email{background:rgba(var(--c-accent-rgb),.14);color:var(--c-accent-text,var(--gold))}
+.tds-ic.linkedin{background:var(--c-info-wash);color:var(--c-info)}
+.tds-t.risk .tds-ic{background:var(--c-risk-wash);color:var(--c-risk)}
+.tds-t.done .tds-ic{background:var(--c-verified-wash);color:var(--c-verified)}
+.tds-tx{display:flex;flex-direction:column;gap:6px;font-size:13px;line-height:1.5;min-width:0;padding-top:4px}
+.tds-t.risk .tds-tx>span:first-child{color:var(--c-risk);font-weight:600}
+.tds-t.wait .tds-tx,.tds-t.done .tds-tx{color:var(--text2)}
+.tds-a{all:unset;cursor:pointer;font-size:12.5px;font-weight:650;color:var(--c-accent-text,var(--gold));padding:5px 10px;border-radius:999px;border:1px solid var(--g-line);white-space:nowrap}
+.tds-a:hover{border-color:rgba(var(--c-accent-rgb),.6)}
+.tds-a:focus-visible{outline:2px solid var(--c-focus,var(--gold));outline-offset:2px}
+.tds-bar,.tds-kb{display:flex;height:5px;border-radius:999px;background:var(--g-line);overflow:hidden}
+.tds-bar{max-width:260px}
+.tds-bar i,.tds-kb i{display:block;height:100%;background:var(--c-verified)}
+.tds-kb i.q{background:var(--c-info);opacity:.5}
+.tds-adds{margin:2px 0 12px 38px;padding:8px 12px;border-radius:12px;background:var(--g-fill)}
+.tds-adds summary{cursor:pointer;font-size:12.5px;font-weight:650;display:flex;align-items:center;gap:8px}
+.tds-k{display:flex;flex-direction:column;gap:5px;padding:8px 0 2px}
+.tds-kh{display:flex;align-items:center;gap:8px;font-size:12.5px}
+.tds-kh span:first-child{color:var(--text2)}
+.tds-kh b{margin-left:auto;font-variant-numeric:tabular-nums}
+.tds-sk{height:14px;border-radius:7px;background:var(--g-fill);margin-top:10px}
+@media (max-width:640px){.tds{padding:14px}.tds-t{grid-template-columns:28px minmax(0,1fr)}.tds-t .tds-a{grid-column:2;justify-self:start}.tds-adds{margin-left:0}.tds-chs{display:none}}
 </style>
 <script src="/js/vendor/sortable.min.js"></script>
 </head>
@@ -2686,6 +2730,8 @@ body[data-tab]:not([data-tab="today"]) .metric-wrap{display:none}
     <div class="today-main">
     <!-- This week: the rep's scorecard against the team's weekly targets. -->
     <div id="todayScore"></div>
+    <!-- Drop E: what each SAMpaign needs today, email and LinkedIn -->
+    <div id="todaySamp"></div>
     <div id="productivityBanner" style="margin-bottom:8px"></div>
     <div id="nudgeBanner" style="display:none;background:rgba(var(--c-accent-rgb),0.08);border:1px solid rgba(var(--c-accent-rgb),0.25);border-radius:var(--radius);padding:10px 14px;margin-bottom:12px"><div style="display:flex;align-items:center;justify-content:space-between"><div id="nudgeText" style="font-size:12px;color:var(--text2)"></div><button onclick="this.parentElement.parentElement.style.display='none'" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:0 0 0 8px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div></div>
     <div class="today-sections" style="display:flex;gap:8px;margin-bottom:8px">
