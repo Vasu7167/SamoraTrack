@@ -19,40 +19,47 @@ p,li{color:var(--ink2)} b{color:var(--ink)} a{color:var(--gold)}
 <main>
 <div class="k">Samora Global</div>
 <h1>Samora for LinkedIn: privacy</h1>
-<p>Last updated 3 October 2026.</p>
+<p>Last updated 9 October 2026. Applies to version 1.4 and later.</p>
 
 <h2>What the plugin is for</h2>
-<p>Samora for LinkedIn runs the LinkedIn steps of SAMpaigns that you or your team set up in SamoraOS: visiting a profile, sending an invitation with a note, and sending a message once someone accepts. It only works for people who are signed in to a SamoraOS workspace.</p>
+<p>Samora for LinkedIn runs the LinkedIn side of SAMpaigns that you or your team set up in SamoraOS: visiting a profile, sending an invitation with a note, and sending a message once someone accepts. On a profile you open, it shows whether the person is in your SAMpaigns, a read of how to approach them, and their phone and email if you ask for them. It only works for people who are signed in to a SamoraOS workspace.</p>
 
 <h2>What it reads</h2>
 <ul>
-<li><b>LinkedIn profiles you open or that your SAMpaign asks it to open</b>: the person's name, headline, company, profile address and connection degree, so it can match them to your SamoraOS records.</li>
-<li><b>Your connections list and unread conversations, only when you press "Check accepts and replies" or while Autopilot is on</b>: profile addresses and the names on unread conversations, so it can tell SamoraOS who accepted and who replied. Message text is not read.</li>
-<li><b>Your Sent invitations page, at the same moments</b>: only two numbers, how many invitations went out in the last 7 days and how many are still pending, so your weekly limit counts invitations you sent outside Samora too. Names on that page are not read or sent.</li>
+<li><b>LinkedIn profiles you open, or that your SAMpaign asks it to open</b>: the person's name, headline, company, location, profile address, connection degree, follower count and mutual connections, and the text of their About, Experience, Education, Skills and recent activity sections. This matches them to your SamoraOS records and lets SamoraOS write its read of how to approach them.</li>
+<li><b>Your connections list and unread conversations</b>, when you press "Check now", when the side panel opens, after a batch of steps, and about once an hour in your working hours: profile addresses and the names on unread conversations, so it can tell SamoraOS who accepted and who replied. Message text is not read.</li>
+<li><b>Your Sent invitations page, at the same moments</b>: only two numbers, how many invitations went out in the last 7 days and how many are still pending. Names on that page are not read or sent.</li>
+<li><b>Your My Premium page, about once a week</b>: only which plan LinkedIn shows (Free, Premium, Sales Navigator or Recruiter Lite), so your limits match your plan.</li>
 <li><b>Your own LinkedIn name</b>, shown in the plugin so you can see which account it runs on.</li>
 <li><b>On SamoraOS pages only</b>: a one-time pairing code that the signed-in app hands to the plugin.</li>
 </ul>
 <p>It does not read other websites, your browsing history, passwords, or anything on LinkedIn outside the pages above.</p>
 
+<h2>How to approach someone</h2>
+<p>When you ask for it, or automatically for people already in your SamoraOS records, the profile text above is sent to your SamoraOS workspace, which asks the AI provider your organisation has set up (Google Gemini) to write a short read: their likely communication style, what to do and avoid, and an opener in their style. It is written only from what the person published on LinkedIn and what your organisation already holds. Personal characteristics such as health, religion, politics, family or relationships are never inferred and are removed if they appear. The read is kept in your organisation's workspace so the next look is instant. Samora does not use it to train AI models.</p>
+
+<h2>Phone and email, only on a click</h2>
+<p>Nothing is looked up until you press "Reveal phone and email". Then your SamoraOS workspace checks your organisation's own records first, and if needed asks Lusha or Apollo, using your organisation's own account with them, by the person's LinkedIn address. What is found is shown to you, saved for your organisation so a colleague does not pay for the same person again, and added to the SAMpaign contact if you add them. Numbers on a do-not-call list are marked and cannot be dialled from the plugin. Your organisation's admin sets how many paid look-ups each person may make a day.</p>
+
 <h2>What you tell it</h2>
 <ul>
-<li><b>Your LinkedIn plan</b> (Free, Premium, Sales Navigator or Recruiter Lite), which sets your daily and weekly limits and the length of invitation notes.</li>
+<li><b>Your LinkedIn plan</b>, if you choose it yourself, which sets your daily and weekly limits and the length of invitation notes.</li>
 <li><b>A one tap label on a LinkedIn reply</b> (Interested, Not now or Not interested), which counts in your SAMpaign results.</li>
+<li><b>The order of your steps</b>, if you drag them or press Next.</li>
 </ul>
-<p>Your weekly scorecard in the plugin is built from the counts above and your SamoraOS activity. It shows numbers only.</p>
 
 <h2>What it stores and where</h2>
-<p>A device token that connects this Chrome to your SamoraOS account, your settings, and a short list of recent actions are kept in Chrome's storage on your computer. The people, notes, messages and results are kept in your organisation's SamoraOS workspace, the same place as your SAMpaigns. They are not sold, shared with advertisers, or used for anything other than running and reporting on your SAMpaigns.</p>
-<p>The use of information received through this extension adheres to the <a href="https://developer.chrome.com/docs/webstore/program-policies/policies">Chrome Web Store User Data Policy</a>, including the Limited Use requirements. Data is sent only over HTTPS, only to your SamoraOS workspace, and is never used to train AI models.</p>
+<p>A device token that connects this Chrome to your SamoraOS account, your settings, and a short list of recent actions are kept in Chrome's storage on your computer. The people, notes, messages, reads, revealed contact details and results are kept in your organisation's SamoraOS workspace, the same place as your SAMpaigns. They are not sold, shared with advertisers, or used for anything other than running and reporting on your outreach.</p>
+<p>The use of information received through this extension adheres to the <a href="https://developer.chrome.com/docs/webstore/program-policies/policies">Chrome Web Store User Data Policy</a>, including the Limited Use requirements. Data is sent only over HTTPS and only to your SamoraOS workspace. From there it reaches Google Gemini, Lusha or Apollo only for the purposes above, under your organisation's own accounts with them.</p>
 
-<h2>What it sends</h2>
-<p>In Co-pilot, invitations and messages go out only when you press Enter or LinkedIn's Send button. In Autopilot, which you switch on yourself after confirming the risk, the plugin presses Send for you at a human pace, within your working hours and daily limits. LinkedIn does not allow automated sending, so using Autopilot is your decision about your own account.</p>
+<h2>What it sends on LinkedIn</h2>
+<p>In Co-pilot, invitations and messages go out only when you press Enter or LinkedIn's Send button. In Autopilot, which you switch on yourself after confirming the risk, the plugin presses Send for you at a human pace, within your working hours and daily limits. LinkedIn's terms do not allow automated sending, so using Autopilot is your decision about your own account.</p>
 
 <h2>If Samora switches LinkedIn Automation off</h2>
 <p>LinkedIn Automation is an add-on. If it is off for your organisation, the plugin shows a locked screen and reads nothing on LinkedIn until it is switched back on.</p>
 
 <h2>Removing your data</h2>
-<p>Disconnect the plugin from its Settings, or remove it from Chrome, and its local data is deleted. To delete records held in SamoraOS, ask your organisation's SamoraOS admin or write to <a href="mailto:vasu@samoraglobal.com">vasu@samoraglobal.com</a>. The full Samora privacy policy is at <a href="https://samoraglobal.com/privacy">samoraglobal.com/privacy</a>.</p>
+<p>Disconnect the plugin from its Settings, or remove it from Chrome, and its local data is deleted. To delete records held in SamoraOS, including a read or revealed contact details about a person, ask your organisation's SamoraOS admin or write to <a href="mailto:vasu@samoraglobal.com">vasu@samoraglobal.com</a>. The full Samora privacy policy is at <a href="https://samoraglobal.com/privacy">samoraglobal.com/privacy</a>.</p>
 </main>
 </body>
 </html>
