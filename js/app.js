@@ -3,7 +3,7 @@ let SB_KEY = localStorage.getItem('dt-sb-key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6I
 let API_KEY = localStorage.getItem('dt-api-key') || '';
 var _userHabits = null;
 // Cache buster — update this string on every deploy to purge stale service worker cache
-var APP_VERSION = '20261010-01';
+var APP_VERSION = '20261010-02';
 
 // ── Money in the org's own currency (2026-10-04) ───────────────────────────
 // Amounts are stored in USD (deal_value_usd) and shown in the org's currency
@@ -3790,6 +3790,7 @@ function _briefFailText(reason, status) {
     case 'truncated':             return 'Gemini’s reply was cut off';
     case 'empty':                 return 'Gemini returned an empty reply';
     case 'network':               return 'Could not reach Gemini';
+    case 'overloaded':            return 'Google’s AI was too busy to write today’s brief';
     case 'not_configured':        return 'Gemini is not set up for your organisation';
     case 'legacy':                return 'SAM could not refresh today’s brief';
     default:                      return 'SAM could not generate today’s brief' + (status ? ' (Gemini error ' + status + ')' : '');
@@ -16889,6 +16890,7 @@ async function sampWriteDrafts(id, launch) {
       if (d.ok && d.review) rvAgg.rewritten += d.review.rewritten || 0;
       if (!d.ok) {
         if (d.reason === 'quota' && !d.daily && paced++ < 8) { if (await _spPace(d.retry_after || 30, document.getElementById('sampWriteMsg'), function () { return stop; })) continue; break; }
+        if (d.reason === 'overloaded' && paced++ < 4) { if (await _spPace(20, document.getElementById('sampWriteMsg'), function () { return stop; }, 'Google\'s AI is busy right now.')) continue; break; }
         err = d.error || 'Could not write drafts'; break;
       }
       written += d.written || 0;
@@ -17438,6 +17440,7 @@ async function spLiWrite(id, kind) {
     var r = await _sampEdge('write_linkedin_notes', { campaign_id: id, kind: kind, batch: 12, skip_ids: skip });
     if (!r.ok) {
       if (r.reason === 'quota' && !r.daily && paced++ < 8) { if (await _spPace(r.retry_after || 30, document.getElementById('liWMsg'), function () { return stop; })) continue; break; }
+      if (r.reason === 'overloaded' && paced++ < 4) { if (await _spPace(20, document.getElementById('liWMsg'), function () { return stop; }, 'Google\'s AI is busy right now.')) continue; break; }
       err = r.error || 'SAM could not write these.'; break;
     }
     written += r.written || 0; skip = skip.concat(r.missed || []);
@@ -17755,10 +17758,10 @@ async function _spScoutDone(campaignId, d, found, provider) {
 }
 
 // ── Gemini pacing: wait out a per-minute limit instead of stopping ──────────
-async function _spPace(secs, msgEl, isStopped) {
+async function _spPace(secs, msgEl, isStopped, why) {
   for (var s = Math.max(5, secs || 30); s > 0; s--) {
     if (isStopped && isStopped()) return false;
-    if (msgEl) msgEl.textContent = 'Pacing to your Gemini key\'s per-minute limit. Carrying on in ' + s + 's…';
+    if (msgEl) msgEl.textContent = (why || 'Pacing to your Gemini key\'s per-minute limit.') + ' Carrying on in ' + s + 's…';
     await new Promise(function (r) { setTimeout(r, 1000); });
   }
   return true;
@@ -19617,7 +19620,8 @@ function _g19TamRender() {
     '<button class="g-btn sp-gold" type="button" id="g19TamGo" onclick="g19TamSearch()"' + (T.busy || left === 0 ? ' disabled' : '') + '>' + (T.busy ? 'SAM is looking…' : SP_ICON.spark + ' Find companies') + '</button></div>' +
     '<div class="sp-small" style="margin-top:8px">' + (left === null ? '' : left === 0 ? 'No searches left today. They reset at midnight.' : _spPlural(left, 'search', 'searches') + ' left today.') + ' Uses no data credits: SAM only spends credits later, when it finds people inside the companies you pick.</div></section>';
   var res = '';
-  if (T.busy) res = '<section class="sp-card sp-pad"><div class="sp-lbl">Looking</div><div class="sp-progress" style="margin-top:12px"><span style="width:60%"></span></div><div class="sp-small" style="margin-top:10px">SAM proposes companies, then opens each website to check it is real and names the company. About a minute.</div></section>';
+  if (!T.busy && T.err && !T.res) res = _g20TamErr(T);
+  else if (T.busy) res = '<section class="sp-card sp-pad"><div class="sp-lbl">Looking</div><div class="sp-progress" style="margin-top:12px"><span style="width:60%"></span></div><div class="sp-small" style="margin-top:10px">SAM proposes companies, then opens each website to check it is real and names the company. About a minute.</div></section>';
   else if (T.res) {
     var c = T.res.candidates || [];
     var nPick = c.filter(function (x) { return T.picked[x.id]; }).length;
@@ -19639,10 +19643,18 @@ function _g19TamSave() { var T = window._g19Tam; var q = document.getElementById
 async function g19TamSearch() {
   _g19TamSave(); var T = window._g19Tam;
   if (String(T.q).trim().length < 8) { showToast('Describe the companies in a few words, like the examples'); return; }
+  _g20TamStopWait(); T.err = null;
   T.busy = true; T.res = null; T.picked = {}; _g19TamRender();
   var d = await _sampEdge('discover_accounts', { description: String(T.q).trim(), region_hint: String(T.region || '').trim() || undefined, limit: T.n });
   T.busy = false;
-  if (!d.ok) { if (d.locked) { window._orgConfig = Object.assign({}, window._orgConfig || {}, { samTam: false }); } showToast(d.error || 'SAM could not search just now'); _g19TamRender(); return; }
+  if (!d.ok) {
+    if (d.locked) { window._orgConfig = Object.assign({}, window._orgConfig || {}, { samTam: false }); showToast(d.error || 'SAM-TAM Discovery is a premium feature'); _g19TamRender(); return; }
+    T.err = { msg: d.error || 'SAM could not search just now. Try again in a minute.', busy: !!d.busy };
+    g19UsageLoad(true).then(function () { if (window._g19Tam === T && !T.busy) _g19TamRender(); });
+    if (d.busy && (T.autoTries || 0) < 2) { T.autoTries = (T.autoTries || 0) + 1; _g20TamWait(T.autoTries === 1 ? 20 : 45); }
+    _g19TamRender(); _g20Reveal('.g20-err'); return;
+  }
+  T.autoTries = 0; setTimeout(function () { _g20Reveal('.g19-tamres'); }, 60);
   T.res = d;
   (d.candidates || []).forEach(function (x) { if (x.verified) T.picked[x.id] = true; });
   await g19UsageLoad(true);
@@ -19679,4 +19691,43 @@ function _g19TamWizCard() {
   return _g19SamTam()
     ? '<button type="button" class="g19-tamcta" onclick="g19TamFromWizard()">' + G19_ICON.target + '<span><b>Find the companies with SAM-TAM Discovery</b><small>Describe your market in a sentence; SAM finds real companies and checks each website.</small></span><span class="g19-prem">Premium</span></button>'
     : '<button type="button" class="g19-tamcta locked" onclick="g19TamFromWizard()">' + G19_ICON.lock + '<span><b>SAM-TAM Discovery</b><small>Let SAM find the companies for you. Part of Samora’s premium plan.</small></span><span class="g19-prem">Premium</span></button>';
+}
+
+// ── Drop H.1 (2026-10-10): when Google's AI is busy ─────────────────────────
+var G20_ICON = {
+  cloud: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18.5h10a4 4 0 00.6-7.96A6 6 0 006.2 9.6 4.5 4.5 0 007 18.5z"/><path d="M12 11v3.5M12 16.8v.2"/></svg>',
+  warn: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 8v5M12 15.8v.2"/></svg>'
+};
+function _g20TamErr(T) {
+  var e = T.err, left = _g19Left('discovery');
+  var body = e.busy
+    ? 'Google, which powers SAM’s search, is overloaded for a moment. Nothing was used' + (left !== null ? ': you still have ' + _spPlural(left, 'search', 'searches') + ' today' : '') + '. This usually clears within a minute.'
+    : e.msg;
+  return '<section class="sp-card sp-pad g20-err' + (e.busy ? ' busy' : '') + '" role="status" aria-live="polite">' +
+    '<div class="g20-eh"><span class="g20-ei">' + (e.busy ? G20_ICON.cloud : G20_ICON.warn) + '</span><b>' + (e.busy ? 'Google’s AI is busy right now' : 'SAM could not search') + '</b></div>' +
+    '<div class="g20-eb">' + esc(body) + '</div>' +
+    (T.wait ? '<div class="g20-ew"><span class="g20-spin" aria-hidden="true"></span><span>Trying again in <b id="g20TamWait">' + T.wait + '</b>s</span></div>' : '') +
+    '<div class="g20-ea"><button class="g-btn sp-gold" type="button" onclick="g20TamRetryNow()">Try again now</button>' +
+    (T.wait ? '<button class="g-btn" type="button" onclick="_g20TamStopWait();_g19TamRender()">Don’t retry</button>' : '') + '</div></section>';
+}
+function _g20TamWait(secs) {
+  var T = window._g19Tam; if (!T) return;
+  _g20TamStopWait();
+  T.wait = secs;
+  T.waitT = setInterval(function () {
+    if (window._g19Tam !== T || window._sampView !== 'tam') { _g20TamStopWait(); return; }
+    T.wait--;
+    var el = document.getElementById('g20TamWait'); if (el) el.textContent = String(Math.max(0, T.wait));
+    if (T.wait <= 0) { _g20TamStopWait(); g19TamSearch(); }
+  }, 1000);
+}
+function _g20TamStopWait() { var T = window._g19Tam; if (!T) return; if (T.waitT) clearInterval(T.waitT); T.waitT = null; T.wait = 0; }
+function g20TamRetryNow() { _g20TamStopWait(); g19TamSearch(); }
+// On a phone the answer lands below the form: bring it into view once.
+function _g20Reveal(sel) {
+  setTimeout(function () {
+    var el = document.querySelector(sel); if (!el || !el.getBoundingClientRect) return;
+    var r = el.getBoundingClientRect();
+    if (r.top > window.innerHeight - 120) { try { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { el.scrollIntoView(); } }
+  }, 50);
 }
