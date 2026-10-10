@@ -3,7 +3,7 @@ let SB_KEY = localStorage.getItem('dt-sb-key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6I
 let API_KEY = localStorage.getItem('dt-api-key') || '';
 var _userHabits = null;
 // Cache buster — update this string on every deploy to purge stale service worker cache
-var APP_VERSION = '20261010-03';
+var APP_VERSION = '20261010-04';
 
 // ── Money in the org's own currency (2026-10-04) ───────────────────────────
 // Amounts are stored in USD (deal_value_usd) and shown in the org's currency
@@ -3781,19 +3781,19 @@ var _BRIEF_CACHE_KEY = 'samora_brief_cache';
 // a month of non-quota failures.
 function _briefFailText(reason, status) {
   switch (reason) {
-    case 'quota':                 return 'Gemini quota reached';
-    case 'key_invalid':           return 'The Gemini API key is invalid or expired';
-    case 'access_denied':         return 'Gemini refused access for this API key';
-    case 'model_unavailable':     return 'The configured Gemini model is unavailable';
-    case 'grounding_unavailable': return 'Google Search grounding is not available on this key';
-    case 'blocked':               return 'Gemini declined to write this brief';
-    case 'truncated':             return 'Gemini’s reply was cut off';
-    case 'empty':                 return 'Gemini returned an empty reply';
-    case 'network':               return 'Could not reach Gemini';
-    case 'overloaded':            return 'Google’s AI was too busy to write today’s brief';
-    case 'not_configured':        return 'Gemini is not set up for your organisation';
-    case 'legacy':                return 'SAM could not refresh today’s brief';
-    default:                      return 'SAM could not generate today’s brief' + (status ? ' (Gemini error ' + status + ')' : '');
+    case 'quota':                 return 'SAM has used its writing allowance for now';
+    case 'key_invalid':           return 'SAM\u2019s AI key for your organisation is invalid or expired';
+    case 'access_denied':         return 'SAM\u2019s AI key for your organisation was refused';
+    case 'model_unavailable':     return 'SAM\u2019s AI model is unavailable just now';
+    case 'grounding_unavailable': return 'SAM\u2019s web search is not available for your organisation';
+    case 'blocked':               return 'SAM declined to write this brief';
+    case 'truncated':             return 'SAM\u2019s brief was cut off';
+    case 'empty':                 return 'SAM came back with an empty brief';
+    case 'network':               return 'Could not reach SAM\u2019s AI';
+    case 'overloaded':            return 'SAM was too busy to write today\u2019s brief';
+    case 'not_configured':        return 'SAM\u2019s AI is not set up for your organisation';
+    case 'legacy':                return 'SAM could not refresh today\u2019s brief';
+    default:                      return 'SAM could not write today\u2019s brief' + (status ? ' (error ' + status + ')' : '');
   }
 }
 function _briefDateLabel(ymd) {
@@ -4331,13 +4331,13 @@ async function syncNotetaker() {
   var btn = document.getElementById('notetakerSyncBtn');
   var out = document.getElementById('seqSyncOutput');
  if (btn) { btn.textContent = 'Syncing calls…'; btn.disabled = true; }
-  if (out) out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">Connecting to notetaker and analysing transcripts with Gemini…</div>';
+  if (out) out.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">Connecting to notetaker and SAM is reading the transcripts…</div>';
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'sync_notetaker'}) });
     var d = await r.json();
     if (!d.ok) { if (out) out.innerHTML = '<div style="font-size:12px;color:var(--coral)"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> '+esc(d.error||'Sync failed')+'</div>'; return; }
     var html = '<div style="background:var(--surface2);border-radius:var(--r-sm);padding:10px 12px;margin-top:6px">' +
-      '<div style="font-size:11px;font-weight:600;color:var(--gold);margin-bottom:6px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5a2.8 2.8 0 00-2.8 2.8v5.4a2.8 2.8 0 005.6 0V6.3A2.8 2.8 0 0012 3.5zM5.5 11a6.5 6.5 0 0013 0M12 17.5V21"/></svg> '+esc(d.provider)+' synced · '+d.transcripts_analysed+'/'+d.transcripts_found+' transcripts analysed via Gemini</div>' +
+      '<div style="font-size:11px;font-weight:600;color:var(--gold);margin-bottom:6px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5a2.8 2.8 0 00-2.8 2.8v5.4a2.8 2.8 0 005.6 0V6.3A2.8 2.8 0 0012 3.5zM5.5 11a6.5 6.5 0 0013 0M12 17.5V21"/></svg> '+esc(d.provider)+' synced · '+d.transcripts_analysed+'/'+d.transcripts_found+' transcripts read by SAM</div>' +
       '<div style="font-size:11px;color:var(--text3)">Full transcript → exact quotes, budget signals, action items, signal score updates. Signals visible in Intelligence tab.</div>' +
       (d.errors&&d.errors.length?'<div style="font-size:11px;color:var(--amber);margin-top:4px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v5M12 16.5v.5M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg> '+d.errors.length+' partial errors</div>':'') +
     '</div>';
@@ -8940,7 +8940,7 @@ function renderIntelDebug(data) {
   if (data.geminiQuotaExhausted && data.message) {
     return '<div style="text-align:center;padding:48px 0;color:var(--text3);font-size:14px">' +
       '<div style="font-size:34px;margin-bottom:12px;opacity:0.5">⏳</div>' +
-      '<div style="font-weight:600;color:var(--gold);margin-bottom:8px">Gemini quota limit reached</div>' +
+      '<div style="font-weight:600;color:var(--gold);margin-bottom:8px">SAM has reached its limit for now</div>' +
       '<div style="max-width:420px;margin:0 auto;line-height:1.6;font-size:13px">' + esc(data.message) + '</div>' +
     '</div>';
   }
@@ -13599,7 +13599,7 @@ async function runIcpScoring() {
   var status  = document.getElementById('icpScoreStatus');
   var results = document.getElementById('icpScoreResults');
  [btn, samBtn].forEach(function(b){ if(b){b.textContent='Scoring…';b.disabled=true;} });
- if (status) status.textContent = 'Gemini is scoring your accounts…';
+ if (status) status.textContent = 'SAM is scoring your accounts…';
   if (results) results.innerHTML = '';
   try {
     var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'compute_icp_scores'}) });
@@ -16895,7 +16895,7 @@ async function sampWriteDrafts(id, launch) {
       if (d.ok && d.review) rvAgg.rewritten += d.review.rewritten || 0;
       if (!d.ok) {
         if (d.reason === 'quota' && !d.daily && paced++ < 8) { if (await _spPace(d.retry_after || 30, document.getElementById('sampWriteMsg'), function () { return stop; })) continue; break; }
-        if (d.reason === 'overloaded' && paced++ < 4) { if (await _spPace(20, document.getElementById('sampWriteMsg'), function () { return stop; }, 'Google\'s AI is busy right now.')) continue; break; }
+        if (d.reason === 'overloaded' && paced++ < 4) { if (await _spPace(20, document.getElementById('sampWriteMsg'), function () { return stop; }, 'SAM is busy right now.')) continue; break; }
         err = d.error || 'Could not write drafts'; break;
       }
       written += d.written || 0;
@@ -17445,7 +17445,7 @@ async function spLiWrite(id, kind) {
     var r = await _sampEdge('write_linkedin_notes', { campaign_id: id, kind: kind, batch: 12, skip_ids: skip });
     if (!r.ok) {
       if (r.reason === 'quota' && !r.daily && paced++ < 8) { if (await _spPace(r.retry_after || 30, document.getElementById('liWMsg'), function () { return stop; })) continue; break; }
-      if (r.reason === 'overloaded' && paced++ < 4) { if (await _spPace(20, document.getElementById('liWMsg'), function () { return stop; }, 'Google\'s AI is busy right now.')) continue; break; }
+      if (r.reason === 'overloaded' && paced++ < 4) { if (await _spPace(20, document.getElementById('liWMsg'), function () { return stop; }, 'SAM is busy right now.')) continue; break; }
       err = r.error || 'SAM could not write these.'; break;
     }
     written += r.written || 0; skip = skip.concat(r.missed || []);
@@ -17766,7 +17766,7 @@ async function _spScoutDone(campaignId, d, found, provider) {
 async function _spPace(secs, msgEl, isStopped, why) {
   for (var s = Math.max(5, secs || 30); s > 0; s--) {
     if (isStopped && isStopped()) return false;
-    if (msgEl) msgEl.textContent = (why || 'Pacing to your Gemini key\'s per-minute limit.') + ' Carrying on in ' + s + 's…';
+    if (msgEl) msgEl.textContent = (why || 'SAM is pacing itself.') + ' Carrying on in ' + s + 's…';
     await new Promise(function (r) { setTimeout(r, 1000); });
   }
   return true;
@@ -19626,7 +19626,7 @@ function _g19TamRender() {
     '<div class="sp-small" style="margin-top:8px">' + (left === null ? '' : left === 0 ? 'No searches left today. They reset at midnight.' : _spPlural(left, 'search', 'searches') + ' left today.') + ' A search counts only when SAM comes back with companies. It uses no data credits.</div></section>';
   var res = '';
   if (!T.busy && T.err && !T.res) res = _g20TamErr(T);
-  else if (T.busy) res = '<section class="sp-card sp-pad"><div class="g21-lk"><span class="sp-lbl">Looking for ' + T.n + ' ' + (T.n === 1 ? 'company' : 'companies') + '</span><span class="g21-el" id="g21TamEl">' + Math.max(0, Math.round((Date.now() - (T.t0 || Date.now())) / 1000)) + 's</span></div><div class="sp-progress g21-ind" style="margin-top:12px"><span></span></div><div class="sp-small" style="margin-top:10px">SAM asks Google for companies that fit, then opens each website to check it is real. Usually 20 to 60 seconds; SAM stops at about 90 and tells you.</div></section>';
+  else if (T.busy) res = '<section class="sp-card sp-pad"><div class="g21-lk"><span class="sp-lbl">Looking for ' + T.n + ' ' + (T.n === 1 ? 'company' : 'companies') + '</span><span class="g21-el" id="g21TamEl">' + Math.max(0, Math.round((Date.now() - (T.t0 || Date.now())) / 1000)) + 's</span></div><div class="sp-progress g21-ind" style="margin-top:12px"><span></span></div><div class="sp-small" style="margin-top:10px">SAM finds companies that fit, then checks each website is real. Usually 20 to 60 seconds.</div></section>';
   else if (T.res) {
     var c = T.res.candidates || [];
     var nPick = c.filter(function (x) { return T.picked[x.id]; }).length;
@@ -19658,7 +19658,7 @@ async function g19TamSearch() {
     if (d.locked) { window._orgConfig = Object.assign({}, window._orgConfig || {}, { samTam: false }); showToast(d.error || 'SAM-TAM Discovery is a premium feature'); _g19TamRender(); return; }
     T.err = { msg: d.error || 'SAM could not search just now. Try again in a minute.', busy: !!(d.busy || d._stopped), slow: !!(d.slow || d._stopped) };
     g19UsageLoad(true).then(function () { if (window._g19Tam === T && !T.busy) _g19TamRender(); });
-    if (d.busy && (T.autoTries || 0) < 2) { T.autoTries = (T.autoTries || 0) + 1; _g20TamWait(T.autoTries === 1 ? 20 : 45); }
+    if ((d.busy || /put the list together/.test(d.error || '')) && (T.autoTries || 0) < 2) { T.autoTries = (T.autoTries || 0) + 1; _g20TamWait(T.autoTries === 1 ? 20 : 45); }
     _g19TamRender(); _g20Reveal('.g20-err'); return;
   }
   T.autoTries = 0; setTimeout(function () { _g20Reveal('.g19-tamres'); }, 60);
@@ -19708,12 +19708,12 @@ var G20_ICON = {
 function _g20TamErr(T) {
   var e = T.err, left = _g19Left('discovery');
   var body = e.slow
-    ? 'Google was too slow to answer, so the search was stopped. Nothing was used' + (left !== null ? ': you still have ' + _spPlural(left, 'search', 'searches') + ' today' : '') + '. Try again, or ask for fewer companies.'
+    ? 'The search took too long, so SAM stopped it. Nothing was used' + (left !== null ? ': you still have ' + _spPlural(left, 'search', 'searches') + ' today' : '') + '. Try again, or ask for fewer companies.'
     : e.busy
-    ? 'Google, which powers SAM’s search, is overloaded for a moment. Nothing was used' + (left !== null ? ': you still have ' + _spPlural(left, 'search', 'searches') + ' today' : '') + '. This usually clears within a minute.'
+    ? 'SAM is under heavy load for a moment. Nothing was used' + (left !== null ? ': you still have ' + _spPlural(left, 'search', 'searches') + ' today' : '') + '. This usually clears within a minute.'
     : e.msg;
   return '<section class="sp-card sp-pad g20-err' + (e.busy ? ' busy' : '') + '" role="status" aria-live="polite">' +
-    '<div class="g20-eh"><span class="g20-ei">' + (e.busy ? G20_ICON.cloud : G20_ICON.warn) + '</span><b>' + (e.slow ? 'SAM took too long' : e.busy ? 'Google’s AI is busy right now' : 'SAM could not search') + '</b></div>' +
+    '<div class="g20-eh"><span class="g20-ei">' + (e.busy ? G20_ICON.cloud : G20_ICON.warn) + '</span><b>' + (e.slow ? 'SAM took too long' : e.busy ? 'SAM is busy right now' : 'SAM could not search') + '</b></div>' +
     '<div class="g20-eb">' + esc(body) + '</div>' +
     (T.wait ? '<div class="g20-ew"><span class="g20-spin" aria-hidden="true"></span><span>Trying again in <b id="g20TamWait">' + T.wait + '</b>s</span></div>' : '') +
     '<div class="g20-ea"><button class="g-btn sp-gold" type="button" onclick="g20TamRetryNow()">Try again now</button>' +
