@@ -3,7 +3,7 @@ let SB_KEY = localStorage.getItem('dt-sb-key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6I
 let API_KEY = localStorage.getItem('dt-api-key') || '';
 var _userHabits = null;
 // Cache buster — update this string on every deploy to purge stale service worker cache
-var APP_VERSION = '20261008-02';
+var APP_VERSION = '20261010-01';
 
 // ── Money in the org's own currency (2026-10-04) ───────────────────────────
 // Amounts are stored in USD (deal_value_usd) and shown in the org's currency
@@ -1210,7 +1210,7 @@ function switchTab(tab) {
   if (['tasks','issues','wins','misses'].includes(tab)) { if (tab !== 'misses') setTodaySection(tab); renderToday(); }
   if (tab === 'today') { setTodaySection('tasks'); renderToday(); }
   if (tab === 'settings') { renderSettings(); if (currentUser?.token && _isOrgAdmin()) { loadNotificationRules(); } }
-  if (tab === 'you') { renderYouPanel(); refreshYouTabConnections(); loadHabitsSection(); loadEnrichmentStatus(); try { _sigRenderYou(); } catch (e) {} }
+  if (tab === 'you') { renderYouPanel(); refreshYouTabConnections(); loadHabitsSection(); loadEnrichmentStatus(); try { _sigRenderYou(); } catch (e) {} try { g19RenderYouUsage(); } catch (e) {} }
   if (tab === 'review') renderSummary();
   if (tab === 'exec') { scWireMore(); renderScBoard(); const bm = document.getElementById('scBoardMore'); if (bm && bm.open) loadExecDashboard(); }
   if (tab === 'signals') {
@@ -15148,7 +15148,7 @@ function joinOrgCancel() {
     if (this.showProfile) tabs.push(['profile', 'Company profile']);
     tabs.push(['calendar', 'Work calendar']);
     tabs.push(['currency', 'Currency']);
-    tabs.push(['reveals', 'Contact reveals']);
+    tabs.push(['reveals', 'Usage']);
     tabs.push(['mailboxes', 'Mailboxes']);
     tabs.push(['log', 'Activity']);
     this._parkHosted();
@@ -15431,6 +15431,7 @@ function joinOrgCancel() {
     else if (a === 'mb-scan') this._mbScan(t);
     else if (a === 'cur-save') this._saveCurrency(t);
     else if (a === 'rev-save') this._saveReveals(t);
+    else if (a.indexOf('use-') === 0) this._g19Act(a, t);
   };
 
   Console.prototype._change = function (e) {
@@ -16039,6 +16040,74 @@ function joinOrgCancel() {
     };
   };
 
+  // ── Usage: the admin's tab (Team & access) ──────────────────────────────────
+  Console.prototype._renderReveals = async function (body) {
+    if (!this.use) {
+      body.innerHTML = '<div class="sxa-empty">Loading…</div>';
+      var d, rv;
+      try { d = await this.call('org_admin_usage_get', this._body()); } catch (e) { d = { ok: false, error: e.message }; }
+      try { rv = await this.call('org_admin_reveals_get', this._body()); } catch (e) { rv = null; }
+      if (this.tab !== 'reveals') return;
+      if (!d || !d.ok) { body.innerHTML = '<div class="sxa-empty sxa-err">' + h((d && d.error) || 'Could not load.') + '</div>'; return; }
+      this.use = d; this.rev = rv && rv.ok ? rv : null;
+    }
+    var u = this.use, self = this;
+    var kinds = u.kinds || [];
+    var short = { ai_email: 'Emails', ai_note: 'LinkedIn notes', ai_read: 'Reads', reveal: 'Reveals', scout: 'People search', enrich: 'Look-ups', discovery: 'SAM-TAM', export: 'Exports' };
+    var team = '<div class="g19-tl">' + kinds.map(function (k) {
+      return '<label class="g19-tf"><span>' + h(k.label) + '<small>Samora limit ' + k.samora_cap + (k.month_cap !== null && k.month_cap !== undefined ? ' a day, ' + k.month_cap + ' a month for the team (' + k.month_used + ' used)' : ' a day') + '</small></span>' +
+        '<input class="sxa-in" type="number" min="0" max="' + k.samora_cap + '" data-g19-team="' + k.kind + '" value="' + (k.team_cap === null || k.team_cap === undefined ? '' : k.team_cap) + '" placeholder="' + k.samora_cap + '"></label>';
+    }).join('') + '</div>';
+    var rows = (u.people || []).map(function (p) {
+      var open = self.useOpen === p.user_id;
+      var chips = p.usage.filter(function (x) { return x.used > 0 || x.kind === 'ai_email'; }).map(function (x) {
+        var full = x.cap && x.used >= x.cap;
+        return '<span class="g19-uc' + (full ? ' full' : '') + '" title="' + h(short[x.kind] || x.kind) + '">' + h(short[x.kind] || x.kind) + ' <b>' + x.used + '</b>/' + x.cap + '</span>';
+      }).join('');
+      var edit = open ? '<tr class="g19-edit"><td colspan="3"><div class="g19-tl">' + p.usage.map(function (x) {
+        var ov = p.overrides && p.overrides[x.kind] !== undefined ? p.overrides[x.kind] : '';
+        return '<label class="g19-tf"><span>' + h(short[x.kind] || x.kind) + '<small>now ' + x.cap + ' a day</small></span><input class="sxa-in" type="number" min="0" data-g19-p="' + x.kind + '" value="' + ov + '" placeholder="Team limit"></label>';
+      }).join('') + '</div><div class="sxa-actions" style="justify-content:flex-start"><button class="sxa-btn sxa-btn-gold" data-sxa="use-person" data-v="' + h(p.user_id) + '">Save ' + h(p.name.split(' ')[0]) + '’s limits</button><button class="sxa-btn" data-sxa="use-open" data-v="">Close</button></div><div class="sxa-note">Empty means the team limit. Never above Samora’s.</div></td></tr>' : '';
+      return '<tr><td><b>' + h(p.name) + '</b><div class="sxa-note" style="margin:2px 0 0">' + h(p.email) + '</div></td><td><div class="g19-ucs">' + (chips || '<span class="sxa-note">Nothing yet today</span>') + '</div><button class="g19-lnk" data-sxa="use-open" data-v="' + h(p.user_id) + '">' + (open ? 'Editing' : 'Limits') + '</button></td>' +
+        '<td style="text-align:right"><button class="toggle-pill' + (p.can_export ? ' on' : '') + '" role="switch" aria-checked="' + p.can_export + '" aria-label="' + h(p.name) + ' can export audiences" data-sxa="use-export" data-v="' + h(p.user_id) + '"><i></i></button></td></tr>' + edit;
+    }).join('');
+    var ex = (u.exports || []).map(function (x) { return '<tr><td>' + h(new Date(x.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })) + '</td><td>' + h(x.by) + '</td><td>' + h({ meta: 'Meta', linkedin_people: 'LinkedIn contacts', linkedin_companies: 'LinkedIn companies' }[x.format] || x.format) + '</td><td style="text-align:right">' + x.rows + '</td></tr>'; }).join('');
+    var r = this.rev;
+    var rrows = r ? (r.month || []).map(function (m) { return '<tr><td>' + h(m.name) + '</td><td style="text-align:right">' + m.paid + '</td><td style="text-align:right">' + m.free + '</td><td style="text-align:right">' + m.found + '</td></tr>'; }).join('') : '';
+    body.innerHTML = '<div class="sxa-pf">' +
+      (u.note ? '<div class="sxa-note" style="color:var(--c-partial)">' + h(u.note) + '</div>' : '') +
+      '<div class="sxa-sec" style="margin-top:4px">Daily limits for the team</div>' +
+      '<div class="sxa-note">Limits keep costs predictable and stop anything running in a loop. Samora sets the most your plan allows; you can set lower ones for everyone here, or for one person below.</div>' + team +
+      '<div class="sxa-actions" style="justify-content:flex-start"><button class="sxa-btn sxa-btn-gold" data-sxa="use-team">Save team limits</button></div>' +
+      '<div class="sxa-sec">People today</div>' +
+      '<table class="sxa-tbl g19-ptbl" style="width:100%"><thead><tr><th style="text-align:left">Person</th><th style="text-align:left">Used today</th><th style="text-align:right">Can export audiences</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+      '<div class="sxa-sec">Ad audience exports</div>' +
+      '<label class="g19-sw"><button class="toggle-pill' + (u.export_provider_data ? ' on' : '') + '" role="switch" aria-checked="' + !!u.export_provider_data + '" data-sxa="use-provider"><i></i></button><span><b>Include phone numbers and emails found through Lusha or Apollo</b><small>Off by default. Their contracts usually limit data to your own internal use; check yours before switching this on. Your own records and people’s replies are always included.</small></span></label>' +
+      (ex ? '<table class="sxa-tbl" style="width:100%;max-width:640px;margin-top:10px"><thead><tr><th style="text-align:left">When</th><th style="text-align:left">Who</th><th style="text-align:left">Format</th><th style="text-align:right">Rows</th></tr></thead><tbody>' + ex + '</tbody></table>' : '<div class="sxa-note">No exports yet.</div>') +
+      (r ? '<div class="sxa-sec">Contact reveals this month</div>' + (rrows ? '<table class="sxa-tbl" style="width:100%;max-width:560px"><thead><tr><th style="text-align:left">Person</th><th style="text-align:right">Paid</th><th style="text-align:right">Free</th><th style="text-align:right">With a phone</th></tr></thead><tbody>' + rrows + '</tbody></table>' : '<div class="sxa-note">No reveals yet this month.</div>') : '') +
+    '</div>';
+  };
+  Console.prototype._g19Save = async function (payload, okMsg) {
+    var d;
+    try { d = await this.call('org_admin_usage_save', this._body(payload)); } catch (e) { d = { ok: false, error: e.message }; }
+    if (!d || !d.ok) { this.toast((d && d.error) || 'Could not save.', true); return; }
+    this.use = d;
+    try { var rv = await this.call('org_admin_reveals_get', this._body()); if (rv && rv.ok) this.rev = rv; } catch (e) {}
+    this.toast(d.note || okMsg);
+    this._renderReveals(this.el.querySelector('#sxa-body'));
+  };
+  Console.prototype._g19Act = function (a, t) {
+    var self = this;
+    if (a === 'use-open') { this.useOpen = t.getAttribute('data-v') || null; this._renderReveals(this.el.querySelector('#sxa-body')); return true; }
+    if (a === 'use-team') { var def = {}; this.el.querySelectorAll('[data-g19-team]').forEach(function (i) { def[i.getAttribute('data-g19-team')] = i.value === '' ? null : i.value; }); this._g19Save({ defaults: def }, 'Team limits saved'); return true; }
+    if (a === 'use-person') { var caps = {}; this.el.querySelectorAll('[data-g19-p]').forEach(function (i) { caps[i.getAttribute('data-g19-p')] = i.value === '' ? null : i.value; }); this.useOpen = null; this._g19Save({ person: { user_id: t.getAttribute('data-v'), caps: caps } }, 'Limits saved'); return true; }
+    if (a === 'use-export') { var on = !t.classList.contains('on'); t.classList.toggle('on', on); this._g19Save({ export_user: { user_id: t.getAttribute('data-v'), on: on } }, on ? 'They can export audiences now' : 'Export switched off for them'); return true; }
+    if (a === 'use-provider') { var on2 = !t.classList.contains('on'); t.classList.toggle('on', on2); this._g19Save({ export_provider_data: on2 }, on2 ? 'Lusha and Apollo data will be included in exports' : 'Lusha and Apollo data stay out of exports'); return true; }
+    void self;
+    return false;
+  };
+
+
   window.SamoraAccessConsole = {
     mount: function (el, opts) {
       if (!el) return null;
@@ -16388,6 +16457,7 @@ function _spShow(view) {
   if (home) home.hidden = view !== 'home';
   if (det) det.hidden = view !== 'detail';
   if (wiz) wiz.hidden = view !== 'new';
+  var tam = document.getElementById('sampTamPage'); if (tam) tam.hidden = view !== 'tam';
   try { window.scrollTo({ top: 0, behavior: 'instant' }); } catch (e) { window.scrollTo(0, 0); }
 }
 
@@ -16602,6 +16672,7 @@ function _spRenderHeader(id) {
       '<button class="g-btn" type="button" onclick="sampOpenEdit(\'' + esc(id) + '\')">Edit</button>' +
       '<button class="g-btn" type="button" onclick="syncSampaignCampaign(\'' + esc(id) + '\')" title="Check the mailbox for new replies now">Check replies</button>' + primary
     : '<span class="sp-chip">View only · syncs from ' + esc(owner || 'the owner') + '\'s mailbox</span>';
+  acts += _g19ExportBtn(id);
   el.innerHTML = '<div class="sp-head"><div style="min-width:0;flex:1"><h1 class="sp-title">' + esc(c.name) + '<span class="sp-pill ' + st[1] + '"><i></i>' + st[0] + '</span></h1>' +
     '<div class="sp-sub">' + esc(sub) + '</div>' + goal + _spFailedBanner(id, o) +
     (c.campaign_goal ? '<p class="sp-goal clamp" id="sampGoal_' + esc(id) + '">' + esc(c.campaign_goal) + '</p>' + (c.campaign_goal.length > 180 ? '<button class="sp-back" style="margin:4px 0 0;font-weight:600;color:var(--c-accent-text)" type="button" onclick="var g=document.getElementById(\'sampGoal_' + esc(id) + '\');g.classList.toggle(\'clamp\');this.textContent=g.classList.contains(\'clamp\')?\'Read more\':\'Show less\'">Read more</button>' : '') : '') +
@@ -17031,7 +17102,7 @@ function _spWizRender() {
       '<button type="button" class="sp-opt ' + (W.scope === 'list' ? 'on' : '') + '" onclick="_spWizSave();window._sampW.scope=\'list\';_spWizRender()"><b>A list of companies</b><span>The same outreach to many companies, like 10 institutes or 40 FMCG brands.</span></button></div>' +
       (W.scope === 'account'
         ? '<div class="sp-row3"><label class="sp-fld">Company<input id="spw_name" value="' + esc(W.name) + '" placeholder="Jotun Paints"></label><label class="sp-fld">Website<input id="spw_domain" value="' + esc(W.domain) + '" placeholder="jotun.com"></label><label class="sp-fld">Region <small>optional</small><input id="spw_region" value="' + esc(W.region) + '" placeholder="UAE"></label></div>'
-        : '<div class="sp-row2"><label class="sp-fld">Name of the list<input id="spw_listName" value="' + esc(W.listName) + '" placeholder="Karnataka top 10 institutes"></label><label class="sp-fld">Region <small>optional, for the whole list</small><input id="spw_listRegion" value="' + esc(W.listRegion || '') + '" placeholder="India"></label></div><label class="sp-fld">Companies, one per line<small>Name and website, and a region if it differs: Marico, marico.com, UAE. SAM scouts people in each company\u2019s region.</small><textarea id="spw_companies" placeholder="Marico, marico.com&#10;Dabur, dabur.com, UAE">' + esc(W.companies) + '</textarea></label>') +
+        : '<div class="sp-row2"><label class="sp-fld">Name of the list<input id="spw_listName" value="' + esc(W.listName) + '" placeholder="Karnataka top 10 institutes"></label><label class="sp-fld">Region <small>optional, for the whole list</small><input id="spw_listRegion" value="' + esc(W.listRegion || '') + '" placeholder="India"></label></div>' + _g19TamWizCard() + '<label class="sp-fld">Companies, one per line<small>Name and website, and a region if it differs: Marico, marico.com, UAE. SAM scouts people in each company\u2019s region.</small><textarea id="spw_companies" placeholder="Marico, marico.com&#10;Dabur, dabur.com, UAE">' + esc(W.companies) + '</textarea></label>') +
       '<div class="sp-ih" style="margin-top:22px">Who inside them?</div>' +
       '<label class="sp-fld">Upload a CSV <small>Columns like name, email, title, company. Header names are flexible.</small><input id="spw_csv" type="file" accept=".csv,text/csv"></label>' + (W.csv ? '<div class="sp-small">Chosen: ' + esc(W.csv.name) + '</div>' : '') +
       '<label class="sp-fld">Or type people, one per line <small>Name, email, title, company. Email can be left out and found later.</small><textarea id="spw_people" placeholder="Anita Rao, anita@nlsiu.ac.in, Registrar">' + esc(W.people) + '</textarea></label>' +
@@ -17115,6 +17186,7 @@ async function _spWizCreate() {
     var titles = String(W.titles || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean);
     if (titles.length) { try { await _sampEdge('save_org_setting', { key: 'scout_profile_sampaign_' + id, value: JSON.stringify({ jobTitles: titles, departments: [], seniorities: [], locations: [] }) }); } catch (e) {} }
     showToast('SAMpaign created');
+    if (W.tamAccept && W.tamAccept.length) { _sampEdge('commit_discovery', { mark_only: true, accept_ids: W.tamAccept }).catch(function () {}); }
     window._sampaignCampaignsCache = window._sampaignCampaignsCache || {};
     window._sampaignCampaignsCache[id] = Object.assign({}, d.campaign, { is_owner: true, owner_email: currentUser.email });
     openSampaignDetail(id, 'overview');
@@ -17265,7 +17337,7 @@ async function _liRenderYou() {
   if (!d || !d.ok) { box.innerHTML = '<div class="sp-small">' + esc((d && d.error) || 'Could not load.') + '</div>'; return; }
   var devs = d.devices || [];
   var _liOld = (ext && _liVerLt(ext, LI_EXT_LATEST)) || devs.some(function (v) { return v.version && _liVerLt(v.version, LI_EXT_LATEST); });
-  var _liUpd = _liOld ? '<div class="li-note" style="margin-bottom:10px"><b>Update to ' + LI_EXT_LATEST + '.</b> It reads every profile you open, writes SAM’s read of how to approach them, reveals their phone and email in one click, and sends messages on LinkedIn’s new pages. <button class="rv-link" type="button" onclick="_liSheet(_liInstallHtml())">Get the update</button></div>' : '';
+  var _liUpd = _liOld ? '<div class="li-note" style="margin-bottom:10px"><b>Update to ' + LI_EXT_LATEST + '.</b> It catches replies in chats you have already opened, matches SamoraOS in light or dark, and reads your LinkedIn plan on its own. <button class="rv-link" type="button" onclick="_liSheet(_liInstallHtml())">Get the update</button></div>' : '';
   var head = devs.length
     ? devs.map(function (v) {
         return '<div class="li-dev"><span class="li-dot ' + (v.online ? 'on' : '') + '"></span><div><b>' + esc(v.label || 'Chrome') + '</b><small>' + (v.online ? 'Online now' : 'Last seen ' + _liAgo(v.last_seen_at)) + (v.linkedin_name ? ' · LinkedIn: ' + esc(v.linkedin_name) : '') + (v.version ? ' · v' + esc(v.version) : '') + '</small></div></div>';
@@ -18968,7 +19040,7 @@ function scWireMore() {
 // a message by now and has not). The same list the LinkedIn panel shows and
 // the morning push names, from get_sampaign_tasks.
 window._tds = window._tds || { data: null, at: 0, open: {}, touched: false };
-var LI_EXT_LATEST = '1.4.0';
+var LI_EXT_LATEST = '1.5.0';
 function _liVerLt(a, b) { var x = String(a || '0').split('.').map(Number), y = String(b || '0').split('.').map(Number); for (var i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; }
 var TDS_ICON = {
   email: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M4 7l8 6 8-6"/></svg>',
@@ -19345,4 +19417,266 @@ function _g18WroteMsg(written, rv) {
   var bits = ['SAM wrote ' + _spPlural(written, 'draft')];
   if (rv && rv.rewritten) bits.push('rewrote ' + rv.rewritten + ' that failed its checks');
   return bits.join(' and ') + '. Review them, then schedule.';
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Drop H (2026-10-10): usage and limits, ad audiences, SAM-TAM Discovery.
+// ════════════════════════════════════════════════════════════════════════════
+var G19_ICON = {
+  target: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/></svg>',
+  people: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0113 0M16 4.5a3.5 3.5 0 010 7M18 14a5.5 5.5 0 013.5 6"/></svg>',
+  lock: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V8a4 4 0 018 0v2.5"/></svg>',
+  check: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  dl: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19.5h14"/></svg>'
+};
+function _g19Cfg() { return window._orgConfig || {}; }
+function _g19CanExport() { return !!_g19Cfg().canExport; }
+function _g19SamTam() { return !!_g19Cfg().samTam; }
+// The home buttons follow what this person may do.
+function g19PaintHome() {
+  var a = document.getElementById('g19AudBtn'); if (a) a.hidden = !_g19CanExport();
+  var t = document.getElementById('g19TamBtn'); if (t) t.classList.toggle('g19-locked', !_g19SamTam());
+}
+setInterval(function () { try { if (window._orgConfig) g19PaintHome(); } catch (e) {} }, 1500);
+
+// ── Usage: mine ─────────────────────────────────────────────────────────────
+window._g19Usage = null; window._g19UsageAt = 0;
+async function g19UsageLoad(force) {
+  if (window._g19Usage && !force && Date.now() - window._g19UsageAt < 60000) return window._g19Usage;
+  var d = await _sampEdge('get_my_usage', {});
+  if (d.ok) { window._g19Usage = d; window._g19UsageAt = Date.now(); }
+  return window._g19Usage;
+}
+function _g19Left(kind) { var u = window._g19Usage; if (!u) return null; var k = (u.kinds || []).find(function (x) { return x.kind === kind; }); return k ? Math.max(0, k.cap - k.used) : null; }
+function _g19Meter(k) {
+  var pct = k.cap ? Math.min(100, Math.round(k.used / k.cap * 100)) : 100;
+  var tone = !k.cap ? 'off' : pct >= 100 ? 'full' : pct >= 80 ? 'near' : '';
+  return '<div class="g19-m ' + tone + '"><div class="g19-mh"><span>' + esc(k.label) + '</span><b>' + (k.cap ? k.used + ' <small>of ' + k.cap + '</small>' : '<small>Off</small>') + '</b></div><div class="g19-mb"><span style="width:' + (k.cap ? pct : 0) + '%"></span></div></div>';
+}
+async function g19RenderYouUsage() {
+  var box = document.getElementById('youUsageBody'), chip = document.getElementById('youUsageChip');
+  if (!box) return;
+  box.innerHTML = '<div class="admin-card" style="margin-bottom:0"><div class="sp-small">Loading…</div></div>';
+  var u = await g19UsageLoad(true);
+  if (!u) { box.innerHTML = '<div class="admin-card" style="margin-bottom:0"><div class="sp-small">Could not load your usage.</div></div>'; return; }
+  var near = (u.kinds || []).filter(function (k) { return k.cap && k.used / k.cap >= 0.8; }).length;
+  if (chip) chip.textContent = near ? near + ' near the limit' : 'Today';
+  box.innerHTML = '<div class="admin-card" style="margin-bottom:0"><div class="sp-small" style="margin-bottom:10px">What you have used today, against your daily limits. Limits reset at midnight. Your admin sets them in Team &amp; access, Usage.</div>' +
+    '<div class="g19-meters">' + (u.kinds || []).map(_g19Meter).join('') + '</div>' +
+    (u.rights && u.rights.export ? '<div class="sp-small" style="margin-top:12px">' + G19_ICON.check + ' You can export ad audiences.</div>' : '') + '</div>';
+}
+
+// ── Ad audiences ────────────────────────────────────────────────────────────
+var G19_SEG = [['reached', 'Reached'], ['engaged', 'Replied or interested'], ['not_replied', 'No reply yet'], ['everyone', 'Everyone']];
+var G19_FMT = [
+  ['meta', 'Meta', 'Facebook and Instagram. Emails, phone numbers and names, hashed. Meta suggests at least 1,000 people; smaller lists work best as a lookalike seed.'],
+  ['linkedin_people', 'LinkedIn contacts', 'Emails hashed, with names, job titles and companies so LinkedIn can match people without an email. LinkedIn needs 300 matched members to run ads.'],
+  ['linkedin_companies', 'LinkedIn companies', 'The companies only, no personal data. The surest way to reach B2B buyers: LinkedIn targets everyone there by job title.']
+];
+async function openAdAudience(campaignId) {
+  if (!_g19CanExport()) { showToast('Exporting audiences needs your admin’s go-ahead. They can switch it on in Team & access, Usage.'); return; }
+  var A = window._g19Aud = { camps: [], picked: {}, seg: 'reached', fmt: 'meta', sum: null, loading: true, only: campaignId || null };
+  var m = document.createElement('div'); m.className = 'sp-modal'; m.id = 'g19Aud';
+  m.addEventListener('click', function (e) { if (e.target === m) m.remove(); });
+  m.innerHTML = '<div class="sp-mcard g19-aud" role="dialog" aria-modal="true" aria-label="Ad audience"><div id="g19AudBody"><div class="sp-small">Loading…</div></div></div>';
+  document.body.appendChild(m);
+  var d = await _sampEdge('ad_audience_options', {});
+  if (!d.ok) { document.getElementById('g19AudBody').innerHTML = '<h3>Ad audience</h3><p class="sp-muted">' + esc(d.error || 'Not available.') + '</p><div class="sp-foot"><span></span><button class="g-btn" type="button" onclick="document.getElementById(\'g19Aud\').remove()">Close</button></div>'; return; }
+  A.camps = d.campaigns || []; A.provider = d.provider_data;
+  A.camps.forEach(function (c) { A.picked[c.id] = !A.only || c.id === A.only; });
+  A.loading = false;
+  g19UsageLoad(false).then(function () { _g19AudRender(); });
+  _g19AudRender(); _g19AudPreview();
+}
+function _g19AudIds() { var A = window._g19Aud; return A.camps.filter(function (c) { return A.picked[c.id]; }).map(function (c) { return c.id; }); }
+function _g19AudRender() {
+  var A = window._g19Aud, el = document.getElementById('g19AudBody'); if (!A || !el) return;
+  var ids = _g19AudIds(), s = A.sum;
+  var tile = function (n, l, tone) { return '<div class="g19-t' + (tone ? ' ' + tone : '') + '"><b>' + (n === null || n === undefined ? '…' : n) + '</b><span>' + l + '</span></div>'; };
+  var left = _g19Left('reveal');
+  var canFill = s && s.could_find_phone > 0 && A.fmt === 'meta';
+  el.innerHTML = '<h3>Ad audience</h3><p class="sp-muted" style="margin:4px 0 0">People from your SAMpaigns, ready to upload to Meta or LinkedIn. Emails and phone numbers are hashed, so they never leave Samora readable. Anyone who opted out or said not interested is left out.</p>' +
+    '<div class="g19-sec">From</div>' +
+    '<div class="g19-camps">' + (A.camps.length ? A.camps.map(function (c) { return '<label class="g19-camp"><input type="checkbox" data-g19-camp="' + esc(c.id) + '"' + (A.picked[c.id] ? ' checked' : '') + '><span><b>' + esc(c.name) + '</b><small>' + _spPlural(c.people, 'person', 'people') + (c.owner ? ' · ' + esc(c.owner) : '') + '</small></span></label>'; }).join('') : '<div class="sp-small">No SAMpaigns with people yet.</div>') + '</div>' +
+    '<div class="g19-sec">Who</div><div class="g19-seg">' + G19_SEG.map(function (x) { return '<button type="button" class="' + (A.seg === x[0] ? 'on' : '') + '" data-g19-seg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
+    '<div class="g19-tiles">' + tile(s ? s.usable : null, 'in the file') + tile(s ? s.with_email : null, 'with an email') + tile(s ? s.with_phone : null, 'with a phone') + tile(s ? s.companies : null, 'companies') + '</div>' +
+    (s && s.left_out_provider_data ? '<div class="sp-small" style="margin-top:8px">' + _spPlural(s.left_out_provider_data, 'email or number', 'emails and numbers') + ' from Lusha or Apollo left out, as your admin has set.</div>' : '') +
+    '<div class="g19-sec">Format</div><div class="g19-fmts">' + G19_FMT.map(function (f) { return '<button type="button" class="g19-fmt' + (A.fmt === f[0] ? ' on' : '') + '" data-g19-fmt="' + f[0] + '"><b>' + f[1] + '</b><span>' + f[2] + '</span></button>'; }).join('') + '</div>' +
+    (canFill ? '<div class="g19-fill"><div><b>' + _spPlural(s.could_find_phone, 'person has', 'people have') + ' no phone number yet</b><small>Phone numbers lift Meta’s match rate the most. SAM can look them up from their LinkedIn profile, one paid reveal each (usually one Lusha credit)' + (left !== null ? '. You have ' + left + ' left today' : '') + '.</small></div><button class="g-btn sp-sm" type="button" data-g19-fill="1"' + (left === 0 ? ' disabled' : '') + '>Find up to ' + Math.min(s.could_find_phone, left === null ? 25 : left) + '</button></div>' : '') +
+    '<div class="sp-foot"><button class="g-btn" type="button" onclick="document.getElementById(\'g19Aud\').remove()">Close</button><button class="g-btn sp-gold" type="button" data-g19-dl="1"' + (!ids.length || (s && !s.usable && A.fmt !== 'linkedin_companies') ? ' disabled' : '') + '>' + G19_ICON.dl + ' Download for ' + (G19_FMT.find(function (f) { return f[0] === A.fmt; }) || G19_FMT[0])[1] + '</button></div>';
+}
+var _g19AudT = null;
+function _g19AudPreview() {
+  clearTimeout(_g19AudT);
+  _g19AudT = setTimeout(async function () {
+    var A = window._g19Aud; if (!A) return;
+    var ids = _g19AudIds();
+    if (!ids.length) { A.sum = { usable: 0, with_email: 0, with_phone: 0, companies: 0 }; _g19AudRender(); return; }
+    A.sum = null; _g19AudRender();
+    var d = await _sampEdge('ad_audience_preview', { campaign_ids: ids, segment: A.seg });
+    if (window._g19Aud !== A) return;
+    A.sum = d.ok ? d.summary : { usable: 0, with_email: 0, with_phone: 0, companies: 0 };
+    if (!d.ok) showToast(d.error || 'Could not count the audience');
+    _g19AudRender();
+  }, 250);
+}
+document.addEventListener('click', async function (e) {
+  var t = e.target.closest('[data-g19-seg],[data-g19-fmt],[data-g19-dl],[data-g19-fill]'); if (!t || !window._g19Aud) return;
+  var A = window._g19Aud;
+  if (t.hasAttribute('data-g19-seg')) { A.seg = t.getAttribute('data-g19-seg'); _g19AudPreview(); return; }
+  if (t.hasAttribute('data-g19-fmt')) { A.fmt = t.getAttribute('data-g19-fmt'); _g19AudRender(); return; }
+  if (t.hasAttribute('data-g19-dl')) {
+    t.disabled = true; t.textContent = 'Preparing…';
+    var d = await _sampEdge('ad_audience_export', { campaign_ids: _g19AudIds(), segment: A.seg, format: A.fmt });
+    if (!d.ok) { showToast(d.error || 'Could not export'); _g19AudRender(); return; }
+    var blob = new Blob([d.csv], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = d.filename || 'samora-audience.csv';
+    document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    window._g19LastExport = d;
+    showToast('Downloaded ' + _spPlural(d.rows, 'row') + '. Upload it in ' + (A.fmt === 'meta' ? 'Meta Ads Manager, Audiences, Custom audience, Customer list.' : 'LinkedIn Campaign Manager, Audiences, Upload a list.'));
+    g19UsageLoad(true); _g19AudRender(); return;
+  }
+  if (t.hasAttribute('data-g19-fill')) { g19FillPhones(t); return; }
+});
+document.addEventListener('change', function (e) {
+  var t = e.target; if (!t || !t.hasAttribute || !t.hasAttribute('data-g19-camp') || !window._g19Aud) return;
+  window._g19Aud.picked[t.getAttribute('data-g19-camp')] = t.checked; _g19AudPreview();
+});
+async function g19FillPhones(btn) {
+  var A = window._g19Aud; var left = _g19Left('reveal');
+  var max = Math.min(A.sum.could_find_phone, left === null ? 25 : left);
+  if (!max) { showToast('No reveals left today.'); return; }
+  if (btn.getAttribute('data-sure') !== '1') { btn.setAttribute('data-sure', '1'); btn.textContent = 'Use up to ' + max + ' reveals?'; btn.classList.add('sp-gold'); return; }
+  var d = await _sampEdge('ad_audience_phone_targets', { campaign_ids: _g19AudIds(), segment: A.seg, max: max });
+  if (!d.ok) { showToast(d.error || 'Could not start'); return; }
+  var list = d.targets || [];
+  var m = document.createElement('div'); m.className = 'sp-modal'; m.id = 'g19FillM';
+  m.innerHTML = '<div class="sp-mcard" role="dialog" aria-modal="true" aria-label="Finding phone numbers"><h3>Finding phone numbers</h3><div class="sp-small" id="g19FillMsg">Starting…</div><div class="sp-progress"><span id="g19FillBar" style="width:4%"></span></div><div class="sp-small" style="margin-top:10px">Samora checks its own records first, so a number already found by your team costs nothing.</div><div class="sp-foot"><span></span><button class="g-btn" type="button" id="g19FillStop">Stop</button></div></div>';
+  document.body.appendChild(m);
+  var stop = false; document.getElementById('g19FillStop').onclick = function () { stop = true; this.textContent = 'Stopping…'; };
+  var found = 0, done = 0, err = null;
+  for (var i = 0; i < list.length && !stop; i++) {
+    var r = await _sampEdge('panel_reveal_contact', { linkedin_url: list[i].linkedin_url, name: list[i].name, company: list[i].company });
+    done++;
+    if (!r.ok) { err = r.error || 'Stopped'; break; }
+    if ((r.phones || []).length) found++;
+    var msg = document.getElementById('g19FillMsg'), bar = document.getElementById('g19FillBar');
+    if (msg) msg.textContent = done + ' of ' + list.length + ' checked, ' + _spPlural(found, 'number') + ' found';
+    if (bar) bar.style.width = Math.max(4, Math.round(done / list.length * 100)) + '%';
+  }
+  m.remove();
+  showToast(err ? err : 'Found ' + _spPlural(found, 'phone number') + ' for ' + _spPlural(done, 'person', 'people') + '.');
+  await g19UsageLoad(true); _g19AudPreview();
+}
+function _g19ExportBtn(id) { return _g19CanExport() ? '<button class="g-btn" type="button" onclick="openAdAudience(\'' + esc(id) + '\')" title="People from this SAMpaign for Meta or LinkedIn ads">Ad audience</button>' : ''; }
+
+// ── SAM-TAM Discovery (premium) ─────────────────────────────────────────────
+function _g19PremiumCard(compact) {
+  return '<div class="li-lock' + (compact ? ' sm' : '') + '" role="note" aria-label="SAM-TAM Discovery is a premium feature">' +
+    '<span class="li-lock-sheen" aria-hidden="true"></span><div class="li-lock-mark">' + G19_ICON.target.replace('width="16" height="16"', 'width="22" height="22"') + '</div>' +
+    '<div class="li-lock-body"><div class="li-lock-k">Premium</div><div class="li-lock-t">SAM-TAM Discovery</div>' +
+    '<div class="li-lock-s">Describe the market you want, in a sentence. SAM finds real companies that fit, checks every website, leaves out the ones you already have, and turns your pick into a SAMpaign in one click.</div>' +
+    '<div class="li-lock-acts"><button class="li-lock-b" type="button" onclick="g19RequestTam(this)">Ask Samora to unlock</button><span class="li-lock-f">Part of Samora’s premium plan.</span></div></div></div>';
+}
+async function g19RequestTam(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  var d = await _sampEdge('request_addon', { addon: 'sam_tam' });
+  if (btn) { btn.textContent = d.ok ? 'Samora has your request' : 'Ask Samora to unlock'; btn.disabled = !!d.ok; }
+  showToast(d.ok ? 'Sent to the Samora team. They will be in touch.' : (d.error || 'Could not reach Samora'));
+}
+function sampOpenTam(opts) {
+  window._g19Tam = Object.assign({ q: '', region: '', n: 25, res: null, picked: {}, busy: false, fromWizard: false }, window._g19Tam && opts && opts.keep ? window._g19Tam : {}, opts || {});
+  _spShow('tam');
+  var page = document.getElementById('sampTamPage'); if (!page) return;
+  _g19TamRender();
+  if (_g19SamTam()) { g19UsageLoad(false).then(_g19TamRender); _g19TamIdeas(); }
+}
+async function _g19TamIdeas() {
+  var T = window._g19Tam; if (T.ideas) return;
+  T.ideas = [];
+  try {
+    var d = await _sampEdge('get_org_setting', { key: 'icp_definition' });
+    var icp = d && d.value ? (typeof d.value === 'string' ? JSON.parse(d.value) : d.value) : {};
+    var inds = (icp.target_industries || []).slice(0, 3), geos = (icp.target_geographies || []).slice(0, 2);
+    inds.forEach(function (i) { T.ideas.push(i + (geos[0] ? ' companies in ' + geos[0] : ' companies')); });
+    if (inds[0] && geos[1]) T.ideas.push(inds[0] + ' companies in ' + geos[1]);
+  } catch (e) {}
+  if (!T.ideas.length) T.ideas = ['Fintech lenders in India with 200 to 2,000 employees', 'FMCG brands in the UAE with their own distributor network', 'Private universities in Karnataka'];
+  _g19TamRender();
+}
+function _g19TamRender() {
+  var T = window._g19Tam, page = document.getElementById('sampTamPage'); if (!T || !page) return;
+  var head = '<button class="sp-back" type="button" onclick="' + (T.fromWizard ? '_g19TamBack()' : 'sampBackToList()') + '">' + SP_ICON.back + (T.fromWizard ? 'Back to New SAMpaign' : 'All SAMpaigns') + '</button>' +
+    '<h1 class="sp-title">SAM-TAM Discovery <span class="g19-prem">Premium</span></h1><div class="sp-sub">Find the part of your market worth reaching. Describe it in a sentence; SAM finds real companies, checks each website, and leaves out the ones you already have.</div>';
+  if (!_g19SamTam()) { page.innerHTML = '<div class="sp-wiz g19-tam">' + head + '<div style="margin-top:18px">' + _g19PremiumCard(false) + '</div></div>'; return; }
+  var left = _g19Left('discovery');
+  var form = '<section class="sp-card sp-pad g19-tamf"><label class="sp-fld" style="margin-top:0">Describe the companies<textarea id="g19TamQ" rows="2" placeholder="Fintech lenders in India with 200 to 2,000 employees">' + esc(T.q) + '</textarea></label>' +
+    (T.ideas && T.ideas.length && !T.res ? '<div class="sp-chips" style="margin-top:10px">' + T.ideas.map(function (x, i) { return '<button type="button" class="sp-chip g18-sug" onclick="window._g19Tam.q=window._g19Tam.ideas[' + i + '];_g19TamRender()">' + esc(x) + '</button>'; }).join('') + '</div>' : '') +
+    '<div class="g19-tamrow"><label class="sp-fld">Region <small>optional</small><input id="g19TamR" value="' + esc(T.region) + '" placeholder="India"></label>' +
+    '<div class="sp-fld">How many<div class="g19-seg">' + [10, 25, 50].map(function (n) { return '<button type="button" class="' + (T.n === n ? 'on' : '') + '" onclick="_g19TamSave();window._g19Tam.n=' + n + ';_g19TamRender()">' + n + '</button>'; }).join('') + '</div></div>' +
+    '<button class="g-btn sp-gold" type="button" id="g19TamGo" onclick="g19TamSearch()"' + (T.busy || left === 0 ? ' disabled' : '') + '>' + (T.busy ? 'SAM is looking…' : SP_ICON.spark + ' Find companies') + '</button></div>' +
+    '<div class="sp-small" style="margin-top:8px">' + (left === null ? '' : left === 0 ? 'No searches left today. They reset at midnight.' : _spPlural(left, 'search', 'searches') + ' left today.') + ' Uses no data credits: SAM only spends credits later, when it finds people inside the companies you pick.</div></section>';
+  var res = '';
+  if (T.busy) res = '<section class="sp-card sp-pad"><div class="sp-lbl">Looking</div><div class="sp-progress" style="margin-top:12px"><span style="width:60%"></span></div><div class="sp-small" style="margin-top:10px">SAM proposes companies, then opens each website to check it is real and names the company. About a minute.</div></section>';
+  else if (T.res) {
+    var c = T.res.candidates || [];
+    var nPick = c.filter(function (x) { return T.picked[x.id]; }).length;
+    res = '<section class="sp-card g19-tamres"><div class="g19-trh"><div><b>' + _spPlural(c.length, 'company', 'companies') + '</b><span class="sp-small"> · ' + (T.res.verified_count || 0) + ' with a checked website' + (T.res.skipped_existing ? ' · ' + T.res.skipped_existing + ' you already have left out' : '') + '</span></div>' +
+      '<div class="g19-trha"><button class="g19-lnk" type="button" onclick="g19TamPick(\'verified\')">Select checked</button><button class="g19-lnk" type="button" onclick="g19TamPick(\'none\')">Clear</button></div></div>' +
+      (c.length ? c.map(function (x) {
+        return '<label class="g19-co' + (T.picked[x.id] ? ' on' : '') + '"><input type="checkbox" ' + (T.picked[x.id] ? 'checked ' : '') + 'onchange="window._g19Tam.picked[\'' + esc(x.id) + '\']=this.checked;_g19TamRender()">' +
+          '<span class="g19-cob"><span class="g19-con"><b>' + esc(x.name) + '</b>' + (x.verified ? '<span class="g19-ver" title="' + esc(x.evidence || '') + '">' + G19_ICON.check + ' Website checked</span>' : '<span class="g19-unv" title="' + esc(x.evidence || '') + '">Not checked</span>') + '</span>' +
+          '<small>' + esc([x.domain, x.region].filter(Boolean).join(' · ')) + '</small>' + (x.description ? '<span class="g19-cod">' + esc(x.description) + '</span>' : '') + '</span>' +
+          '<button type="button" class="g19-nf" title="Not a fit: SAM will not suggest it again" onclick="event.preventDefault();g19TamReject(\'' + esc(x.id) + '\')">Not a fit</button></label>';
+      }).join('') : '<div class="sp-empty">No new companies for that. Try a broader description or a different region.</div>') +
+      (T.res.context_note ? '<div class="sp-small" style="padding:10px 16px">' + esc(T.res.context_note) + '</div>' : '') +
+      '</section>' +
+      (nPick ? '<div class="g19-tambar"><span><b>' + nPick + '</b> selected</span><button class="g-btn sp-gold" type="button" onclick="g19TamUse()">' + (T.fromWizard ? 'Add ' + nPick + ' to the SAMpaign' : 'Start a SAMpaign with ' + nPick) + '</button></div>' : '');
+  }
+  page.innerHTML = '<div class="sp-wiz g19-tam">' + head + form + res + '</div>';
+}
+function _g19TamSave() { var T = window._g19Tam; var q = document.getElementById('g19TamQ'), r = document.getElementById('g19TamR'); if (q) T.q = q.value; if (r) T.region = r.value; }
+async function g19TamSearch() {
+  _g19TamSave(); var T = window._g19Tam;
+  if (String(T.q).trim().length < 8) { showToast('Describe the companies in a few words, like the examples'); return; }
+  T.busy = true; T.res = null; T.picked = {}; _g19TamRender();
+  var d = await _sampEdge('discover_accounts', { description: String(T.q).trim(), region_hint: String(T.region || '').trim() || undefined, limit: T.n });
+  T.busy = false;
+  if (!d.ok) { if (d.locked) { window._orgConfig = Object.assign({}, window._orgConfig || {}, { samTam: false }); } showToast(d.error || 'SAM could not search just now'); _g19TamRender(); return; }
+  T.res = d;
+  (d.candidates || []).forEach(function (x) { if (x.verified) T.picked[x.id] = true; });
+  await g19UsageLoad(true);
+  _g19TamRender();
+}
+function g19TamPick(which) { var T = window._g19Tam; T.picked = {}; if (which === 'verified') (T.res.candidates || []).forEach(function (x) { if (x.verified) T.picked[x.id] = true; }); _g19TamRender(); }
+async function g19TamReject(id) {
+  var T = window._g19Tam;
+  T.res.candidates = (T.res.candidates || []).filter(function (x) { return x.id !== id; });
+  delete T.picked[id]; _g19TamRender();
+  _sampEdge('commit_discovery', { mark_only: true, reject_ids: [id] }).catch(function () {});
+}
+function g19TamUse() {
+  var T = window._g19Tam;
+  var pick = (T.res.candidates || []).filter(function (x) { return T.picked[x.id]; });
+  var lines = pick.map(function (x) { return [x.name, x.domain || '', x.region || ''].filter(function (v, i) { return i < 2 || v; }).join(', ').replace(/, $/, ''); });
+  if (T.fromWizard && window._sampW) {
+    var W = window._sampW;
+    W.companies = (String(W.companies || '').trim() ? String(W.companies).trim() + '\n' : '') + lines.join('\n');
+    W.tamAccept = (W.tamAccept || []).concat(pick.map(function (x) { return x.id; }));
+    _spShow('new'); _spWizRender(); showToast(_spPlural(pick.length, 'company', 'companies') + ' added to the list');
+    return;
+  }
+  sampOpenWizard();
+  var W2 = window._sampW;
+  W2.scope = 'list'; W2.listName = String(T.q).trim().slice(0, 60); W2.listRegion = String(T.region || '').trim();
+  W2.companies = lines.join('\n'); W2.tamAccept = pick.map(function (x) { return x.id; });
+  _spWizRender();
+  showToast('Your list is in. Check it, then Continue.');
+}
+function _g19TamBack() { _spShow('new'); _spWizRender(); }
+function g19TamFromWizard() { _spWizSave(); sampOpenTam({ fromWizard: true, keep: false }); }
+function _g19TamWizCard() {
+  return _g19SamTam()
+    ? '<button type="button" class="g19-tamcta" onclick="g19TamFromWizard()">' + G19_ICON.target + '<span><b>Find the companies with SAM-TAM Discovery</b><small>Describe your market in a sentence; SAM finds real companies and checks each website.</small></span><span class="g19-prem">Premium</span></button>'
+    : '<button type="button" class="g19-tamcta locked" onclick="g19TamFromWizard()">' + G19_ICON.lock + '<span><b>SAM-TAM Discovery</b><small>Let SAM find the companies for you. Part of Samora’s premium plan.</small></span><span class="g19-prem">Premium</span></button>';
 }
