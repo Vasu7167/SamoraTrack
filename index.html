@@ -2624,6 +2624,22 @@ body[data-tab]:not([data-tab="today"]) .metric-wrap{display:none}
   .g19-tambar{flex-direction:column;align-items:stretch;bottom:calc(88px + env(safe-area-inset-bottom, 0px))}
   .g19-tam{padding-bottom:180px}
 }
+
+/* ── Drop H.1 (2026-10-10): SAM-TAM when Google's AI is busy ─────────────── */
+.g20-err{margin-top:16px;border:1px solid var(--c-line-strong)}
+.g20-err.busy{border-color:rgba(var(--c-accent-rgb),.35);background:rgba(var(--c-accent-rgb),.04)}
+.g20-eh{display:flex;align-items:center;gap:10px;font-size:15px}
+.g20-ei{display:grid;place-items:center;width:32px;height:32px;border-radius:10px;flex:none;color:var(--c-accent-text);background:rgba(var(--c-accent-rgb),.12)}
+.g20-err:not(.busy) .g20-ei{color:var(--c-risk);background:var(--c-risk-wash)}
+.g20-eb{margin:8px 0 0 42px;font-size:13px;line-height:1.5;color:var(--text2);max-width:640px}
+.g20-ew{display:flex;align-items:center;gap:8px;margin:12px 0 0 42px;font-size:13px;color:var(--text2);font-variant-numeric:tabular-nums}
+.g20-ew b{color:var(--text)}
+.g20-spin{width:14px;height:14px;border-radius:50%;border:2px solid rgba(var(--c-accent-rgb),.25);border-top-color:var(--c-accent);animation:g20spin .9s linear infinite}
+@keyframes g20spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.g20-spin{animation:none}}
+.g20-ea{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 0 42px}
+@media (max-width:640px){.g20-eb,.g20-ew,.g20-ea{margin-left:0}}
+.g19-tam .sp-chips .sp-chip{white-space:normal;max-width:100%;text-align:left;line-height:1.35}
 </style>
 <script src="/js/vendor/sortable.min.js"></script>
 </head>
