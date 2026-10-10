@@ -2511,6 +2511,119 @@ body[data-tab]:not([data-tab="today"]) .metric-wrap{display:none}
  .g18-open{padding-left:4px}
  .g18-bar{width:90px}
 }
+
+/* ── Drop H (2026-10-10): usage, ad audiences, SAM-TAM ─────────────────── */
+.g19-pl{display:none;margin-left:2px;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:999px;color:var(--c-accent-text);background:rgba(var(--c-accent-rgb),.12)}
+.g19-locked .g19-pl{display:inline-flex}
+.g-btn[hidden]{display:none}
+.g19-prem{display:inline-flex;align-items:center;vertical-align:middle;margin-left:8px;font-family:var(--sans);font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:3px 9px;border-radius:999px;color:var(--c-accent-text);background:rgba(var(--c-accent-rgb),.12);border:1px solid rgba(var(--c-accent-rgb),.3)}
+.toggle-pill{all:unset;box-sizing:border-box;position:relative;display:inline-block;width:40px;height:24px;border-radius:999px;background:rgba(127,127,127,.28);cursor:pointer;flex:none;transition:background var(--dur-fast,.15s) var(--ease)}
+.toggle-pill i{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform var(--dur-fast,.15s) var(--ease)}
+.toggle-pill.on{background:var(--c-accent)}
+.toggle-pill.on i{transform:translateX(16px)}
+.toggle-pill:focus-visible{outline:2px solid var(--c-focus);outline-offset:2px}
+.g19-meters{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
+.g19-m{padding:11px 13px;border-radius:12px;background:var(--surface2);border:1px solid var(--border)}
+.g19-mh{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12.5px;color:var(--text2)}
+.g19-mh span{flex:1;min-width:0}
+.g19-mh b{font-size:14px;color:var(--text);font-variant-numeric:tabular-nums;white-space:nowrap}
+.g19-mh small{font-size:11px;font-weight:500;color:var(--text3)}
+.g19-mb{height:6px;border-radius:999px;background:rgba(127,127,127,.14);overflow:hidden;margin-top:8px}
+.g19-mb span{display:block;height:100%;border-radius:999px;background:var(--c-verified);transition:width .3s var(--ease)}
+.g19-m.near .g19-mb span{background:var(--c-partial)}
+.g19-m.full .g19-mb span{background:var(--c-risk)}
+.g19-m.off{opacity:.6}
+.g19-tl{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px 14px;margin:10px 0}
+.g19-tf{display:flex;flex-direction:column;gap:5px;font-size:12.5px;font-weight:600;color:var(--text)}
+.g19-tf small{display:block;font-weight:400;font-size:11px;color:var(--text3);margin-top:1px}
+.g19-tf .sxa-in{max-width:140px}
+.g19-ptbl td{vertical-align:top}
+.sxa-pf .sxa-tbl{border-collapse:collapse}
+.sxa-pf .sxa-tbl th{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text3);padding:8px 10px 8px 0}
+.sxa-pf .sxa-tbl td{padding:10px 10px 10px 0;border-top:1px solid var(--border);font-size:13px}
+.g19-ptbl td b{font-size:13.5px}
+.g19-ucs{display:flex;flex-wrap:wrap;gap:5px}
+.g19-uc{font-size:11px;padding:2px 8px;border-radius:999px;background:rgba(127,127,127,.1);color:var(--text2);white-space:nowrap;font-variant-numeric:tabular-nums}
+.g19-uc b{color:var(--text)}
+.g19-uc.full{background:var(--c-risk-wash);color:var(--c-risk)}
+.g19-lnk{all:unset;cursor:pointer;margin-top:6px;display:inline-block;font-size:12px;font-weight:600;color:var(--c-accent-text)}
+.g19-lnk:hover{text-decoration:underline}
+.g19-lnk:focus-visible{outline:2px solid var(--c-focus);outline-offset:2px;border-radius:4px}
+.g19-edit td{background:var(--surface2)}
+.g19-sw{display:flex;gap:12px;align-items:flex-start;max-width:640px;margin-top:6px;cursor:default}
+.g19-sw span{display:flex;flex-direction:column;gap:3px;font-size:13px}
+.g19-sw small{font-size:12px;color:var(--text3);line-height:1.45}
+.sp-mcard.g19-aud{max-width:640px}
+.g19-sec{margin:18px 0 8px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text3)}
+.g19-camps{display:flex;flex-direction:column;gap:6px;max-height:190px;overflow:auto}
+.g19-camp{display:flex;gap:10px;align-items:center;padding:9px 12px;border-radius:12px;border:1px solid var(--border);cursor:pointer}
+.g19-camp:hover{background:var(--surface2)}
+.g19-camp span{display:flex;flex-direction:column;min-width:0}
+.g19-camp b{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.g19-camp small{font-size:11.5px;color:var(--text3)}
+.g19-camp input{accent-color:var(--c-accent);width:16px;height:16px;flex:none}
+.g19-seg{display:inline-flex;flex-wrap:wrap;gap:4px;padding:3px;border-radius:12px;background:rgba(127,127,127,.1)}
+.g19-seg button{all:unset;cursor:pointer;padding:6px 12px;border-radius:9px;font-size:12.5px;font-weight:600;color:var(--text2)}
+.g19-seg button.on{background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.g19-seg button:focus-visible{outline:2px solid var(--c-focus)}
+.g19-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
+.g19-t{padding:10px 12px;border-radius:12px;background:var(--surface2);border:1px solid var(--border)}
+.g19-t b{display:block;font-size:20px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums}
+.g19-t span{font-size:11.5px;color:var(--text3)}
+.g19-fmts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.g19-fmt{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;gap:4px;padding:12px 13px;border-radius:14px;border:1.5px solid var(--c-line-strong);background:var(--surface)}
+.g19-fmt b{font-size:13px}
+.g19-fmt span{font-size:11.5px;line-height:1.45;color:var(--text3)}
+.g19-fmt.on{border-color:var(--c-accent);background:rgba(var(--c-accent-rgb),.06)}
+.g19-fmt:focus-visible{outline:2px solid var(--c-focus);outline-offset:2px}
+.g19-fill{display:flex;gap:14px;align-items:center;justify-content:space-between;margin-top:14px;padding:12px 14px;border-radius:14px;background:var(--c-info-wash);border:1px solid rgba(127,127,127,.12)}
+.g19-fill div{display:flex;flex-direction:column;gap:3px;font-size:13px}
+.g19-fill small{font-size:12px;color:var(--text2);line-height:1.45}
+.g19-fill .g-btn{flex:none}
+.g19-tam{padding-bottom:90px}
+.g19-tamf{margin-top:18px}
+.g19-tamrow{display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap}
+.g19-tamrow .sp-fld{flex:1;min-width:160px}
+.g19-tamrow .g-btn{margin-top:8px;height:40px}
+.g19-tamrow .g19-seg{align-self:flex-start}
+.g19-tamrow .sp-fld:has(.g19-seg){flex:0 0 auto;min-width:0}
+.g19-tamres{margin-top:16px;padding:0;overflow:hidden}
+.g19-trh{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:14px 16px;border-bottom:1px solid var(--border)}
+.g19-trha{display:flex;gap:14px}
+.g19-trha .g19-lnk{margin:0}
+.g19-co{display:flex;gap:12px;align-items:flex-start;padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background var(--dur-fast,.15s)}
+.g19-co:last-of-type{border-bottom:0}
+.g19-co:hover{background:var(--surface2)}
+.g19-co.on{background:rgba(var(--c-accent-rgb),.05)}
+.g19-co input{accent-color:var(--c-accent);width:16px;height:16px;margin-top:2px;flex:none}
+.g19-cob{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.g19-con{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.g19-con b{font-size:14px}
+.g19-cob small{font-size:12px;color:var(--text3)}
+.g19-cod{font-size:12.5px;color:var(--text2);line-height:1.45}
+.g19-ver,.g19-unv{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px}
+.g19-ver{color:var(--c-verified);background:var(--c-verified-wash)}
+.g19-unv{color:var(--text3);background:rgba(127,127,127,.1)}
+.g19-nf{all:unset;cursor:pointer;flex:none;font-size:12px;font-weight:600;color:var(--text3);padding:4px 8px;border-radius:8px;opacity:0;transition:opacity var(--dur-fast,.15s)}
+.g19-co:hover .g19-nf,.g19-nf:focus-visible{opacity:1}
+.g19-nf:hover{color:var(--c-risk);background:var(--c-risk-wash)}
+@media (hover:none){.g19-nf{opacity:1}}
+.g19-tambar{position:sticky;bottom:16px;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;padding:12px 14px 12px 18px;border-radius:16px;background:var(--surface);border:1px solid var(--g-line);box-shadow:0 18px 40px -16px rgba(16,18,24,.35)}
+.g19-tambar span{font-size:13.5px;color:var(--text2)}
+.g19-tamcta{all:unset;box-sizing:border-box;cursor:pointer;width:100%;display:flex;gap:12px;align-items:center;margin-top:12px;padding:13px 15px;border-radius:14px;border:1.5px dashed rgba(var(--c-accent-rgb),.45);background:rgba(var(--c-accent-rgb),.05);color:var(--c-accent-text)}
+.g19-tamcta span:not(.g19-prem){flex:1;display:flex;flex-direction:column;gap:2px;color:var(--text)}
+.g19-tamcta b{font-size:13.5px}
+.g19-tamcta small{font-size:12px;color:var(--text3)}
+.g19-tamcta:hover{background:rgba(var(--c-accent-rgb),.09)}
+.g19-tamcta:focus-visible{outline:2px solid var(--c-focus);outline-offset:2px}
+.g19-tamcta.locked{border-color:var(--c-line-strong);background:transparent;color:var(--text3)}
+@media (max-width:640px){
+  .g19-tiles{grid-template-columns:repeat(2,1fr)}
+  .g19-fmts{grid-template-columns:1fr}
+  .g19-fill{flex-direction:column;align-items:stretch}
+  .g19-tambar{flex-direction:column;align-items:stretch;bottom:calc(88px + env(safe-area-inset-bottom, 0px))}
+  .g19-tam{padding-bottom:180px}
+}
 </style>
 <script src="/js/vendor/sortable.min.js"></script>
 </head>
@@ -2911,6 +3024,8 @@ body[data-tab]:not([data-tab="today"]) .metric-wrap{display:none}
               <button onclick="openDetectiveSam()" class="g-btn" title="Find the right people at an account"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg> Detective SAM</button>
               <button onclick="loadSequencingStats()" id="seqStatsBtn" class="g-btn"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg> Analytics</button>
               <button onclick="refreshSampaigns()" id="seqSyncBtn" class="g-btn" title="Look for new replies in your inbox"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 00-14.6-4.5M4 4v4h4M4 13a8 8 0 0014.6 4.5M20 20v-4h-4"/></svg> Check replies</button>
+              <button onclick="sampOpenTam()" id="g19TamBtn" class="g-btn g19-locked" title="Find the companies in your market worth reaching"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/></svg> SAM-TAM <span class="g19-pl">Premium</span></button>
+              <button onclick="openAdAudience()" id="g19AudBtn" class="g-btn" hidden title="People from your SAMpaigns for Meta or LinkedIn ads"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0113 0M16 4.5a3.5 3.5 0 010 7M18 14a5.5 5.5 0 013.5 6"/></svg> Ad audience</button>
               <button onclick="toggleNewSampaignForm()" class="g-btn sp-gold">+ New SAMpaign</button>
             </div>
           </div>
@@ -2920,6 +3035,7 @@ body[data-tab]:not([data-tab="today"]) .metric-wrap{display:none}
         </div>
         <div id="sampDetailPage" hidden></div>
         <div id="sampWizardPage" hidden></div>
+        <div id="sampTamPage" hidden></div>
       </div>
     </div>
   </div>
@@ -3404,6 +3520,10 @@ body[data-tab]:not([data-tab="today"]) .metric-wrap{display:none}
       <div class="you-acc" id="youAcc-signature">
         <button class="you-row" onclick="toggleYouAcc('signature');_sigRenderYou()" aria-expanded="false"><span class="you-ic tone-orange"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 00-3-3L5 17v3zM13 20h7"/></svg></span><span class="you-row-l">Email signature</span><span class="you-row-v" id="youSigChip"></span><span class="you-chev" aria-hidden="true"></span></button>
         <div class="you-acc-body"><div class="you-acc-in" id="youSigBody"></div></div>
+      </div>
+      <div class="you-acc" id="youAcc-usage">
+        <button class="you-row" onclick="toggleYouAcc('usage');g19RenderYouUsage()" aria-expanded="false"><span class="you-ic tone-green"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 17a8 8 0 1115 0"/><path d="M12 13l3.5-3.5"/><circle cx="12" cy="13" r="1"/></svg></span><span class="you-row-l">Usage and limits</span><span class="you-row-v" id="youUsageChip"></span><span class="you-chev" aria-hidden="true"></span></button>
+        <div class="you-acc-body"><div class="you-acc-in" id="youUsageBody"></div></div>
       </div>
       <div class="you-acc" id="youAcc-linkedin">
         <button class="you-row" onclick="toggleYouAcc('linkedin');_liRenderYou()" aria-expanded="false"><span class="you-ic tone-blue"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="M8 10.5V16M8 7.8v.2M11.5 16v-3.2a2.3 2.3 0 014.6 0V16M11.5 10.5V16"/></svg></span><span class="you-row-l">LinkedIn plugin</span><span class="you-row-v" id="youLiChip"></span><span class="you-chev" aria-hidden="true"></span></button>
