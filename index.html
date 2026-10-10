@@ -2640,6 +2640,13 @@ body[data-tab]:not([data-tab="today"]) .metric-wrap{display:none}
 .g20-ea{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 0 42px}
 @media (max-width:640px){.g20-eb,.g20-ew,.g20-ea{margin-left:0}}
 .g19-tam .sp-chips .sp-chip{white-space:normal;max-width:100%;text-align:left;line-height:1.35}
+
+/* ── Drop H.2 (2026-10-10): SAM-TAM looking ──────────────────────────────── */
+.g21-lk{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.g21-el{font-size:13px;font-weight:600;color:var(--text2);font-variant-numeric:tabular-nums}
+.g21-ind span{width:35%;animation:g21ind 1.6s ease-in-out infinite}
+@keyframes g21ind{0%{transform:translateX(-100%)}100%{transform:translateX(290%)}}
+@media (prefers-reduced-motion:reduce){.g21-ind span{animation:none;width:60%}}
 </style>
 <script src="/js/vendor/sortable.min.js"></script>
 </head>
