@@ -2609,22 +2609,23 @@ function _g19TamRender() {
     '<div class="g19-tamrow"><label class="sp-fld">Region <small>optional</small><input id="g19TamR" value="' + esc(T.region) + '" placeholder="India"></label>' +
     '<div class="sp-fld">How many<div class="g19-seg">' + [2, 5, 10, 20].map(function (n) { return '<button type="button" class="' + (T.n === n ? 'on' : '') + '" onclick="_g19TamSave();window._g19Tam.n=' + n + ';_g19TamRender()">' + n + '</button>'; }).join('') + '</div></div>' +
     '<button class="g-btn sp-gold" type="button" id="g19TamGo" onclick="g19TamSearch()"' + (T.busy || left === 0 ? ' disabled' : '') + '>' + (T.busy ? 'SAM is looking…' : SP_ICON.spark + ' Find companies') + '</button></div>' +
-    '<div class="sp-small" style="margin-top:8px">' + (left === null ? '' : left === 0 ? 'No searches left today. They reset at midnight.' : _spPlural(left, 'search', 'searches') + ' left today.') + ' A search counts only when SAM comes back with companies. It uses no data credits.</div></section>';
+    '<div class="sp-small" style="margin-top:8px">' + (left === null ? '' : left === 0 ? 'No searches left today. They reset at midnight.' : _spPlural(left, 'search', 'searches') + ' left today.') + ' A search counts only when SAM comes back with companies. It uses no data credits' + (T.apollo ? ' unless you use Apollo below' : '') + '.</div>' + _g26TamDbHtml(T) + '</section>';
   var res = '';
   if (!T.busy && T.err) res = _g20TamErr(T);
   if (T.busy) res = '<section class="sp-card sp-pad"><div class="g21-lk"><span class="sp-lbl">Looking for ' + T.n + ' ' + (T.n === 1 ? 'company' : 'companies') + '</span><span class="g21-el" id="g21TamEl">' + Math.max(0, Math.round((Date.now() - (T.t0 || Date.now())) / 1000)) + 's</span></div><div class="sp-progress g21-ind" style="margin-top:12px"><span></span></div><div class="sp-small" style="margin-top:10px">SAM finds companies that fit, then checks each website is real. Usually 20 to 60 seconds.</div></section>';
   if (!T.busy && T.res) {
     var c = T.res.candidates || [];
     var nPick = c.filter(function (x) { return T.picked[x.id]; }).length;
-    res += '<section class="sp-card g19-tamres' + (T.res.earlier ? ' g24-earl' : '') + '">' + (T.res.earlier ? '<div class="g24-earh">' + G24_ICON.spark + '<span>Found by an earlier search' + (T.res.query ? ': <b>' + esc(T.res.query) + '</b>' : '') + '. Already checked, and using them costs no search.</span></div>' : '') + '<div class="g19-trh"><div><b>' + _spPlural(c.length, 'company', 'companies') + '</b><span class="sp-small"> · ' + (T.res.verified_count || 0) + ' with a checked website' + (T.res.skipped_existing ? ' · ' + T.res.skipped_existing + ' you already have left out' : '') + '</span></div>' +
+    res += '<section class="sp-card g19-tamres' + (T.res.earlier ? ' g24-earl' : '') + '">' + (T.res.earlier ? '<div class="g24-earh">' + G24_ICON.spark + '<span>Found by an earlier search' + (T.res.query ? ': <b>' + esc(T.res.query) + '</b>' : '') + '. Already checked, and using them costs no search.</span></div>' : '') + _g26TamFilters(T.res) + '<div class="g19-trh"><div><b>' + _spPlural(c.length, 'company', 'companies') + '</b><span class="sp-small"> · ' + (T.res.verified_count || 0) + ' with a checked website' + (T.res.skipped_existing ? ' · ' + T.res.skipped_existing + ' you already have left out' : '') + '</span></div>' +
       '<div class="g19-trha"><button class="g19-lnk" type="button" onclick="g19TamPick(\'verified\')">Select checked</button><button class="g19-lnk" type="button" onclick="g19TamPick(\'none\')">Clear</button></div></div>' +
       (c.length ? c.map(function (x) {
         return '<label class="g19-co' + (T.picked[x.id] ? ' on' : '') + '"><input type="checkbox" ' + (T.picked[x.id] ? 'checked ' : '') + 'onchange="window._g19Tam.picked[\'' + esc(x.id) + '\']=this.checked;_g19TamRender()">' +
-          '<span class="g19-cob"><span class="g19-con"><b>' + esc(x.name) + '</b>' + (x.verified ? '<span class="g19-ver" title="' + esc(x.evidence || '') + '">' + G19_ICON.check + ' Website checked</span>' : '<span class="g19-unv" title="' + esc(x.evidence || '') + '">Not checked</span>') + '</span>' +
+          '<span class="g19-cob"><span class="g19-con"><b>' + esc(x.name) + '</b>' + (x.verified ? '<span class="g19-ver" title="' + esc(x.evidence || '') + '">' + G19_ICON.check + ' Website checked</span>' : '<span class="g19-unv" title="' + esc(x.evidence || '') + '">Not checked</span>') + (x._earlier ? '<span class="g26-earl" title="Found by an earlier search like this one. Already checked; using it costs no search.">Found earlier</span>' : '') + '</span>' +
           '<small>' + esc([x.domain, x.region].filter(Boolean).join(' · ')) + '</small>' + (x.description ? '<span class="g19-cod">' + esc(x.description) + '</span>' : '') + '</span>' +
           '<button type="button" class="g19-nf" title="Not a fit: SAM will not suggest it again" onclick="event.preventDefault();g19TamReject(\'' + esc(x.id) + '\')">Not a fit</button></label>';
       }).join('') : '<div class="sp-empty">No new companies for that. Try a broader description or a different region.</div>') +
       (T.res.found_by === 'knowledge' ? '<div class="sp-small" style="padding:10px 16px">Live web search was not available just now, so SAM used what it knows. Every website was still checked.</div>' : T.res.found_by === 'directory' ? '<div class="sp-small" style="padding:10px 16px">SAM\u2019s AI was not available just now, so SAM used public company directories. Every website was still checked; refine with SAM later for a closer fit.</div>' : '') +
+      _g26TamNotes(T.res) +
       (T.res.context_note ? '<div class="sp-small" style="padding:10px 16px">' + esc(T.res.context_note) + '</div>' : '') +
       '</section>' +
       (nPick ? '<div class="g19-tambar"><span><b>' + nPick + '</b> selected</span><button class="g-btn sp-gold" type="button" onclick="g19TamUse()">' + (T.fromWizard ? 'Add ' + nPick + ' to the SAMpaign' : 'Start a SAMpaign with ' + nPick) + '</button></div>' : '');
@@ -2639,7 +2640,7 @@ async function g19TamSearch() {
   T.busy = true; T.res = null; T.picked = {}; T.t0 = Date.now(); _g19TamRender();
   if (T.elT) clearInterval(T.elT);
   T.elT = setInterval(function () { var el = document.getElementById('g21TamEl'); if (!T.busy || !el) { clearInterval(T.elT); T.elT = null; return; } el.textContent = Math.round((Date.now() - T.t0) / 1000) + 's'; }, 1000);
-  var d = await _sampEdge('discover_accounts', { description: String(T.q).trim(), region_hint: String(T.region || '').trim() || undefined, limit: T.n });
+  var d = await _sampEdge('discover_accounts', { description: String(T.q).trim(), region_hint: String(T.region || '').trim() || undefined, limit: T.n, use_database: (T.apollo && T.useDb) || undefined });
   T.busy = false;
   if (!d.ok) {
     if (d.locked) { window._orgConfig = Object.assign({}, window._orgConfig || {}, { samTam: false }); showToast(d.error || 'SAM-TAM Discovery is a premium feature'); _g19TamRender(); return; }
@@ -2650,6 +2651,7 @@ async function g19TamSearch() {
     _g19TamRender(); _g20Reveal('.g20-err'); return;
   }
   T.autoTries = 0; setTimeout(function () { _g20Reveal('.g19-tamres'); }, 60);
+  if (d.earlier_finds && d.earlier_finds.length) { d.candidates = (d.candidates || []).concat(d.earlier_finds.map(function (x) { return Object.assign({}, x, { _earlier: true }); })); d.verified_count = (d.verified_count || 0) + d.earlier_finds.filter(function (x) { return x.verified; }).length; }
   T.res = d;
   (d.candidates || []).forEach(function (x) { if (x.verified) T.picked[x.id] = true; });
   await g19UsageLoad(true);
@@ -3608,3 +3610,125 @@ function _g25Put(n, d) { try { localStorage.setItem(_g25Key(n), JSON.stringify({
     g24LoadSched._g25 = true;
   }
 })();
+
+// ════════════════════════════════════════════════════════════════════════════
+// Drop L (2026-10-17)
+//  SAM-TAM: the rep can let SAM use the organisation's Apollo company database
+//  (one Apollo credit a search), and sees the filters SAM read, the companies
+//  left out for not being in the sector, and earlier finds for the same kind
+//  of search, marked as such.
+//  Today: away messages SAM has read become actions. "Back from leave": SAM
+//  writes the welcome back. "Named someone to contact instead": SAM adds that
+//  person to the SAMpaign and writes their first email. Nothing sends until
+//  the rep approves.
+// ════════════════════════════════════════════════════════════════════════════
+(function () {
+  if (document.getElementById('g26css')) return;
+  var st = document.createElement('style'); st.id = 'g26css';
+  st.textContent =
+    '.g26-db{display:flex;gap:10px;align-items:flex-start;margin-top:12px;padding:10px 12px;border:1px solid var(--border,rgba(0,0,0,.1));border-radius:10px;font-size:13px;line-height:1.45;cursor:pointer}' +
+    '.g26-db input{margin-top:3px;accent-color:#B8860B}.g26-db small{display:block;color:var(--text3,#777);font-size:12px}' +
+    '.g26-flt{display:flex;flex-wrap:wrap;gap:6px;padding:10px 16px 0}.g26-flt span{font-size:12px;padding:3px 9px;border-radius:999px;background:var(--bg2,rgba(0,0,0,.05));color:var(--text2,#555)}' +
+    '.g26-earl{font-size:11px;padding:2px 7px;border-radius:999px;background:rgba(184,134,11,.12);color:#8a6408;margin-left:6px;white-space:nowrap}' +
+    '.g26-note{padding:10px 16px;font-size:12.5px;color:var(--text2,#555);line-height:1.45}';
+  document.head.appendChild(st);
+})();
+
+function _g26TamDbKey() { try { return 'g26_tam_db_' + ((currentUser && currentUser.id) || ''); } catch (e) { return 'g26_tam_db'; } }
+function _g26TamDbSave() { try { localStorage.setItem(_g26TamDbKey(), window._g19Tam.useDb ? '1' : '0'); } catch (e) {} }
+async function _g26TamApollo() {
+  var T = window._g19Tam; if (!T || T.apollo !== undefined) return;
+  T.apollo = false;
+  try {
+    var d = await _sampEdge('get_enrichment_status', {});
+    var p = (d && d.providers) || {};
+    T.apollo = !!(p.apollo_org || p.apollo_user);
+    var v = null; try { v = localStorage.getItem(_g26TamDbKey()); } catch (e) {}
+    T.useDb = T.apollo && v === '1';
+  } catch (e) { T.apollo = false; }
+  if (T.apollo) _g19TamRender();
+}
+function _g26TamDbHtml(T) {
+  if (!T || !T.apollo) return '';
+  return '<label class="g26-db"><input type="checkbox" ' + (T.useDb ? 'checked ' : '') + 'onchange="_g19TamSave();window._g19Tam.useDb=this.checked;_g26TamDbSave();_g19TamRender()">' +
+    '<span><b>Use your Apollo company database</b><small>1 Apollo credit per search. SAM filters it by country, sector and size, then checks every website. Steadier results, even when SAM’s AI is busy.</small></span></label>';
+}
+// What SAM read from the description, above the list.
+function _g26TamFilters(r) {
+  var f = r && r.filters;
+  if (!f || !(f.country || (f.sectors && f.sectors.length) || f.size)) return '';
+  var bits = [];
+  if (f.country) bits.push(f.country);
+  (f.sectors || []).forEach(function (s) { bits.push(s.charAt(0).toUpperCase() + s.slice(1)); });
+  if (f.size) bits.push(Number(f.size[0]).toLocaleString('en-GB') + (f.size[1] >= 1000000 ? '+' : ' to ' + Number(f.size[1]).toLocaleString('en-GB')) + ' employees');
+  return '<div class="g26-flt" title="What SAM read from your description">' + bits.map(function (b) { return '<span>' + esc(b) + '</span>'; }).join('') + '</div>';
+}
+function _g26TamNotes(r) {
+  if (!r || r.earlier) return '';
+  var out = '';
+  if (r.found_by === 'database') out += '<div class="g26-note">From your Apollo company database' + (r.database && r.database.credits ? ' (' + _spPlural(r.database.credits, 'credit') + ')' : '') + '. Every website was still checked.</div>';
+  else if (r.database && r.database.note === 'no_key') out += '<div class="g26-note">Apollo is not connected for you, so SAM searched as usual.</div>';
+  else if (r.database && !r.database.used) out += '<div class="g26-note">The Apollo company database did not answer, so SAM searched as usual. No Apollo credit was used.</div>';
+  if (r.off_topic) out += '<div class="g26-note">' + _spPlural(r.off_topic, 'company', 'companies') + ' left out because ' + (r.off_topic === 1 ? 'its website does' : 'their websites do') + ' not look like ' + esc(r.sector || 'what you described') + (r.off_topic_names && r.off_topic_names.length ? ': ' + esc(r.off_topic_names.join(', ')) : '') + '.</div>';
+  return out;
+}
+(function () {
+  if (typeof sampOpenTam === 'function' && !sampOpenTam._g26) {
+    var o = sampOpenTam;
+    sampOpenTam = function () { var x = o.apply(this, arguments); try { if (_g19SamTam()) _g26TamApollo(); } catch (e) {} return x; };
+    sampOpenTam._g26 = true;
+  }
+})();
+
+// ── Today: away messages SAM has read ──────────────────────────────────────
+(function () {
+  if (typeof _g24SamLabel === 'function' && !_g24SamLabel._g26) {
+    var o = _g24SamLabel;
+    _g24SamLabel = function (x) {
+      var s = (x && x.sam) || {};
+      if (s.do === 'ooo_back') return (s.people || []).length > 1 ? 'Let SAM write ' + s.people.length + ' welcome backs' : 'Let SAM write the welcome back';
+      if (s.do === 'ooo_alt') return (s.people || []).length > 1 ? 'Let SAM add them and write' : 'Let SAM add ' + String(((s.people || [])[0] || {}).alt && s.people[0].alt.name || 'them').split(' ')[0] + ' and write';
+      return o.apply(this, arguments);
+    };
+    _g24SamLabel._g26 = true;
+  }
+  if (typeof g24Handle === 'function' && !g24Handle._g26) {
+    var h = g24Handle;
+    g24Handle = function (key, quiet) {
+      var x = _g24Find(key);
+      if (x && x.sam && (x.sam.do === 'ooo_back' || x.sam.do === 'ooo_alt')) return _g26Away(x, key, quiet);
+      return h.apply(this, arguments);
+    };
+    g24Handle._g26 = true;
+  }
+})();
+async function _g26Away(x, key, quiet) {
+  var s = x.sam, c = x.c, back = s.do === 'ooo_back';
+  var msg = function (m) { _g24Set(key, { phase: 'working', msg: m }); };
+  var groups = {}, written = 0, already = 0, errs = [];
+  var people = s.people || [];
+  for (var i = 0; i < people.length; i++) {
+    var p = people[i];
+    var who = back ? String(p.name || p.email || '').split(' ')[0] : String((p.alt && (p.alt.name || p.alt.email)) || '').split(' ')[0];
+    msg((back ? 'Writing to ' : 'Adding ') + (who || 'them') + '…');
+    var r = back
+      ? await _sampEdge('sam_handle_ooo', { contact_email: p.email, contact_name: p.name || '', return_date: p.until || null, task_date: todayKey() })
+      : await _sampEdge('sam_ooo_alt', { campaign_id: c.id, contact_id: p.id });
+    if (!r || !r.ok) { errs.push((r && r.error) || 'SAM could not do this one.'); continue; }
+    var gk = r.campaign_id + ':' + r.launch;
+    var g = groups[gk] || (groups[gk] = { campaign_id: r.campaign_id, campaign_name: r.campaign_name || c.name, launch: r.launch, contact_ids: [], start_at: r.start_at || null, send_day: r.send_day || null });
+    if (r.existing) { if (r.existing.status === 'pending') { already++; continue; } g.contact_ids.push(r.contact_id); continue; }
+    var w = await _g24WriteWave(r.campaign_id, r.launch, msg, { contact_ids: [r.contact_id], instruction: r.instruction, batch: 1 });
+    if (!w.ok || !w.written) { errs.push((w && w.error) || 'SAM could not write this one.'); continue; }
+    g.contact_ids.push(r.contact_id); written++;
+  }
+  var list = Object.keys(groups).map(function (k) { return groups[k]; }).filter(function (g) { return g.contact_ids.length; });
+  if (!list.length) {
+    _g24Set(key, already && !errs.length ? { phase: 'done', msg: already === 1 ? 'Already scheduled' : 'All already scheduled' } : { phase: 'error', msg: errs[0] || 'Nothing for SAM to write here.' });
+    return null;
+  }
+  var n = list.reduce(function (a, g) { return a + g.contact_ids.length; }, 0);
+  _g24Set(key, { phase: 'ready', msg: 'SAM wrote ' + _g24Pl(n, 'email'), cta: 'Review ' + (n > 1 ? n + ' ' : '') + 'and approve', groups: list });
+  if (!quiet) g24Review(list, key);
+  return list[0];
+}
