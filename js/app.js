@@ -3,7 +3,7 @@ let SB_KEY = localStorage.getItem('dt-sb-key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6I
 let API_KEY = localStorage.getItem('dt-api-key') || '';
 var _userHabits = null;
 // Cache buster — update this string on every deploy to purge stale service worker cache
-var APP_VERSION = '20261014-01';
+var APP_VERSION = '20261015-01';
 
 // ── Money in the org's own currency (2026-10-04) ───────────────────────────
 // Amounts are stored in USD (deal_value_usd) and shown in the org's currency
@@ -1417,7 +1417,7 @@ function renderListHTML(key, items) {
             (item.altContactPhone ? '<a href="tel:' + esc(item.altContactPhone.replace(/[^\d+]/g,'')) + '" style="font-size:11px;font-weight:600;color:var(--gold);text-decoration:none;border:1px solid var(--border2);border-radius:var(--r-sm);padding:1px 7px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3.5H4.5A1.5 1.5 0 003 5c0 8.8 7.2 16 16 16a1.5 1.5 0 001.5-1.5V17l-4.5-2-2.5 2.5A15 15 0 018.5 11L11 8.5z"/></svg> ' + esc(item.altContactPhone) + '</a>' : '') +
           '</div>'
         : '';
-      const tsMeta = (item.addedAt ? '<div class="item-meta">' + (item.delegatedBy?'Delegated ':'Added ') + item.addedAt + (item.completedAt?' · Completed '+item.completedAt:'') + '</div>' : '') + carryMeta + altContactCta;
+      const tsMeta = (item.addedAt ? '<div class="item-meta">' + (item.delegatedBy?'Delegated ':'Added ') + item.addedAt + (item.completedAt?' · Completed '+item.completedAt:'') + '</div>' : '') + carryMeta + altContactCta + _g24OooHtml(item, i);
       return '<div class="item ' + (item.done?'done':'') + ' ' + (isPriority?'priority-task':'') + '" data-task-idx="' + i + '" data-carry-text="' + esc(displayText) + '"' + (item.carriedTo?' style="opacity:0.5"':'') + '>' +
         '<div class="drag-handle"><svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="4" cy="3" r="1.5"/><circle cx="8" cy="3" r="1.5"/><circle cx="4" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="4" cy="13" r="1.5"/><circle cx="8" cy="13" r="1.5"/></svg></div>' +
         '<div class="chk ' + (item.done?'on':'') + '" onclick="' + (item.carriedTo?'':'toggleFromToday('+i+')') + '"' + (item.carriedTo?' title="Task moved forward"':'') + '></div>' +
@@ -1687,8 +1687,7 @@ async function syncCalendarTasks(force) {
   var row = document.getElementById('calendarSyncRow');
   var status = document.getElementById('calSyncStatus');
   try {
-    var r = await fetch(EDGE_FN_URL, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+currentUser.token,'apikey':SB_KEY}, body:JSON.stringify({action:'get_calendar_tasks', date: today2, tz: Intl.DateTimeFormat().resolvedOptions().timeZone}) });
-    var d = await r.json();
+    var d = await _g24Cal(today2);
     if (!d.ok || !d.tasks || !d.tasks.length) return;
     _calTasksFetched = today2;
     var existing = (dayData(today2).tasks || []).map(function(t){return t.text.toLowerCase();});
@@ -16854,14 +16853,15 @@ function _spRenderSeqTopBase(id) {
     var lbl = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.dow] || '';
     return '<div class="sp-cb" title="' + esc(_spDate(d.date) + ': ' + d.mine + ' from this SAMpaign, ' + other + ' from others') + '"><div class="bars"><span class="o" style="height:' + Math.round(other / maxV * 100) + '%"></span><span class="m" style="height:' + Math.round(d.mine / maxV * 100) + '%"></span></div><small>' + lbl + '</small></div>';
   }).join('');
-  box.innerHTML = '<div class="sp-wv"><section class="sp-card"><div class="sp-pad" style="padding-bottom:6px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><div class="sp-lbl">Sequence · email and LinkedIn</div>' + (owner ? '<button class="g-btn sp-sm sp-ghost" type="button" onclick="spSeqEdit(\'' + esc(id) + '\')">Edit sequence</button>' : '') + '</div>' + steps + '</section>' +
-    '<div class="sp-col"><div id="spLiSender_' + esc(id) + '"></div><section class="sp-card sp-pad"><div class="sp-lbl">Sends from this mailbox, next 10 weekdays</div><div class="sp-cal"><div class="sp-cap" style="bottom:' + Math.round(cal.cap / maxV * 100) + '%"><b>Limit ' + cal.cap + '</b></div>' + bars + '</div>' +
-      '<div class="sp-small" style="margin-top:10px">Gold is this SAMpaign, pale is the owner\'s other SAMpaigns. A full day pushes emails to the next free day.</div></section>' +
-      '<section class="sp-card sp-pad"><div class="sp-lbl">Rules</div>' +
-        '<div class="sp-rule" style="margin-top:6px"><span>Stop for anyone who replies, bounces or opts out, on every channel</span><span class="sp-on">Always on</span></div>' +
-        '<div class="sp-rule"><span>Follow-ups go in the same email thread</span><span class="sp-on">On</span></div>' +
-        '<div class="sp-rule"><span>Nothing sends until you approve the drafts</span><span class="sp-on">Always on</span></div>' +
-      '</section></div></div>';
+  box.innerHTML = '<div class="sp-wv"><section class="sp-card"><div class="sp-pad" style="padding-bottom:6px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><div class="sp-lbl">Sequence · email and LinkedIn</div>' + (owner ? '<button class="g-btn sp-sm sp-ghost" type="button" onclick="spSeqEdit(\'' + esc(id) + '\')">Edit sequence</button>' : '') + '</div>' + steps + _g24Rules() + '</section>' +
+    '<div class="sp-col">' + _g24MailCard(o, cal) + '<div id="spLiSender_' + esc(id) + '"></div></div></div>';
+}
+function _g24MailCard(o, cal) {
+  var h = o.health || {};
+  var chart = (cal.days || []).length ? _g24Chart(cal.days, { cap: cal.cap, capLabel: 'Limit ' + cal.cap, mine: function (d) { return d.mine; }, other: function (d) { return Math.max(0, d.all - d.mine); } }) : '<div class="g24-empty">Nothing scheduled from this mailbox yet.</div>';
+  return '<section class="sp-card sp-pad g24-sc"><div class="g24-sch"><span class="g24-scl mail">' + G24_ICON.mail + 'Email · next 10 days</span></div>' +
+    '<div class="g24-scs"><span class="li-dot ' + (h.mailbox_connected ? 'on' : '') + '"></span><b>' + (h.mailbox_connected ? 'Mailbox connected' : 'Mailbox not connected') + '</b>' + (h.pace_per_day ? ' · ' + h.pace_per_day + ' a day planned of ' + (h.cap || cal.cap) + ' allowed' : ' · nothing scheduled') + '</div>' +
+    chart + '<div class="g24-leg"><span><i class="m"></i>This SAMpaign</span><span><i class="o"></i>Your other SAMpaigns</span><span class="g24-lf">A full day moves to the next free day</span></div></section>';
 }
 function sampReviewWave(id, launch) {
   window._sampLaunch = launch;
@@ -17403,17 +17403,7 @@ async function _spLiDecorate(id, force) {
       '<div class="sp-acts">' + act('<button class="g-btn sp-sm sp-gold" type="button" onclick="spLiEdit(\'' + esc(id) + '\',true)">Add LinkedIn steps</button>') + '</div></div>';
   }
   if (steps) steps.innerHTML = html;
-  if (side) {
-    var snd = d.sender || {}, dev = snd.device;
-    var lim = snd.limit || 10, inv = (snd.today && snd.today.invites) || 0, pct = Math.min(100, Math.round(inv / Math.max(1, lim) * 100));
-    side.innerHTML = '<section class="sp-card sp-pad li-sender"><div class="sp-lbl">LinkedIn sender</div>' +
-      (dev
-        ? '<div class="li-sr"><div class="li-ring" style="background:conic-gradient(var(--c-accent) 0 ' + pct + '%,var(--g-line) ' + pct + '% 100%)"><div>' + inv + '/' + lim + '</div></div><div><b><span class="li-dot ' + (dev.online ? 'on' : '') + '"></span>' + esc(dev.label || 'Chrome') + ' · ' + (dev.online ? 'online' : 'offline') + '</b><div class="sp-small">' + (snd.mode === 'autopilot' ? 'Autopilot' : 'Co-pilot') + ' · ' + (snd.plan ? esc(snd.plan_label) + ' plan' : 'LinkedIn plan not confirmed') + ' · invites today' + (snd.next_due ? ' · next ' + esc(_spDate(snd.next_due, true)) : '') + '</div></div></div>' +
-          '<div class="sp-small" style="margin-top:10px">LinkedIn steps run from the plugin on ' + (owner ? 'your' : 'the owner\'s') + ' computer, ' + _liHour(snd.window.start) + ' to ' + _liHour(snd.window.end) + '. If Chrome is closed they wait; nothing is lost.</div>'
-        : '<div class="sp-small" style="margin-top:8px">' + (owner ? 'Samora for LinkedIn is not connected yet. LinkedIn steps wait until it is.' : 'The owner has not connected Samora for LinkedIn yet.') + '</div>' + (owner ? '<div class="li-btns"><button class="g-btn sp-sm sp-gold" type="button" onclick="liConnect(false)">' + (_liExtVersion() ? 'Connect this Chrome' : 'Get the plugin') + '</button></div>' : '')) +
-      (owner && cfg.on ? '<div class="li-btns"><button class="g-btn sp-sm" type="button" onclick="spLiEdit(\'' + esc(id) + '\')">LinkedIn steps</button></div>' : '') +
-      '</section>';
-  }
+  if (side) side.innerHTML = _g24LiCard(id, d, owner);
 }
 function spLiEdit(id, turnOn) {
   var d = (window._spLiCache || {})[id] || {};
@@ -19613,7 +19603,7 @@ function sampOpenTam(opts) {
   _spShow('tam');
   var page = document.getElementById('sampTamPage'); if (!page) return;
   _g19TamRender();
-  if (_g19SamTam()) { g19UsageLoad(false).then(_g19TamRender); _g19TamIdeas(); }
+  if (_g19SamTam()) { g19UsageLoad(false).then(_g19TamRender); _g19TamIdeas(); _g24TamEarlier(true); }
 }
 async function _g19TamIdeas() {
   var T = window._g19Tam; if (T.ideas) return;
@@ -19641,12 +19631,12 @@ function _g19TamRender() {
     '<button class="g-btn sp-gold" type="button" id="g19TamGo" onclick="g19TamSearch()"' + (T.busy || left === 0 ? ' disabled' : '') + '>' + (T.busy ? 'SAM is looking…' : SP_ICON.spark + ' Find companies') + '</button></div>' +
     '<div class="sp-small" style="margin-top:8px">' + (left === null ? '' : left === 0 ? 'No searches left today. They reset at midnight.' : _spPlural(left, 'search', 'searches') + ' left today.') + ' A search counts only when SAM comes back with companies. It uses no data credits.</div></section>';
   var res = '';
-  if (!T.busy && T.err && !T.res) res = _g20TamErr(T);
-  else if (T.busy) res = '<section class="sp-card sp-pad"><div class="g21-lk"><span class="sp-lbl">Looking for ' + T.n + ' ' + (T.n === 1 ? 'company' : 'companies') + '</span><span class="g21-el" id="g21TamEl">' + Math.max(0, Math.round((Date.now() - (T.t0 || Date.now())) / 1000)) + 's</span></div><div class="sp-progress g21-ind" style="margin-top:12px"><span></span></div><div class="sp-small" style="margin-top:10px">SAM finds companies that fit, then checks each website is real. Usually 20 to 60 seconds.</div></section>';
-  else if (T.res) {
+  if (!T.busy && T.err) res = _g20TamErr(T);
+  if (T.busy) res = '<section class="sp-card sp-pad"><div class="g21-lk"><span class="sp-lbl">Looking for ' + T.n + ' ' + (T.n === 1 ? 'company' : 'companies') + '</span><span class="g21-el" id="g21TamEl">' + Math.max(0, Math.round((Date.now() - (T.t0 || Date.now())) / 1000)) + 's</span></div><div class="sp-progress g21-ind" style="margin-top:12px"><span></span></div><div class="sp-small" style="margin-top:10px">SAM finds companies that fit, then checks each website is real. Usually 20 to 60 seconds.</div></section>';
+  if (!T.busy && T.res) {
     var c = T.res.candidates || [];
     var nPick = c.filter(function (x) { return T.picked[x.id]; }).length;
-    res = '<section class="sp-card g19-tamres"><div class="g19-trh"><div><b>' + _spPlural(c.length, 'company', 'companies') + '</b><span class="sp-small"> · ' + (T.res.verified_count || 0) + ' with a checked website' + (T.res.skipped_existing ? ' · ' + T.res.skipped_existing + ' you already have left out' : '') + '</span></div>' +
+    res += '<section class="sp-card g19-tamres' + (T.res.earlier ? ' g24-earl' : '') + '">' + (T.res.earlier ? '<div class="g24-earh">' + G24_ICON.spark + '<span>Found by an earlier search' + (T.res.query ? ': <b>' + esc(T.res.query) + '</b>' : '') + '. Already checked, and using them costs no search.</span></div>' : '') + '<div class="g19-trh"><div><b>' + _spPlural(c.length, 'company', 'companies') + '</b><span class="sp-small"> · ' + (T.res.verified_count || 0) + ' with a checked website' + (T.res.skipped_existing ? ' · ' + T.res.skipped_existing + ' you already have left out' : '') + '</span></div>' +
       '<div class="g19-trha"><button class="g19-lnk" type="button" onclick="g19TamPick(\'verified\')">Select checked</button><button class="g19-lnk" type="button" onclick="g19TamPick(\'none\')">Clear</button></div></div>' +
       (c.length ? c.map(function (x) {
         return '<label class="g19-co' + (T.picked[x.id] ? ' on' : '') + '"><input type="checkbox" ' + (T.picked[x.id] ? 'checked ' : '') + 'onchange="window._g19Tam.picked[\'' + esc(x.id) + '\']=this.checked;_g19TamRender()">' +
@@ -19659,7 +19649,7 @@ function _g19TamRender() {
       '</section>' +
       (nPick ? '<div class="g19-tambar"><span><b>' + nPick + '</b> selected</span><button class="g-btn sp-gold" type="button" onclick="g19TamUse()">' + (T.fromWizard ? 'Add ' + nPick + ' to the SAMpaign' : 'Start a SAMpaign with ' + nPick) + '</button></div>' : '');
   }
-  page.innerHTML = '<div class="sp-wiz g19-tam">' + head + form + res + '</div>';
+  page.innerHTML = '<div class="sp-wiz g19-tam">' + head + form + res + _g24TamEarlierHtml(T) + '</div>';
 }
 function _g19TamSave() { var T = window._g19Tam; var q = document.getElementById('g19TamQ'), r = document.getElementById('g19TamR'); if (q) T.q = q.value; if (r) T.region = r.value; }
 async function g19TamSearch() {
@@ -19673,7 +19663,8 @@ async function g19TamSearch() {
   T.busy = false;
   if (!d.ok) {
     if (d.locked) { window._orgConfig = Object.assign({}, window._orgConfig || {}, { samTam: false }); showToast(d.error || 'SAM-TAM Discovery is a premium feature'); _g19TamRender(); return; }
-    T.err = { msg: d.error || 'SAM could not search just now. Try again in a minute.', busy: !!(d.busy || d._stopped), slow: !!(d.slow || d._stopped) };
+    T.err = { msg: d.error || 'SAM could not search just now. Try again in a minute.', busy: !!(d.busy || d._stopped), slow: !!(d.slow || d._stopped), quota: d.quota || null, admin: d.admin_detail || null };
+    if (d.waiting && d.waiting.length) { T.res = { candidates: d.waiting, verified_count: d.waiting.filter(function (x) { return x.verified; }).length, earlier: true }; T.picked = {}; }
     g19UsageLoad(true).then(function () { if (window._g19Tam === T && !T.busy) _g19TamRender(); });
     if ((d.busy || /put the list together/.test(d.error || '')) && (T.autoTries || 0) < 2) { T.autoTries = (T.autoTries || 0) + 1; _g20TamWait(T.autoTries === 1 ? 20 : 45); }
     _g19TamRender(); _g20Reveal('.g20-err'); return;
@@ -19724,15 +19715,17 @@ var G20_ICON = {
 };
 function _g20TamErr(T) {
   var e = T.err, left = _g19Left('discovery');
-  var body = e.slow
+  var body = e.quota ? e.msg : e.slow
     ? 'The search took too long, so SAM stopped it. Nothing was used' + (left !== null ? ': you still have ' + _spPlural(left, 'search', 'searches') + ' today' : '') + '. Try again, or ask for fewer companies.'
     : e.busy
     ? 'SAM is under heavy load for a moment. Nothing was used' + (left !== null ? ': you still have ' + _spPlural(left, 'search', 'searches') + ' today' : '') + '. This usually clears within a minute.'
     : e.msg;
   return '<section class="sp-card sp-pad g20-err' + (e.busy ? ' busy' : '') + '" role="status" aria-live="polite">' +
-    '<div class="g20-eh"><span class="g20-ei">' + (e.busy ? G20_ICON.cloud : G20_ICON.warn) + '</span><b>' + (e.slow ? 'SAM took too long' : e.busy ? 'SAM is busy right now' : 'SAM could not search') + '</b></div>' +
+    '<div class="g20-eh"><span class="g20-ei">' + (e.busy ? G20_ICON.cloud : G20_ICON.warn) + '</span><b>' + (e.quota === 'day' ? 'SAM’s AI allowance is used up for today' : e.quota ? 'SAM is pacing itself' : e.slow ? 'SAM took too long' : e.busy ? 'SAM is busy right now' : 'SAM could not search') + '</b></div>' +
     '<div class="g20-eb">' + esc(body) + '</div>' +
     (T.wait ? '<div class="g20-ew"><span class="g20-spin" aria-hidden="true"></span><span>Trying again in <b id="g20TamWait">' + T.wait + '</b>s</span></div>' : '') +
+    (e.admin ? '<details class="g24-adm"><summary>For Samora: the technical reason</summary><code>' + esc(e.admin) + '</code></details>' : '') +
+    (T.res && T.res.earlier ? '<div class="g24-eh">Meanwhile, companies from earlier searches are below.</div>' : '') +
     '<div class="g20-ea"><button class="g-btn sp-gold" type="button" onclick="g20TamRetryNow()">Try again now</button>' +
     (T.wait ? '<button class="g-btn" type="button" onclick="_g20TamStopWait();_g19TamRender()">Don’t retry</button>' : '') + '</div></section>';
 }
@@ -19989,4 +19982,528 @@ function _g23PhoneDone(id, cid, d, first) {
   if (p) { p.phone = ph.value; p.phone_dnc = /do not call/i.test(String(ph.note || '')); }
   showToast(p && p.phone_dnc ? first + '’s number is marked do not call.' : (d.cached || !d.paid ? 'Samora already had ' + first + '’s number.' : 'Got ' + first + '’s number. Saved for your team.'));
   try { _spPaintPeople(id); } catch (e) {}
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Drop J (2026-10-15): Today rebuilt around one list, Let SAM handle, the
+// LinkedIn chart on the sequence page, and SAM-TAM that shows earlier finds.
+// ════════════════════════════════════════════════════════════════════════════
+var G24_ICON = {
+  spark: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.6L18 9.4l-4.2 1.8L12 16l-1.8-4.8L6 9.4l4.2-1.8z"/><path d="M18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></svg>',
+  cal: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8.5 3v4M15.5 3v4"/></svg>',
+  away: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5a8.5 8.5 0 108.5 8.5"/><path d="M12 7.5V12l3 2"/><path d="M17 3.5h4v4"/></svg>',
+  risk: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8.5v4.5M12 16.5v.1"/><path d="M10.3 4.2L2.9 17.4a1.6 1.6 0 001.4 2.4h15.4a1.6 1.6 0 001.4-2.4L13.7 4.2a1.6 1.6 0 00-3.4 0z"/></svg>',
+  reply: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 010 11H11"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
+  check: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.2 4.2L19 7"/></svg>',
+  x: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  chev: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>',
+  mail: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M4 7l8 6 8-6"/></svg>',
+  li: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="3.5"/><path d="M8 10.5V16M8 7.8v.1M11.5 16v-3.2a2.3 2.3 0 014.6 0V16M11.5 10.5V16"/></svg>'
+};
+window._g24 = window._g24 || { st: {}, open: {}, meet: null, meetDay: null, ownOpen: false };
+function _g24Pl(n, one, many) { return n + ' ' + (n === 1 ? one : (many || one + 's')); }
+function _g24IsToday() { try { return typeof viewDate === 'undefined' || !viewDate || viewDate === todayKey(); } catch (e) { return true; } }
+function _g24FirstName() {
+  try {
+    var n = (currentUser && currentUser.user_metadata && (currentUser.user_metadata.full_name || currentUser.user_metadata.name)) || '';
+    n = String(n).trim().split(/\s+/)[0] || '';
+    if (!n && currentUser && currentUser.email) n = String(currentUser.email).split('@')[0].split(/[._-]/)[0];
+    return n ? n.charAt(0).toUpperCase() + n.slice(1) : '';
+  } catch (e) { return ''; }
+}
+function _g24Day(d) { try { return new Date(String(d).slice(0, 10) + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }); } catch (e) { return String(d || ''); } }
+
+// ── What is on the day ──────────────────────────────────────────────────────
+// SAMpaign tasks (from get_sampaign_tasks) and the rep's own tasks, read as
+// one list. Each SAMpaign task SAM can take on carries `sam`.
+function _g24Items() {
+  var d = window._tds && window._tds.data, out = [];
+  if (d && _g24IsToday()) (d.campaigns || []).forEach(function (c) {
+    (c.tasks || []).forEach(function (t) {
+      if (t.key === 'clear') return;
+      out.push({ key: c.id + ':' + t.key, c: c, t: t, tone: t.tone, sam: t.sam || null });
+    });
+  });
+  return out;
+}
+function _g24OwnOoo() {
+  var out = [];
+  try { (dayData(viewDate).tasks || []).forEach(function (t, i) { if (t && t.oooContactEmail && !t.done && !t.carriedTo && !t.samHandled) out.push({ i: i, t: t }); }); } catch (e) {}
+  return out;
+}
+function _g24Counts() {
+  var it = _g24Items(), own = [];
+  try { own = (dayData(viewDate).tasks || []).filter(function (t) { return t && !t.done && !t.carriedTo; }); } catch (e) {}
+  var samN = it.filter(function (x) { return x.sam && (x.tone === 'do' || x.tone === 'risk') && !(window._g24.st[x.key] && window._g24.st[x.key].phase === 'done'); }).length + _g24OwnOoo().length;
+  var needs = it.filter(function (x) { return x.tone === 'do' || x.tone === 'risk'; }).length + own.length;
+  var replies = it.filter(function (x) { return /replies$/.test(x.t.key); }).reduce(function (a, x) { return a + (x.t.count || 0); }, 0);
+  var meet = (window._g24.meet || []).length;
+  return { needs: needs, sam: samN, replies: replies, meet: meet, risk: it.filter(function (x) { return x.tone === 'risk'; }).length, own: own.length };
+}
+
+// ── The SAM line at the top ─────────────────────────────────────────────────
+function g24RenderBrief() {
+  var el = document.getElementById('g24Brief'); if (!el) return;
+  if (!_g24IsToday()) {
+    var dd = ''; try { dd = _g24Day(viewDate); } catch (e) {}
+    el.innerHTML = '<div class="g24-bf other"><div class="g24-bt"><b>' + esc(dd) + '</b><span>' + (viewDate > todayKey() ? 'Planning ahead. Tasks you add here show up on the day.' : 'Looking back. What you did and what slipped.') + '</span></div><button class="g24-btn ghost" type="button" onclick="gotoDate(todayKey())">Back to today</button></div>';
+    return;
+  }
+  var k = _g24Counts();
+  var bits = [];
+  if (k.replies) bits.push('<span class="g24-st">' + G24_ICON.reply + _g24Pl(k.replies, 'reply', 'replies') + ' to answer</span>');
+  if (k.meet) bits.push('<span class="g24-st">' + G24_ICON.cal + _g24Pl(k.meet, 'meeting') + '</span>');
+  if (k.risk) bits.push('<span class="g24-st risk">' + G24_ICON.risk + k.risk + ' at risk</span>');
+  if (k.own) bits.push('<span class="g24-st">' + G24_ICON.check + _g24Pl(k.own, 'task') + ' of yours</span>');
+  var line = !window._tds.data && !window._g24.loadedOnce
+    ? 'Reading your SAMpaigns, inbox and calendar…'
+    : k.needs
+      ? '<b>' + _g24Pl(k.needs, 'thing needs', 'things need') + ' you today.</b> ' + (k.sam ? 'SAM can take <b>' + k.sam + '</b> of them. Nothing sends until you approve.' : 'Start at the top.')
+      : '<b>You are clear for now.</b> Nothing needs you. Add a task below, or start a SAMpaign.';
+  el.innerHTML = '<div class="g24-bf"><span class="g24-sam" aria-hidden="true">S</span><div class="g24-bt"><div class="g24-bl">' + line + '</div>' + (bits.length ? '<div class="g24-sts">' + bits.join('') + '</div>' : '') + '</div>' +
+    (k.sam ? '<button class="g24-btn gold" type="button" id="g24TakeAll" onclick="g24HandleAll()">' + G24_ICON.spark + 'Let SAM take ' + k.sam + '</button>' : '') + '</div>';
+}
+
+// ── The list: needs you, SAM can do these, running on its own ──────────────
+function _g24Ch(t) { return t.channel === 'linkedin' ? 'li' : t.channel === 'email' ? 'mail' : 'all'; }
+function _g24RowIcon(x) {
+  if (x.tone === 'risk') return '<span class="g24-ic risk">' + G24_ICON.risk + '</span>';
+  if (/replies$/.test(x.t.key)) return '<span class="g24-ic reply">' + G24_ICON.reply + '</span>';
+  var ch = _g24Ch(x.t);
+  return '<span class="g24-ic ' + ch + '">' + (ch === 'li' ? G24_ICON.li : ch === 'mail' ? G24_ICON.mail : G24_ICON.spark) + '</span>';
+}
+function _g24SamLabel(x) {
+  var s = x.sam || {};
+  if (s.do === 'write') return 'Let SAM write ' + (x.t.count ? x.t.count : 'them');
+  if (s.do === 'review') return 'Review and approve';
+  if (s.do === 'li_write') return 'Let SAM write ' + (x.t.count || '') + (s.kind === 'invite' ? ' notes' : ' messages');
+  if (s.do === 'retry') return 'Let SAM send again';
+  return 'Let SAM handle';
+}
+function _g24Row(x) {
+  var st = window._g24.st[x.key] || null;
+  var acts = '';
+  if (st && st.phase === 'working') acts = '<span class="g24-wk"><span class="g24-spin" aria-hidden="true"></span>' + esc(st.msg || 'SAM is on it…') + '</span>';
+  else if (st && st.phase === 'ready') acts = '<button class="g24-btn gold sm" type="button" onclick="g24ReviewKey(\'' + esc(x.key) + '\')">' + esc(st.cta || 'Review and approve') + '</button>';
+  else if (st && st.phase === 'done') acts = '<span class="g24-done">' + G24_ICON.check + esc(st.msg || 'Done') + '</span>' + (st.link ? '<button class="g24-lk" type="button" onclick="' + st.link + '">' + esc(st.linkLabel || 'See it') + '</button>' : '');
+  else {
+    if (x.sam && (x.tone === 'do' || x.tone === 'risk')) acts += '<button class="g24-btn gold sm" type="button" onclick="g24Handle(\'' + esc(x.key) + '\')">' + G24_ICON.spark + esc(_g24SamLabel(x)) + '</button>';
+    acts += _tdsAct(x.t, x.c).replace('class="tds-a"', 'class="g24-btn ghost sm"');
+  }
+  var err = st && st.phase === 'error' ? '<div class="g24-err">' + esc(st.msg) + '</div>' : '';
+  var bar = x.t.total ? '<span class="g24-bar" aria-hidden="true"><i style="width:' + Math.round((x.t.done || 0) / x.t.total * 100) + '%"></i></span>' : '';
+  return '<li class="g24-row ' + esc(x.tone) + (st ? ' s-' + st.phase : '') + '" data-key="' + esc(x.key) + '">' + _g24RowIcon(x) +
+    '<div class="g24-rmain"><div class="g24-rt">' + esc(x.t.text) + '</div>' + bar +
+    '<div class="g24-rs"><button class="g24-cn" type="button" onclick="tdsGo(\'sampaign\',\'' + esc(x.c.id) + '\',\'overview\')">' + esc(x.c.name) + '</button>' + (x.tone === 'risk' ? '<span class="g24-tag risk">At risk</span>' : '') + '</div>' + err + '</div>' +
+    '<div class="g24-ra">' + acts + '</div></li>';
+}
+function g24RenderFeed() {
+  var el = document.getElementById('g24Feed'); if (!el) return;
+  if (typeof todayActiveSection !== 'undefined' && todayActiveSection !== 'tasks') { el.innerHTML = ''; return; }
+  if (!_g24IsToday()) { el.innerHTML = ''; return; }
+  var it = _g24Items();
+  if (!window._tds.data) { el.innerHTML = '<div class="g24-sk"><i></i><i style="width:72%"></i><i style="width:56%"></i></div>'; return; }
+  var rank = { risk: 0, do: 1 };
+  var act = it.filter(function (x) { return x.tone === 'risk' || x.tone === 'do'; });
+  var needs = act.filter(function (x) { return !x.sam; }).sort(function (a, b) { return rank[a.tone] - rank[b.tone]; });
+  var sam = act.filter(function (x) { return !!x.sam; }).sort(function (a, b) { return rank[a.tone] - rank[b.tone]; });
+  var calm = it.filter(function (x) { return x.tone === 'wait' || x.tone === 'done'; });
+  var html = '';
+  if (needs.length) html += '<div class="g24-gh"><span>Needs you</span><b>' + needs.length + '</b></div><ul class="g24-list">' + needs.map(_g24Row).join('') + '</ul>';
+  if (sam.length) html += '<div class="g24-gh sam"><span>' + G24_ICON.spark + 'SAM can do these</span><b>' + sam.length + '</b><small>You approve before anything sends</small></div><ul class="g24-list">' + sam.map(_g24Row).join('') + '</ul>';
+  if (calm.length) {
+    var op = !!window._g24.open.calm;
+    html += '<button class="g24-gh calm" type="button" aria-expanded="' + op + '" onclick="window._g24.open.calm=!window._g24.open.calm;g24RenderFeed()"><span>Running on its own</span><b>' + calm.length + '</b><i class="g24-cv' + (op ? ' on' : '') + '">' + G24_ICON.chev + '</i></button>' +
+      (op ? '<ul class="g24-list calm">' + calm.map(_g24Row).join('') + '</ul>' : '');
+  }
+  el.innerHTML = html;
+}
+function g24RenderAll() { try { g24RenderBrief(); } catch (e) {} try { g24RenderFeed(); } catch (e) {} try { g24RenderSched(); } catch (e) {} try { _g24OwnHead(); } catch (e) {} }
+function _g24OwnHead() {
+  var h = document.querySelector('#today-tasks-section .today-sec-title'); if (!h) return;
+  if (!h.dataset.g24) { h.dataset.g24 = '1'; h.innerHTML = 'Your tasks'; }
+}
+
+// ── Today's schedule (rail) ────────────────────────────────────────────────
+var _g24CalP = null, _g24CalDay = null;
+function _g24Cal(day) {
+  if (_g24CalP && _g24CalDay === day) return _g24CalP;
+  _g24CalDay = day;
+  _g24CalP = fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify({ action: 'get_calendar_tasks', date: day, tz: Intl.DateTimeFormat().resolvedOptions().timeZone }) })
+    .then(function (r) { return r.json(); }).catch(function () { return { ok: false }; });
+  return _g24CalP;
+}
+async function g24LoadSched() {
+  if (typeof currentUser === 'undefined' || !currentUser || !currentUser.token) return;
+  var day = todayKey();
+  if (window._g24.meetDay === day && window._g24.meet) { g24RenderSched(); return; }
+  var d = await _g24Cal(day);
+  window._g24.meetDay = day;
+  window._g24.meet = d && d.ok ? (d.tasks || []) : [];
+  window._g24.meetOk = !!(d && d.ok);
+  g24RenderSched(); g24RenderBrief();
+}
+function g24RenderSched() {
+  var el = document.getElementById('g24Sched'); if (!el) return;
+  if (!_g24IsToday()) { el.innerHTML = ''; el.hidden = true; return; }
+  el.hidden = false;
+  var m = window._g24.meet;
+  var have = [];
+  try { have = (dayData(todayKey()).tasks || []).map(function (t) { return String(t.calendarEventId || ''); }); } catch (e) {}
+  var body;
+  if (m === null) body = '<div class="g24-sk sm"><i></i><i style="width:60%"></i></div>';
+  else if (!m.length) body = '<div class="g24-empty">' + (window._g24.meetOk === false ? 'Connect your calendar in You to see meetings here.' : 'No meetings today. Good day for outreach.') + '</div>';
+  else body = '<ul class="g24-sl">' + m.map(function (x, i) {
+    var added = x.calendar_event_id && have.indexOf(String(x.calendar_event_id)) !== -1;
+    return '<li><span class="g24-tm">' + esc(x.time || '') + '</span><div class="g24-sm"><b>' + esc(x.title || 'Meeting') + '</b>' + (x.account_name ? '<small>' + esc(x.account_name) + '</small>' : '') + '</div>' +
+      (added ? '<span class="g24-in" title="On your task list">' + G24_ICON.check + '</span>' : '<button class="g24-add" type="button" aria-label="Add ' + esc(x.title || 'meeting') + ' to your tasks" title="Add to your tasks" onclick="g24AddMeet(' + i + ')">' + G24_ICON.plus + '</button>') + '</li>';
+  }).join('') + '</ul>';
+  el.innerHTML = '<div class="g24-rh"><span>' + G24_ICON.cal + 'Today’s schedule</span>' + (m && m.length ? '<b>' + m.length + '</b>' : '') + '</div>' + body;
+}
+function g24AddMeet(i) {
+  var t = (window._g24.meet || [])[i]; if (!t) return;
+  var d = dayData(todayKey());
+  d.tasks.push({ text: t.text, done: false, priority: false, source: 'calendar', calendarEventId: t.calendar_event_id || null, account: t.account_name || null, completionNote: (typeof stripMeetingBoilerplate === 'function' ? stripMeetingBoilerplate(t.agenda) : '') || null });
+  save(todayKey()); render();
+  showToast('Added to your tasks');
+}
+
+// ── Let SAM handle ─────────────────────────────────────────────────────────
+function _g24Set(key, st) { window._g24.st[key] = st; g24RenderFeed(); g24RenderBrief(); }
+function _g24Find(key) { return _g24Items().find(function (x) { return x.key === key; }) || null; }
+function _g24Wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+async function _g24WriteWave(cId, launch, onMsg, extra) {
+  var written = 0, skip = [], paced = 0, total = null;
+  var name = (currentUser && currentUser.user_metadata && currentUser.user_metadata.full_name) || '';
+  for (var i = 0; i < 40; i++) {
+    var d = await _sampEdge('write_sampaign_drafts', Object.assign({ campaign_id: cId, launch: launch, batch: 6, skip_ids: skip, sender_name: name.split(' ')[0] || '', sender_full_name: name }, extra || {}));
+    if (!d.ok) {
+      if ((d.reason === 'quota' && !d.daily) || d.reason === 'overloaded') { if (paced++ < 6) { onMsg('SAM is pacing itself, back in a moment…'); await _g24Wait(Math.min(45, d.retry_after || 20) * 1000); continue; } }
+      return { ok: false, written: written, error: d.error || 'SAM could not write these.' };
+    }
+    written += d.written || 0; (d.missed || []).forEach(function (x) { skip.push(x); });
+    if (total === null) total = written + (d.remaining || 0);
+    onMsg('Written ' + written + (total ? ' of ' + total : '') + '…');
+    if (!d.remaining || (!d.written && !(d.missed || []).length)) break;
+  }
+  return { ok: true, written: written };
+}
+async function _g24WriteLi(cId, kind, onMsg) {
+  var written = 0, skip = [], paced = 0;
+  for (var i = 0; i < 40; i++) {
+    var r = await _sampEdge('write_linkedin_notes', { campaign_id: cId, kind: kind, batch: 12, skip_ids: skip });
+    if (!r.ok) {
+      if ((r.reason === 'quota' && !r.daily) || r.reason === 'overloaded') { if (paced++ < 6) { onMsg('SAM is pacing itself, back in a moment…'); await _g24Wait(Math.min(45, r.retry_after || 20) * 1000); continue; } }
+      return { ok: false, written: written, error: r.error || 'SAM could not write these.' };
+    }
+    written += r.written || 0; skip = skip.concat(r.missed || []);
+    onMsg(written + ' written…');
+    if (!r.remaining || (!r.written && !(r.missed || []).length)) break;
+  }
+  return { ok: true, written: written };
+}
+// One task. quiet: part of "Let SAM take all", so no review sheet of its own.
+async function g24Handle(key, quiet) {
+  var x = _g24Find(key); if (!x || !x.sam) return null;
+  var c = x.c, s = x.sam, msg = function (m) { _g24Set(key, { phase: 'working', msg: m }); };
+  msg('SAM is on it…');
+  if (s.do === 'write') {
+    var r = await _g24WriteWave(c.id, s.launch, msg);
+    if (!r.ok && !r.written) { _g24Set(key, { phase: 'error', msg: r.error }); return null; }
+    var grp = { campaign_id: c.id, campaign_name: c.name, launch: s.launch };
+    _g24Set(key, { phase: 'ready', msg: 'SAM wrote ' + _g24Pl(r.written, 'email'), cta: 'Review ' + r.written + ' and approve', groups: [grp] });
+    if (!quiet) g24Review([grp], key);
+    return grp;
+  }
+  if (s.do === 'review') {
+    var g2 = { campaign_id: c.id, campaign_name: c.name, launch: s.launch };
+    _g24Set(key, { phase: 'ready', cta: 'Review and approve', groups: [g2] });
+    if (!quiet) g24Review([g2], key);
+    return g2;
+  }
+  if (s.do === 'li_write') {
+    var r2 = await _g24WriteLi(c.id, s.kind, msg);
+    if (!r2.ok && !r2.written) { _g24Set(key, { phase: 'error', msg: r2.error }); return null; }
+    _g24Set(key, { phase: 'done', msg: 'SAM wrote ' + r2.written + (s.kind === 'invite' ? ' invite notes' : ' messages') + '. They go out from the plugin on their days.', link: 'g24OpenLi(\'' + esc(c.id) + '\',\'' + (s.kind === 'invite' ? 'li_invite' : 'li_message') + '\')', linkLabel: 'Read them' });
+    try { tdSampLoad(true); } catch (e) {}
+    return { li: r2.written, kind: s.kind, campaign_id: c.id, campaign_name: c.name };
+  }
+  if (s.do === 'retry') {
+    var d = await _sampEdge('retry_failed_sends', { campaign_id: c.id });
+    if (!d.ok && d.needs_reconnect) { _g24Set(key, { phase: 'error', msg: d.error || 'Reconnect your mailbox first.' }); try { _spReconnectModal(c.id, null, d); } catch (e) {} return null; }
+    if (!d.ok) { _g24Set(key, { phase: 'error', msg: d.error || 'SAM could not do that.' }); return null; }
+    if (!d.drafts) { _g24Set(key, { phase: 'done', msg: d.cancelled ? 'Nothing to send: they replied or bounced meanwhile.' : 'Nothing to send again.' }); return null; }
+    var g3 = { campaign_id: c.id, campaign_name: c.name, launch: d.launch };
+    _g24Set(key, { phase: 'ready', msg: _g24Pl(d.drafts, 'email') + ' ready to go again', cta: 'Pick when they go', groups: [g3] });
+    if (!quiet) g24Review([g3], key);
+    return g3;
+  }
+  return null;
+}
+function g24ReviewKey(key) { var st = window._g24.st[key]; if (st && st.groups) g24Review(st.groups, key); }
+function g24OpenLi(id, tab) {
+  try { switchTab('sampaign'); } catch (e) {}
+  setTimeout(function () { openSampaignDetail(id, 'sequence'); setTimeout(function () { try { setSampLaunch(id, tab); var q = document.getElementById('sampSendQueue'); if (q) q.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {} }, 900); }, 350);
+}
+
+// Away messages: on the task itself.
+async function g24HandleOoo(i, quiet) {
+  var day = viewDate, t = (dayData(day).tasks || [])[i];
+  if (!t || !t.oooContactEmail) return null;
+  var key = 'ooo:' + day + ':' + i;
+  var set = function (st) { window._g24.st[key] = st; setTimeout(function () { try { renderToday(); } catch (e) {} }, 0); };
+  set({ phase: 'working', msg: 'SAM is writing to ' + (_g24OooName(t) || 'them') + '…' });
+  var p = await _sampEdge('sam_handle_ooo', { contact_email: t.oooContactEmail, contact_name: _g24OooName(t), return_date: t.oooReturnDate || null, task_date: day, msg_id: t.oooMsgId || null });
+  if (!p.ok) { set({ phase: 'error', msg: p.error || 'SAM could not do this one.' }); return null; }
+  var grp = { campaign_id: p.campaign_id, campaign_name: p.campaign_name, launch: p.launch, contact_ids: [p.contact_id], start_at: p.start_at, send_day: p.send_day, ooo: { day: day, i: i, name: _g24OooName(t) } };
+  if (p.existing) {
+    if (p.existing.status === 'pending') { _g24MarkOoo(day, i, { campaign_id: p.campaign_id, send_at: p.existing.send_at, state: 'scheduled' }); set({ phase: 'done', msg: 'Already scheduled for ' + _g24Day(p.existing.send_at) }); return null; }
+    set({ phase: 'ready', cta: 'Review the email', groups: [grp] });
+    if (!quiet) g24Review([grp], key);
+    return grp;
+  }
+  var w = await _g24WriteWave(p.campaign_id, p.launch, function (m) { set({ phase: 'working', msg: m }); }, { contact_ids: [p.contact_id], instruction: p.instruction, batch: 1 });
+  if (!w.ok || !w.written) { set({ phase: 'error', msg: (w && w.error) || 'SAM could not write this one.' }); return null; }
+  set({ phase: 'ready', cta: 'Review the email', groups: [grp] });
+  if (!quiet) g24Review([grp], key);
+  return grp;
+}
+function _g24OooName(t) {
+  var m = String(t.oooFrom || '').replace(/<[^>]*>/g, '').replace(/["']/g, '').trim();
+  if (m && m.indexOf('@') === -1) return m;
+  var mt = String(t.text || '').match(/^From OOO Mail: (.+?) back from leave/);
+  return mt ? mt[1] : '';
+}
+function _g24MarkOoo(day, i, info) {
+  var t = (dayData(day).tasks || [])[i]; if (!t) return;
+  t.samHandled = Object.assign({ at: new Date().toISOString() }, info);
+  if (!t.done) {
+    t.done = true;
+    try { t.completedAt = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) + ' · ' + new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }); } catch (e) {}
+    t.completionNote = 'SAM scheduled a welcome back email' + (info.send_at ? ' for ' + _g24Day(info.send_at) : '') + '.';
+  }
+  try { save(day); } catch (e) {}
+}
+function _g24OooHtml(item, i) {
+  if (!item || !item.oooContactEmail || item.carriedTo) return '';
+  var key = 'ooo:' + viewDate + ':' + i, st = window._g24.st[key];
+  if (item.samHandled) return '<div class="g24-oo done">' + G24_ICON.check + 'SAM scheduled a welcome back email' + (item.samHandled.send_at ? ' for ' + esc(_g24Day(item.samHandled.send_at)) : '') + '.</div>';
+  if (item.done) return '';
+  if (st && st.phase === 'working') return '<div class="g24-oo"><span class="g24-spin" aria-hidden="true"></span>' + esc(st.msg) + '</div>';
+  if (st && st.phase === 'ready') return '<div class="g24-oo"><button class="g24-btn gold sm" type="button" onpointerdown="event.stopPropagation()" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()" onclick="event.stopPropagation();g24ReviewKey(\'' + esc(key) + '\')">Review the email</button></div>';
+  if (st && st.phase === 'done') return '<div class="g24-oo done">' + G24_ICON.check + esc(st.msg) + '</div>';
+  return '<div class="g24-oo">' + (st && st.phase === 'error' ? '<span class="g24-err">' + esc(st.msg) + '</span>' : '') +
+    '<button class="g24-btn gold sm" type="button" onpointerdown="event.stopPropagation()" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()" onclick="event.stopPropagation();g24HandleOoo(' + i + ')">' + G24_ICON.spark + 'Let SAM handle this</button><span class="g24-hint">SAM writes a welcome back email for the day they return. You approve it.</span></div>';
+}
+
+// "Let SAM take all": every task SAM can do, then one review.
+async function g24HandleAll() {
+  if (window._g24.allBusy) return;
+  window._g24.allBusy = true;
+  var btn = document.getElementById('g24TakeAll'); if (btn) { btn.disabled = true; btn.innerHTML = '<span class="g24-spin" aria-hidden="true"></span>SAM is working…'; }
+  var items = _g24Items().filter(function (x) { return x.sam && (x.tone === 'do' || x.tone === 'risk') && !(window._g24.st[x.key] && ['done', 'ready'].indexOf(window._g24.st[x.key].phase) !== -1); });
+  var ooo = _g24OwnOoo();
+  var groups = [], li = [];
+  for (var a = 0; a < items.length; a++) { var r = await g24Handle(items[a].key, true); if (r && r.li !== undefined) li.push(r); else if (r) groups.push(r); }
+  for (var b = 0; b < ooo.length; b++) { var r2 = await g24HandleOoo(ooo[b].i, true); if (r2) groups.push(r2); }
+  // Already ready from an earlier click.
+  Object.keys(window._g24.st).forEach(function (k) { var st = window._g24.st[k]; if (st.phase === 'ready' && st.groups) st.groups.forEach(function (g) { if (!groups.some(function (x) { return x.campaign_id === g.campaign_id && x.launch === g.launch && String(x.contact_ids || '') === String(g.contact_ids || ''); })) groups.push(g); }); });
+  window._g24.allBusy = false;
+  g24RenderBrief();
+  if (groups.length) g24Review(groups, null, li);
+  else if (li.length) showToast('SAM wrote ' + li.reduce(function (s, x) { return s + x.li; }, 0) + ' LinkedIn texts. They go out from the plugin.');
+  else showToast('Nothing left for SAM to do right now.');
+}
+
+// ── Review sheet: read, edit, remove, then approve ─────────────────────────
+async function g24Review(groups, key, li) {
+  var old = document.getElementById('g24Rv'); if (old) old.remove();
+  var m = document.createElement('div'); m.className = 'g24-rv'; m.id = 'g24Rv';
+  m.innerHTML = '<div class="g24-rvp" role="dialog" aria-modal="true" aria-labelledby="g24RvT"><div class="g24-rvh"><div><h3 id="g24RvT">Review what SAM wrote</h3><div class="g24-rvs">Nothing sends until you approve. Edit anything first.</div></div><button class="g24-x" type="button" aria-label="Close" onclick="g24CloseReview()">' + G24_ICON.x + '</button></div><div class="g24-rvb" id="g24RvB"><div class="g24-sk"><i></i><i style="width:70%"></i><i style="width:50%"></i></div></div><div class="g24-rvf" id="g24RvF"></div></div>';
+  m.addEventListener('click', function (e) { if (e.target === m) g24CloseReview(); });
+  document.body.appendChild(m);
+  document.addEventListener('keydown', _g24Esc);
+  requestAnimationFrame(function () { m.classList.add('on'); });
+  var R = window._g24.rv = { groups: groups, key: key, li: li || [], rows: {}, open: null };
+  var byCamp = {};
+  for (var i = 0; i < groups.length; i++) {
+    var g = groups[i];
+    if (!byCamp[g.campaign_id]) byCamp[g.campaign_id] = await _sampEdge('list_sampaign_scheduled_sends', { campaign_id: g.campaign_id });
+    var all = (byCamp[g.campaign_id] && byCamp[g.campaign_id].sends) || [];
+    g.rows = all.filter(function (s) { return s.status === 'draft' && Number(s.launch || 1) === Number(g.launch) && (!g.contact_ids || g.contact_ids.indexOf(s.contact_id) !== -1); });
+    g.rows.forEach(function (s) { R.rows[s.id] = s; });
+    var plan = g.rows.length ? await _sampEdge('schedule_sampaign_drafts', { campaign_id: g.campaign_id, launch: g.launch, contact_ids: g.contact_ids || undefined, start_at: g.start_at || null, dry_run: true }) : null;
+    g.plan = plan && plan.ok ? plan : null;
+  }
+  _g24RvRender();
+}
+function _g24Esc(e) { if (e.key === 'Escape') g24CloseReview(); }
+function g24CloseReview() {
+  var m = document.getElementById('g24Rv'); document.removeEventListener('keydown', _g24Esc);
+  if (!m) return; m.classList.remove('on'); setTimeout(function () { m.remove(); }, 180);
+}
+function _g24Plain(html) { var b = document.createElement('div'); b.innerHTML = String(html || '').replace(/<br\s*\/?>/gi, ' ').replace(/<\/p>/gi, ' '); return (b.textContent || '').replace(/\s+/g, ' ').trim(); }
+function _g24PlanText(g) {
+  var p = g.plan; if (!p || !p.first_send) return '';
+  var a = _g24Day(p.first_send), z = _g24Day(p.last_send);
+  var t = ''; try { t = new Date(p.first_send).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); } catch (e) {}
+  return a === z ? 'Goes out ' + a + (g.rows.length === 1 && t ? ', ' + t : '') : 'Goes out ' + a + ' to ' + z;
+}
+function _g24RvRender() {
+  var R = window._g24.rv, body = document.getElementById('g24RvB'), foot = document.getElementById('g24RvF'); if (!R || !body) return;
+  var total = 0;
+  var html = R.groups.map(function (g, gi) {
+    total += g.rows.length;
+    var label = g.ooo ? 'Welcome back' : _spWave(g.launch);
+    var head = '<div class="g24-rg"><div><b>' + esc(g.campaign_name || 'SAMpaign') + '</b><span>' + esc(label) + ' · ' + _g24Pl(g.rows.length, 'email') + '</span></div><small>' + esc(_g24PlanText(g)) + '</small></div>';
+    if (!g.rows.length) return head + '<div class="g24-empty">Nothing waiting here any more.</div>';
+    return head + '<ul class="g24-dl">' + g.rows.map(function (s) {
+      var open = R.open === s.id;
+      var who = esc(s.contact_name || s.name || (s.contact && s.contact.name) || s.to_email || s.email || '');
+      var co = esc(s.contact_company || (s.contact && s.contact.company) || s.company || '');
+      if (!open) return '<li class="g24-dr"><button class="g24-drb" type="button" onclick="_g24RvOpen(\'' + esc(s.id) + '\')"><span class="g24-av">' + esc(_spIni(who || '?')) + '</span><span class="g24-drm"><span class="g24-drn"><b>' + who + '</b>' + (co ? '<small>' + co + '</small>' : '') + '</span><span class="g24-drs">' + esc(s.subject || '') + '</span><span class="g24-drp">' + esc(_g24Plain(s.body).slice(0, 150)) + '</span></span></button>' +
+        '<button class="g24-rm" type="button" aria-label="Remove the email to ' + who + '" title="Remove" onclick="_g24RvRemove(\'' + esc(s.id) + '\')">' + G24_ICON.x + '</button></li>';
+      return '<li class="g24-dr open"><div class="g24-dre"><div class="g24-drn"><span class="g24-av">' + esc(_spIni(who || '?')) + '</span><b>' + who + '</b>' + (co ? '<small>' + co + '</small>' : '') + '</div>' +
+        '<label class="g24-fl">Subject<input id="draftSubj_g24_' + esc(s.id) + '" value="' + esc(s.subject || '') + '"></label>' +
+        '<div class="g24-fl">Email' + _rtEditor('g24_' + s.id, s.body || '') + '</div>' +
+        '<div class="g24-dra"><button class="g24-btn ghost sm" type="button" onclick="_g24RvRemove(\'' + esc(s.id) + '\')">Remove</button><span class="g24-sp"></span><button class="g24-btn ghost sm" type="button" onclick="window._g24.rv.open=null;_g24RvRender()">Cancel</button><button class="g24-btn gold sm" type="button" onclick="_g24RvSave(\'' + esc(s.id) + '\')">Save</button></div></div></li>';
+    }).join('') + '</ul>';
+  }).join('');
+  if (R.li && R.li.length) html = '<div class="g24-linote">' + G24_ICON.li + '<span>SAM also wrote ' + R.li.map(function (x) { return x.li + (x.kind === 'invite' ? ' invite notes' : ' LinkedIn messages') + ' for ' + esc(x.campaign_name); }).join(', ') + '. They go out from the plugin on their days.</span></div>' + html;
+  body.innerHTML = html || '<div class="g24-empty">Nothing to review.</div>';
+  foot.innerHTML = '<button class="g24-btn ghost" type="button" onclick="g24CloseReview()">Not now</button><span class="g24-sp"></span>' + (total ? '<button class="g24-btn gold" type="button" id="g24RvGo" onclick="g24Approve()">' + G24_ICON.check + 'Approve and schedule ' + total + '</button>' : '');
+}
+async function _g24RvOpen(id) {
+  var R = window._g24.rv; if (R.open && R.open !== id) await _g24RvSave(R.open, true);
+  R.open = id; _g24RvRender();
+  var el = document.getElementById('draftSubj_g24_' + id); if (el) el.focus();
+}
+async function _g24RvSave(id, quiet) {
+  var R = window._g24.rv, s = R && R.rows[id]; if (!s) return;
+  var subjEl = document.getElementById('draftSubj_g24_' + id); if (!subjEl) return;
+  var subject = subjEl.value.trim(), body = rtValue('g24_' + id);
+  if (!subject || rtIsEmpty(body)) { showToast('Subject and email are both needed'); return; }
+  if (subject === String(s.subject || '') && body === String(s.body || '')) { if (!quiet) { R.open = null; _g24RvRender(); } return; }
+  var d = await _sampEdge('update_sampaign_scheduled_send', { send_id: id, subject: subject, body: body });
+  if (!d.ok) { showToast(d.error || 'Could not save'); return; }
+  s.subject = subject; s.body = body;
+  if (!quiet) { R.open = null; _g24RvRender(); showToast('Saved'); }
+}
+async function _g24RvRemove(id) {
+  var R = window._g24.rv;
+  var d = await _sampEdge('cancel_sampaign_scheduled_send', { send_ids: [id] });
+  if (!d.ok) { showToast(d.error || 'Could not remove'); return; }
+  R.groups.forEach(function (g) { g.rows = g.rows.filter(function (s) { return s.id !== id; }); });
+  delete R.rows[id]; if (R.open === id) R.open = null;
+  _g24RvRender(); showToast('Removed. That person gets nothing from this step.');
+}
+async function g24Approve() {
+  var R = window._g24.rv, btn = document.getElementById('g24RvGo'); if (!R) return;
+  if (R.open) await _g24RvSave(R.open, true);
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="g24-spin" aria-hidden="true"></span>Scheduling…'; }
+  var done = 0, firsts = [], errs = [];
+  for (var i = 0; i < R.groups.length; i++) {
+    var g = R.groups[i]; if (!g.rows.length) continue;
+    var d = await _sampEdge('schedule_sampaign_drafts', { campaign_id: g.campaign_id, launch: g.launch, contact_ids: g.contact_ids || undefined, start_at: g.start_at || null, allow_roll: true });
+    if (!d.ok) { errs.push((g.campaign_name || 'SAMpaign') + ': ' + (d.error || 'could not schedule')); continue; }
+    done += d.scheduled || 0; if (d.first_send) firsts.push(d.first_send);
+    if (g.ooo) _g24MarkOoo(g.ooo.day, g.ooo.i, { campaign_id: g.campaign_id, send_at: d.first_send, state: 'scheduled' });
+  }
+  Object.keys(window._g24.st).forEach(function (k) { var st = window._g24.st[k]; if (st.phase === 'ready' && st.groups && st.groups.every(function (g) { return R.groups.indexOf(g) !== -1 || R.groups.some(function (x) { return x.campaign_id === g.campaign_id && x.launch === g.launch; }); })) window._g24.st[k] = { phase: 'done', msg: 'Approved and scheduled' }; });
+  g24CloseReview();
+  firsts.sort();
+  showToast(errs.length ? errs[0] : 'Scheduled ' + _g24Pl(done, 'email') + (firsts[0] ? ', first ' + _g24Day(firsts[0]) : '') + '. Change anything in Drafts and queue.');
+  try { render(); } catch (e) {}
+  try { tdSampLoad(true); } catch (e) {}
+  g24RenderAll();
+}
+
+// ── Wiring ────────────────────────────────────────────────────────────────
+(function () {
+  if (typeof tdSampRender === 'function' && !tdSampRender._g24) {
+    var o = tdSampRender;
+    tdSampRender = function () { var r = o.apply(this, arguments); window._g24.loadedOnce = true; g24RenderAll(); return r; };
+    tdSampRender._g24 = true;
+  }
+  if (typeof renderToday === 'function' && !renderToday._g24) {
+    var o2 = renderToday;
+    renderToday = function () { var r = o2.apply(this, arguments); try { document.body.classList.add('g24'); } catch (e) {} g24RenderAll(); try { g24LoadSched(); } catch (e) {} return r; };
+    renderToday._g24 = true;
+  }
+  if (typeof updateHeader === 'function' && !updateHeader._g24) {
+    var o3 = updateHeader;
+    updateHeader = function () {
+      var r = o3.apply(this, arguments);
+      try { var g = document.getElementById('greeting'), fn = _g24FirstName(); if (g && fn) g.textContent = g.textContent.replace(/\.$/, '') + ', ' + fn + '.'; } catch (e) {}
+      return r;
+    };
+    updateHeader._g24 = true;
+  }
+  try { document.body.classList.add('g24'); } catch (e) {}
+})();
+
+// ── Sequence page: email and LinkedIn charts side by side ───────────────────
+function _g24Chart(days, opts) {
+  var cap = Math.max(1, opts.cap || 1), mx = Math.max(cap, 1);
+  days.forEach(function (d) { mx = Math.max(mx, opts.mine(d) + opts.other(d)); });
+  mx = mx * 1.15;
+  var bars = days.map(function (d, i) {
+    var a = opts.mine(d), b = opts.other(d);
+    var lbl = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.dow] || '';
+    var tip = _g24Day(d.date) + ': ' + a + ' from this SAMpaign' + (b ? ', ' + b + ' from your others' : '');
+    return '<div class="g24-cb' + (i === 0 ? ' today' : '') + '" title="' + esc(tip) + '"><div class="g24-cbars"><span class="m ' + (opts.tone || '') + '" style="height:' + Math.round(a / mx * 100) + '%"></span><span class="o" style="height:' + Math.round(b / mx * 100) + '%"></span>' + (a + b ? '<em>' + (a + b) + '</em>' : '') + '</div><small>' + (i === 0 ? 'Today' : lbl) + '</small></div>';
+  }).join('');
+  return '<div class="g24-chart"><div class="g24-cap" style="bottom:' + (22 + Math.round(106 * cap / mx)) + 'px"><b>' + esc(opts.capLabel) + '</b></div>' + bars + '</div>';
+}
+function _g24Rules() {
+  return '<div class="g24-rules"><span>' + G24_ICON.check + 'Stops for anyone who replies, bounces or opts out, on every channel</span><span>' + G24_ICON.check + 'Follow-ups go in the same email thread</span><span>' + G24_ICON.check + 'Nothing sends until you approve the drafts</span></div>';
+}
+function _g24LiCard(id, d, owner) {
+  var snd = d.sender || {}, dev = snd.device, cal = d.calendar, cfg = d.config || {};
+  var L = window._g24.liView = window._g24.liView || {};
+  var view = L[id] || 'inv';
+  var lim = snd.limit || 10, inv = (snd.today && snd.today.invites) || 0;
+  var status = dev
+    ? '<span class="li-dot ' + (dev.online ? 'on' : '') + '"></span><b>' + esc(dev.label || 'Chrome') + '</b> · ' + (dev.online ? 'online' : 'offline') + ' · ' + (snd.mode === 'autopilot' ? 'Autopilot' : 'Co-pilot') + ' · ' + (snd.plan ? esc(snd.plan_label) + ' plan' : 'plan not confirmed') + ' · <b>' + inv + ' of ' + lim + '</b> invites today'
+    : (owner ? 'Samora for LinkedIn is not connected yet. LinkedIn steps wait until it is.' : 'The owner has not connected Samora for LinkedIn yet.');
+  var chart = '';
+  if (cal && cal.days && cal.days.length) {
+    var isInv = view === 'inv';
+    chart = _g24Chart(cal.days, { cap: isInv ? cal.caps.invites : cal.caps.messages, capLabel: 'Limit ' + (isInv ? cal.caps.invites : cal.caps.messages), tone: 'li',
+      mine: function (x) { return isInv ? x.inv.mine : x.msg.mine; }, other: function (x) { return isInv ? x.inv.other : x.msg.other; } });
+    var over = cal.overflow && (cal.overflow.mine + cal.overflow.other);
+    var foot = [];
+    if (!isInv && cal.awaiting_accept) foot.push(_g24Pl(cal.awaiting_accept, 'more message goes', 'more messages go') + ' out as people accept');
+    if (isInv) foot.push(cal.caps.weekly + ' a week on your plan, ' + (cal.week_sent || 0) + ' sent this week');
+    if (over) foot.push(over + ' more after these 10 days');
+    chart += '<div class="g24-leg"><span><i class="m li"></i>This SAMpaign</span><span><i class="o"></i>Your other SAMpaigns</span></div>' + (foot.length ? '<div class="g24-cf">' + esc(foot.join('. ')) + '.</div>' : '');
+  } else if (cfg.on) chart = '<div class="g24-empty">Nothing queued on LinkedIn yet. Invites appear here once notes are written.</div>';
+  return '<section class="sp-card sp-pad g24-sc li-sender"><div class="g24-sch"><span class="g24-scl li">' + G24_ICON.li + 'LinkedIn · next 10 days</span>' +
+    (cal && cal.days ? '<div class="g24-seg" role="tablist"><button type="button" role="tab" aria-selected="' + (view === 'inv') + '" class="' + (view === 'inv' ? 'on' : '') + '" onclick="_g24LiView(\'' + esc(id) + '\',\'inv\')">Invites</button><button type="button" role="tab" aria-selected="' + (view === 'msg') + '" class="' + (view === 'msg' ? 'on' : '') + '" onclick="_g24LiView(\'' + esc(id) + '\',\'msg\')">Messages</button></div>' : '') + '</div>' +
+    '<div class="g24-scs">' + status + (owner && !dev ? ' <button class="g24-lk" type="button" onclick="liConnect(false)">' + (_liExtVersion() ? 'Connect this Chrome' : 'Get the plugin') + '</button>' : '') + (owner && cfg.on ? ' · <button class="g24-lk" type="button" onclick="spLiEdit(\'' + esc(id) + '\')">LinkedIn steps</button>' : '') + '</div>' + chart + '</section>';
+}
+function _g24LiView(id, v) { window._g24.liView = window._g24.liView || {}; window._g24.liView[id] = v; _spLiDecorate(id); }
+
+// ── SAM-TAM: what earlier searches found ───────────────────────────────────
+async function _g24TamEarlier(force) {
+  var T = window._g19Tam; if (!T || (T.batches && !force)) return;
+  var d = await _sampEdge('list_discovery_candidates', { status: 'pending' });
+  T.batches = d && d.ok ? (d.batches || []).filter(function (b) { return (b.candidates || []).length; }).slice(0, 6) : [];
+  if (window._g19Tam === T && !T.busy && !T.res) _g19TamRender();
+}
+function _g24TamEarlierHtml(T) {
+  if (!T.batches || !T.batches.length || T.res || T.busy) return '';
+  return '<section class="sp-card sp-pad g24-tamE"><div class="sp-lbl">Waiting from earlier searches</div><div class="sp-small" style="margin-top:4px">Companies SAM already found and checked. Pick from them without searching again.</div><ul>' +
+    T.batches.map(function (b, i) {
+      var v = (b.candidates || []).filter(function (x) { return x.verified; }).length;
+      return '<li><div><b>' + esc(b.query || 'Earlier search') + '</b><small>' + _g24Pl(b.candidates.length, 'company', 'companies') + (v ? ', ' + v + ' with a checked website' : '') + ' · ' + esc(_spAgo(b.created_at)) + '</small></div><button class="g24-btn ghost sm" type="button" onclick="g24TamShow(' + i + ')">Show</button></li>';
+    }).join('') + '</ul></section>';
+}
+function g24TamShow(i) {
+  var T = window._g19Tam, b = T && T.batches && T.batches[i]; if (!b) return;
+  T.err = null; T.picked = {};
+  T.res = { candidates: b.candidates.map(function (x) { return Object.assign({ description: '' }, x); }), verified_count: b.candidates.filter(function (x) { return x.verified; }).length, earlier: true, query: b.query };
+  T.res.candidates.forEach(function (x) { if (x.verified) T.picked[x.id] = true; });
+  _g19TamRender();
 }
