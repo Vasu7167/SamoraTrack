@@ -1,6 +1,7 @@
 // ── SamoraOS Service Worker ──────────────────────────────────────
 // BUMP THIS VERSION NUMBER every time you push an update.
-const VERSION = 'v1.0.13';   // 1.0.13: new icons. Same filenames as the old ones, so without a bump the cache keeps serving the placeholder S.
+const VERSION = 'v1.0.14';   // 1.0.14 (Drop K): the app is five versioned files; each is kept until the next release.
+// 1.0.13 note:   // 1.0.13: new icons. Same filenames as the old ones, so without a bump the cache keeps serving the placeholder S.
 const CACHE = `samoratrack-${VERSION}`;
 
 const PRECACHE = [
@@ -11,10 +12,9 @@ const PRECACHE = [
   '/icons/icon-512.png',
   '/icons/apple-touch-icon.png',
   '/favicon.svg',
-  '/js/app.js',
-  '/js/app-tail.js',
-  '/js/vendor/sortable.min.js',
 ];
+// The app's JavaScript is not precached: index.html asks for /js/app-1.js?v=<release>
+// and the handler below keeps each versioned file the first time it is fetched.
 
 self.addEventListener('install', event => {
   self.skipWaiting();
@@ -123,6 +123,21 @@ self.addEventListener('fetch', event => {
   // would look like "the feature I just shipped doesn't exist for some
   // users". Network-first removes the dependency on remembering; the cache
   // still answers when the network doesn't, so offline is unaffected.
+  // Drop K: a versioned file (?v=<release>) never changes, so it is served
+  // from the cache with no network round trip. A new release has a new ?v=,
+  // which is a different request, so it is fetched fresh.
+  if (url.origin === self.location.origin && url.pathname.startsWith('/js/') && url.searchParams.has('v')) {
+    event.respondWith(
+      caches.match(request).then(cached => cached || fetch(request).then(response => {
+        if (response && response.status === 200) {
+          const clone = response.clone();
+          caches.open(CACHE).then(cache => cache.put(request, clone));
+        }
+        return response;
+      }))
+    );
+    return;
+  }
   if (url.origin === self.location.origin && url.pathname.startsWith('/js/')) {
     event.respondWith(
       fetch(request)
