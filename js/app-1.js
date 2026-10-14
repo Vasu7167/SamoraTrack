@@ -3,7 +3,7 @@ let SB_KEY = localStorage.getItem('dt-sb-key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6I
 let API_KEY = localStorage.getItem('dt-api-key') || '';
 var _userHabits = null;
 // Cache buster — update this string on every deploy to purge stale service worker cache
-var APP_VERSION = '20261016-01';
+var APP_VERSION = '20261017-01';
 
 // ── Money in the org's own currency (2026-10-04) ───────────────────────────
 // Amounts are stored in USD (deal_value_usd) and shown in the org's currency
@@ -4305,4 +4305,3 @@ async function openNotetakerConnect() {
   modal.addEventListener('click', function() { modal.remove(); });
   document.body.appendChild(modal);
 }
-
