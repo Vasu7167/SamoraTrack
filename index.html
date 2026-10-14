@@ -2699,6 +2699,276 @@ a.g23-pn:hover{background:rgba(var(--c-accent-rgb),.1)}
 .g23-pci{display:grid;place-items:center;width:40px;height:40px;border-radius:12px;flex:none;color:var(--c-accent-text);background:rgba(var(--c-accent-rgb),.12)}
 .g23-pci svg{width:18px;height:18px}
 @media (max-width:640px){.g23-lh{flex-direction:column}.g23-st{margin-left:0}}
+
+/* ── Drop J (2026-10-15): Today, Let SAM handle, sequence charts, SAM-TAM ── */
+.g24-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:36px;padding:0 16px;border-radius:999px;font:inherit;font-size:13.5px;font-weight:650;cursor:pointer;white-space:nowrap;border:1px solid transparent;transition:transform .12s ease,box-shadow .15s ease,background .15s ease}
+.g24-btn svg{flex:none}
+.g24-btn.gold{background:linear-gradient(135deg,#B8860B,#E8B84B 55%,#C8961E);color:#1b1407;box-shadow:0 1px 2px rgba(120,80,0,.25),inset 0 1px 0 rgba(255,255,255,.35)}
+.g24-btn.gold:hover{box-shadow:0 4px 14px rgba(184,134,11,.28),inset 0 1px 0 rgba(255,255,255,.35);transform:translateY(-1px)}
+.g24-btn.ghost{background:transparent;color:var(--text);border-color:var(--border2)}
+.g24-btn.ghost:hover{background:var(--surface2)}
+.g24-btn.sm{height:30px;padding:0 12px;font-size:12.5px}
+.g24-btn[disabled]{opacity:.7;cursor:default;transform:none}
+.g24-btn:focus-visible,.g24-lk:focus-visible,.g24-cn:focus-visible,.g24-add:focus-visible,.g24-x:focus-visible,.g24-drb:focus-visible,.g24-rm:focus-visible,.g24-gh.calm:focus-visible{outline:2px solid var(--c-focus,var(--gold));outline-offset:2px}
+.g24-lk{all:unset;cursor:pointer;font-size:12.5px;font-weight:600;color:var(--c-accent-text,var(--gold))}
+.g24-lk:hover{text-decoration:underline}
+.g24-spin{width:13px;height:13px;border-radius:50%;border:2px solid rgba(var(--c-accent-rgb),.3);border-top-color:var(--gold);display:inline-block;animation:g24spin .8s linear infinite;flex:none}
+@keyframes g24spin{to{transform:rotate(360deg)}}
+.g24-sk i{display:block;height:12px;border-radius:6px;margin:12px 0;background:linear-gradient(90deg,var(--surface2) 25%,rgba(var(--c-accent-rgb),.08) 50%,var(--surface2) 75%);background-size:200% 100%;animation:g24sk 1.4s ease infinite}
+.g24-sk.sm i{height:10px;margin:9px 0}
+@keyframes g24sk{to{background-position:-200% 0}}
+.g24-empty{font-size:13px;color:var(--text3);padding:10px 0}
+.g24-err{font-size:12.5px;color:var(--c-risk,var(--coral));margin-top:6px}
+@media (prefers-reduced-motion:reduce){.g24-spin,.g24-sk i{animation:none}.g24-btn{transition:none}}
+
+/* Header on Today: one calm line, a slimmer date strip */
+body.g24[data-tab="today"] .cal-strip{margin-bottom:14px}
+body.g24[data-tab="today"] .cal-d{padding:6px 4px}
+body.g24[data-tab="today"] .cal-dow{font-size:10.5px}
+body.g24[data-tab="today"] .cal-num{font-size:15px}
+@media(min-width:900px){body.g24 #panel-today.active{grid-template-columns:minmax(0,1.8fr) minmax(300px,1fr);column-gap:28px}}
+
+/* The SAM line */
+.g24-brief:empty{display:none}
+.g24-bf{display:flex;align-items:center;gap:14px;padding:16px 18px;margin-bottom:16px;border-radius:18px;background:linear-gradient(135deg,rgba(var(--c-accent-rgb),.12),rgba(var(--c-accent-rgb),.03) 60%,transparent);border:1px solid rgba(var(--c-accent-rgb),.24)}
+.g24-bf.other{background:var(--surface2);border-color:var(--border)}
+.g24-sam{flex:none;width:38px;height:38px;border-radius:12px;display:grid;place-items:center;font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:21px;color:#2a1d05;background:linear-gradient(135deg,#B8860B,#E8B84B 55%,#C8961E);box-shadow:inset 0 1px 0 rgba(255,255,255,.4)}
+.g24-bt{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
+.g24-bf.other .g24-bt{flex-direction:row;align-items:baseline;gap:10px;flex-wrap:wrap}
+.g24-bf.other .g24-bt span{font-size:13px;color:var(--text2)}
+.g24-bl{font-size:15px;line-height:1.45;color:var(--text)}
+.g24-bl b{font-weight:700}
+.g24-sts{display:flex;flex-wrap:wrap;gap:6px}
+.g24-st{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--text2);background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:3px 9px}
+.g24-st svg{width:13px;height:13px;color:var(--text3)}
+.g24-st.risk{color:var(--c-risk,var(--coral))}
+.g24-st.risk svg{color:currentColor}
+
+/* The day card */
+.g24-day{background:var(--g-fill,var(--surface));border:1px solid var(--g-line,var(--border));border-radius:18px;box-shadow:var(--g-card-shadow,none);padding:4px 18px 16px;margin-bottom:16px}
+.g24-dhead{display:flex;align-items:center;border-bottom:1px solid var(--border);margin:0 -18px;padding:0 18px}
+#panel-today .g24-dhead .today-sections{display:flex;gap:20px;margin:0;overflow-x:auto;scrollbar-width:none}
+#panel-today .g24-dhead .today-section-btn{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;padding:13px 0 11px;font-size:13.5px;font-weight:600;color:var(--text3);border-bottom:2px solid transparent;white-space:nowrap}
+#panel-today .g24-dhead .today-section-btn .ico{width:14px;height:14px}
+#panel-today .g24-dhead .today-section-btn:hover{color:var(--text)}
+#panel-today .g24-dhead .today-section-btn.active{color:var(--text);border-bottom-color:var(--gold)}
+#panel-today .g24-dhead .today-section-btn:focus-visible{outline:2px solid var(--c-focus,var(--gold));outline-offset:2px}
+#panel-today #today-add-box{display:grid;grid-template-columns:minmax(0,1fr) auto auto;grid-template-areas:"ooo ooo ooo" "cal cal cal" "anon anon anon" "input input input" "hint hint hint" "tip tools tmpl";align-items:center;column-gap:8px;background:none;border:0;box-shadow:none;padding:14px 0 6px;margin:0}
+#panel-today #calendarSyncRow{display:none !important}
+#panel-today #oooSyncRow{grid-area:ooo;border-radius:12px !important;padding:8px 12px !important}
+#panel-today #today-anon-row{grid-area:anon}
+#panel-today #today-add-box .ab-row{grid-area:input;display:flex;align-items:center;gap:6px;background:var(--surface);border:1.5px solid var(--border2);border-radius:14px;padding:5px 5px 5px 14px;transition:border-color .15s,box-shadow .15s}
+#panel-today #today-add-box .ab-row:focus-within{border-color:var(--gold);box-shadow:0 0 0 4px rgba(var(--c-accent-rgb),.14)}
+#panel-today #todayInput{flex:1;min-width:0;border:0 !important;background:transparent !important;box-shadow:none !important;outline:none;font-size:14.5px;padding:9px 0 !important;color:var(--text)}
+#panel-today #today-add-box .mic-btn{width:36px;height:36px;border-radius:10px;border:0;background:transparent;color:var(--text3)}
+#panel-today #today-add-box .mic-btn:hover{background:var(--surface2);color:var(--text)}
+#panel-today #todayAddBtn{width:38px;height:38px;border-radius:11px;font-size:20px;line-height:1;flex:none}
+#panel-today #ch-today{grid-area:hint}
+#panel-today #roleTipToday{grid-area:tip;font-size:11.5px !important;padding:8px 2px 0 !important;color:var(--text3)}
+#panel-today #today-add-box > div:has(#oooScanBtn){grid-area:tools;margin:8px 0 0 !important}
+#panel-today #today-add-box > div:has(#oooScanBtn) > span{display:none}
+#panel-today #today-template-row{grid-area:tmpl;margin:8px 0 0 !important}
+#panel-today #today-add-box .template-btn{height:28px;padding:0 10px !important;border-radius:999px;font-size:12px;display:inline-flex;align-items:center;gap:5px}
+#panel-today #today-add-box .template-btn .ico{width:13px;height:13px}
+
+/* The list */
+.g24-feed:empty{display:none}
+.g24-gh{display:flex;align-items:center;gap:8px;margin:18px 0 4px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text3)}
+.g24-gh > span{display:inline-flex;align-items:center;gap:6px}
+.g24-gh b{font-size:11px;font-weight:700;letter-spacing:0;color:var(--text2);background:var(--surface2);border-radius:999px;padding:1px 7px}
+.g24-gh small{margin-left:auto;font-size:11.5px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--text3)}
+.g24-gh.sam > span{color:var(--c-accent-text,var(--gold))}
+.g24-gh.sam svg{width:13px;height:13px}
+.g24-gh.calm{all:unset;box-sizing:border-box;width:100%;display:flex;align-items:center;gap:8px;margin:18px 0 4px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);cursor:pointer}
+.g24-gh.calm b{font-size:11px;letter-spacing:0;color:var(--text2);background:var(--surface2);border-radius:999px;padding:1px 7px}
+.g24-cv{margin-left:auto;display:inline-flex;transition:transform .15s}
+.g24-cv.on{transform:rotate(180deg)}
+.g24-list{list-style:none;margin:0;padding:0}
+.g24-row{display:grid;grid-template-columns:32px minmax(0,1fr) auto;gap:12px;align-items:start;padding:12px 2px;border-top:1px solid var(--border)}
+.g24-list .g24-row:first-child{border-top:0}
+.g24-ic{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:rgba(var(--c-accent-rgb),.12);color:var(--c-accent-text,var(--gold))}
+.g24-ic.li{background:rgba(10,102,194,.10);color:#0a66c2}
+.g24-ic.reply{background:rgba(74,140,92,.13);color:var(--green,#3d7a4f)}
+.g24-ic.risk{background:rgba(196,76,60,.12);color:var(--c-risk,#c44c3c)}
+.g24-ic.all{background:var(--surface2);color:var(--text2)}
+.g24-rmain{min-width:0}
+.g24-rt{font-size:13.5px;line-height:1.45;color:var(--text)}
+.g24-rs{display:flex;align-items:center;gap:8px;margin-top:3px;flex-wrap:wrap}
+.g24-cn{all:unset;cursor:pointer;font-size:12px;color:var(--text3);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.g24-cn:hover{color:var(--text);text-decoration:underline}
+.g24-tag{font-size:10.5px;font-weight:700;border-radius:999px;padding:1px 7px}
+.g24-tag.risk{color:var(--c-risk,#c44c3c);background:rgba(196,76,60,.1)}
+.g24-bar{display:block;height:4px;border-radius:4px;background:var(--surface2);margin-top:7px;overflow:hidden;max-width:280px}
+.g24-bar i{display:block;height:100%;background:var(--green,#3d7a4f);border-radius:4px}
+.g24-ra{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;padding-top:1px}
+.g24-wk{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text2);font-weight:600}
+.g24-done{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--green,#3d7a4f)}
+.g24-row.s-done .g24-rt{color:var(--text2)}
+.g24-list.calm .g24-rt{color:var(--text2)}
+@media (max-width:640px){
+  .g24-row{grid-template-columns:32px minmax(0,1fr)}
+  .g24-ra{grid-column:2;justify-content:flex-start}
+  .g24-bf{flex-wrap:wrap;padding:14px}
+  .g24-bf .g24-btn.gold{width:100%}
+  .g24-day{padding:2px 14px 12px;border-radius:16px}
+  .g24-dhead{margin:0 -14px;padding:0 14px}
+  #panel-today #today-add-box{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:8px 6px;text-align:left}
+  #panel-today #today-add-box > *{flex:0 0 100%;order:5}
+  #panel-today #oooSyncRow{order:0}
+  #panel-today #today-add-box .ab-row{order:1;margin:0 !important;width:100%;box-sizing:border-box;max-width:none}
+  #panel-today #ch-today{order:2}
+  #panel-today #today-add-box > div:has(#oooScanBtn){order:3}
+  #panel-today #today-template-row{order:4}
+  .g24-sam{display:none}
+  #panel-today #today-add-box > div:has(#oooScanBtn),#panel-today #today-template-row{flex:0 0 auto;margin:6px 0 0 !important;justify-content:flex-start !important}
+  #panel-today #roleTipToday{display:none}
+  .g24-gh small{display:none}
+}
+
+/* Your tasks: same rhythm as the list */
+#panel-today #today-tasks-section .today-sec-header{margin:18px 0 4px;padding:0;border:0}
+#panel-today #today-tasks-section .today-sec-title{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text3)}
+#panel-today .today-section .items .item{border-radius:12px}
+.g24-oo{display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;margin-top:8px;font-size:12.5px;color:var(--text2)}
+.g24-oo.done{color:var(--green,#3d7a4f);font-weight:600;gap:6px}
+.g24-hint{font-size:11.5px;color:var(--text3)}
+
+/* The rail */
+.g24-rc{background:var(--g-fill,var(--surface));border:1px solid var(--g-line,var(--border));border-radius:16px;box-shadow:var(--g-card-shadow,none);padding:14px 16px;margin-bottom:14px}
+.g24-rc[hidden],.g24-rc:empty{display:none}
+.g24-rh{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text3)}
+.g24-rh > span{display:inline-flex;align-items:center;gap:7px}
+.g24-rh svg{width:14px;height:14px}
+.g24-rh b{margin-left:auto;font-size:11px;letter-spacing:0;color:var(--text2);background:var(--surface2);border-radius:999px;padding:1px 7px}
+.g24-sl{list-style:none;margin:0;padding:0}
+.g24-sl li{display:grid;grid-template-columns:48px minmax(0,1fr) 28px;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--border)}
+.g24-sl li:first-child{border-top:0}
+.g24-tm{font-size:12.5px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums}
+.g24-sm{min-width:0;display:flex;flex-direction:column}
+.g24-sm b{font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.g24-sm small{font-size:11.5px;color:var(--text3)}
+.g24-add{all:unset;cursor:pointer;width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:var(--text3);border:1px solid var(--border2)}
+.g24-add:hover{color:var(--text);background:var(--surface2)}
+.g24-in{width:28px;height:28px;display:grid;place-items:center;color:var(--green,#3d7a4f)}
+.today-rail #todaySamp .tds{padding:14px 16px;border-radius:16px;margin-bottom:14px}
+.today-rail #todaySamp .tds-h{flex-direction:column;align-items:flex-start;gap:8px}
+.today-rail #todaySamp .tds-sub{display:none}
+.today-rail #todaySamp .tds-l{display:none}
+.today-rail #todaySamp .tds-li{font-size:12px;padding:9px 11px}
+.today-rail #todaySamp .tds-ch-h{padding:10px 0}
+.today-rail #todaySamp .tds-n{font-size:13px}
+.today-rail #todayScore:not(:empty){margin-bottom:14px}
+.today-rail #todayScore .sc-strip{flex-direction:column;align-items:stretch;gap:10px;padding:14px 16px;border-radius:16px}
+.today-rail #todayScore .sc-rows{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}
+.g24-pulse .metric-wrap{margin:0}
+.g24-pulse .metric-strip{display:grid !important;grid-template-columns:1fr 1fr;gap:2px 14px;border:0 !important;box-shadow:none !important;background:none !important;padding:0 !important;border-radius:0 !important;overflow:visible !important;margin:0 !important}
+.g24-pulse .metric{border:0 !important;padding:8px 0 !important;min-width:0 !important;flex:none !important}
+.g24-pulse .metric-val{font-size:20px !important}
+.g24-pulse .metric-more{display:none !important}
+.g24-pulse #metricDrill:not(:empty){margin-top:8px}
+.g24-na .rail-head{margin:0 0 6px;padding:0;border:0}
+@media(min-width:900px){.today-rail{position:sticky;top:20px;max-height:calc(100vh - 40px);overflow:auto;scrollbar-width:thin;padding-bottom:12px}}
+
+/* Review sheet */
+.g24-rv{position:fixed;inset:0;z-index:9000;background:rgba(12,10,6,.34);opacity:0;transition:opacity .18s ease}
+.g24-rv.on{opacity:1}
+.g24-rvp{position:absolute;top:0;right:0;bottom:0;width:min(620px,100vw);background:var(--c-canvas,var(--surface,#fff));display:flex;flex-direction:column;box-shadow:-20px 0 60px rgba(0,0,0,.18);transform:translateX(28px);transition:transform .2s ease}
+.g24-rv.on .g24-rvp{transform:none}
+.g24-rvh{display:flex;align-items:flex-start;gap:12px;padding:20px 22px 12px;border-bottom:1px solid var(--border)}
+.g24-rvh > div{flex:1;min-width:0}
+.g24-rvh h3{margin:0;font-size:18px;font-weight:700;letter-spacing:-.01em}
+.g24-rvs{font-size:13px;color:var(--text2);margin-top:4px}
+.g24-x{all:unset;cursor:pointer;width:34px;height:34px;border-radius:10px;display:grid;place-items:center;color:var(--text3)}
+.g24-x:hover{background:var(--surface2);color:var(--text)}
+.g24-rvb{flex:1;overflow:auto;padding:6px 22px 18px}
+.g24-rvf{display:flex;align-items:center;gap:10px;padding:14px 22px calc(14px + env(safe-area-inset-bottom));border-top:1px solid var(--border);background:var(--c-canvas,var(--surface,#fff))}
+.g24-sp{flex:1}
+.g24-rg{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:18px 0 8px;flex-wrap:wrap}
+.g24-rg b{font-size:14px}
+.g24-rg span{font-size:12.5px;color:var(--text3);margin-left:8px}
+.g24-rg small{font-size:12px;color:var(--text2);font-weight:600}
+.g24-dl{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.g24-dr{display:flex;align-items:flex-start;border:1px solid var(--border);border-radius:14px;background:var(--surface);transition:border-color .15s}
+.g24-dr:hover{border-color:var(--border2)}
+.g24-dr.open{display:block;border-color:rgba(var(--c-accent-rgb),.5);box-shadow:0 0 0 4px rgba(var(--c-accent-rgb),.08)}
+.g24-drb{all:unset;box-sizing:border-box;flex:1;min-width:0;cursor:pointer;display:flex;gap:12px;padding:12px 4px 12px 14px}
+.g24-av{flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:11.5px;font-weight:700;color:var(--c-accent-text,var(--gold));background:rgba(var(--c-accent-rgb),.13)}
+.g24-drm{min-width:0;display:flex;flex-direction:column;gap:2px}
+.g24-drn{display:flex;align-items:center;gap:8px;min-width:0}
+.g24-drn b{font-size:13px}
+.g24-drn small{font-size:12px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.g24-drs{font-size:13.5px;font-weight:650;color:var(--text)}
+.g24-drp{font-size:12.5px;color:var(--text3);line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.g24-rm{all:unset;cursor:pointer;flex:none;width:32px;height:32px;margin:10px 8px 0 0;border-radius:9px;display:grid;place-items:center;color:var(--text3)}
+.g24-rm:hover{background:var(--surface2);color:var(--c-risk,var(--coral))}
+.g24-dre{padding:14px}
+.g24-fl{display:flex;flex-direction:column;gap:6px;margin-top:12px;font-size:12px;font-weight:600;color:var(--text2)}
+.g24-fl input{font:inherit;font-size:14px;font-weight:600;color:var(--text);padding:10px 12px;border-radius:10px;border:1.5px solid var(--border2);background:var(--surface)}
+.g24-fl input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(var(--c-accent-rgb),.15)}
+.g24-dra{display:flex;align-items:center;gap:8px;margin-top:12px}
+.g24-linote{display:flex;gap:10px;align-items:flex-start;margin-top:16px;padding:10px 12px;border-radius:12px;background:rgba(10,102,194,.07);font-size:12.5px;color:var(--text2)}
+.g24-linote svg{color:#0a66c2;flex:none;margin-top:1px}
+@media (max-width:640px){
+  .g24-rvp{top:6vh;width:100vw;border-radius:20px 20px 0 0;transform:translateY(28px)}
+  .g24-rvh{padding:16px 16px 10px}.g24-rvb{padding:4px 16px 16px}.g24-rvf{padding:12px 16px calc(12px + env(safe-area-inset-bottom))}
+  .g24-rvf .g24-btn.gold{flex:1}
+}
+
+/* Sequence: rules in the card, email and LinkedIn charts on the right */
+.g24-rules{display:flex;flex-wrap:wrap;gap:8px 18px;padding:14px 18px 16px;border-top:1px solid var(--border);font-size:12px;color:var(--text2)}
+.g24-rules span{display:inline-flex;align-items:center;gap:6px}
+.g24-rules svg{color:var(--green,#3d7a4f)}
+.g24-sc{margin-bottom:14px;padding:16px 18px !important}
+.sp-wv:has(.g24-rules){align-items:stretch}
+.sp-wv > .sp-card:has(.g24-rules){display:flex;flex-direction:column}
+.g24-rules{margin-top:auto}
+.sp-wv > .sp-col:has(.g24-sc) > div:last-child > .g24-sc{margin-bottom:0}
+.g24-sch{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.g24-scl{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--text2)}
+.g24-scl.mail svg{color:var(--c-accent-text,var(--gold))}
+.g24-scl.li svg{color:#0a66c2}
+.g24-scs{font-size:12.5px;color:var(--text2);margin-top:8px;line-height:1.5}
+.g24-scs .li-dot{margin-right:5px}
+.g24-seg{display:inline-flex;background:var(--surface2);border-radius:999px;padding:2px}
+.g24-seg button{all:unset;cursor:pointer;font-size:11.5px;font-weight:650;padding:4px 10px;border-radius:999px;color:var(--text3)}
+.g24-seg button.on{background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.g24-seg button:focus-visible{outline:2px solid var(--c-focus,var(--gold));outline-offset:1px}
+.g24-chart{position:relative;height:128px;display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:6px;margin-top:14px}
+.g24-cb{display:flex;flex-direction:column;height:100%;min-width:0}
+.g24-cbars{height:106px;display:flex;flex-direction:column-reverse;align-items:stretch}
+.g24-cbars span{display:block;border-radius:5px 5px 2px 2px;min-height:0}
+.g24-cbars span.m{background:linear-gradient(180deg,#E8B84B,#C8961E)}
+.g24-cbars span.m.li{background:linear-gradient(180deg,#3b8ee0,#0a66c2)}
+.g24-cbars span.o{background:rgba(var(--c-accent-rgb),.22);border-radius:5px 5px 0 0;margin-bottom:1px}
+.g24-cbars span.m[style*="height:0%"]{display:none}
+.g24-cbars span.o[style*="height:0%"]{display:none}
+.g24-cbars em{font-style:normal;font-size:10.5px;font-weight:700;color:var(--text3);text-align:center;margin-bottom:3px;font-variant-numeric:tabular-nums}
+.g24-cb small{height:22px;display:flex;align-items:flex-end;justify-content:center;font-size:11px;color:var(--text3)}
+.g24-cb.today small{color:var(--c-accent-text,var(--gold));font-weight:700}
+.g24-cap{position:absolute;left:0;right:0;border-top:1.5px dashed rgba(196,76,60,.5);pointer-events:none}
+.g24-cap b{position:absolute;right:0;bottom:3px;font-size:10.5px;font-weight:700;color:var(--c-risk,#c44c3c);background:var(--g-fill,var(--surface));padding:0 0 0 6px}
+.g24-leg{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:11.5px;color:var(--text3)}
+.g24-lf{margin-left:auto}
+.g24-leg span{display:inline-flex;align-items:center;gap:6px}
+.g24-leg i{width:10px;height:10px;border-radius:3px;display:inline-block;background:linear-gradient(180deg,#E8B84B,#C8961E)}
+.g24-leg i.li{background:#0a66c2}
+.g24-leg i.o{background:rgba(var(--c-accent-rgb),.22)}
+.g24-cf{font-size:11.5px;color:var(--text3);margin-top:6px;line-height:1.5}
+
+/* SAM-TAM */
+.g24-tamE{margin-top:14px}
+.g24-tamE ul{list-style:none;margin:10px 0 0;padding:0}
+.g24-tamE li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--border)}
+.g24-tamE li:first-child{border-top:0}
+.g24-tamE li div{display:flex;flex-direction:column;min-width:0}
+.g24-tamE li b{font-size:13.5px}
+.g24-tamE li small{font-size:12px;color:var(--text3)}
+.g24-earh{display:flex;gap:8px;align-items:flex-start;padding:12px 16px;font-size:12.5px;color:var(--text2);background:rgba(var(--c-accent-rgb),.07);border-bottom:1px solid var(--border)}
+.g24-earh svg{color:var(--c-accent-text,var(--gold));flex:none;margin-top:1px}
+.g24-adm{margin-top:10px;font-size:12px;color:var(--text3)}
+.g24-adm summary{cursor:pointer}
+.g24-adm code{display:block;margin-top:6px;padding:8px 10px;border-radius:8px;background:var(--surface2);font-size:11.5px;white-space:pre-wrap;word-break:break-word;color:var(--text2)}
+.g24-eh{font-size:12.5px;color:var(--text2);margin-top:8px}
 </style>
 <script src="/js/vendor/sortable.min.js"></script>
 </head>
@@ -2956,45 +3226,22 @@ a.g23-pn:hover{background:rgba(var(--c-accent-rgb),.1)}
 
   <div class="cal-strip" id="calStrip"></div>
 
-  <!-- ── Today metrics ──────────────────────────────────────────────────
-       One glance line: what is on me, what is shouting, what is real, how
-       well covered. Values fill in as their sources land rather than the
-       strip waiting for the slowest one, so the shape is stable from the
-       first paint and only the numbers change. -->
-  <div class="metric-wrap" id="todayMetricsWrap">
-  <div class="metric-strip" id="todayMetrics">
-    <div class="metric"><div class="metric-lbl">Open tasks</div><div class="metric-val" id="mOpenTasks">&ndash;</div></div>
-    <div class="metric is-clickable" id="metricAlerts" onclick="toggleMetricDrill('alerts')"><div class="metric-lbl">Alerts</div><div class="metric-val" id="mAlerts">&ndash;</div></div>
-    <div class="metric"><div class="metric-lbl">Verified pipeline</div><div class="metric-val" id="mVerified">&ndash;</div></div>
-    <div class="metric"><div class="metric-lbl">Coverage</div><div class="metric-val" id="mCoverage">&ndash;</div></div>
-    <div class="metric is-clickable" id="metricWins" onclick="toggleMetricDrill('wins')"><div class="metric-lbl">Weekly team wins</div><div class="metric-val" id="mTeamWins">&ndash;</div></div>
-  </div>
-  <div class="metric-more" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></div>
-  </div>
-  <!-- Drill-down for the two interactive metrics. Rendered from data already
-       held in memory, so opening it costs nothing. -->
-  <div id="metricDrill"></div>
 
-  <!-- ── TODAY ── -->
+
+  <!-- ── TODAY (Drop J) ── one list for the day, SAM on top, the glance items in the rail -->
   <div class="panel active" id="panel-today">
-      <!-- Left: the things you act on. Right rail: the things you glance at.
-           Two real containers, not grid placement. CSS grid shares rows across
-           columns, so assigning grid-row to the rail items stretched every
-           left-hand item down to match the taller right-hand row, which is what
-           produced the large vertical gaps. Independent column flow needs
-           independent formatting contexts. -->
     <div class="today-main">
-    <!-- This week: the rep's scorecard against the team's weekly targets. -->
-    <div id="todayScore"></div>
-    <!-- Drop E: what each SAMpaign needs today, email and LinkedIn -->
-    <div id="todaySamp"></div>
+    <div id="g24Brief" class="g24-brief" aria-live="polite"></div>
     <div id="productivityBanner" style="margin-bottom:8px"></div>
     <div id="nudgeBanner" style="display:none;background:rgba(var(--c-accent-rgb),0.08);border:1px solid rgba(var(--c-accent-rgb),0.25);border-radius:var(--radius);padding:10px 14px;margin-bottom:12px"><div style="display:flex;align-items:center;justify-content:space-between"><div id="nudgeText" style="font-size:12px;color:var(--text2)"></div><button onclick="this.parentElement.parentElement.style.display='none'" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:0 0 0 8px"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div></div>
-    <div class="today-sections" style="display:flex;gap:8px;margin-bottom:8px">
-      <button class="today-section-btn active" id="tsb-tasks" onclick="setTodaySection('tasks')"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg> Tasks</button>
+    <section class="g24-day" aria-label="Your day">
+    <div class="g24-dhead">
+    <div class="today-sections" role="tablist" aria-label="What to show">
+      <button class="today-section-btn active" id="tsb-tasks" onclick="setTodaySection('tasks')"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg> My day</button>
       <button class="today-section-btn" id="tsb-issues" onclick="setTodaySection('issues')"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3L5 13.5h5.5L9.5 21l8.5-10.5h-5.5z"/></svg> Issues</button>
       <button class="today-section-btn" id="tsb-wins" onclick="setTodaySection('wins')"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.8l2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 10l5.9-.8z"/></svg> Wins</button>
       <button class="today-section-btn" id="tsb-misses" onclick="setTodaySection('misses')">○ Misses</button> </div>
+    </div>
     <div class="add-box" id="today-add-box">
       <!-- Calendar events sync row -->
       <div id="calendarSyncRow" style="display:none;margin-bottom:8px;padding:6px 8px;background:var(--surface2);border-radius:var(--r-sm);font-size:12px;color:var(--text3)">
@@ -3024,6 +3271,7 @@ a.g23-pn:hover{background:rgba(var(--c-accent-rgb),.1)}
         <button class="template-btn" onclick="shareTasksMenu()" style="display:flex;align-items:center;gap:5px;padding:5px 10px">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg> Share </button>
         <button class="template-btn" onclick="openTemplateManager()"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.5h6v3H9zM7 5H5.5v15h13V5H17"/></svg> Templates</button> </div> </div>
+    <div id="g24Feed" class="g24-feed"></div>
     <div id="today-tasks-section" class="today-section">
       <div class="today-sec-header"><span class="today-sec-title"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg> Tasks</span><span class="today-sec-count" id="tasksDoneCount"></span></div>
       <div class="items" id="today-list-tasks"></div> </div>
@@ -3036,18 +3284,39 @@ a.g23-pn:hover{background:rgba(var(--c-accent-rgb),.1)}
     <div id="today-misses-section" class="today-section" style="display:none">
       <div class="today-sec-header"><span class="today-sec-title">○ Misses</span></div>
       <div class="items" id="today-list-misses"></div> </div>
+    </section>
     </div>
     <div class="today-rail">
-      <!-- Needs attention. Derived from the same coaching alerts the metric
-           strip counts, so the number above and the list here can never
-           disagree. No invented delta: the alerts carry severity and a
-           reason, not a score change, and showing a made up figure next to
-           a real account name is exactly what the receipts rule forbids. -->
+      <section id="g24Sched" class="g24-rc g24-sched" aria-label="Today's schedule"></section>
+      <div id="todaySamp"></div>
+      <div id="todayScore"></div>
+      <section class="g24-rc g24-pulse" aria-label="Pulse"><div class="g24-rh"><span>Pulse</span></div>
+  <!-- ── Today metrics ──────────────────────────────────────────────────
+       One glance line: what is on me, what is shouting, what is real, how
+       well covered. Values fill in as their sources land rather than the
+       strip waiting for the slowest one, so the shape is stable from the
+       first paint and only the numbers change. -->
+  <div class="metric-wrap" id="todayMetricsWrap">
+  <div class="metric-strip" id="todayMetrics">
+    <div class="metric"><div class="metric-lbl">Open tasks</div><div class="metric-val" id="mOpenTasks">&ndash;</div></div>
+    <div class="metric is-clickable" id="metricAlerts" onclick="toggleMetricDrill('alerts')"><div class="metric-lbl">Alerts</div><div class="metric-val" id="mAlerts">&ndash;</div></div>
+    <div class="metric"><div class="metric-lbl">Verified pipeline</div><div class="metric-val" id="mVerified">&ndash;</div></div>
+    <div class="metric"><div class="metric-lbl">Coverage</div><div class="metric-val" id="mCoverage">&ndash;</div></div>
+    <div class="metric is-clickable" id="metricWins" onclick="toggleMetricDrill('wins')"><div class="metric-lbl">Weekly team wins</div><div class="metric-val" id="mTeamWins">&ndash;</div></div>
+  </div>
+  <div class="metric-more" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></div>
+  </div>
+  <!-- Drill-down for the two interactive metrics. Rendered from data already
+       held in memory, so opening it costs nothing. -->
+  <div id="metricDrill"></div>
+      </section>
+      <section class="g24-rc g24-na">
       <div class="rail-head" id="railHead" onclick="toggleNeedsAttention()">
         <span>Needs attention <span id="naCount" class="today-sec-count"></span></span>
         <svg class="rail-caret ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
       </div>
       <div id="needsAttention"><div class="rail-empty">Checking your accounts…</div></div>
+      </section>
     </div>
   </div>
 
