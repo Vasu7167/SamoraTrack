@@ -3,7 +3,7 @@ let SB_KEY = localStorage.getItem('dt-sb-key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6I
 let API_KEY = localStorage.getItem('dt-api-key') || '';
 var _userHabits = null;
 // Cache buster — update this string on every deploy to purge stale service worker cache
-var APP_VERSION = '20261010-04';
+var APP_VERSION = '20261014-01';
 
 // ── Money in the org's own currency (2026-10-04) ───────────────────────────
 // Amounts are stored in USD (deal_value_usd) and shown in the org's currency
@@ -10271,6 +10271,7 @@ function _renderLaunchTabs(campaignId, byLaunch, maxLaunch) {
               : (rows.length ? '<span style="color:var(--text3);font-size:11px"> · '+rows.length+'</span>' : '<span style="color:var(--text3);font-size:11px"> · empty</span>')) +
     '</span>';
   }
+  out += _g23LiTabs(campaignId);
   out += '</div>';
   return out;
 }
@@ -10313,6 +10314,11 @@ async function loadSampaignSendQueue(campaignId) {
     try { _renderSampTabs(campaignId); } catch(e) {}
 
     var tabsHtml = _renderLaunchTabs(campaignId, byLaunch, maxLaunch);
+    if (typeof window._sampLaunch === 'string' && /^li_/.test(window._sampLaunch)) {
+      box.innerHTML = tabsHtml + '<div id="g23Li"></div>';
+      g23RenderLi(campaignId);
+      return;
+    }
     var mine = byLaunch[window._sampLaunch] || [];
 
     if (!mine.length) {
@@ -16596,8 +16602,7 @@ function _spRenderRows() {
       '<div><div class="sp-cn">' + esc(c.name) + '</div>' +
         '<div class="sp-cm"><span class="sp-av">' + esc(_spIni(c.owner_email)) + '</span>' + esc(owner) + (c.is_owner ? '' : ' · view only') + ' · ' + (c.scope === 'list' ? 'a list of companies' : 'one account') + (c.focus ? ' · ' + esc(c.focus) : '') + '</div>' +
         '<div class="sp-chips"><span class="sp-chip ' + (c.paused ? 'warn' : 'live') + '"><i></i>Email</span>' + (c.channels && c.channels.linkedin && c.channels.linkedin.on ? '<span class="sp-chip li"><i></i>LinkedIn</span>' : '') + flags.join('') + '</div></div>' +
-      '<div><div class="sp-fun" aria-hidden="true"><span class="sp-f1" style="width:' + w(interested) + '"></span><span class="sp-f2" style="width:' + w(Math.max(0, replied - interested)) + '"></span><span class="sp-f3" style="width:' + w(Math.max(0, (s.sent || 0) - replied)) + '"></span></div>' +
-        '<div class="sp-fl"><span><b>' + (s.sent || 0) + '</b> of ' + tot + ' reached</span><span><b>' + replied + '</b> replied</span><span class="sp-g"><b class="sp-g">' + interested + '</b> interested</span>' + (s.meetings ? '<span><b>' + s.meetings + '</b> ' + (s.meetings === 1 ? 'meeting' : 'meetings') + '</span>' : '') + '</div>' + _spLiCardLine(c) + '</div>' +
+      '<div>' + _g23MailLine(c) + _spLiCardLine(c) + '</div>' +
       '<div class="sp-rate"><div class="n ' + tone + '">' + (rate === null ? 'n/a' : rate + '%') + '</div><small>' + note + '</small></div>' +
       '<div class="sp-next">' + SP_ICON.arrow + '<span>' + esc(_spNextLine(c)) + '</span>' + (acts ? '<span class="sp-rowacts">' + acts + '</span>' : '') + '</div>' +
     '</div>';
@@ -16638,6 +16643,7 @@ async function _sampLoadOverview(id) {
   if (d.ok) {
     window._sampOv[id] = d;
     var c = (window._sampaignCampaignsCache || {})[id] || {};
+    window._sampaignCampaignsCache = window._sampaignCampaignsCache || {};
     window._sampaignCampaignsCache[id] = Object.assign({}, c, { id: id, name: d.campaign.name, owner_email: d.campaign.owner_email, is_owner: d.campaign.is_owner, campaign_goal: d.campaign.campaign_goal, focus: d.campaign.focus, followup_dates: d.campaign.followup_dates });
   } else window._sampOv[id] = { ok: false, error: d.error };
   _spRenderHeader(id); _renderSampTabs(id);
@@ -18910,6 +18916,7 @@ function _spPaintPeople(id) {
       if ((p.stage === 'replied' || p.stage === 'meeting') && d.can_move) acts += '<button class="g-btn sp-sm sp-gold" type="button" onclick="_spMoveToDeal(\'' + esc(id) + '\',\'' + esc(p.id) + '\',this)">Move to deal</button>';
       if (p.stage === 'deal' && p.account_id) acts += '<button class="g-btn sp-sm" type="button" onclick="_spOpenDeal(\'' + esc(p.account_id) + '\',\'' + esc(String(p.account_name || '').replace(/'/g, '')) + '\')">Open deal</button>';
       if ((p.stage === 'replied' || p.stage === 'meeting') && owner && p.email) acts += '<a class="g-btn sp-sm sp-ghost" href="https://mail.google.com/mail/u/0/#search/' + encodeURIComponent('from:' + p.email) + '" target="_blank" rel="noopener">Open the reply</a>';
+      acts = acts + _g23PhoneHtml(id, p, owner || d.can_move);
       return '<li class="sd-prs"><span class="sp-av">' + esc(_spIni(p.name || p.email)) + '</span>' +
         '<div class="sd-pm"><div class="sd-pt"><b>' + esc(p.name || p.email || 'Unnamed') + '</b>' + (p.title ? '<span class="sp-small"> · ' + esc(p.title) + '</span>' : '') + (p.linkedin_url ? ' <a class="sd-li" href="' + esc(p.linkedin_url) + '" target="_blank" rel="noopener" aria-label="LinkedIn">in</a>' : '') + '</div>' +
         '<div class="sp-small">' + esc([p.last + (when ? ' ' + when : ''), p.next].filter(Boolean).join(' · ')) + '</div></div>' +
@@ -19316,9 +19323,17 @@ function _spGuideSteps(id, o) {
   st.push({ key: 'people', title: 'Find the people', done: c.total > 0,
     text: c.total > 0 ? _spPlural(c.total, 'person', 'people') + ' in this SAMpaign, ' + withEmail + ' with an email.' : 'SAM finds the decision makers at ' + where + ' by job title. Or bring your own list.',
     acts: c.total > 0 ? [['ghost', 'Find more', 'g18FindPeople(\'' + id + '\')']] : [['gold', 'Find people with SAM', 'g18FindPeople(\'' + id + '\')'], ['', 'Add my own', 'setSampTab(\'' + id + '\',\'people\')']] });
-  if (c.no_email > 0 || (c.total > 0 && !withEmail)) st.push({ key: 'emails', title: 'Get their email addresses', done: false,
-    text: _spPlural(c.no_email || 0, 'person has', 'people have') + ' no email yet. SAM looks them up with your data provider. It uses credits, one per person found.',
-    acts: [['gold', 'Find ' + _spPlural(c.no_email || 0, 'email'), 'g18FindEmails(\'' + id + '\')']] });
+  if (c.no_email > 0 || (c.total > 0 && !withEmail)) {
+    var el2 = su.email_lookup || null, missing = c.no_email || 0;
+    var untried = el2 ? el2.untried : missing, notFound = el2 ? el2.not_found : 0;
+    var liOnNow = !!su.li_on && !(typeof _liLocked === 'function' && _liLocked());
+    st.push({ key: 'emails', title: 'Get their email addresses', done: untried === 0 && missing > 0, partial: untried === 0 && notFound > 0,
+      text: untried > 0
+        ? (notFound ? notFound + ' looked up already. ' : '') + _spPlural(untried, 'person has', 'people have') + ' no email yet. SAM looks them up: free when Samora already has it, otherwise about one credit per person found.'
+        : withEmail + ' with an email. SAM could not find one for ' + notFound + (liOnNow ? '; LinkedIn reaches them.' : '. LinkedIn can reach them, or add an email yourself.'),
+      acts: untried > 0 ? [['gold', 'Find ' + _spPlural(untried, 'email'), 'g23FindEmails(\'' + id + '\')']]
+        : [['ghost', 'Try again for ' + notFound, 'g23FindEmails(\'' + id + '\',true)']].concat(liOnNow || (typeof _liLocked === 'function' && _liLocked()) ? [] : [['ghost', 'Add LinkedIn', 'spLiEdit(\'' + id + '\', true)']]) });
+  }
   st.push({ key: 'write', title: 'Write the first emails', done: wrote > 0 && !w1.ready,
     text: wrote > 0 && w1.ready ? wrote + ' written. ' + _spPlural(w1.ready, 'more person is', 'more people are') + ' ready for one.' : wrote > 0 ? _spPlural(wrote, 'email') + ' written, one per person.' : 'One email per person, from their role and company: short paragraphs, the key points in bold, your signature. Nothing sends yet.',
     acts: w1.ready ? [['gold', 'Write ' + _spPlural(w1.ready, 'email') + ' with SAM', 'sampWriteDrafts(\'' + id + '\',1)'], ['ghost', 'One email for all', 'sampOpenComposer(\'' + id + '\',1)']] : [], sig: true });
@@ -19359,7 +19374,7 @@ function _spGuideRender(id) {
     '<ol class="g18-steps">' + steps.map(function (s, i) {
       var state = s.done ? 'done' : i === nowIdx ? 'now' : s.optional ? 'opt' : 'later';
       var acts = (state === 'now' || state === 'opt' || (state === 'done' && s.acts.length) || (state === 'later' && s.key === 'li')) ? s.acts.map(function (a) { return '<button class="g-btn sp-sm' + (a[0] === 'gold' && state === 'now' ? ' sp-gold' : a[0] === 'ghost' || state !== 'now' ? ' sp-ghost' : '') + '" type="button" onclick="' + a[2].replace(/"/g, '&quot;') + '">' + (a[0] === 'gold' && state === 'now' ? SP_ICON.spark + ' ' : '') + esc(a[1]) + '</button>'; }).join('') : '';
-      return '<li class="g18-s ' + state + '"><span class="g18-n">' + (s.done ? '✓' : (i + 1)) + '</span><div class="g18-st"><b>' + esc(s.title) + (s.optional && !s.done ? ' <small>optional</small>' : '') + '</b><small>' + esc(s.text) + '</small>' +
+      return '<li class="g18-s ' + state + (s.partial ? ' part' : '') + '"><span class="g18-n">' + (s.done ? (s.partial ? '!' : '✓') : (i + 1)) + '</span><div class="g18-st"><b>' + esc(s.title) + (s.optional && !s.done ? ' <small>optional</small>' : '') + '</b><small>' + esc(s.text) + '</small>' +
         (s.sig && state === 'now' ? '<div id="g18GuideSig_' + esc(id) + '">' + _sigLine(1) + '</div>' : '') + '</div>' +
         (acts ? '<div class="g18-sa">' + acts + '</div>' : '') + '</li>';
     }).join('') + '</ol></section>';
@@ -19405,7 +19420,8 @@ async function g18AskTitles(id) {
     await _sampLoadOverview(id);
   };
 }
-async function g18FindEmails(id) {
+async function g18FindEmails(id) { return g23FindEmails(id); }
+async function g18FindEmailsOld(id) {
   var list = (window._sampaignContactsCache || {})[id];
   if (!list) { try { var r = await _sampEdge('list_sampaign_contacts', { campaign_id: id }); if (r.ok) { list = r.contacts || []; (window._sampaignContactsCache = window._sampaignContactsCache || {})[id] = list; } } catch (e) {} }
   var ids = (list || []).filter(function (x) { return x.status === 'not_contacted' && (!x.email || /^scouted\./i.test(x.email) || /@linkedin\.invalid$/i.test(x.email)); }).map(function (x) { return x.id; }).slice(0, 200);
@@ -19638,6 +19654,7 @@ function _g19TamRender() {
           '<small>' + esc([x.domain, x.region].filter(Boolean).join(' · ')) + '</small>' + (x.description ? '<span class="g19-cod">' + esc(x.description) + '</span>' : '') + '</span>' +
           '<button type="button" class="g19-nf" title="Not a fit: SAM will not suggest it again" onclick="event.preventDefault();g19TamReject(\'' + esc(x.id) + '\')">Not a fit</button></label>';
       }).join('') : '<div class="sp-empty">No new companies for that. Try a broader description or a different region.</div>') +
+      (T.res.found_by === 'knowledge' ? '<div class="sp-small" style="padding:10px 16px">Live web search was not available just now, so SAM used what it knows. Every website was still checked.</div>' : '') +
       (T.res.context_note ? '<div class="sp-small" style="padding:10px 16px">' + esc(T.res.context_note) + '</div>' : '') +
       '</section>' +
       (nPick ? '<div class="g19-tambar"><span><b>' + nPick + '</b> selected</span><button class="g-btn sp-gold" type="button" onclick="g19TamUse()">' + (T.fromWizard ? 'Add ' + nPick + ' to the SAMpaign' : 'Start a SAMpaign with ' + nPick) + '</button></div>' : '');
@@ -19739,4 +19756,237 @@ function _g20Reveal(sel) {
     var r = el.getBoundingClientRect();
     if (r.top > window.innerHeight - 120) { try { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { el.scrollIntoView(); } }
   }, 50);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Drop I (2026-10-14): emails found per person, the email line on SAMpaign
+// cards, LinkedIn notes and messages in Drafts and queue, a phone on click.
+// ════════════════════════════════════════════════════════════════════════════
+var G23_ICON = {
+  phone: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h3.5l1.8 4.4-2.2 1.4a11 11 0 005.1 5.1l1.4-2.2L19 14.5V18a2 2 0 01-2 2A15 15 0 013 6a2 2 0 012-2z"/></svg>',
+  copy: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8.5" y="8.5" width="11" height="11" rx="2.5"/><path d="M15.5 8.5V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7.5a2 2 0 002 2h2.5"/></svg>',
+  wa: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 19.5l1.2-3.6A8 8 0 1112 20a8 8 0 01-3.9-1z"/><path d="M9.2 8.6c.3 2.6 2.6 5 5.3 5.4l1-1.2-1.6-1-.9.6c-.9-.4-1.6-1.1-2-2l.6-.9-1-1.6z"/></svg>',
+  pen: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 00-3-3L5 17v3z"/></svg>'
+};
+
+// ── Launch plan step 2: emails, person by person ─────────────────────────────
+async function g23FindEmails(id, retry) {
+  var m = document.createElement('div'); m.className = 'sp-modal'; m.id = 'g23EmM';
+  m.innerHTML = '<div class="sp-mcard" role="dialog" aria-modal="true" aria-label="Finding email addresses"><h3>Finding email addresses</h3>' +
+    '<div class="sp-small" id="g23EmMsg">Checking what Samora already has…</div><div class="sp-progress"><span id="g23EmBar" style="width:4%"></span></div>' +
+    '<div class="sp-small" style="margin-top:10px">Free when Samora already has it. Otherwise about one credit per person found.</div>' +
+    '<div class="sp-foot"><span></span><button class="g-btn" type="button" id="g23EmStop">Stop</button></div></div>';
+  document.body.appendChild(m);
+  var stop = false; document.getElementById('g23EmStop').onclick = function () { stop = true; this.textContent = 'Stopping…'; };
+  var found = 0, checked = 0, total = null, err = null, last = null, phones = 0, guard = 0, first = true;
+  while (!stop && guard++ < 60) {
+    var d = await _sampEdge('find_sampaign_emails', { campaign_id: id, batch: 8, retry: !!retry && first });
+    first = false;
+    if (!d.ok) { err = d.error || 'SAM could not look up emails just now.'; break; }
+    last = d;
+    found += d.found || 0; checked += d.checked || 0; phones += d.phones_found || 0;
+    if (total === null) total = checked + (d.remaining || 0);
+    var msg = document.getElementById('g23EmMsg'), bar = document.getElementById('g23EmBar');
+    if (msg) msg.textContent = 'Looked up ' + checked + (total ? ' of ' + total : '') + ' · ' + _spPlural(found, 'email') + ' found';
+    if (bar) bar.style.width = Math.max(4, Math.round(checked / Math.max(1, total || 1) * 100)) + '%';
+    if (!d.remaining || !d.checked) break;
+    retry = false;
+  }
+  m.remove();
+  if (err) showToast(err);
+  else {
+    var nf = last && last.summary ? last.summary.not_found : Math.max(0, checked - found);
+    showToast(checked ? ('Found ' + _spPlural(found, 'email') + (nf ? '. ' + nf + ' still without one: LinkedIn can reach them, or add an email yourself.' : '.') + (phones ? ' ' + _spPlural(phones, 'phone number') + ' came with them.' : '')) : 'Everyone here has been looked up.');
+  }
+  try { await _sampPrimeContacts(id); } catch (e) {}
+  await _sampLoadOverview(id);
+}
+
+// ── SAMpaign cards: the email line, like the LinkedIn one ────────────────────
+function _g23MailLine(c) {
+  var s = c.stats || {}, q = c.queue || {}, tot = s.total || 0, sent = s.sent || 0;
+  var replied = (s.replied || 0) + (s.opted_out || 0), interested = s.interested || 0, bounced = s.dead || 0;
+  var w = function (n) { return tot ? Math.max(0, Math.round(n / tot * 1000) / 10) + '%' : '0%'; };
+  var bits = ['<span><b>' + sent + '</b> of ' + tot + ' reached</span>', '<span><b>' + replied + '</b> replied</span>', '<span class="sp-g"><b class="sp-g">' + interested + '</b> interested</span>'];
+  if (s.meetings) bits.push('<span><b>' + s.meetings + '</b> ' + (s.meetings === 1 ? 'meeting' : 'meetings') + '</span>');
+  if (bounced) bits.push('<span class="sp-r"><b class="sp-r">' + bounced + '</b> bounced</span>');
+  return '<div class="sp-lil g23-ml"><span class="sp-lik g23-mk" title="Email">' + SP_ICON.mail + '</span><div style="flex:1;min-width:0">' +
+    '<div class="sp-fun" aria-hidden="true"><span class="sp-f1" style="width:' + w(interested) + '"></span><span class="sp-f2" style="width:' + w(Math.max(0, replied - interested)) + '"></span><span class="sp-f3" style="width:' + w(Math.max(0, sent - replied)) + '"></span></div>' +
+    '<div class="sp-fl">' + bits.join('') + '</div></div></div>';
+}
+
+// ── Drafts and queue: LinkedIn notes and messages ───────────────────────────
+window._g23Li = window._g23Li || {};
+function _g23LiOn(id) {
+  var o = (window._sampOv || {})[id], c = (o && o.campaign) || (window._sampaignCampaignsCache || {})[id] || {};
+  if (typeof _liLocked === 'function' && _liLocked()) return false;
+  var l = c.channels && c.channels.linkedin;
+  return !!(l && typeof l === 'object' && l.on);
+}
+function _g23LiTabs(id) {
+  if (!_g23LiOn(id)) return '';
+  var L = window._g23Li[id], cnt = L && L.data ? L.data.counts : null;
+  var tab = function (key, label, n, needs) {
+    var on = window._sampLaunch === key;
+    return '<span onclick="setSampLaunch(\'' + esc(id) + '\',\'' + key + '\')" class="g23-lt' + (on ? ' on' : '') + '">' + SP_ICON.li + '<span style="font-weight:' + (on ? '700' : '600') + '">' + label + '</span>' +
+      (needs ? '<span class="g23-ltn">' + needs + ' to write</span>' : n !== null && n !== undefined ? '<span style="color:var(--text3)"> · ' + n + '</span>' : '') + '</span>';
+  };
+  if (!L) _g23LiLoad(id, false).then(function () { var t = document.getElementById('g23LiTabs_' + id); if (t) t.outerHTML = _g23LiTabs(id); });
+  return '<span id="g23LiTabs_' + esc(id) + '" class="g23-lts">' + tab('li_invite', 'LinkedIn notes', cnt ? cnt.notes : null, cnt ? cnt.needs_note : 0) + tab('li_message', 'LinkedIn messages', cnt ? cnt.messages : null, 0) + '</span>';
+}
+async function _g23LiLoad(id, force) {
+  var L = window._g23Li[id] = window._g23Li[id] || { filter: 'all', editing: null };
+  if (L.data && !force && Date.now() - L.at < 30000) return L.data;
+  if (L.p && !force) return L.p;
+  L.p = _sampEdge('list_sampaign_linkedin_texts', { campaign_id: id }).then(function (d) { L.p = null; if (d.ok) { L.data = d; L.at = Date.now(); } return L.data; });
+  return L.p;
+}
+function _g23StepTxt(p, kind) {
+  var st = kind === 'invite' ? p.invite : p.message_step;
+  if (p.stopped && p.stage === 'replied') return ['Replied', 'int'];
+  if (st && st.status === 'removed') return ['Taken out', 'mute'];
+  if (kind === 'invite') {
+    if (['connected', 'messaged'].includes(p.stage)) return ['Accepted', 'live'];
+    if (p.stage === 'invited' || (st && st.status === 'done')) return ['Sent' + (st && st.done_at ? ' ' + _spDate(st.done_at) : ''), 'live'];
+    if (st && st.status === 'queued') return ['Lined up' + (st.not_before ? ' · ' + _spDate(st.not_before) : ''), 'warn'];
+    if (st && st.status === 'failed') return ['Did not go', 'risk'];
+    return p.note ? ['Ready', 'warn'] : ['Not written', 'mute'];
+  }
+  if (p.stage === 'messaged' || (st && st.status === 'done')) return ['Sent' + (st && st.done_at ? ' ' + _spDate(st.done_at) : ''), 'live'];
+  if (st && st.status === 'queued') return ['Lined up' + (st.not_before ? ' · ' + _spDate(st.not_before) : ''), 'warn'];
+  if (p.stage === 'connected') return p.message ? ['Ready', 'warn'] : ['Accepted, not written', 'mute'];
+  return ['After they accept', 'mute'];
+}
+async function g23RenderLi(id) {
+  var host = document.getElementById('g23Li'); if (!host) return;
+  var kind = window._sampLaunch === 'li_message' ? 'message' : 'invite';
+  var L = window._g23Li[id] = window._g23Li[id] || { filter: 'all', editing: null };
+  if (!L.data) { host.innerHTML = '<div class="sp-small">Loading…</div>'; await _g23LiLoad(id, true); }
+  var d = L.data; if (!d) { host.innerHTML = '<div class="sp-small">Could not load the LinkedIn steps.</div>'; return; }
+  var lim = kind === 'invite' ? d.note_chars : 1900;
+  var ppl = d.people.filter(function (p) {
+    var st = kind === 'invite' ? p.invite : p.message_step, removed = st && st.status === 'removed';
+    if (L.filter === 'removed') return removed;
+    if (removed) return false;
+    if (L.filter === 'todo') return kind === 'invite' ? (!p.note && p.can_edit_note) : (!p.message && p.can_edit_message && p.stage === 'connected');
+    if (L.filter === 'sent') return _g23StepTxt(p, kind)[1] === 'live';
+    return kind === 'invite' ? true : (!!p.message || p.stage === 'connected' || p.stage === 'messaged');
+  });
+  var cntOf = function (f) { var keep = L.filter; L.filter = f; var n = 0; d.people.forEach(function (p) { var st = kind === 'invite' ? p.invite : p.message_step, removed = st && st.status === 'removed'; if (f === 'removed' ? removed : !removed && (f === 'todo' ? (kind === 'invite' ? (!p.note && p.can_edit_note) : (!p.message && p.can_edit_message && p.stage === 'connected')) : f === 'sent' ? _g23StepTxt(p, kind)[1] === 'live' : (kind === 'invite' || !!p.message || p.stage === 'connected' || p.stage === 'messaged'))) n++; }); L.filter = keep; return n; };
+  var chip = function (f, label) { var n = cntOf(f); return '<button type="button" class="' + (L.filter === f ? 'on' : '') + '" onclick="window._g23Li[\'' + esc(id) + '\'].filter=\'' + f + '\';g23RenderLi(\'' + esc(id) + '\')">' + label + ' <b>' + n + '</b></button>'; };
+  var needs = kind === 'invite' ? d.counts.needs_note : 0;
+  var head = '<div class="g23-lh"><div><b>' + (kind === 'invite' ? 'LinkedIn invite notes' : 'Messages after they accept') + '</b><div class="sp-small">' +
+    (kind === 'invite' ? 'One per person, under ' + lim + ' characters, the limit on your LinkedIn plan. They go out from the Samora plugin on the days in your sequence.' : 'Sent from the plugin once someone accepts. A reply on email or LinkedIn stops the rest.') + '</div></div>' +
+    (d.is_owner && needs ? '<button class="g-btn sp-gold sp-sm" type="button" onclick="g23LiWriteAll(\'' + esc(id) + '\',\'' + kind + '\')">' + SP_ICON.spark + ' Write ' + _spPlural(needs, 'note') + ' with SAM</button>' : '') + '</div>' +
+    '<div class="g19-seg g23-lf">' + chip('all', 'All') + chip('todo', 'To write') + chip('sent', 'Sent') + chip('removed', 'Taken out') + '</div>';
+  var rows = ppl.map(function (p) {
+    var txt = kind === 'invite' ? p.note : p.message, st = _g23StepTxt(p, kind);
+    var can = kind === 'invite' ? p.can_edit_note : p.can_edit_message;
+    var step = kind === 'invite' ? p.invite : p.message_step, removed = step && step.status === 'removed';
+    var editing = L.editing === p.id + ':' + kind;
+    var body = editing
+      ? '<textarea class="g23-ta" id="g23Ta_' + esc(p.id) + '" rows="' + (kind === 'invite' ? 3 : 5) + '" oninput="var n=this.value.length,c=document.getElementById(\'g23Cc_' + esc(p.id) + '\');c.textContent=n+\' / ' + lim + '\';c.classList.toggle(\'over\',n>' + lim + ')">' + esc(txt) + '</textarea>' +
+        '<div class="g23-ea"><span class="g23-cc' + (txt.length > lim ? ' over' : '') + '" id="g23Cc_' + esc(p.id) + '">' + txt.length + ' / ' + lim + '</span><span class="g23-sp"></span><button class="g-btn sp-sm" type="button" onclick="window._g23Li[\'' + esc(id) + '\'].editing=null;g23RenderLi(\'' + esc(id) + '\')">Cancel</button><button class="g-btn sp-sm sp-gold" type="button" onclick="g23LiSave(\'' + esc(id) + '\',\'' + esc(p.id) + '\',\'' + kind + '\',this)">Save</button></div>'
+      : txt ? '<div class="g23-tx">' + esc(txt) + '</div><div class="g23-meta">' + txt.length + ' / ' + lim + (kind === 'invite' && p.note_by ? ' · ' + (p.note_by === 'rep' ? 'edited by you' : 'written by SAM') : '') + '</div>'
+      : '<div class="g23-tx none">' + (kind === 'invite' ? 'No note yet.' : p.stage === 'connected' ? 'No message yet.' : 'SAM writes it when they accept.') + '</div>';
+    var acts = '';
+    if (d.is_owner && !editing) {
+      if (removed) acts += '<button class="g23-lk" type="button" onclick="g23LiRemove(\'' + esc(id) + '\',\'' + esc(p.id) + '\',\'' + kind + '\',true)">Put back</button>';
+      else if (can) {
+        acts += '<button class="g23-lk" type="button" onclick="window._g23Li[\'' + esc(id) + '\'].editing=\'' + esc(p.id) + ':' + kind + '\';g23RenderLi(\'' + esc(id) + '\');setTimeout(function(){var t=document.getElementById(\'g23Ta_' + esc(p.id) + '\');if(t){t.focus();t.setSelectionRange(t.value.length,t.value.length)}},30)">' + G23_ICON.pen + (txt ? 'Edit' : 'Write') + '</button>';
+        if (kind === 'invite' || p.stage === 'connected') acts += '<button class="g23-lk" type="button" onclick="g23LiRewrite(\'' + esc(id) + '\',\'' + esc(p.id) + '\',\'' + kind + '\')">' + SP_ICON.spark + (txt ? 'Rewrite with SAM' : 'Write with SAM') + '</button>';
+        acts += '<button class="g23-lk dim" type="button" onclick="g23LiRemove(\'' + esc(id) + '\',\'' + esc(p.id) + '\',\'' + kind + '\',false)">Take out of LinkedIn</button>';
+      }
+    }
+    return '<li class="g23-lr' + (removed ? ' removed' : '') + '"><span class="sp-av">' + esc(_spIni(p.name)) + '</span><div class="g23-lm">' +
+      '<div class="g23-lt1"><b>' + esc(p.name || 'Unnamed') + '</b><span class="sp-small">' + esc([p.title, p.company].filter(Boolean).join(' · ')) + '</span>' +
+      '<a class="sd-li" href="' + esc(p.linkedin_url) + '" target="_blank" rel="noopener" aria-label="Open LinkedIn profile">in</a><span class="sp-chip ' + st[1] + ' g23-st">' + esc(st[0]) + '</span></div>' +
+      body + (acts ? '<div class="g23-la">' + acts + '</div>' : '') + '</div></li>';
+  }).join('');
+  host.innerHTML = head + (rows ? '<ul class="g23-ll">' + rows + '</ul>' : '<div class="sp-empty" style="padding:22px 8px">' + (L.filter === 'removed' ? 'Nobody taken out.' : L.filter === 'todo' ? 'Nothing to write.' : kind === 'message' ? 'No messages yet. SAM writes them as people accept your invites.' : 'Nobody with a LinkedIn profile yet.') + '</div>');
+}
+async function g23LiSave(id, cid, kind, btn) {
+  var ta = document.getElementById('g23Ta_' + cid); if (!ta) return;
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  var d = await _sampEdge('save_sampaign_linkedin_text', { campaign_id: id, contact_id: cid, kind: kind, text: ta.value });
+  if (!d.ok) { showToast(d.error || 'Could not save'); if (btn) { btn.disabled = false; btn.textContent = 'Save'; } return; }
+  window._g23Li[id].editing = null;
+  showToast(kind === 'invite' ? 'Note saved. The plugin sends this one.' : 'Message saved. The plugin sends this one.');
+  await _g23LiLoad(id, true); g23RenderLi(id);
+}
+async function g23LiRemove(id, cid, kind, restore) {
+  var d = await _sampEdge('remove_sampaign_linkedin_step', { campaign_id: id, contact_id: cid, kind: kind === 'message' ? 'message' : 'all', restore: !!restore });
+  if (!d.ok) { showToast(d.error || 'Could not change this'); return; }
+  showToast(restore ? 'Back in. SAM lines up their LinkedIn steps again.' : 'Taken out of LinkedIn. Emails carry on.');
+  await _g23LiLoad(id, true); g23RenderLi(id);
+  try { _sampLoadOverview(id); } catch (e) {}
+}
+function g23LiRewrite(id, cid, kind) {
+  var m = document.createElement('div'); m.className = 'sp-modal'; m.id = 'g23RwM';
+  m.addEventListener('click', function (e) { if (e.target === m) m.remove(); });
+  m.innerHTML = '<div class="sp-mcard" role="dialog" aria-modal="true" aria-label="Rewrite with SAM"><h3>Rewrite with SAM</h3>' +
+    '<label class="sp-fld">What should change? <small>optional</small><input id="g23RwIn" placeholder="Shorter, mention their new role"></label>' +
+    '<div class="sp-chips" style="margin-top:10px">' + ['Shorter', 'Warmer', 'More specific to their role', 'No question at the end'].map(function (x) { return '<button type="button" class="sp-chip g18-sug" onclick="document.getElementById(\'g23RwIn\').value=\'' + x + '\'">' + x + '</button>'; }).join('') + '</div>' +
+    '<div class="sp-foot"><button class="g-btn" type="button" onclick="document.getElementById(\'g23RwM\').remove()">Cancel</button><button class="g-btn sp-gold" type="button" id="g23RwGo">' + SP_ICON.spark + ' Rewrite</button></div></div>';
+  document.body.appendChild(m);
+  var inp = document.getElementById('g23RwIn'); inp.focus();
+  inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') document.getElementById('g23RwGo').click(); });
+  document.getElementById('g23RwGo').onclick = async function () {
+    this.disabled = true; this.textContent = 'SAM is writing…';
+    var d = await _sampEdge('write_linkedin_notes', { campaign_id: id, kind: kind, contact_ids: [cid], instruction: inp.value || 'a better version' });
+    m.remove();
+    if (!d.ok) { showToast(d.error || 'SAM could not rewrite this'); return; }
+    showToast(d.written ? 'Rewritten. Have a look.' : 'Nothing to rewrite here.');
+    await _g23LiLoad(id, true); g23RenderLi(id);
+  };
+}
+async function g23LiWriteAll(id, kind) { await spLiWrite(id, kind); await _g23LiLoad(id, true); g23RenderLi(id); try { _sampLoadOverview(id); } catch (e) {} }
+
+// ── A phone number on click ─────────────────────────────────────────────────
+function _g23PhoneHtml(id, p, can) {
+  if (p.phone) {
+    var digits = String(p.phone).replace(/[^\d+]/g, '');
+    if (p.phone_dnc) return '<span class="g23-ph"><span class="sp-chip risk" title="Marked do not call by the data provider">Do not call</span><span class="g23-pn">' + esc(p.phone) + '</span></span>';
+    return '<span class="g23-ph"><a class="g23-pn" href="tel:' + esc(digits) + '" title="Call">' + G23_ICON.phone + esc(p.phone) + '</a>' +
+      '<a class="g23-pi" href="https://wa.me/' + esc(digits.replace(/^\+/, '')) + '" target="_blank" rel="noopener" title="WhatsApp" aria-label="WhatsApp">' + G23_ICON.wa + '</a>' +
+      '<button class="g23-pi" type="button" title="Copy" aria-label="Copy number" onclick="event.stopPropagation();g23Copy(\'' + esc(p.phone) + '\')">' + G23_ICON.copy + '</button></span>';
+  }
+  return can ? '<button class="g23-gp" type="button" onclick="event.stopPropagation();g23GetPhone(\'' + esc(id) + '\',\'' + esc(p.id || p.contact_id) + '\',this)">' + G23_ICON.phone + 'Get phone</button>' : '';
+}
+function g23Copy(v) { try { navigator.clipboard.writeText(v); showToast('Copied ' + v); } catch (e) { showToast(v); } }
+async function g23GetPhone(id, cid, btn) {
+  var people = ((window._spPeople || {})[id] || {}).people || [];
+  var p = people.find(function (x) { return x.id === cid; }) || {};
+  var first = String(p.name || 'them').split(' ')[0];
+  if (btn) { btn.disabled = true; btn.innerHTML = G23_ICON.phone + 'Checking…'; }
+  var peek = await _sampEdge('panel_reveal_contact', { contact_id: cid, peek: true });
+  if (btn) { btn.disabled = false; btn.innerHTML = G23_ICON.phone + 'Get phone'; }
+  if (peek.ok && peek.revealed) { _g23PhoneDone(id, cid, peek, first); return; }
+  if (!peek.ok) { showToast(peek.error || 'Phone numbers are not available right now'); return; }
+  var stt = peek.state || {};
+  if (stt.already) { await _g23Reveal(id, cid, first, btn); return; }
+  var m = document.createElement('div'); m.className = 'sp-modal'; m.id = 'g23PhM';
+  m.addEventListener('click', function (e) { if (e.target === m) m.remove(); });
+  var left = stt.left_today;
+  m.innerHTML = '<div class="sp-mcard g23-pc" role="dialog" aria-modal="true" aria-label="Get phone number"><div class="g23-pch"><span class="g23-pci">' + G23_ICON.phone + '</span><div><h3 style="margin:0">Get ' + esc(first) + '’s phone number?</h3>' +
+    '<div class="sp-small">' + esc([p.title, p.company].filter(Boolean).join(' · ')) + '</div></div></div>' +
+    '<p class="sp-muted" style="margin:12px 0 0">This uses <b>1 credit</b> from your data provider. Samora keeps the number for your whole team, so nobody pays for ' + esc(first) + ' again.' + (left !== undefined && left !== null ? ' You have <b>' + left + '</b> left today.' : '') + '</p>' +
+    '<div class="sp-foot"><button class="g-btn" type="button" onclick="document.getElementById(\'g23PhM\').remove()">Cancel</button><button class="g-btn sp-gold" type="button" id="g23PhGo"' + (left === 0 ? ' disabled' : '') + '>' + G23_ICON.phone + ' Get phone, 1 credit</button></div></div>';
+  document.body.appendChild(m);
+  document.getElementById('g23PhGo').onclick = async function () { this.disabled = true; this.textContent = 'Getting it…'; await _g23Reveal(id, cid, first, null); m.remove(); };
+}
+async function _g23Reveal(id, cid, first, btn) {
+  if (btn) { btn.disabled = true; btn.innerHTML = G23_ICON.phone + 'Getting it…'; }
+  var d = await _sampEdge('panel_reveal_contact', { contact_id: cid });
+  if (!d.ok) { showToast(d.error || 'Could not get the number'); if (btn) { btn.disabled = false; btn.innerHTML = G23_ICON.phone + 'Get phone'; } return; }
+  _g23PhoneDone(id, cid, d, first);
+}
+function _g23PhoneDone(id, cid, d, first) {
+  var ph = (d.phones || [])[0];
+  if (!ph) { showToast(d.paid ? 'No phone number on record for ' + first + '. SAM found an email instead.' : 'No phone number found for ' + first + '. No credit was used.'); return; }
+  var people = ((window._spPeople || {})[id] || {}).people || [];
+  var p = people.find(function (x) { return x.id === cid; });
+  if (p) { p.phone = ph.value; p.phone_dnc = /do not call/i.test(String(ph.note || '')); }
+  showToast(p && p.phone_dnc ? first + '’s number is marked do not call.' : (d.cached || !d.paid ? 'Samora already had ' + first + '’s number.' : 'Got ' + first + '’s number. Saved for your team.'));
+  try { _spPaintPeople(id); } catch (e) {}
 }
