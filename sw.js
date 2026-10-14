@@ -1,6 +1,6 @@
 // ── SamoraOS Service Worker ──────────────────────────────────────
 // BUMP THIS VERSION NUMBER every time you push an update.
-const VERSION = 'v1.0.14';   // 1.0.14 (Drop K): the app is five versioned files; each is kept until the next release.
+const VERSION = 'v1.0.15';   // 1.0.15 (Drop L): new release number on the app files. 1.0.14 (Drop K): the app is five versioned files; each is kept until the next release.
 // 1.0.13 note:   // 1.0.13: new icons. Same filenames as the old ones, so without a bump the cache keeps serving the placeholder S.
 const CACHE = `samoratrack-${VERSION}`;
 
