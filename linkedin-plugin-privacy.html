@@ -19,7 +19,7 @@ p,li{color:var(--ink2)} b{color:var(--ink)} a{color:var(--gold)}
 <main>
 <div class="k">Samora Global</div>
 <h1>Samora for LinkedIn: privacy</h1>
-<p>Last updated 9 October 2026. Applies to version 1.4 and later.</p>
+<p>Last updated 18 October 2026. Applies to version 1.8 and later.</p>
 
 <h2>What the plugin is for</h2>
 <p>Samora for LinkedIn runs the LinkedIn side of SAMpaigns that you or your team set up in SamoraOS: visiting a profile, sending an invitation with a note, and sending a message once someone accepts. On a profile you open, it shows whether the person is in your SAMpaigns, a read of how to approach them, and their phone and email if you ask for them. It only works for people who are signed in to a SamoraOS workspace.</p>
@@ -27,7 +27,8 @@ p,li{color:var(--ink2)} b{color:var(--ink)} a{color:var(--gold)}
 <h2>What it reads</h2>
 <ul>
 <li><b>LinkedIn profiles you open, or that your SAMpaign asks it to open</b>: the person's name, headline, company, location, profile address, connection degree, follower count and mutual connections, and the text of their About, Experience, Education, Skills and recent activity sections. This matches them to your SamoraOS records and lets SamoraOS write its read of how to approach them.</li>
-<li><b>Your connections list and unread conversations</b>, when you press "Check now", when the side panel opens, after a batch of steps, and about once an hour in your working hours: profile addresses and the names on unread conversations, so it can tell SamoraOS who accepted and who replied. Message text is not read.</li>
+<li><b>Your connections list and your Messaging list</b>, when you press "Check now", when the side panel opens, after a batch of steps, and about once an hour in your working hours: profile addresses, the names on conversations whose last message is theirs, the first line of that message and the conversation's address, so it can tell SamoraOS who accepted and who replied. For people in your SAMpaigns, that first line is saved in your organisation's SamoraOS workspace so SAM can show you the reply and write your answer. For anyone else it is not kept.</li>
+<li><b>A conversation, when you ask</b>: when you press "Let SAM reply", the plugin opens that person's conversation and reads its recent messages, so SAM can write your answer. They are saved in your organisation's workspace with the reply, so you can also answer from SamoraOS. Nothing is typed until you press Send.</li>
 <li><b>Your Sent invitations page, at the same moments</b>: only two numbers, how many invitations went out in the last 7 days and how many are still pending. Names on that page are not read or sent.</li>
 <li><b>Your My Premium page, about once a week</b>: only which plan LinkedIn shows (Free, Premium, Sales Navigator or Recruiter Lite), so your limits match your plan.</li>
 <li><b>Your own LinkedIn name</b>, shown in the plugin so you can see which account it runs on.</li>
@@ -45,6 +46,7 @@ p,li{color:var(--ink2)} b{color:var(--ink)} a{color:var(--gold)}
 <ul>
 <li><b>Your LinkedIn plan</b>, if you choose it yourself, which sets your daily and weekly limits and the length of invitation notes.</li>
 <li><b>A one tap label on a LinkedIn reply</b> (Interested, Not now or Not interested), which counts in your SAMpaign results.</li>
+<li><b>Your answer to a reply</b>, written with SAM in the plugin or in SamoraOS. An answer sent from SamoraOS waits in your queue until the plugin sends it in that person's conversation.</li>
 <li><b>The order of your steps</b>, if you drag them or press Next.</li>
 </ul>
 
