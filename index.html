@@ -2970,7 +2970,44 @@ body.g24[data-tab="today"] .cal-num{font-size:15px}
 .g24-adm code{display:block;margin-top:6px;padding:8px 10px;border-radius:8px;background:var(--surface2);font-size:11.5px;white-space:pre-wrap;word-break:break-word;color:var(--text2)}
 .g24-eh{font-size:12.5px;color:var(--text2);margin-top:8px}
 </style>
-<script src="/js/vendor/sortable.min.js?v=20261021-01"></script>
+<script src="/js/vendor/sortable.min.js?v=20261022-01"></script>
+<style>
+/* Drop Q: Samora Intelligence */
+.sq-intent{background:var(--surface2);border-radius:var(--r-md);padding:12px;margin-bottom:12px}
+.sq-ih{display:flex;gap:12px;align-items:center;margin-bottom:6px}
+.sq-score{width:46px;height:46px;border-radius:50%;border:2px solid;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;flex:none}
+.sq-ihb{flex:1;min-width:0}.sq-k{font-size:12px;font-weight:600;color:var(--text)}.sq-k>span{justify-content:flex-start!important}
+.sq-band{font-size:13px;font-weight:700;margin-top:2px}.sq-sub{font-size:11px;color:var(--text3);line-height:1.5}
+.sq-lnk{background:none;border:0;color:var(--gold);font-size:11px;cursor:pointer;font-family:var(--sans);flex:none}
+.sq-gh{display:block;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:10px 0 4px}
+.sq-parts{display:flex;flex-direction:column;gap:6px}
+.sq-part{display:grid;grid-template-columns:118px 60px 46px 1fr;gap:8px;align-items:start;font-size:12px}
+.sq-part.unk{opacity:.55}.sq-pl{color:var(--text2)}.sq-pv{font-weight:600;color:var(--text);text-align:right}.sq-pv small{color:var(--text3);font-weight:400}
+.sq-bar{height:6px;border-radius:3px;background:rgba(127,127,127,.18);margin-top:5px;overflow:hidden}.sq-bar i{display:block;height:100%;border-radius:3px}
+.sq-pw{color:var(--text2);line-height:1.45}.sq-pw small{display:block;color:var(--text3);font-size:11px;margin-top:1px}
+@media (max-width:560px){.sq-part{grid-template-columns:1fr 46px}.sq-bar{display:none}.sq-pw{grid-column:1/-1}}
+.sq-modes{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:14px 0}
+@media (max-width:720px){.sq-modes{grid-template-columns:1fr 1fr}}
+.sq-mode{all:unset;box-sizing:border-box;cursor:pointer;border:1px solid var(--border2);border-radius:var(--r-md);padding:10px 12px;background:var(--surface);display:flex;flex-direction:column;gap:2px}
+.sq-mode b{font-size:13px;color:var(--text)}.sq-mode small{font-size:11px;color:var(--text3);line-height:1.35}
+.sq-mode.on{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset}.sq-mode:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.sq-chip{all:unset;cursor:pointer;font-size:11px;font-weight:700;border:1px solid;border-radius:var(--r-sm);padding:1px 7px;margin-left:6px;white-space:nowrap}
+.sq-why{display:block;margin-top:8px;padding:8px 10px;background:var(--surface2);border-radius:var(--r-sm)}
+.sq-fp{display:flex;flex-direction:column;gap:5px}.sq-fph{font-size:12px;font-weight:600;margin-bottom:4px}.sq-fph>span{justify-content:flex-start!important}
+.sq-fpr{display:grid;grid-template-columns:100px 1fr;gap:8px;font-size:12px}.sq-fpr>span:first-child{color:var(--text3)}.sq-fpr small{color:var(--text3)}
+.sq-chk{display:flex;gap:8px;align-items:flex-start;font-size:12px;color:var(--text2);cursor:pointer}
+.sq-chh{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;margin-bottom:10px}
+.sq-mv{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border);font-size:13px}
+.sq-mvb small{display:block;color:var(--text3);font-size:11px;margin-top:2px;line-height:1.45}.sq-mva{display:flex;gap:8px;flex:none}
+@media (max-width:560px){.sq-mv{flex-direction:column;align-items:flex-start}}
+.sq-dis{all:unset;cursor:pointer;font-size:12px;font-weight:600;color:var(--text3);padding:6px 10px;border-radius:8px;border:1px solid var(--border2)}.sq-dis:hover{color:var(--c-risk);background:var(--c-risk-wash)}.sq-dis:focus-visible{outline:2px solid var(--gold)}
+.sq-sw{margin:10px 0}.sq-sw small{display:block}
+.sq-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--text2);margin-top:10px}
+.sq-num{width:72px;padding:6px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-family:var(--sans)}
+.sq-txt{flex:1;min-width:160px;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-family:var(--sans);font-size:12px}
+.sq-snip{display:flex;gap:8px;align-items:center;margin-top:10px}.sq-snip code{flex:1;min-width:0;font-size:11px;padding:8px;background:var(--surface2);border-radius:var(--r-sm);overflow-x:auto;white-space:nowrap}
+.sq-topics{margin-top:6px}.sp-chip.on{border-color:var(--gold);color:var(--gold)}
+</style>
 </head>
 <body>
 
@@ -3947,6 +3984,13 @@ body.g24[data-tab="today"] .cal-num{font-size:15px}
             <div style="font-size:12px;font-weight:600;color:var(--text)">Lusha</div>
             <div style="font-size:11px;color:var(--text3)" id="lushaUserStatus">Not connected</div> </div>
           <button style="padding:4px 10px;border-radius:var(--r-sm);background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:11px;cursor:pointer" id="lushaUserBtn">Connect</button> </div>
+        <!-- ZoomInfo -->
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border)">
+          <div style="width:28px;height:28px;border-radius:var(--r-sm);background:#C8102E;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">Zi</div>
+          <div style="flex:1">
+            <div style="font-size:12px;font-weight:600;color:var(--text)">ZoomInfo</div>
+            <div style="font-size:11px;color:var(--text3)" id="zoominfoUserStatus">Not connected</div> </div>
+          <button style="padding:4px 10px;border-radius:var(--r-sm);background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:11px;cursor:pointer" id="zoominfoUserBtn">Connect</button> </div>
         <!-- Hunter -->
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
           <div style="width:28px;height:28px;border-radius:var(--r-sm);background:#F97316;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">Hu</div>
@@ -3956,6 +4000,8 @@ body.g24[data-tab="today"] .cal-num{font-size:15px}
           <button style="padding:4px 10px;border-radius:var(--r-sm);background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-family:var(--sans);font-size:11px;cursor:pointer" id="hunterUserBtn">Connect</button> </div>
         <!-- inline key input -->
         <div id="enrichmentKeyInput" style="display:none;margin-top:4px">
+          <input type="text" id="enrichmentKeyId" placeholder="Client ID" autocomplete="off"
+            style="display:none;width:100%;box-sizing:border-box;margin-bottom:8px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>
           <div style="display:flex;gap:8px">
             <input type="password" id="enrichmentKeyValue" placeholder="Paste API key…" autocomplete="off"
               style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>
@@ -4119,6 +4165,22 @@ body.g24[data-tab="today"] .cal-num{font-size:15px}
             style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>
           <button onclick="saveEnrichmentKey('lusha','org')" style="padding:8px 14px;border-radius:var(--r-sm);background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Save</button> </div> </div>
 
+      <!-- ZoomInfo -->
+      <div class="admin-card" style="margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <div style="width:32px;height:32px;border-radius:var(--r-sm);background:#C8102E;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">Zi</div>
+          <div>
+            <div class="admin-card-title" style="margin-bottom:0">ZoomInfo</div>
+            <div style="font-size:11px;color:var(--text3)">Direct dials and mobiles · deepest North America coverage</div> </div>
+          <span id="zoominfoOrgStatus" style="margin-left:auto;font-size:11px;color:var(--text3)">Not connected</span> </div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:8px;line-height:1.5">From your ZoomInfo API app (client credentials). SamoraOS checks the pair with ZoomInfo before saving, which uses no credits. Searches are free; each person revealed uses 1 ZoomInfo credit.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input type="text" id="zoominfoOrgId" placeholder="Client ID" autocomplete="off"
+            style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>
+          <input type="password" id="zoominfoOrgKey" placeholder="Client secret" autocomplete="off"
+            style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>
+          <button onclick="saveEnrichmentKey('zoominfo','org')" style="padding:8px 14px;border-radius:var(--r-sm);background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Save</button> </div> </div>
+
       <!-- Hunter -->
       <div class="admin-card">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
@@ -4131,7 +4193,12 @@ body.g24[data-tab="today"] .cal-num{font-size:15px}
           <input type="password" id="hunterOrgKey" placeholder="Hunter API key" autocomplete="off"
             style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);font-family:var(--sans);font-size:13px;outline:none"/>
           <button onclick="saveEnrichmentKey('hunter','org')" style="padding:8px 14px;border-radius:var(--r-sm);background:var(--gold);border:none;color:#18160F;font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer">Save</button> </div> </div>
-      <div id="enrichmentOrgStatus" style="font-size:12px;color:var(--text3);margin-top:8px"></div> </div> </div>
+      <div id="enrichmentOrgStatus" style="font-size:12px;color:var(--text3);margin-top:8px"></div> </div>
+
+    <div class="admin-section" id="samIntelAdminSection" style="display:none">
+      <div class="admin-title">Intelligence</div>
+      <div class="admin-card-sub" style="margin-bottom:12px;font-size:12px;color:var(--text3)">How SAM finds companies and reads buying intent. Free features are on; anything that spends ZoomInfo credits is off until you switch it on and set a limit.</div>
+      <div id="samIntelAdminBody"><div style="font-size:12px;color:var(--text3)">Loading…</div></div> </div> </div>
 </div>
 
 <div class="bottom-nav">
@@ -4171,11 +4238,12 @@ body.g24[data-tab="today"] .cal-num{font-size:15px}
 </div>
 </div>
 <!-- Drop K: the app in five parts, loaded in this order. ?v= lets browsers keep each file until the next release. -->
-<script src="/js/app-1.js?v=20261021-01"></script>
-<script src="/js/app-2.js?v=20261021-01"></script>
-<script src="/js/app-3.js?v=20261021-01"></script>
-<script src="/js/app-4.js?v=20261021-01"></script>
-<script src="/js/app-5.js?v=20261021-01"></script>
+<script src="/js/app-1.js?v=20261022-01"></script>
+<script src="/js/app-2.js?v=20261022-01"></script>
+<script src="/js/app-3.js?v=20261022-01"></script>
+<script src="/js/app-4.js?v=20261022-01"></script>
+<script src="/js/app-5.js?v=20261022-01"></script>
+<script src="/js/app-intel.js?v=20261022-01"></script>
 
     <!-- Template Manager Modal -->
     <div id="templateModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:500;align-items:center;justify-content:center;padding:20px">
@@ -4239,7 +4307,7 @@ body.g24[data-tab="today"] .cal-num{font-size:15px}
           <button onclick="closeReminderModal()" style="flex:1;padding:11px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text2);font-family:var(--font);font-size:14px;cursor:pointer">Cancel</button>
           <button onclick="confirmCreateReminder()" style="flex:2;padding:11px;background:var(--gold);border:none;border-radius:var(--r-sm);color:#18160F;font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer">⏰ Set reminder</button> </div> </div> </div>
 
-<script src="/js/app-tail.js?v=20261021-01"></script>
+<script src="/js/app-tail.js?v=20261022-01"></script>
 
 <div id="doneConfirmModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:700;align-items:center;justify-content:center;padding:20px">
   <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-md);width:100%;max-width:380px;padding:24px">
