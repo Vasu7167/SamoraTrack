@@ -74,7 +74,7 @@ If you are ever unsure whether something is queued, call get_scheduled_sends. It
 WRITING A WAVE
 1. get_draft_brief(campaign_id, launch). One call, everything you need. Do not chain the individual tools by hand.
 2. Read its warnings first. If it says a wave is already queued, stop and ask the user.
-3. Write ONE GENUINELY DIFFERENT email per person. Same email with the name swapped is not personalisation and the recipient can tell. Use the person's actual role, the account's real recorded activity, and only the proof the brief returned.
+3. Write each email in the person's language (write_for[].language; English unless the SAMpaign says otherwise). Write ONE GENUINELY DIFFERENT email per person. Same email with the name swapped is not personalisation and the recipient can tell. Use the person's actual role, the account's real recorded activity, and only the proof the brief returned.
 4. Save the WHOLE wave in ONE save_sampaign_drafts call. Do not reread or re-check drafts yourself first: SAM reviews every save (see below).
 5. Read the response's review. Rewrite ONLY the drafts in review.flagged whose issues have severity "fix", and save just those again in one call. Never rewrite clean drafts.
 6. schedule_sampaign_drafts with dry_run true. Read the plan back to the user, including today_limit and why. Only then schedule for real.
