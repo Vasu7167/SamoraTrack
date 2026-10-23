@@ -439,14 +439,18 @@ export async function executeTool(accessToken, name, args = {}) {
       // Fetched together. A failure in the optional colour (account signals,
       // timeline) must not cost the caller the parts it cannot write without.
       const settle = (p) => p.then(v => ({ ok: true, v }), e => ({ ok: false, e: String(e && e.message || e).slice(0, 200) }));
-      const [campsR, ctxR, storiesR, contactsR, queueR, limitR] = await Promise.all([
+      const [campsR, ctxR, storiesR, contactsR, queueR, limitR, langR] = await Promise.all([
         settle(edge(accessToken, 'list_sampaigns', { scope: 'visible' })),
         settle(edge(accessToken, 'get_company_context', {})),
         settle(edge(accessToken, 'get_success_stories', { campaign_id: campaignId, account_id: null })),
         settle(edge(accessToken, 'list_sampaign_contacts', { campaign_id: campaignId })),
         settle(edge(accessToken, 'list_sampaign_scheduled_sends', { campaign_id: campaignId })),
-        settle(edge(accessToken, 'get_sending_limit', {}))
+        settle(edge(accessToken, 'get_sending_limit', {})),
+        // Drop R: the language SAM writes in, for the SAMpaign and each person.
+        settle(edge(accessToken, 'get_person_cards', { campaign_id: campaignId }))
       ]);
+      const langPeople = langR.ok ? (langR.v.people || {}) : {};
+      const campLang = langR.ok && langR.v.language ? langR.v.language : { lang: 'en', name: 'English' };
 
       const camp = campsR.ok ? (campsR.v.campaigns || []).find(c => c.id === campaignId) : null;
       if (!camp) return { ok: false, error: 'Campaign not found. Call get_sampaigns for the list of ids.' };
@@ -481,7 +485,7 @@ export async function executeTool(accessToken, name, args = {}) {
         .filter(c => !alreadyInWave.has(c.id))
         .filter(c => c.email && !/^scouted\./i.test(c.email))
         .slice(0, limit)
-        .map(c => ({ contact_id: c.id, name: c.name, email: c.email, company: c.company, title: c.title, seniority: c.seniority, department: c.department, linkedin_url: c.linkedin_url, status: c.status }));
+        .map(c => ({ contact_id: c.id, name: c.name, email: c.email, company: c.company, title: c.title, seniority: c.seniority, department: c.department, linkedin_url: c.linkedin_url, status: c.status, language: (langPeople[c.id] && langPeople[c.id].lang) ? langPeople[c.id].lang.name : (campLang.lang === 'en' ? 'English' : campLang.name) }));
 
       const needsEnrichment = allContacts.filter(c => c.email && /^scouted\./i.test(c.email)).length;
 
@@ -491,12 +495,14 @@ export async function executeTool(accessToken, name, args = {}) {
       if (needsEnrichment) warnings.push(needsEnrichment + ' contact(s) have placeholder addresses and cannot be mailed. Run enrich_sampaign_contacts if the user wants them.');
       if (!camp.campaign_goal) warnings.push('This campaign has NO GOAL set, so there is nothing for the copy to argue towards and the app shows the user an empty state. If the conversation has already told you what this campaign is for, call set_campaign_goal now, confirming the wording in one line. Do not ask the user to type it into the UI.');
       if (!storiesR.ok || !((storiesR.v.stories || []).length)) warnings.push('No success stories are on record for this campaign. Write from the product capability alone. Do NOT invent a client name, a statistic or a quotation.');
+      if (campLang.lang && campLang.lang !== 'en') warnings.push('This SAMpaign writes in ' + (campLang.lang === 'auto' ? 'each person\'s own language' : campLang.name) + '. Write each email in the language given in write_for[].language, as a native business writer of that language would, not translated English. Keep names, company and product names and job titles exactly as written; greet them by their first name as written. Thai: address them as คุณ followed by their first name; no ครับ or ค่ะ unless the user says which they use. Never mix in English sentences.');
       if (!writeFor.length) warnings.push('Nobody is waiting for a wave ' + launch + ' email. Everyone is already drafted, queued, sent, replied, dead, or unreachable.');
 
       return {
         ok: true,
         campaign: { id: camp.id, name: camp.name, goal: camp.campaign_goal, focus: camp.focus, scope: camp.scope, account_id: camp.account_id, followup_days: camp.followup_days, followup_dates: camp.followup_dates, stats: camp.stats },
         wave: launch,
+        language: campLang,
         what_we_sell: ctxR.ok ? ctxR.v : { error: ctxR.e },
         proof: storiesR.ok ? (storiesR.v.stories || []) : [],
         proof_rule: 'These are the ONLY results, client names and quotations you may use. Never invent one and never embellish one. Where usable_publicly is false, you may use what the story proves but must not name the client or attribute the quote. Where a story carries a url, link the claim to it with <a href>: a reader who can go and read the case study is worth more than one more adjective, and it is only ever present on a story cleared for public use. Pick the story whose industries, personas and keywords match THIS contact, not the first in the list, and use at most one per email.',
