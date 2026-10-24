@@ -30,3 +30,4 @@
   history.pushState = function () { var r = push.apply(this, arguments); if (ok) setTimeout(send, 0); return r; };
   window.addEventListener('popstate', function () { if (ok) send(); });
 })();
+ 
