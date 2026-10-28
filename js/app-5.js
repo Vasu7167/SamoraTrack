@@ -421,8 +421,11 @@ async function spLiWrite(id, kind) {
   m.innerHTML = '<div class="sp-mcard" role="dialog" aria-modal="true" aria-label="Writing"><h3>SAM is writing ' + (kind === 'invite' ? 'invite notes' : 'LinkedIn messages') + '</h3><div class="sp-small" id="liWMsg">Starting…</div><div class="sp-progress"><span id="liWBar" style="width:4%"></span></div><div class="sp-small" style="margin-top:10px">One per person, from their role, company and the first email. ' + (kind === 'invite' ? 'Under 300 characters each.' : '') + '</div><div class="sp-foot"><span></span><button class="g-btn" type="button" id="liWStop">Stop</button></div></div>';
   document.body.appendChild(m);
   var stop = false; document.getElementById('liWStop').onclick = function () { stop = true; this.textContent = 'Stopping…'; };
-  var written = 0, skip = [], total = null, err = null, paced = 0;
-  for (var i = 0; i < 40 && !stop; i++) {
+  var written = 0, skip = [], total = null, err = null, paced = 0, held = 0;
+  // Drop S1: all of them in one go, three groups at a time.
+  var s1 = await _s1Write({ action: 'write_linkedin_notes', base: { campaign_id: id, kind: kind }, chunk: 6, conc: 3, isStopped: function () { return stop; }, onProgress: _s1Bar('liWMsg', 'liWBar', 'written'), onPace: _s1Pace('liWMsg') });
+  if (s1) { written = s1.written; held = s1.held; err = s1.err; }
+  if (!s1) for (var i = 0; i < 40 && !stop; i++) {
     var r = await _sampEdge('write_linkedin_notes', { campaign_id: id, kind: kind, batch: 12, skip_ids: skip });
     if (!r.ok) {
       if (r.reason === 'quota' && !r.daily && paced++ < 8) { if (await _spPace(r.retry_after || 30, document.getElementById('liWMsg'), function () { return stop; })) continue; break; }
@@ -434,10 +437,12 @@ async function spLiWrite(id, kind) {
     var msg = document.getElementById('liWMsg'), bar = document.getElementById('liWBar');
     if (msg) msg.textContent = written + ' written' + (total ? ' of ' + total : '');
     if (bar) bar.style.width = Math.max(4, Math.round(written / Math.max(1, total || 1) * 100)) + '%';
-    if (!r.remaining || (!r.written && !(r.missed || []).length)) break;
+    held += r.held || 0;
+    if (!r.remaining || (!r.written && !r.held && !(r.missed || []).length)) break;
   }
   m.remove();
-  if (err) showToast(err); else showToast(written ? written + ' written and queued for LinkedIn' : 'Nothing left to write');
+  var heldTxt = held ? '. ' + held + ' need a look before they go: open Needs you' : '';
+  if (err) showToast((written ? written + ' written, then: ' : '') + err); else showToast(written || held ? written + ' written and queued for LinkedIn' + heldTxt : 'Nothing left to write');
   _spLiDecorate(id, true);
 }
 
@@ -2047,7 +2052,7 @@ function scWireMore() {
 // a message by now and has not). The same list the LinkedIn panel shows and
 // the morning push names, from get_sampaign_tasks.
 window._tds = window._tds || { data: null, at: 0, open: {}, touched: false };
-var LI_EXT_LATEST = '1.12.0';
+var LI_EXT_LATEST = '1.13.0';
 function _liVerLt(a, b) { var x = String(a || '0').split('.').map(Number), y = String(b || '0').split('.').map(Number); for (var i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; }
 var TDS_ICON = {
   email: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M4 7l8 6 8-6"/></svg>',
@@ -3188,6 +3193,8 @@ function _g24Wait(ms) { return new Promise(function (r) { setTimeout(r, ms); });
 async function _g24WriteWave(cId, launch, onMsg, extra) {
   var written = 0, skip = [], paced = 0, total = null;
   var name = (currentUser && currentUser.user_metadata && currentUser.user_metadata.full_name) || '';
+  var s1 = await _s1Write({ action: 'write_sampaign_drafts', base: Object.assign({ campaign_id: cId, launch: launch, sender_name: name.split(' ')[0] || '', sender_full_name: name }, extra || {}), chunk: 4, conc: 3, onProgress: function (st) { onMsg('Written ' + st.written + ' of ' + st.total + '…'); }, onPace: function () { onMsg('SAM is pacing itself, back in a moment…'); } });
+  if (s1) return s1.err && !s1.written ? { ok: false, written: 0, error: s1.err } : { ok: true, written: s1.written };
   for (var i = 0; i < 40; i++) {
     var d = await _sampEdge('write_sampaign_drafts', Object.assign({ campaign_id: cId, launch: launch, batch: 6, skip_ids: skip, sender_name: name.split(' ')[0] || '', sender_full_name: name }, extra || {}));
     if (!d.ok) {
@@ -3203,6 +3210,8 @@ async function _g24WriteWave(cId, launch, onMsg, extra) {
 }
 async function _g24WriteLi(cId, kind, onMsg) {
   var written = 0, skip = [], paced = 0;
+  var s1 = await _s1Write({ action: 'write_linkedin_notes', base: { campaign_id: cId, kind: kind }, chunk: 6, conc: 3, onProgress: function (st) { onMsg((st.written + st.held) + ' of ' + st.total + ' written…'); }, onPace: function () { onMsg('SAM is pacing itself, back in a moment…'); } });
+  if (s1) return s1.err && !s1.written ? { ok: false, written: 0, error: s1.err } : { ok: true, written: s1.written };
   for (var i = 0; i < 40; i++) {
     var r = await _sampEdge('write_linkedin_notes', { campaign_id: cId, kind: kind, batch: 12, skip_ids: skip });
     if (!r.ok) {
@@ -4352,12 +4361,10 @@ async function g34RewriteAll(campaignId) {
     if (!ids.length) { msg.textContent = 'Nothing to rewrite with these choices.'; return; }
     this.disabled = true;
     var done = 0, err = null;
-    for (var i = 0; i < ids.length; i += 6) {
-      msg.innerHTML = '<span class="g24-spin" aria-hidden="true"></span> Rewriting ' + Math.min(ids.length, i + 6) + ' of ' + ids.length + '…';
-      var d = await _sampEdge('write_sampaign_drafts', { campaign_id: campaignId, launch: launch, replace: true, which: which, include_edited: ed, contact_ids: ids.slice(i, i + 6), instruction: ins, batch: 6, sender_name: (typeof _sigNameHint === 'function' ? _sigNameHint().split(' ')[0] : ''), sender_full_name: (typeof _sigNameHint === 'function' ? _sigNameHint() : '') });
-      if (!d.ok) { err = d.error || 'SAM could not rewrite these'; break; }
-      done += d.written || 0;
-    }
+    msg.innerHTML = '<span class="g24-spin" aria-hidden="true"></span> Rewriting ' + ids.length + '…';
+    var sR = await _s1Write({ action: 'write_sampaign_drafts', ids: ids, chunk: 4, conc: 3, base: { campaign_id: campaignId, launch: launch, replace: true, which: which, include_edited: ed, instruction: ins, sender_name: (typeof _sigNameHint === 'function' ? _sigNameHint().split(' ')[0] : ''), sender_full_name: (typeof _sigNameHint === 'function' ? _sigNameHint() : '') },
+      onProgress: function (st) { msg.innerHTML = '<span class="g24-spin" aria-hidden="true"></span> Rewritten ' + st.written + ' of ' + st.total + '…'; } });
+    done = sR.written; err = sR.err;
     m.remove();
     showToast(err && !done ? err : 'Rewrote ' + _spPlural(done, 'email') + (err ? '. Stopped: ' + err : '. Same places, same send times.'));
     loadSampaignSendQueue(campaignId);
@@ -4389,12 +4396,10 @@ function g34LiRewriteAll(campaignId, kind) {
     if (!list.length) { msg.textContent = 'Nothing to rewrite with these choices.'; return; }
     this.disabled = true;
     var done = 0, held = 0, err = null;
-    for (var i = 0; i < list.length; i += 12) {
-      msg.innerHTML = '<span class="g24-spin" aria-hidden="true"></span> Rewriting ' + Math.min(list.length, i + 12) + ' of ' + list.length + '…';
-      var r = await _sampEdge('write_linkedin_notes', { campaign_id: campaignId, kind: kind, contact_ids: list.slice(i, i + 12).map(function (p) { return p.id; }), instruction: ins, batch: 12 });
-      if (!r.ok) { err = r.error || 'SAM could not rewrite these'; break; }
-      done += r.written || 0; held += r.held || 0;
-    }
+    msg.innerHTML = '<span class="g24-spin" aria-hidden="true"></span> Rewriting ' + list.length + '…';
+    var sL = await _s1Write({ action: 'write_linkedin_notes', ids: list.map(function (p) { return p.id; }), chunk: 6, conc: 3, base: { campaign_id: campaignId, kind: kind, instruction: ins },
+      onProgress: function (st) { msg.innerHTML = '<span class="g24-spin" aria-hidden="true"></span> Rewritten ' + (st.written + st.held) + ' of ' + st.total + '…'; } });
+    done = sL.written; held = sL.held; err = sL.err;
     m.remove();
     showToast(err && !done ? err : 'Rewrote ' + _spPlural(done, what) + (held ? '. ' + held + ' held for you in the Samora panel' : '') + (err ? '. Stopped: ' + err : '.'));
     await _g23LiLoad(campaignId, true); g23RenderLi(campaignId);
@@ -4470,3 +4475,59 @@ async function _g34SizeSave(campaignId, v) {
     saveSampaignScoutProfile._g34 = true;
   }
 })();
+
+// ════════════════════════════════════════════════════════════════════════════
+// Drop S1 (28 Oct 2026): write every note and email in one go, in parallel.
+// The server lists who needs one; the app writes them in small groups, three
+// at a time. A group the server stopped for time is split and tried again; a
+// rate limit slows to one at a time and waits. Older servers: the old loop.
+// ════════════════════════════════════════════════════════════════════════════
+async function _s1Write(o) {
+  var list = o.ids ? { ok: true, ids: o.ids } : await _sampEdge(o.action, Object.assign({}, o.base, { list_only: true }));
+  if (list.ok && !Array.isArray(list.ids)) return null;
+  if (!list.ok) return { written: 0, held: 0, total: 0, missed: [], rewritten: 0, err: list.error || 'SAM could not start.' };
+  var ids = list.ids.slice(), total = ids.length, queue = [];
+  for (var i = 0; i < ids.length; i += o.chunk) queue.push({ ids: ids.slice(i, i + o.chunk), tries: 0 });
+  var st = { written: 0, held: 0, missed: [], rewritten: 0, err: null, total: total, conc: Math.max(1, o.conc || 3), pauseUntil: 0, busy: 0 };
+  var stopped = function () { return !!(o.isStopped && o.isStopped()); };
+  var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+  if (o.onProgress) o.onProgress(st);
+  async function worker(n) {
+    while (!st.err && !stopped()) {
+      if (n >= st.conc) return;
+      var w = st.pauseUntil - Date.now();
+      if (w > 0) { if (o.onPace) o.onPace(Math.ceil(w / 1000)); await sleep(Math.min(w, 1000)); continue; }
+      var job = queue.shift();
+      if (!job) { if (st.busy) { await sleep(400); continue; } return; }
+      st.busy++;
+      var d;
+      try { d = await _sampEdge(o.action, Object.assign({}, o.base, { contact_ids: job.ids, batch: job.ids.length })); } catch (e) { d = { ok: false, _stopped: true, error: e.message }; }
+      st.busy--;
+      if (!d.ok) {
+        job.tries++;
+        if (d.reason === 'quota' && !d.daily && job.tries <= 6) { st.conc = 1; st.pauseUntil = Date.now() + Math.min(60, Math.max(10, d.retry_after || 30)) * 1000; queue.unshift(job); continue; }
+        if (d.reason === 'overloaded' && job.tries <= 4) { st.pauseUntil = Date.now() + 20000; queue.unshift(job); continue; }
+        if ((d._stopped || d._status >= 500) && job.tries <= 2) {
+          if (job.ids.length > 1) { var h = Math.ceil(job.ids.length / 2); queue.unshift({ ids: job.ids.slice(0, h), tries: job.tries }, { ids: job.ids.slice(h), tries: job.tries }); }
+          else queue.unshift(job);
+          continue;
+        }
+        st.err = d.error || 'SAM could not write these.'; return;
+      }
+      st.written += d.written || 0; st.held += d.held || 0; st.missed = st.missed.concat(d.missed || []);
+      if (d.review) st.rewritten += d.review.rewritten || 0;
+      if (o.onProgress) o.onProgress(st);
+    }
+  }
+  var ws = []; for (var k = 0; k < st.conc; k++) ws.push(worker(k));
+  await Promise.all(ws);
+  return st;
+}
+function _s1Bar(msgId, barId, label) {
+  return function (st) {
+    var done = st.written + st.held, msg = document.getElementById(msgId), bar = document.getElementById(barId);
+    if (msg) msg.textContent = done + ' of ' + st.total + ' ' + label + (done < st.total ? '…' : '.');
+    if (bar) bar.style.width = Math.max(4, Math.round(done / Math.max(1, st.total) * 100)) + '%';
+  };
+}
+function _s1Pace(msgId) { return function (s) { var m = document.getElementById(msgId); if (m) m.textContent = 'SAM is pacing itself. Carrying on in ' + s + 's…'; }; }
