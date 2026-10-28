@@ -1960,7 +1960,10 @@ async function sampWriteDrafts(id, launch) {
   var written = 0, skip = [], err = null, guard = 0, paced = 0, rvAgg = { rewritten: 0 };
   var name = (currentUser && currentUser.user_metadata && currentUser.user_metadata.full_name) || '';
   try {
-    while (!stop && guard++ < 40) {
+    // Drop S1: all of them in one go, three groups at a time.
+    var s1 = await _s1Write({ action: 'write_sampaign_drafts', base: { campaign_id: id, launch: launch, sender_name: name.split(' ')[0] || '', sender_full_name: name }, chunk: 4, conc: 3, isStopped: function () { return stop; }, onProgress: _s1Bar('sampWriteMsg', 'sampWriteBar', 'written'), onPace: _s1Pace('sampWriteMsg') });
+    if (s1) { written = s1.written; err = s1.err; rvAgg.rewritten = s1.rewritten; }
+    if (!s1) while (!stop && guard++ < 40) {
       var d = await _sampEdge('write_sampaign_drafts', { campaign_id: id, launch: launch, batch: 6, skip_ids: skip, sender_name: name.split(' ')[0] || '', sender_full_name: name });
       if (d.ok && d.review) rvAgg.rewritten += d.review.rewritten || 0;
       if (!d.ok) {
