@@ -57,6 +57,7 @@ function _spWizSave() {
   var v = function (id) { var el = document.getElementById(id); return el ? el.value : undefined; };
   ['name', 'domain', 'region', 'listName', 'listRegion', 'companies', 'people', 'titles', 'goal', 'metric', 'target', 'focus', 'start', 'lang'].forEach(function (k) { var x = v('spw_' + k); if (x !== undefined) W[k] = x; });
   var thp = document.querySelector('input[name="spw_thp"]:checked'); if (thp) W.thPolite = thp.value;
+  if (document.getElementById('spwMaxT')) W.size = _g34SizeRead('spw');
   var csv = document.getElementById('spw_csv'); if (csv && csv.files && csv.files[0]) W.csv = csv.files[0];
   var wn = document.getElementById('spw_writeNow'); if (wn) W.writeNow = wn.checked;
   var li = document.getElementById('spw_li'); if (li) W.li = li.checked;
@@ -100,7 +101,7 @@ function _spWizRender() {
       '<div class="sp-ih" style="margin-top:22px">Who inside them?</div>' +
       '<label class="sp-fld">Upload a CSV <small>Columns like name, email, title, company. Header names are flexible.</small><input id="spw_csv" type="file" accept=".csv,text/csv"></label>' + (W.csv ? '<div class="sp-small">Chosen: ' + esc(W.csv.name) + '</div>' : '') +
       '<label class="sp-fld">Or type people, one per line <small>Name, email, title, company. Email can be left out and found later.</small><textarea id="spw_people" placeholder="Anita Rao, anita@nlsiu.ac.in, Registrar">' + esc(W.people) + '</textarea></label>' +
-      '<label class="sp-fld">Or let SAM find them <small>Job titles, separated by commas. SAM finds people with these titles right after you create the SAMpaign.</small><input id="spw_titles" value="' + esc(W.titles || '') + '" placeholder="Head of Sales, Marketing Director, CFO"></label>';
+      '<label class="sp-fld">Or let SAM find them <small>Job titles, separated by commas. SAM finds people with these titles right after you create the SAMpaign.</small><input id="spw_titles" value="' + esc(W.titles || '') + '" placeholder="Head of Sales, Marketing Director, CFO"></label>' + _g34SizeHtml(W.size, 'spw');
   } else if (W.step === 2) {
     var tpl = (window._sampGoalTpl || []).slice(0, 6).map(function (t, i) { return '<button type="button" class="sp-chip" style="cursor:pointer;border:0" onclick="var g=document.getElementById(\'spw_goal\');g.value=window._sampGoalTpl[' + i + '].goal||\'\';">' + esc(t.label || t.goal || '') + '</button>'; }).join('');
     body = '<div class="sp-ih">What should it achieve?</div>' +
@@ -180,13 +181,14 @@ async function _spWizCreate() {
     }
     if (W.csv) { try { await _uploadSampaignCsvFile(id, W.csv); } catch (e) { showToast('Created, but the CSV failed: ' + e.message); } }
     var titles = String(W.titles || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+    if (W.size && (W.size.maxTotal || W.size.maxPerCompany || W.size.leadersOnly)) await _g34SizeSave(id, W.size);
     if (titles.length) { try { await _sampEdge('save_org_setting', { key: 'scout_profile_sampaign_' + id, value: JSON.stringify({ jobTitles: titles, departments: [], seniorities: [], locations: [] }) }); } catch (e) {} }
     showToast('SAMpaign created');
     if (W.tamAccept && W.tamAccept.length) { _sampEdge('commit_discovery', { mark_only: true, accept_ids: W.tamAccept }).catch(function () {}); }
     window._sampaignCampaignsCache = window._sampaignCampaignsCache || {};
     window._sampaignCampaignsCache[id] = Object.assign({}, d.campaign, { is_owner: true, owner_email: currentUser.email });
     openSampaignDetail(id, 'overview');
-    if (titles.length) { try { await scoutSampaignContacts(id); } catch (e) {} }
+    if (titles.length || (W.size && W.size.leadersOnly)) { try { await scoutSampaignContacts(id); } catch (e) {} }
     if (W.writeNow && (!W.seq || _spSeqHas(W.seq, 'email'))) {
       var o = await _sampLoadOverview(id);
       var w1 = o && o.ok ? (o.waves || [])[0] : null;
@@ -705,7 +707,7 @@ async function scoutSampaignContacts(campaignId) {
     if (!d0.ok) { _spScoutDone(campaignId, d0, 0); return; }
   }
   var m = document.createElement('div'); m.className = 'sp-modal'; m.id = 'spScoutModal';
-  m.innerHTML = '<div class="sp-mcard" role="dialog" aria-modal="true" aria-label="Scouting"><h3>Scouting the companies in this list</h3><div class="sp-small" id="spScMsg">Starting…</div><div class="sp-progress"><span id="spScBar" style="width:4%"></span></div><div class="sp-small" id="spScList" style="margin-top:10px"></div><div class="sp-foot"><span></span><button class="g-btn" type="button" id="spScStop">Stop</button></div></div>';
+  m.innerHTML = '<div class="sp-mcard" role="dialog" aria-modal="true" aria-label="Scouting"><h3>Finding people at the companies in this list</h3><div class="sp-small" id="spScMsg">Looking at the first companies…</div><div class="sp-progress"><span id="spScBar" style="width:4%"></span></div><div class="sp-small" id="spScList" style="margin-top:10px"></div><div class="sp-foot"><span></span><button class="g-btn" type="button" id="spScStop">Stop</button></div></div>';
   document.body.appendChild(m);
   var stop = false; document.getElementById('spScStop').onclick = function () { stop = true; this.textContent = 'Stopping…'; };
   var skip = [], found = 0, doneCo = 0, total = null, err = null, last = null, lines = [];
@@ -714,6 +716,7 @@ async function scoutSampaignContacts(campaignId) {
     last = d;
     if (!d.ok) { err = d; break; }
     if (total === null) total = (d.scanned || 0) + (d.remaining || 0);
+    (d.results || []).forEach(function (r) { if (!r.found && r.note) { var k = String(r.note); window._spScNotes = window._spScNotes || {}; window._spScNotes[k] = (window._spScNotes[k] || 0) + 1; } });
     found += d.contacts_found || 0; doneCo += d.scanned || 0;
     (d.no_result_account_ids || []).forEach(function (x) { if (skip.indexOf(x) === -1) skip.push(x); });
     (d.results || []).forEach(function (r) { lines.push(esc(r.account) + ': ' + (r.found ? r.found + ' found' : esc(r.note || 'nobody matching'))); });
@@ -721,9 +724,20 @@ async function scoutSampaignContacts(campaignId) {
     if (msg) msg.textContent = doneCo + (total ? ' of ' + total : '') + ' companies, ' + _spPlural(found, 'person', 'people') + ' found';
     if (bar) bar.style.width = Math.max(4, Math.round(doneCo / Math.max(1, total || 1) * 100)) + '%';
     if (lst) lst.innerHTML = lines.slice(-6).join('<br>');
+    if (d.stop_reason) { err = { ok: false, error: d.stop_reason, stop: true }; break; }
     if (!d.remaining || !d.scanned) break;
   }
   m.remove();
+  // Drop R1: say what happened in one line: who was found, and why not.
+  var notes = window._spScNotes || {}; window._spScNotes = {};
+  var top = Object.keys(notes).sort(function (a, b) { return notes[b] - notes[a]; })[0] || '';
+  if (err && !err.needs_targeting && (found || doneCo)) {
+    showToast((found ? _spPlural(found, 'person', 'people') + ' found at ' : 'Nobody found yet at ') + _spPlural(doneCo, 'company', 'companies') + '. ' + (err.error || ''));
+    try { var r3 = await _sampEdge('list_sampaign_contacts', { campaign_id: campaignId }); if (r3.ok) { window._sampaignContactsCache[campaignId] = r3.contacts || []; _sampaignContactTab = 'prospective'; _renderSampaignContacts(campaignId); } } catch (e) {}
+    try { loadSampaignCampaigns(); } catch (e) {}
+    return;
+  }
+  if (!err && !found && doneCo && top && last) last = Object.assign({}, last, { note: 'Nobody found at ' + _spPlural(doneCo, 'company', 'companies') + '. Most common reason: ' + top.replace(/[.]$/, '') + '. Companies where nobody was found do not count towards your daily limit.' });
   if (err && err.needs_targeting) {
     showToast('Tell SAM who to hunt first, then scout again. That keeps credits on the right people.');
     try { openSampaignScoutProfile(campaignId); } catch (e) {}
@@ -1890,13 +1904,18 @@ function _spPaintPeople(id) {
       if (p.stage === 'deal' && p.account_id) acts += '<button class="g-btn sp-sm" type="button" onclick="_spOpenDeal(\'' + esc(p.account_id) + '\',\'' + esc(String(p.account_name || '').replace(/'/g, '')) + '\')">Open deal</button>';
       if ((p.stage === 'replied' || p.stage === 'meeting') && owner && p.email) acts += '<a class="g-btn sp-sm sp-ghost" href="https://mail.google.com/mail/u/0/#search/' + encodeURIComponent('from:' + p.email) + '" target="_blank" rel="noopener">Open the reply</a>';
       acts = acts + _g23PhoneHtml(id, p, owner || d.can_move);
+      if (owner && p.removed) acts += '<button class="g34-rm" type="button" onclick="g34Restore(\'' + esc(id) + '\',\'' + esc(p.id) + '\')">Bring back</button>';
+      else if (owner && p.stage !== 'deal' && p.stage !== 'meeting') acts += '<button class="g34-rm" type="button" aria-label="Remove ' + esc(p.name || 'this person') + ' from this SAMpaign" onclick="g34Remove(\'' + esc(id) + '\',{contact_ids:[\'' + esc(p.id) + '\']},\'' + esc(String(p.name || 'this person').replace(/'/g, '')) + '\')">Remove</button>';
       return '<li class="sd-prs" data-cid="' + esc(p.id) + '"><span class="sp-av">' + esc(_spIni(p.name || p.email)) + '</span>' +
         '<div class="sd-pm"><div class="sd-pt"><b>' + esc(p.name || p.email || 'Unnamed') + '</b>' + (p.title ? '<span class="sp-small"> · ' + esc(p.title) + '</span>' : '') + (p.linkedin_url ? ' <a class="sd-li" href="' + esc(p.linkedin_url) + '" target="_blank" rel="noopener" aria-label="LinkedIn">in</a>' : '') + '</div>' +
         '<div class="sp-small">' + esc([p.last + (when ? ' ' + when : ''), p.next].filter(Boolean).join(' · ')) + '</div>' + (typeof _g31CardLine === 'function' ? _g31CardLine(id, p) : '') + '</div>' +
         '<span class="sp-chip ' + (SP_STAGE_CHIP[p.stage] || '') + '">' + esc(lab) + '</span>' +
         (acts ? '<div class="sd-pa">' + acts + '</div>' : '') + '</li>';
     }).join('');
-    return '<section class="sd-co"><header><div><b>' + esc(k) + '</b>' + (dealP ? ' <span class="sp-chip live">Deal' + (dealP.deal_value_usd ? ' ' + esc(scMoney(dealP.deal_value_usd)) : '') + '</span>' : '') + '<div class="sp-small">' + scPlural(ps.length, 'person', 'people') + ' · ' + esc(sumTxt) + '</div></div></header>' +
+    var live = ps.filter(function (p) { return !p.removed && p.stage !== 'deal' && p.stage !== 'meeting'; });
+    var accIdG = (ps.find(function (p) { return p.account_id; }) || {}).account_id || '';
+    var rmCo = owner && live.length && keys.length > 1 ? '<button class="g34-rm" type="button" aria-label="Remove ' + esc(k) + ' from this SAMpaign" onclick="g34Remove(\'' + esc(id) + '\',{contact_ids:' + esc(JSON.stringify(live.map(function (p) { return p.id; }))) + (accIdG ? ',account_ids:[\'' + esc(accIdG) + '\']' : '') + '},\'' + esc(String(k).replace(/'/g, '')) + '\',' + live.length + ')">Remove company</button>' : '';
+    return '<section class="sd-co"><header><div><b>' + esc(k) + '</b>' + (dealP ? ' <span class="sp-chip live">Deal' + (dealP.deal_value_usd ? ' ' + esc(scMoney(dealP.deal_value_usd)) : '') + '</span>' : '') + '<div class="sp-small">' + scPlural(ps.length, 'person', 'people') + ' · ' + esc(sumTxt) + '</div></div>' + rmCo + '</header>' +
       '<ul>' + rows + '</ul>' + (ps.length > lim ? '<button class="rv-link" type="button" onclick="_spPeopleMore(\'' + esc(id) + '\',\'' + esc(k.replace(/'/g, '')) + '\')">Show ' + (ps.length - lim) + ' more at ' + esc(k) + '</button>' : '') + '</section>';
   }).join('');
   host.innerHTML = '<section class="sp-card sp-pad sd-journey">' +
@@ -2028,7 +2047,7 @@ function scWireMore() {
 // a message by now and has not). The same list the LinkedIn panel shows and
 // the morning push names, from get_sampaign_tasks.
 window._tds = window._tds || { data: null, at: 0, open: {}, touched: false };
-var LI_EXT_LATEST = '1.11.0';
+var LI_EXT_LATEST = '1.12.0';
 function _liVerLt(a, b) { var x = String(a || '0').split('.').map(Number), y = String(b || '0').split('.').map(Number); for (var i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; }
 var TDS_ICON = {
   email: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M4 7l8 6 8-6"/></svg>',
@@ -2232,6 +2251,7 @@ function _renderSampaignDrafts(campaignId, drafts) {
     '<div class="g18-dh"><div><div class="g18-dt">' + drafts.length + ' ' + label + (drafts.length !== 1 ? 's' : '') + ' to review</div>' +
       '<div class="sp-small">' + (toLook.length ? 'SAM checked every one: <b>' + (drafts.length - toLook.length) + ' ready</b>, ' + toLook.length + ' worth a look.' : 'SAM checked every one. All ready.') + ' Nothing sends until you schedule.</div></div>' +
       '<div class="g18-da">' + (fixable.length ? '<button class="g-btn sp-sm" type="button" onclick="g18Rewrite(\'' + esc(campaignId) + '\',' + launch + ',' + JSON.stringify(fixable.map(function (x) { return x.contact_id; })).replace(/"/g, '&quot;') + ')">' + SP_ICON.spark + ' Fix ' + fixable.length + ' with SAM</button>' : '') +
+      '<button class="g-btn sp-sm" type="button" onclick="g34RewriteAll(\'' + esc(campaignId) + '\')">' + SP_ICON.spark + ' Rewrite all with SAM</button>' +
       '<button class="g-btn sp-sm sp-gold" type="button" onclick="planSampaignDrafts(\'' + esc(campaignId) + '\',null,' + launch + ')">Schedule ' + drafts.length + '</button></div></div>' +
     '<div id="g18Sig_' + esc(campaignId) + '">' + _sigLine(launch) + '</div>' +
     drafts.slice(0, 60).map(function (x) {
@@ -2264,9 +2284,10 @@ function g18RewriteOne(campaignId, launch, contactId, sendId) {
   box.innerHTML = '<div class="g18-rw"><label class="g18-lab">What should change? <small>optional</small><input id="g18rwIn_' + esc(sendId) + '" placeholder="Shorter, warmer, lead with the Marico result…"></label>' +
     '<div class="g18-acts"><button class="g-btn sp-sm sp-gold" type="button" id="g18rwGo_' + esc(sendId) + '">Rewrite</button><button class="g-btn sp-sm sp-ghost" type="button" onclick="this.closest(\'.g18-rw\').remove()">Cancel</button></div></div>';
   var inp = document.getElementById('g18rwIn_' + sendId); if (inp) inp.focus();
-  document.getElementById('g18rwGo_' + sendId).onclick = function () { g18Rewrite(campaignId, launch, [contactId], (inp && inp.value) || ''); };
+  if (inp) inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') document.getElementById('g18rwGo_' + sendId).click(); });
+  document.getElementById('g18rwGo_' + sendId).onclick = function () { g18Rewrite(campaignId, launch, [contactId], (inp && inp.value) || '', sendId); };
 }
-async function g18Rewrite(campaignId, launch, contactIds, instruction) {
+async function g18Rewrite(campaignId, launch, contactIds, instruction, reopenId) {
   var m = document.createElement('div'); m.className = 'sp-modal'; m.id = 'g18RwModal';
   m.innerHTML = '<div class="sp-mcard" role="dialog" aria-modal="true" aria-label="Rewriting"><h3>SAM is rewriting ' + _spPlural(contactIds.length, 'draft') + '</h3><div class="sp-small" id="g18RwMsg">Writing, then checking each one…</div><div class="sp-progress"><span style="width:30%"></span></div></div>';
   document.body.appendChild(m);
@@ -2280,7 +2301,9 @@ async function g18Rewrite(campaignId, launch, contactIds, instruction) {
   } catch (e) { err = e.message; }
   m.remove();
   showToast(err ? err : done ? 'Rewrote ' + _spPlural(done, 'draft') + '. Have a look.' : 'Nothing to rewrite: only drafts can be rewritten.');
-  loadSampaignSendQueue(campaignId);
+  await loadSampaignSendQueue(campaignId);
+  // Drop S: the draft stays where it was, open, so the change is in view.
+  if (reopenId) { var el = document.getElementById('draft_' + reopenId); if (el && el.style.display === 'none') _toggleDraft(reopenId); var row = document.getElementById('g18row_' + reopenId); if (row) row.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
 }
 
 // ── Launch plan: the next click, always visible ─────────────────────────────
@@ -2858,7 +2881,8 @@ async function g23RenderLi(id) {
   var needs = kind === 'invite' ? d.counts.needs_note : 0;
   var head = '<div class="g23-lh"><div><b>' + (kind === 'invite' ? 'LinkedIn invite notes' : 'Messages after they accept') + '</b><div class="sp-small">' +
     (kind === 'invite' ? 'One per person, under ' + lim + ' characters, the limit on your LinkedIn plan. They go out from the Samora plugin on the days in your sequence.' : 'Sent from the plugin once someone accepts. A reply on email or LinkedIn stops the rest.') + '</div></div>' +
-    (d.is_owner && needs ? '<button class="g-btn sp-gold sp-sm" type="button" onclick="g23LiWriteAll(\'' + esc(id) + '\',\'' + kind + '\')">' + SP_ICON.spark + ' Write ' + _spPlural(needs, 'note') + ' with SAM</button>' : '') + '</div>' +
+    (d.is_owner && needs ? '<button class="g-btn sp-gold sp-sm" type="button" onclick="g23LiWriteAll(\'' + esc(id) + '\',\'' + kind + '\')">' + SP_ICON.spark + ' Write ' + _spPlural(needs, 'note') + ' with SAM</button>' : '') +
+    (d.is_owner && d.people.some(function (p) { return kind === 'invite' ? (p.note && p.can_edit_note) : (p.message && p.can_edit_message); }) ? ' <button class="g-btn sp-sm" type="button" onclick="g34LiRewriteAll(\'' + esc(id) + '\',\'' + kind + '\')">' + SP_ICON.spark + ' Rewrite all with SAM</button>' : '') + '</div>' +
     '<div class="g19-seg g23-lf">' + chip('all', 'All') + chip('todo', 'To write') + chip('sent', 'Sent') + chip('removed', 'Taken out') + '</div>';
   var rows = ppl.map(function (p) {
     var txt = kind === 'invite' ? p.note : p.message, st = _g23StepTxt(p, kind);
@@ -3816,6 +3840,7 @@ async function _g27Load(extra) {
     F.innerHTML = '<span class="g27-sp"></span>' + (R.i < R.people.length - 1 ? '<button class="g24-btn ghost" type="button" onclick="_g27Next()">Next person</button>' : '') + '<button class="g24-btn ghost" type="button" onclick="g27Close()">Close</button>';
     return;
   }
+  if (d.channel && p && d.channel !== p.channel) p.channel = d.channel;
   R.err = null; R.d = d; R.showEarlier = false; R.fresh = true;
   _g27Render();
 }
@@ -4257,3 +4282,191 @@ function _g32WizLang(W) {
   return '<label class="sp-fld">SAM writes in <small>' + (sug && W.lang === sug.code ? 'Suggested for ' + esc(sug.where) + '. ' : '') + (W.lang !== 'en' ? 'You approve every LinkedIn note and message before it goes.' : 'Emails, LinkedIn notes and answers to replies.') + '</small>' +
     '<select id="spw_lang" onchange="_spWizSave();_spWizRender()">' + opts + '</select></label>' + th;
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// Drop S (2026-10-28): rewrite all, take people out, SAMpaign size
+// ════════════════════════════════════════════════════════════════════════════
+(function () {
+  if (document.getElementById('g34css')) return;
+  var st = document.createElement('style'); st.id = 'g34css';
+  st.textContent =
+    '.g34-ta{width:100%;min-height:96px;resize:vertical;font:inherit;font-size:14px;line-height:1.5;padding:10px 12px;border-radius:12px;border:1px solid var(--g-line);background:var(--surface);color:var(--text)}' +
+    '.g34-ta:focus{outline:2px solid var(--c-accent);outline-offset:1px}' +
+    '.g34-opts{display:flex;flex-direction:column;gap:8px;margin-top:14px}' +
+    '.g34-opt{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:12px;border:1px solid var(--g-line);cursor:pointer;font-size:13.5px}' +
+    '.g34-opt:has(input:checked){border-color:var(--c-accent);background:rgba(var(--c-accent-rgb),.07)}' +
+    '.g34-opt input{margin-top:3px;accent-color:var(--c-accent)} .g34-opt b{font-weight:600;color:var(--text)} .g34-opt small{display:block;color:var(--text3);font-size:12px;margin-top:2px}' +
+    '.g34-opt.dis{opacity:.5;cursor:not-allowed}' +
+    '.g34-note{margin-top:12px;font-size:12.5px;color:var(--text2);line-height:1.5}' +
+    '.g34-rm{border:0;background:none;font:inherit;font-size:12px;color:var(--text3);cursor:pointer;padding:4px 6px;border-radius:8px}' +
+    '.g34-rm:hover{color:#B3412E;background:rgba(192,57,43,.07)} .g34-rm:focus-visible{outline:2px solid var(--c-accent)}' +
+    '.sd-co header .g34-rm{margin-left:auto;align-self:center}' +
+    '.g34-size{margin-top:14px;padding:12px 14px;border-radius:12px;background:rgba(127,127,127,.06)}' +
+    '.g34-size .sp-row2{margin-top:0} .g34-size input[type=number]{max-width:100%}' +
+    '.g34-sizet{font-size:12px;font-weight:650;letter-spacing:.04em;text-transform:uppercase;color:var(--text3)}';
+  document.head.appendChild(st);
+})();
+function _g34Modal(id, title, inner) {
+  var old = document.getElementById(id); if (old) old.remove();
+  var m = document.createElement('div'); m.className = 'sp-modal'; m.id = id;
+  m.addEventListener('click', function (e) { if (e.target === m) m.remove(); });
+  m.addEventListener('keydown', function (e) { if (e.key === 'Escape') m.remove(); });
+  m.innerHTML = '<div class="sp-mcard" role="dialog" aria-modal="true" aria-label="' + esc(title) + '"><h3>' + esc(title) + '</h3>' + inner + '</div>';
+  document.body.appendChild(m);
+  return m;
+}
+var G34_IDEAS = ['Use our Marico case study: 32% more outlets covered in 90 days', 'Shorter: under 80 words', 'Ask for a 20 minute call next week', 'Lead with their company\'s recent news'];
+
+// ── Rewrite every email with one instruction ───────────────────────────────
+async function g34RewriteAll(campaignId) {
+  var sends = (window._g34Sends || {})[campaignId];
+  if (!sends) { try { var r = await _sampEdge('list_sampaign_scheduled_sends', { campaign_id: campaignId }); sends = r.ok ? r.sends || [] : []; } catch (e) { sends = []; } }
+  var launch = Number(window._sampLaunch) || 1;
+  var inWave = sends.filter(function (x) { return (x.launch || 1) === launch; });
+  var dr = inWave.filter(function (x) { return x.status === 'draft'; }), qd = inWave.filter(function (x) { return x.status === 'pending'; });
+  var drEd = dr.filter(function (x) { return x.edited_by_human; }).length, qdEd = qd.filter(function (x) { return x.edited_by_human; }).length;
+  var wave = launch === 1 ? 'first email' : 'follow-up ' + (launch - 1);
+  var opt = function (idv, on, dis, t, sub) { return '<label class="g34-opt' + (dis ? ' dis' : '') + '"><input type="checkbox" id="' + idv + '"' + (on && !dis ? ' checked' : '') + (dis ? ' disabled' : '') + '><span><b>' + t + '</b><small>' + sub + '</small></span></label>'; };
+  var m = _g34Modal('g34RwAll', 'Rewrite with SAM',
+    '<div class="sp-small">Every ' + esc(wave) + ' in this SAMpaign, with one instruction. Each stays written for its own person.</div>' +
+    '<label class="sp-fld">What should change in every email?<textarea class="g34-ta" id="g34RwIn" maxlength="800" placeholder="Use our Marico case study: 32% more outlets covered in 90 days. Keep it under 90 words."></textarea></label>' +
+    '<div class="sp-chips" style="margin-top:8px">' + G34_IDEAS.map(function (x, i) { return '<button type="button" class="sp-chip g18-sug" onclick="var t=document.getElementById(\'g34RwIn\');t.value=(t.value?t.value+\'. \':\'\')+G34_IDEAS[' + i + '];t.focus()">' + esc(x) + '</button>'; }).join('') + '</div>' +
+    '<div class="g34-opts">' +
+      opt('g34Dr', true, !dr.length, _spPlural(dr.length, 'draft'), 'Not scheduled yet.') +
+      opt('g34Qd', false, !qd.length, _spPlural(qd.length, 'queued email'), 'Scheduled, not sent. Each keeps its send time.') +
+      (drEd + qdEd ? opt('g34Ed', false, false, 'Also the ' + _spPlural(drEd + qdEd, 'one') + ' you edited by hand', 'Left as you wrote them unless you tick this.') : '') +
+    '</div>' +
+    '<div class="g34-note">Sent emails are never changed. Numbers, results and customer names you write here are used as you give them. SAM still checks every email before it is saved.</div>' +
+    '<div class="sp-small" id="g34RwMsg" role="status" style="margin-top:10px"></div>' +
+    '<div class="sp-foot"><button class="g-btn" type="button" onclick="document.getElementById(\'g34RwAll\').remove()">Cancel</button><span class="sp-acts"><button class="g-btn sp-gold" type="button" id="g34RwGo">' + SP_ICON.spark + ' Rewrite</button></span></div>');
+  var inp = document.getElementById('g34RwIn'); inp.focus();
+  inp.addEventListener('input', function () { var mm = document.getElementById('g34RwMsg'); if (mm && !document.getElementById('g34RwGo').disabled) mm.textContent = ''; });
+  document.getElementById('g34RwGo').onclick = async function () {
+    var ins = inp.value.trim(), msg = document.getElementById('g34RwMsg');
+    var wDr = document.getElementById('g34Dr').checked, wQd = document.getElementById('g34Qd').checked, ed = !!(document.getElementById('g34Ed') || {}).checked;
+    if (!ins) { msg.textContent = 'Write what should change first.'; inp.focus(); return; }
+    if (!wDr && !wQd) { msg.textContent = 'Pick drafts, queued emails, or both.'; return; }
+    var which = wDr && wQd ? 'both' : wQd ? 'queued' : 'drafts';
+    var pool = (wDr ? dr : []).concat(wQd ? qd : []).filter(function (x) { return ed || !x.edited_by_human; });
+    var ids = pool.map(function (x) { return x.contact_id; }).filter(function (v, i, a) { return a.indexOf(v) === i; });
+    if (!ids.length) { msg.textContent = 'Nothing to rewrite with these choices.'; return; }
+    this.disabled = true;
+    var done = 0, err = null;
+    for (var i = 0; i < ids.length; i += 6) {
+      msg.innerHTML = '<span class="g24-spin" aria-hidden="true"></span> Rewriting ' + Math.min(ids.length, i + 6) + ' of ' + ids.length + '…';
+      var d = await _sampEdge('write_sampaign_drafts', { campaign_id: campaignId, launch: launch, replace: true, which: which, include_edited: ed, contact_ids: ids.slice(i, i + 6), instruction: ins, batch: 6, sender_name: (typeof _sigNameHint === 'function' ? _sigNameHint().split(' ')[0] : ''), sender_full_name: (typeof _sigNameHint === 'function' ? _sigNameHint() : '') });
+      if (!d.ok) { err = d.error || 'SAM could not rewrite these'; break; }
+      done += d.written || 0;
+    }
+    m.remove();
+    showToast(err && !done ? err : 'Rewrote ' + _spPlural(done, 'email') + (err ? '. Stopped: ' + err : '. Same places, same send times.'));
+    loadSampaignSendQueue(campaignId);
+  };
+}
+
+// ── Rewrite every LinkedIn note or message ─────────────────────────────────
+function g34LiRewriteAll(campaignId, kind) {
+  var L = (window._g23Li || {})[campaignId], d = L && L.data; if (!d) return;
+  var pick = function (own) { return d.people.filter(function (p) {
+    var st = kind === 'invite' ? p.invite : p.message_step; if (st && st.status === 'removed') return false;
+    if (kind === 'invite') return p.can_edit_note && p.note && (own || p.note_by !== 'rep');
+    return p.can_edit_message && p.message && p.stage === 'connected';
+  }); };
+  var sam = pick(false), all = pick(true), mine = all.length - sam.length;
+  var what = kind === 'invite' ? 'invite note' : 'message';
+  var m = _g34Modal('g34LiAll', 'Rewrite with SAM',
+    '<div class="sp-small">Every LinkedIn ' + what + ' not sent yet, with one instruction. Each stays written for its own person and within your plan\'s length.</div>' +
+    '<label class="sp-fld">What should change?<textarea class="g34-ta" id="g34LiIn" maxlength="800" placeholder="Mention we work with Marico. Shorter, no question at the end."></textarea></label>' +
+    '<div class="g34-opts">' + (mine ? '<label class="g34-opt"><input type="checkbox" id="g34LiOwn"><span><b>Also the ' + _spPlural(mine, 'one') + ' you wrote</b><small>Left as you wrote them unless you tick this.</small></span></label>' : '') + '</div>' +
+    '<div class="g34-note">' + _spPlural(sam.length, what) + ' written by SAM will be rewritten. SAM checks each one again before it can go.</div>' +
+    '<div class="sp-small" id="g34LiMsg" role="status" style="margin-top:10px"></div>' +
+    '<div class="sp-foot"><button class="g-btn" type="button" onclick="document.getElementById(\'g34LiAll\').remove()">Cancel</button><span class="sp-acts"><button class="g-btn sp-gold" type="button" id="g34LiGo"' + (all.length ? '' : ' disabled') + '>' + SP_ICON.spark + ' Rewrite</button></span></div>');
+  document.getElementById('g34LiIn').focus();
+  document.getElementById('g34LiGo').onclick = async function () {
+    var ins = document.getElementById('g34LiIn').value.trim(), msg = document.getElementById('g34LiMsg');
+    if (!ins) { msg.textContent = 'Write what should change first.'; return; }
+    var list = (document.getElementById('g34LiOwn') || {}).checked ? all : sam;
+    if (!list.length) { msg.textContent = 'Nothing to rewrite with these choices.'; return; }
+    this.disabled = true;
+    var done = 0, held = 0, err = null;
+    for (var i = 0; i < list.length; i += 12) {
+      msg.innerHTML = '<span class="g24-spin" aria-hidden="true"></span> Rewriting ' + Math.min(list.length, i + 12) + ' of ' + list.length + '…';
+      var r = await _sampEdge('write_linkedin_notes', { campaign_id: campaignId, kind: kind, contact_ids: list.slice(i, i + 12).map(function (p) { return p.id; }), instruction: ins, batch: 12 });
+      if (!r.ok) { err = r.error || 'SAM could not rewrite these'; break; }
+      done += r.written || 0; held += r.held || 0;
+    }
+    m.remove();
+    showToast(err && !done ? err : 'Rewrote ' + _spPlural(done, what) + (held ? '. ' + held + ' held for you in the Samora panel' : '') + (err ? '. Stopped: ' + err : '.'));
+    await _g23LiLoad(campaignId, true); g23RenderLi(campaignId);
+  };
+}
+
+// ── Take people or a company out of a running SAMpaign ─────────────────────
+function g34Remove(campaignId, what, label, count) {
+  var many = (what.contact_ids || []).length > 1 || (what.account_ids || []).length;
+  var m = _g34Modal('g34RmM', many ? 'Remove ' + label + '?' : 'Remove ' + label + '?',
+    '<div class="g34-note" style="margin-top:6px">' + (what.account_ids && what.account_ids.length ? 'The company leaves this SAMpaign\'s list, with ' + _spPlural(count || (what.contact_ids || []).length, 'person', 'people') + '. ' : '') +
+      'Nothing more goes to ' + (many ? 'them' : 'this person') + ': emails and LinkedIn steps not yet sent are cancelled.</div>' +
+    '<div class="g34-note">People never written to leave the SAMpaign. Anyone already written to keeps their history here, and a later reply from them still shows.</div>' +
+    '<div class="sp-foot"><button class="g-btn" type="button" onclick="document.getElementById(\'g34RmM\').remove()">Keep</button><span class="sp-acts"><button class="g-btn sp-gold" type="button" id="g34RmGo">Remove</button></span></div>');
+  document.getElementById('g34RmGo').focus();
+  document.getElementById('g34RmGo').onclick = async function () {
+    this.disabled = true; this.textContent = 'Removing…';
+    var d = await _sampEdge('remove_from_sampaign', Object.assign({ campaign_id: campaignId }, what));
+    m.remove();
+    if (!d.ok) { showToast(d.error || 'Could not remove'); return; }
+    window._g34Undo = { campaignId: campaignId, ids: d.kept_ids || [] };
+    showToast(d.note || 'Removed');
+    try { await _spRenderPeople(campaignId, true); } catch (e) {}
+    try { _sampLoadOverview(campaignId); } catch (e) {}
+  };
+}
+async function g34Restore(campaignId, cid) {
+  var d = await _sampEdge('restore_to_sampaign', { campaign_id: campaignId, contact_ids: [cid] });
+  showToast(d.ok ? d.note : (d.error || 'Could not bring them back'));
+  try { await _spRenderPeople(campaignId, true); } catch (e) {}
+}
+
+// ── SAMpaign size and "Leadership prospects only" ──────────────────────────
+function _g34SizeHtml(v, prefix) {
+  v = v || {};
+  return '<div class="g34-size"><div class="g34-sizet">How many people</div>' +
+    '<div class="sp-row2"><label class="sp-fld">Most people in this SAMpaign <small>optional</small><input type="number" min="1" max="1000" id="' + prefix + 'MaxT" value="' + esc(v.maxTotal || '') + '" placeholder="No limit"></label>' +
+    '<label class="sp-fld">Most per company <small>optional</small><input type="number" min="1" max="50" id="' + prefix + 'MaxC" value="' + esc(v.maxPerCompany || '') + '" placeholder="15"></label></div>' +
+    '<label class="sp-check"><input type="checkbox" id="' + prefix + 'Lead"' + (v.leadersOnly ? ' checked' : '') + '><span><b>Leadership prospects only</b><br><span class="sp-small">Founders, owners, CEOs and other C-level, Presidents, Managing Directors and Partners. Everyone else SAM finds is left out.</span></span></label></div>';
+}
+function _g34SizeRead(prefix) {
+  var n = function (idv, max) { var el = document.getElementById(idv); var x = el ? parseInt(el.value, 10) : NaN; return x > 0 ? Math.min(max, x) : null; };
+  var lead = document.getElementById(prefix + 'Lead');
+  return { maxTotal: n(prefix + 'MaxT', 1000), maxPerCompany: n(prefix + 'MaxC', 50), leadersOnly: !!(lead && lead.checked) };
+}
+async function _g34SizeSave(campaignId, v) {
+  if (!campaignId || !v) return;
+  try { await _sampEdge('save_org_setting', { key: 'scout_profile_size_' + campaignId, value: JSON.stringify(v) }); } catch (e) {}
+}
+(function () {
+  if (typeof openSampaignScoutProfile === 'function' && !openSampaignScoutProfile._g34) {
+    var o = openSampaignScoutProfile;
+    openSampaignScoutProfile = async function (campaignId) {
+      var out = await o.apply(this, arguments);
+      try {
+        var cur = {};
+        var r = await _sampEdge('get_org_setting', { key: 'scout_profile_size_' + campaignId });
+        if (r && r.value) { try { cur = (typeof r.value === 'string' ? JSON.parse(r.value) : r.value) || {}; } catch (e) { cur = {}; } }
+        var btn = document.querySelector('#samp-scout-profile-modal button[onclick="saveSampaignScoutProfile()"]');
+        if (btn && !document.getElementById('g34hMaxT')) btn.insertAdjacentHTML('beforebegin', '<div style="margin-bottom:14px">' + _g34SizeHtml(cur, 'g34h') + '</div>');
+      } catch (e) {}
+      return out;
+    };
+    openSampaignScoutProfile._g34 = true;
+  }
+  if (typeof saveSampaignScoutProfile === 'function' && !saveSampaignScoutProfile._g34) {
+    var sv = saveSampaignScoutProfile;
+    saveSampaignScoutProfile = async function () {
+      var size = document.getElementById('g34hMaxT') ? _g34SizeRead('g34h') : null, cid = (typeof _sampScoutCampaignId !== 'undefined') ? _sampScoutCampaignId : null;
+      if (size && cid) await _g34SizeSave(cid, size);
+      return sv.apply(this, arguments);
+    };
+    saveSampaignScoutProfile._g34 = true;
+  }
+})();
