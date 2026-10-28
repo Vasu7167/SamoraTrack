@@ -2331,6 +2331,7 @@ async function loadSampaignSendQueue(campaignId) {
       body: JSON.stringify({ action:'list_sampaign_scheduled_sends', campaign_id: campaignId, name_hint: (typeof _sigNameHint === 'function' ? _sigNameHint() : '') }) });
     var d = await r.json();
     var all = (d.ok && d.sends) ? d.sends : [];
+    window._g34Sends = window._g34Sends || {}; window._g34Sends[campaignId] = all;
 
     // Group by wave. How many waves exist is a property of the CAMPAIGN
     // (initial send + one per follow-up date), not of what happens to be in
@@ -2406,7 +2407,8 @@ async function loadSampaignSendQueue(campaignId) {
           return '<span style="font-size:11px;font-weight:600;color:'+META[k].color+'">'+s[k]+' '+META[k].label.toLowerCase()+'</span>';
         }).join('<span style="color:var(--text3)">·</span>') +
         (s.failed && d.is_owner ? '<button type="button" class="g-btn sp-sm sp-gold" onclick="sampRetryFailed(\''+esc(campaignId)+'\','+(window._sampLaunch||1)+')" style="margin-left:auto">Send again</button>' : '') +
-        (s.pending ? '<span onclick="cancelSampaignSends(\''+esc(campaignId)+'\',null)" style="'+(s.failed && d.is_owner ? '' : 'margin-left:auto;')+'font-size:11px;color:var(--coral);cursor:pointer">Cancel all queued</span>' : '') +
+        (s.pending && d.is_owner ? '<button type="button" class="g-btn sp-sm" onclick="g34RewriteAll(\''+esc(campaignId)+'\')" style="'+(s.failed ? '' : 'margin-left:auto;')+'">Rewrite queued with SAM</button>' : '') +
+        (s.pending ? '<span onclick="cancelSampaignSends(\''+esc(campaignId)+'\',null)" style="'+(s.failed || d.is_owner ? '' : 'margin-left:auto;')+'font-size:11px;color:var(--coral);cursor:pointer">Cancel all queued</span>' : '') +
       '</div>' +
       // Grouped by send day. A flat list of 48 rows spanning four dates makes
       // the reader parse every timestamp to work out where one day ends; a
