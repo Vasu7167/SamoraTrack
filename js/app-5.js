@@ -97,7 +97,7 @@ function _spWizRender() {
       '<button type="button" class="sp-opt ' + (W.scope === 'list' ? 'on' : '') + '" onclick="_spWizSave();window._sampW.scope=\'list\';_spWizRender()"><b>A list of companies</b><span>The same outreach to many companies, like 10 institutes or 40 FMCG brands.</span></button></div>' +
       (W.scope === 'account'
         ? '<div class="sp-row3"><label class="sp-fld">Company<input id="spw_name" value="' + esc(W.name) + '" placeholder="Jotun Paints"></label><label class="sp-fld">Website<input id="spw_domain" value="' + esc(W.domain) + '" placeholder="jotun.com"></label><label class="sp-fld">Region <small>optional</small><input id="spw_region" value="' + esc(W.region) + '" placeholder="UAE"></label></div>'
-        : '<div class="sp-row2"><label class="sp-fld">Name of the list<input id="spw_listName" value="' + esc(W.listName) + '" placeholder="Karnataka top 10 institutes"></label><label class="sp-fld">Region <small>optional, for the whole list</small><input id="spw_listRegion" value="' + esc(W.listRegion || '') + '" placeholder="India"></label></div>' + _g19TamWizCard() + '<label class="sp-fld">Companies, one per line<small>Name and website, and a region if it differs: Marico, marico.com, UAE. SAM scouts people in each company\u2019s region.</small><textarea id="spw_companies" placeholder="Marico, marico.com&#10;Dabur, dabur.com, UAE">' + esc(W.companies) + '</textarea></label>') +
+        : '<div class="sp-row2"><label class="sp-fld">Name of the list<input id="spw_listName" value="' + esc(W.listName) + '" placeholder="Karnataka top 10 institutes"></label><label class="sp-fld">Region <small>optional, for the whole list</small><input id="spw_listRegion" value="' + esc(W.listRegion || '') + '" placeholder="India"></label></div>' + _g19TamWizCard() + '<label class="sp-fld">Companies, one per line<small>Name and website, and a region if it differs: Acme Foods, acmefoods.com, UAE. SAM scouts people in each company\u2019s region.</small><textarea id="spw_companies" placeholder="Acme Foods, acmefoods.com&#10;Globex Retail, globexretail.com, UAE">' + esc(W.companies) + '</textarea></label>') +
       '<div class="sp-ih" style="margin-top:22px">Who inside them?</div>' +
       '<label class="sp-fld">Upload a CSV <small>Columns like name, email, title, company. Header names are flexible.</small><input id="spw_csv" type="file" accept=".csv,text/csv"></label>' + (W.csv ? '<div class="sp-small">Chosen: ' + esc(W.csv.name) + '</div>' : '') +
       '<label class="sp-fld">Or type people, one per line <small>Name, email, title, company. Email can be left out and found later.</small><textarea id="spw_people" placeholder="Anita Rao, anita@nlsiu.ac.in, Registrar">' + esc(W.people) + '</textarea></label>' +
@@ -2052,7 +2052,7 @@ function scWireMore() {
 // a message by now and has not). The same list the LinkedIn panel shows and
 // the morning push names, from get_sampaign_tasks.
 window._tds = window._tds || { data: null, at: 0, open: {}, touched: false };
-var LI_EXT_LATEST = '1.13.0';
+var LI_EXT_LATEST = '1.14.0';
 function _liVerLt(a, b) { var x = String(a || '0').split('.').map(Number), y = String(b || '0').split('.').map(Number); for (var i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; }
 var TDS_ICON = {
   email: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M4 7l8 6 8-6"/></svg>',
@@ -2286,7 +2286,7 @@ function _toggleDraft(id) {
 }
 function g18RewriteOne(campaignId, launch, contactId, sendId) {
   var box = document.getElementById('g18rw_' + sendId); if (!box) return;
-  box.innerHTML = '<div class="g18-rw"><label class="g18-lab">What should change? <small>optional</small><input id="g18rwIn_' + esc(sendId) + '" placeholder="Shorter, warmer, lead with the Marico result…"></label>' +
+  box.innerHTML = '<div class="g18-rw"><label class="g18-lab">What should change? <small>optional</small><input id="g18rwIn_' + esc(sendId) + '" placeholder="Shorter, warmer, lead with the case study result…"></label>' +
     '<div class="g18-acts"><button class="g-btn sp-sm sp-gold" type="button" id="g18rwGo_' + esc(sendId) + '">Rewrite</button><button class="g-btn sp-sm sp-ghost" type="button" onclick="this.closest(\'.g18-rw\').remove()">Cancel</button></div></div>';
   var inp = document.getElementById('g18rwIn_' + sendId); if (inp) inp.focus();
   if (inp) inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') document.getElementById('g18rwGo_' + sendId).click(); });
@@ -3840,7 +3840,7 @@ async function _g27Load(extra) {
   if (!extra) { R.d = null; B.innerHTML = '<div class="g27-wk"><span class="g24-spin" aria-hidden="true"></span>SAM is reading ' + esc(String(p.name || 'their').split(' ')[0]) + '’s ' + (p.channel === 'linkedin' ? 'LinkedIn ' : '') + 'reply and writing your answer…</div>'; F.innerHTML = ''; }
   else { R.busy = true; _g27Render(); }
   var name = (currentUser && currentUser.user_metadata && currentUser.user_metadata.full_name) || '';
-  var d = await _sampEdge('sam_write_reply', Object.assign({ contact_id: p.id, channel: p.channel === 'linkedin' ? 'linkedin' : 'email', sender_full_name: name, sender_name: name.split(' ')[0] || '' }, extra || {}));
+  var d = await _sampEdge('sam_write_reply', Object.assign({ contact_id: p.id, channel: p.channel === 'linkedin' ? 'linkedin' : 'email', sender_full_name: name, sender_name: name.split(' ')[0] || '' }, p.purpose ? { purpose: p.purpose } : {}, (!extra && p.instruction) ? { instruction: p.instruction } : {}, extra || {}));
   if (window._g27 !== R) return;
   R.busy = false;
   if (!d.ok) {
@@ -4324,7 +4324,7 @@ function _g34Modal(id, title, inner) {
   document.body.appendChild(m);
   return m;
 }
-var G34_IDEAS = ['Use our Marico case study: 32% more outlets covered in 90 days', 'Shorter: under 80 words', 'Ask for a 20 minute call next week', 'Lead with their company\'s recent news'];
+var G34_IDEAS = ['Use our case study: 32% more outlets covered in 90 days', 'Shorter: under 80 words', 'Ask for a 20 minute call next week', 'Lead with their company\'s recent news'];
 
 // ── Rewrite every email with one instruction ───────────────────────────────
 async function g34RewriteAll(campaignId) {
@@ -4338,7 +4338,7 @@ async function g34RewriteAll(campaignId) {
   var opt = function (idv, on, dis, t, sub) { return '<label class="g34-opt' + (dis ? ' dis' : '') + '"><input type="checkbox" id="' + idv + '"' + (on && !dis ? ' checked' : '') + (dis ? ' disabled' : '') + '><span><b>' + t + '</b><small>' + sub + '</small></span></label>'; };
   var m = _g34Modal('g34RwAll', 'Rewrite with SAM',
     '<div class="sp-small">Every ' + esc(wave) + ' in this SAMpaign, with one instruction. Each stays written for its own person.</div>' +
-    '<label class="sp-fld">What should change in every email?<textarea class="g34-ta" id="g34RwIn" maxlength="800" placeholder="Use our Marico case study: 32% more outlets covered in 90 days. Keep it under 90 words."></textarea></label>' +
+    '<label class="sp-fld">What should change in every email?<textarea class="g34-ta" id="g34RwIn" maxlength="800" placeholder="Use our case study: 32% more outlets covered in 90 days. Keep it under 90 words."></textarea></label>' +
     '<div class="sp-chips" style="margin-top:8px">' + G34_IDEAS.map(function (x, i) { return '<button type="button" class="sp-chip g18-sug" onclick="var t=document.getElementById(\'g34RwIn\');t.value=(t.value?t.value+\'. \':\'\')+G34_IDEAS[' + i + '];t.focus()">' + esc(x) + '</button>'; }).join('') + '</div>' +
     '<div class="g34-opts">' +
       opt('g34Dr', true, !dr.length, _spPlural(dr.length, 'draft'), 'Not scheduled yet.') +
@@ -4383,7 +4383,7 @@ function g34LiRewriteAll(campaignId, kind) {
   var what = kind === 'invite' ? 'invite note' : 'message';
   var m = _g34Modal('g34LiAll', 'Rewrite with SAM',
     '<div class="sp-small">Every LinkedIn ' + what + ' not sent yet, with one instruction. Each stays written for its own person and within your plan\'s length.</div>' +
-    '<label class="sp-fld">What should change?<textarea class="g34-ta" id="g34LiIn" maxlength="800" placeholder="Mention we work with Marico. Shorter, no question at the end."></textarea></label>' +
+    '<label class="sp-fld">What should change?<textarea class="g34-ta" id="g34LiIn" maxlength="800" placeholder="Mention the case study. Shorter, no question at the end."></textarea></label>' +
     '<div class="g34-opts">' + (mine ? '<label class="g34-opt"><input type="checkbox" id="g34LiOwn"><span><b>Also the ' + _spPlural(mine, 'one') + ' you wrote</b><small>Left as you wrote them unless you tick this.</small></span></label>' : '') + '</div>' +
     '<div class="g34-note">' + _spPlural(sam.length, what) + ' written by SAM will be rewritten. SAM checks each one again before it can go.</div>' +
     '<div class="sp-small" id="g34LiMsg" role="status" style="margin-top:10px"></div>' +
@@ -4531,3 +4531,175 @@ function _s1Bar(msgId, barId, label) {
   };
 }
 function _s1Pace(msgId) { return function (s) { var m = document.getElementById(msgId); if (m) m.textContent = 'SAM is pacing itself. Carrying on in ' + s + 's…'; }; }
+
+// ════════════════════════════════════════════════════════════════════════════
+// Drop T (2026-10-29): the deal journey. After a reply SAM follows what
+// happened next, from evidence: the meeting and its notes, the proposal going
+// out, their answer. Each step quotes the sentence that proves it, and the
+// next step comes to Today. The pipeline moves when the rep says so.
+// ════════════════════════════════════════════════════════════════════════════
+(function () {
+  if (document.getElementById('g36css')) return;
+  var st = document.createElement('style'); st.id = 'g36css';
+  st.textContent =
+    '.g36-card{margin:0 0 14px;padding:14px 16px;border-radius:16px;border:1px solid var(--g-line);background:var(--surface)}' +
+    '.g36-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.g36-h h4{margin:0;font-size:15px;font-weight:650;color:var(--text)}' +
+    '.g36-h .g36-sync{margin-left:auto;border:0;background:none;font:inherit;font-size:12.5px;color:var(--c-accent-text);cursor:pointer;padding:4px 6px;border-radius:8px}' +
+    '.g36-h .g36-sync:focus-visible{outline:2px solid var(--c-accent)}' +
+    '.g36-sub{font-size:12.5px;color:var(--text3);margin-top:2px}' +
+    '.g36-flow{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0 4px}.g36-flow span{font-size:12px;padding:4px 10px;border-radius:999px;background:rgba(127,127,127,.08);color:var(--text2)}.g36-flow span b{font-weight:700;color:var(--text);margin-left:4px}' +
+    '.g36-flow span.on{background:rgba(var(--c-accent-rgb),.12);color:var(--c-accent-text)}' +
+    '.g36-p{padding:12px 0;border-top:1px solid var(--g-line)}.g36-p:first-of-type{border-top:0}' +
+    '.g36-pt{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.g36-pt b{font-weight:650;color:var(--text)}.g36-pt small{color:var(--text3);font-size:12.5px}' +
+    '.g36-st{display:inline-flex;align-items:center;font-size:11.5px;font-weight:650;letter-spacing:.02em;padding:3px 9px;border-radius:999px;background:rgba(127,127,127,.1);color:var(--text2);margin-right:6px;vertical-align:1px}' +
+    '.g36-st.ask{background:var(--c-partial-wash);color:var(--c-partial)}.g36-st.sent{background:var(--c-info-wash);color:var(--c-info)}.g36-st.neg{background:rgba(var(--c-accent-rgb),.14);color:var(--c-accent-text)}.g36-st.won{background:var(--c-verified-wash);color:var(--c-verified)}.g36-st.lost,.g36-st.risk{background:var(--c-risk-wash);color:var(--c-risk)}' +
+    '.g36-ev{font-size:12.5px;color:var(--text2);line-height:1.5;margin-top:6px;padding-left:10px;border-left:2px solid var(--g-line)}.g36-ev span{color:var(--text3);white-space:nowrap}' +
+    '.g36-nx{font-size:13px;color:var(--text);margin-top:8px}.g36-nx.late{color:var(--c-risk)}' +
+    '.g36-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}' +
+    '.g36-why{margin:10px 0 0;padding:0;list-style:none}.g36-why li{margin-top:6px}' +
+    '.g36-row2{display:flex;gap:10px;margin-top:12px}.g36-row2 label{flex:1}.g36-row2 select,.g36-row2 input{width:100%}' +
+    '@media (max-width:600px){.g36-h .g36-sync{margin-left:0}.g36-acts .g-btn{flex:1 1 auto}}';
+  document.head.appendChild(st);
+})();
+var G36_CLS = { replied: '', meeting_booked: '', meeting_held: '', proposal_requested: 'ask', proposal_sent: 'sent', negotiation: 'neg', committed: 'won', lost: 'lost' };
+var G36_FLOW = [['meeting_held', 'Met'], ['proposal_requested', 'Proposal asked'], ['proposal_sent', 'Proposal sent'], ['negotiation', 'Negotiating'], ['committed', 'Committed']];
+function _g36Day(iso) { if (!iso) return ''; var d = new Date(iso); return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); }
+function _g36Pill(stage, label) { return '<span class="g36-st ' + (G36_CLS[stage] || '') + '">' + esc(label || stage) + '</span>'; }
+function _g36Ev(ev) {
+  if (!ev) return '';
+  var q = String(ev.quote || '').replace(/^Met: /, 'Met: ');
+  return '<div class="g36-ev">' + (q ? '“' + esc(q.length > 170 ? q.slice(0, 167) + '…' : q) + '” ' : '') + '<span>' + esc([ev.source, _g36Day(ev.at)].filter(Boolean).join(' · ')) + '</span></div>';
+}
+window._g36 = window._g36 || { at: 0, busy: false, j: {} };
+// Read the mailbox for meetings, proposals and answers. The server keeps it to once in 20 minutes.
+async function _g36Sync(force) {
+  if (window._g36.busy) return null;
+  if (!force && Date.now() - window._g36.at < 10 * 60000) return null;
+  window._g36.busy = true; window._g36.at = Date.now();
+  var d = null;
+  try { d = await _sampEdge('sync_deal_journey', force ? { force: true } : {}); } catch (e) { d = null; }
+  window._g36.busy = false;
+  return d;
+}
+(function () {
+  // Today: the stage and its proof on a deal task, and the right words on SAM's button.
+  if (typeof _g24Row === 'function' && !_g24Row._g36) {
+    var row = _g24Row;
+    _g24Row = function (x) {
+      var h = row.apply(this, arguments);
+      var dl = x && x.t && x.t.deal;
+      if (!dl) return h;
+      var ev = (dl.evidence || []).slice(-1)[0];
+      return h.replace('<div class="g24-rt">', '<div class="g24-rt">' + _g36Pill(dl.stage, dl.label)).replace('<div class="g24-rs">', _g36Ev(ev) + '<div class="g24-rs">');
+    };
+    _g24Row._g36 = true;
+  }
+  if (typeof _g24SamLabel === 'function' && !_g24SamLabel._g36) {
+    var lab = _g24SamLabel;
+    _g24SamLabel = function (x) { var s = (x && x.sam) || {}; if (s.do === 'reply' && s.people && s.people[0] && s.people[0].purpose === 'follow_up') return 'Let SAM write the follow-up'; return lab.apply(this, arguments); };
+    _g24SamLabel._g36 = true;
+  }
+  // Today: read the mailbox in the background; if a deal moved, Today shows it.
+  if (typeof tdSampLoad === 'function' && !tdSampLoad._g36) {
+    var load = tdSampLoad;
+    tdSampLoad = async function (force) {
+      var out = await load.apply(this, arguments);
+      _g36Sync(false).then(function (d) { if (d && d.ok && d.changed) { try { load(true); } catch (e) {} } });
+      return out;
+    };
+    tdSampLoad._g36 = true;
+  }
+  // People: deals in motion, at the top.
+  if (typeof _spPaintPeople === 'function' && !_spPaintPeople._g36) {
+    var paint = _spPaintPeople;
+    _spPaintPeople = function (id) { var r = paint.apply(this, arguments); try { _g36People(id); } catch (e) {} return r; };
+    _spPaintPeople._g36 = true;
+  }
+})();
+async function _g36People(id, fresh) {
+  var host = typeof _spPeopleHost === 'function' ? _spPeopleHost(id) : null; if (!host) return;
+  var d = (window._spPeople || {})[id];
+  var any = d && (d.people || []).some(function (p) { return p.journey && ['meeting_held', 'proposal_requested', 'proposal_sent', 'negotiation', 'committed'].indexOf(p.journey.stage) !== -1; });
+  var cached = window._g36.j[id];
+  if (!fresh && cached && Date.now() - cached.at < 60000) { _g36Paint(id, cached.list); return; }
+  if (!any && !fresh) { _g36Paint(id, []); return; }
+  var r = await _sampEdge('get_deal_journey', { campaign_id: id });
+  if (!r.ok) return;
+  var list = (r.people || []).filter(function (p) { return p.stage && p.stage !== 'replied' && p.stage !== 'meeting_booked'; });
+  window._g36.j[id] = { at: Date.now(), list: list };
+  _g36Paint(id, list);
+}
+function _g36Paint(id, list) {
+  var host = typeof _spPeopleHost === 'function' ? _spPeopleHost(id) : null; if (!host) return;
+  var old = document.getElementById('g36Card_' + id); if (old) old.remove();
+  var d = (window._spPeople || {})[id] || {};
+  var owner = !!d.is_owner;
+  var cnt = {}; list.forEach(function (p) { cnt[p.stage] = (cnt[p.stage] || 0) + 1; });
+  var card = document.createElement('section'); card.className = 'g36-card'; card.id = 'g36Card_' + id; card.setAttribute('aria-label', 'Deals in motion');
+  var head = '<div class="g36-h"><div><h4>Deals in motion</h4><div class="g36-sub">From your meetings, their notes and your emails. Each step shows what proves it.</div></div>' +
+    (owner ? '<button class="g36-sync" type="button" onclick="g36Refresh(\'' + esc(id) + '\',this)">Check meetings and proposals</button>' : '') + '</div>';
+  if (!list.length) {
+    card.innerHTML = head + '<div class="g36-sub" style="margin-top:10px">Nothing past a reply yet. When you meet someone from this SAMpaign, SAM reads the meeting notes (Calendly, Fireflies, Fathom, Google Meet and others) and follows it from there.</div>';
+  } else {
+    card.innerHTML = head +
+      '<div class="g36-flow">' + G36_FLOW.map(function (f) { return '<span class="' + (cnt[f[0]] ? 'on' : '') + '">' + esc(f[1]) + '<b>' + (cnt[f[0]] || 0) + '</b></span>'; }).join('') + '</div>' +
+      list.map(function (p) { return _g36Person(id, p, owner); }).join('');
+  }
+  host.insertBefore(card, host.firstChild);
+}
+function _g36Person(id, p, owner) {
+  var ev = (p.evidence || []).filter(function (e) { return e.stage; }).slice(-2);
+  var late = p.next && p.next.due && Date.parse(p.next.due) < Date.now() - 86400000;
+  var acts = '';
+  if (owner && p.next && (p.next.kind === 'follow_up' || p.next.kind === 'answer') && p.email) acts += '<button class="g-btn sp-sm sp-gold" type="button" onclick="g36Write(\'' + esc(id) + '\',\'' + esc(p.contact_id) + '\')">' + SP_ICON.spark + (p.next.kind === 'follow_up' ? ' Let SAM write the follow-up' : ' Let SAM write the answer') + '</button>';
+  if (owner && p.suggest) acts += '<button class="g-btn sp-sm" type="button" onclick="g36Pipeline(\'' + esc(id) + '\',\'' + esc(p.contact_id) + '\')">' + (p.suggest.mode === 'add' ? 'Add to Pipeline at ' + esc(p.suggest.label) : 'Move to ' + esc(p.suggest.label) + ' in Pipeline') + '</button>';
+  return '<div class="g36-p"><div class="g36-pt">' + _g36Pill(p.stage, p.label) + (p.pilot ? '<span class="g36-st">Pilot</span>' : '') + '<b>' + esc(p.name || '') + '</b><small>' + esc([p.company, p.deal ? 'in Pipeline' : ''].filter(Boolean).join(' · ')) + '</small></div>' +
+    ev.map(_g36Ev).join('') +
+    (p.risk ? '<div class="g36-ev">' + _g36Pill('risk', 'At risk') + '“' + esc(String(p.risk.quote || '').slice(0, 150)) + '” <span>' + esc([p.risk.source, _g36Day(p.risk.at)].filter(Boolean).join(' · ')) + '</span></div>' : '') +
+    (p.next ? '<div class="g36-nx' + (late ? ' late' : '') + '"><b>Next:</b> ' + esc(p.next.text) + (p.next.due ? ' <span class="sp-small">' + (late ? 'Due since ' : 'By ') + esc(_g36Day(p.next.due)) + '</span>' : '') + '</div>' : '') +
+    (acts ? '<div class="g36-acts">' + acts + '</div>' : '') + '</div>';
+}
+function _g36Find(id, cid) { var c = window._g36.j[id]; return c ? (c.list || []).find(function (p) { return p.contact_id === cid; }) : null; }
+async function g36Refresh(id, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
+  var d = await _g36Sync(true);
+  if (btn) { btn.disabled = false; btn.textContent = 'Check meetings and proposals'; }
+  if (d && !d.ok) { showToast(d.error || 'SAM could not read your mailbox.'); return; }
+  if (d && d.skipped && d.reason === 'outlook') showToast(d.note);
+  else showToast(d && d.changed ? 'SAM moved ' + (d.moved || []).map(function (m) { return String(m.name || '').split(' ')[0] + ' to ' + String(m.label || '').toLowerCase(); }).join(', ') + '.' : 'Nothing new since the last check.');
+  window._g36.j[id] = null;
+  try { await _spRenderPeople(id, true); } catch (e) {}
+  _g36People(id, true);
+}
+function g36Write(id, cid) {
+  var p = _g36Find(id, cid); if (!p) return;
+  var d = (window._spPeople || {})[id] || {};
+  g27ReplyOpen([{ id: p.contact_id, name: p.name, email: p.email, channel: 'email', purpose: p.next && p.next.kind === 'follow_up' ? 'follow_up' : undefined, instruction: p.next && p.next.instruction ? p.next.instruction : undefined }], { id: id, name: p.campaign || '' });
+}
+// Add the company to Pipeline at the stage the evidence supports, or move it there.
+function g36Pipeline(id, cid) {
+  var p = _g36Find(id, cid); if (!p || !p.suggest) return;
+  var add = p.suggest.mode === 'add', co = p.account_name || p.company || 'this company';
+  var why = (p.evidence || []).filter(function (e) { return e.stage; }).slice(-3);
+  var m = _g34Modal('g36Pm', add ? 'Add ' + co + ' to Pipeline' : 'Move ' + co + ' to ' + p.suggest.label,
+    '<div class="sp-small">' + (add ? 'As a deal at <b>' + esc(p.suggest.label) + '</b>, with ' + esc(p.name || 'them') + ' on it.' : 'From <b>' + esc(p.suggest.from || 'its stage') + '</b> to <b>' + esc(p.suggest.label) + '</b>.') + ' What proves it:</div>' +
+    '<ul class="g36-why">' + why.map(function (e) { return '<li>' + _g36Ev(e) + '</li>'; }).join('') + '</ul>' +
+    (add ? '<div class="g36-row2"><label class="sp-fld">Deal value <small>optional</small><input id="g36Val" type="number" min="0" step="1" inputmode="numeric" placeholder="Add it later"></label><label class="sp-fld">Currency<select id="g36Cur"><option>INR</option><option>USD</option><option>EUR</option><option>GBP</option><option>AED</option><option>SGD</option></select></label></div>' : '') +
+    '<div class="sp-small" id="g36Msg" role="status" style="margin-top:10px"></div>' +
+    '<div class="sp-foot"><button class="g-btn" type="button" onclick="document.getElementById(\'g36Pm\').remove()">Cancel</button><span class="sp-acts"><button class="g-btn sp-gold" type="button" id="g36Go">' + (add ? 'Add to Pipeline' : 'Move it') + '</button></span></div>');
+  document.getElementById('g36Go').focus();
+  document.getElementById('g36Go').onclick = async function () {
+    var msg = document.getElementById('g36Msg'); this.disabled = true; this.textContent = 'Saving…';
+    var mv = await _sampEdge('move_sampaign_contact_to_deal', { contact_id: cid, create_account: true });
+    if (!mv.ok) { msg.textContent = mv.error || 'Could not add them to the account.'; this.disabled = false; this.textContent = add ? 'Add to Pipeline' : 'Move it'; return; }
+    var body = { account_id: mv.account_id, deal_type: p.suggest.key };
+    if (add) { var v = parseFloat((document.getElementById('g36Val') || {}).value); body.deal_value = isFinite(v) && v > 0 ? v : 0; body.deal_currency = (document.getElementById('g36Cur') || {}).value || 'INR'; }
+    var up = await _sampEdge('upsert_deal_value', body);
+    if (up && up.error) { msg.textContent = up.error; this.disabled = false; this.textContent = add ? 'Add to Pipeline' : 'Move it'; return; }
+    m.remove();
+    showToast((mv.account_name || co) + ' is in Pipeline at ' + p.suggest.label + '.' + (add && !(body.deal_value > 0) ? ' Add its value when you know it.' : ''));
+    window._g36.j[id] = null;
+    try { await _spRenderPeople(id, true); } catch (e) {}
+    _g36People(id, true);
+  };
+}
