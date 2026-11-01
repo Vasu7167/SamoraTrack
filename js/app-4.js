@@ -217,6 +217,7 @@ function joinOrgCancel() {
     tabs.push(['currency', 'Currency']);
     tabs.push(['reveals', 'Usage']);
     tabs.push(['mailboxes', 'Mailboxes']);
+    tabs.push(['notify', 'Notifications']);
     tabs.push(['log', 'Activity']);
     this._parkHosted();
     var self = this;
@@ -273,6 +274,7 @@ function joinOrgCancel() {
     if (this.tab === 'currency') { this._renderCurrency(body); return; }
     if (this.tab === 'reveals') { this._renderReveals(body); return; }
     if (this.tab === 'mailboxes') { this._renderMailboxes(body); return; }
+    if (this.tab === 'notify') { this._renderNotify(body); return; }
     if (this.tab === 'people') body.innerHTML = this._people();
     else if (this.tab === 'tree') body.innerHTML = this._tree();
     else if (this.tab === 'access') body.innerHTML = this._access();
@@ -496,6 +498,10 @@ function joinOrgCancel() {
     else if (a.indexOf('cal-') === 0) this._calClick(a, t);
     else if (a === 'mb-refresh') this._renderMailboxes(this.el.querySelector('#sxa-body'), true);
     else if (a === 'mb-scan') this._mbScan(t);
+    else if (a === 'mb-check') this._mbCheck(t);
+    else if (a === 'mb-catchup') this._mbCatchup();
+    else if (a === 'mb-nudge') this._mbNudge(t);
+    else if (a.indexOf('lp-') === 0) this._lpClick(a, t);
     else if (a === 'cur-save') this._saveCurrency(t);
     else if (a === 'rev-save') this._saveReveals(t);
     else if (a.indexOf('use-') === 0) this._g19Act(a, t);
@@ -503,6 +509,7 @@ function joinOrgCancel() {
 
   Console.prototype._change = function (e) {
     var t = e.target, a = t.getAttribute && t.getAttribute('data-sxa'), id = t.getAttribute && t.getAttribute('data-id');
+    if (a && a.indexOf('lp-') === 0 && a !== 'lp-save' && a !== 'lp-preview' && a !== 'lp-test') { this._lpChange(a, t); return; }
     if (a === 'role') this._update(id, { role: t.value }, t);
     else if (a === 'mgr') this._update(id, { manager_id: t.value || null }, t);
     else if (a === 'admin') this._update(id, { is_org_admin: !!t.checked }, t);
@@ -907,7 +914,11 @@ function joinOrgCancel() {
           '<span class="sxa-mb-n' + (nFix ? ' bad' : '') + '"><b>' + nFix + '</b> need attention</span>' +
           '<span class="sxa-mb-n"><b>' + nNone + '</b> not connected</span>' +
           '<button type="button" class="sxa-btn sxa-btn-ghost" data-sxa="mb-refresh">Refresh</button>' +
+          '<button type="button" class="sxa-btn sxa-btn-ghost" data-sxa="mb-check">Check connections</button>' +
+          '<button type="button" class="sxa-btn sxa-btn-ghost" data-sxa="mb-catchup">Catch up</button>' +
+          '<button type="button" class="sxa-btn sxa-btn-ghost" data-sxa="mb-nudge"' + (nFix + nNone ? '' : ' disabled') + '>Remind to reconnect</button>' +
         '</div>' +
+        '<div id="sxa-mb-diag">' + (this._mbDiagHtml || '') + '</div>' +
         (rows.length ? '<div class="sxa-list">' + rows.map(function (x) {
           var s = MB_STATUS[x.status] || MB_STATUS.waiting;
           var nm = nameOf[x.user_id] || x.name || x.email;
@@ -1174,6 +1185,170 @@ function joinOrgCancel() {
     return false;
   };
 
+
+
+  // ── Notifications: the leader daily pulse (Drop U, 2026-11-02) ──────────
+  // A morning email to leaders with yesterday's counts from connected
+  // mailboxes and calendars. Off until an admin switches it on here.
+  Console.prototype._renderNotify = async function (body, fresh) {
+    var self = this;
+    if (!this.lp || fresh) {
+      if (!this.lp) body.innerHTML = '<div class="sxa-empty">Loading notifications…</div>';
+      var d;
+      try { d = await this.call('get_leader_pulse_settings', this._body()); } catch (e) { d = { ok: false, error: e.message }; }
+      if (this.tab !== 'notify') return;
+      if (!d || !d.ok) { body.innerHTML = '<div class="sxa-empty sxa-err">' + h((d && d.error) || 'Could not load the notification settings.') + '</div>'; return; }
+      this.lp = d; this.lpDraft = JSON.parse(JSON.stringify(d.settings)); this.lpDirty = false;
+    }
+    var d2 = this.lp, s = this.lpDraft, cal = d2.calendar;
+    var hour = s.send_hour == null ? cal.digest_hour : s.send_hour;
+    var opts = ''; for (var i = cal.start_hour; i < cal.end_hour; i++) opts += '<option value="' + i + '"' + (i === hour ? ' selected' : '') + '>' + calHour(i) + '</option>';
+    var picked = {}; (s.recipients.length ? s.recipients : d2.default_recipients).forEach(function (u) { picked[u] = 1; });
+    var opted = {}; (d2.opted_out || []).forEach(function (u) { opted[u] = 1; });
+    var ppl = d2.people.slice().sort(function (a, b) { return (picked[b.user_id] || 0) - (picked[a.user_id] || 0) || String(a.name).localeCompare(String(b.name)); });
+    var last = d2.last_sent;
+    body.innerHTML =
+      '<div class="sxa-pf">' +
+        '<div class="sxa-card' + (s.enabled ? '' : '') + '" style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">' +
+          '<div class="sxa-pw" style="min-width:220px">' +
+            '<div class="sxa-pn">Leader daily pulse</div>' +
+            '<div class="sxa-note" style="margin:4px 0 0">Each working morning, one email to the leaders below: yesterday&rsquo;s customer emails, replies, meetings, SAMpaign and LinkedIn steps per person, accounts going quiet, deals that moved and today&rsquo;s meetings. Each leader sees only the people they can see in SamoraOS. Counts only, from connected mailboxes and calendars. What emails say is never included.</div>' +
+          '</div>' +
+          '<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600"><input type="checkbox" class="sxa-sw" data-sxa="lp-on"' + (s.enabled ? ' checked' : '') + ' aria-label="Leader daily pulse on"/>' + (s.enabled ? 'On' : 'Off') + '</label>' +
+        '</div>' +
+        '<div class="sxa-f2">' +
+          '<label class="sxa-f"><span class="sxa-lbl">Sends at</span><select class="sxa-in" data-sxa="lp-hour">' + opts + '</select></label>' +
+          '<div class="sxa-f"><span class="sxa-lbl">When</span><span class="sxa-static" style="padding-top:8px">Working days, ' + h(cal.timezone) + '. Monday covers Friday to Sunday.</span></div>' +
+        '</div>' +
+        '<div class="sxa-sec">Who gets it</div>' +
+        '<div class="sxa-note">' + (s.recipients.length ? 'Picked by you.' : 'Nobody picked yet, so executives and admins get it.') + ' Anyone can turn it off for themselves in You, Notifications.</div>' +
+        '<div class="sxa-list">' + ppl.map(function (p) {
+          return '<label class="sxa-row" style="display:flex;align-items:center;gap:10px;cursor:pointer">' +
+            '<input type="checkbox" data-sxa="lp-rec" data-id="' + h(p.user_id) + '"' + (picked[p.user_id] ? ' checked' : '') + ' aria-label="' + h(p.name) + ' gets the pulse"/>' +
+            '<span class="sxa-av">' + h(initials({ name: p.name, email: p.email })) + '</span>' +
+            '<span class="sxa-pw" style="display:block;flex:1;min-width:0"><span class="sxa-pn" style="display:block">' + h(p.name) + '</span><span class="sxa-pe" style="display:block">' + h((ROLE_LABEL[p.role] || p.role || '') + (p.is_admin ? ', admin' : '')) + '</span></span>' +
+            (opted[p.user_id] ? '<span class="sxa-mb-st off">Turned it off</span>' : '') +
+          '</label>';
+        }).join('') + '</div>' +
+        '<label style="display:flex;align-items:center;gap:10px;margin:14px 0 4px;font-size:13px"><input type="checkbox" data-sxa="lp-nudge"' + (s.nudge_reps ? ' checked' : '') + '/> Remind people whose mailbox is not connected or has stopped, at most every 3 days, with what they get back by reconnecting.</label>' +
+        '<div class="sxa-note">Everyone sees in You, Notifications that leaders get this summary.' + (last ? ' Last sent ' + h(calDateLabel(last.date)) + (last.recipients != null ? ' to ' + last.recipients + (last.recipients === 1 ? ' person' : ' people') : '') + '.' : '') + '</div>' +
+        '<div class="sxa-actions" style="justify-content:flex-start;flex-wrap:wrap;gap:8px">' +
+          '<button class="sxa-btn sxa-btn-gold" data-sxa="lp-save"' + (this.lpDirty ? '' : ' disabled') + '>' + (this.lpDirty ? 'Save' : 'Saved') + '</button>' +
+          '<button class="sxa-btn sxa-btn-ghost" data-sxa="lp-preview">Preview</button>' +
+          '<button class="sxa-btn sxa-btn-ghost" data-sxa="lp-test">Send test now (to me)</button>' +
+        '</div>' +
+      '</div>';
+  };
+  Console.prototype._lpChange = function (a, t) {
+    var s = this.lpDraft; if (!s) return;
+    if (a === 'lp-on') s.enabled = !!t.checked;
+    else if (a === 'lp-hour') s.send_hour = parseInt(t.value, 10);
+    else if (a === 'lp-nudge') s.nudge_reps = !!t.checked;
+    else if (a === 'lp-rec') {
+      var cur = s.recipients.length ? s.recipients.slice() : this.lp.default_recipients.slice();
+      var id = t.getAttribute('data-id');
+      cur = cur.filter(function (x) { return x !== id; }); if (t.checked) cur.push(id);
+      s.recipients = cur;
+    }
+    this.lpDirty = true;
+    this._renderNotify(this.el.querySelector('#sxa-body'));
+  };
+  Console.prototype._lpClick = async function (a, t) {
+    var self = this;
+    if (a === 'lp-save') {
+      t.disabled = true; t.textContent = 'Saving…';
+      var d; try { d = await this.call('save_leader_pulse_settings', this._body({ settings: this.lpDraft })); } catch (e) { d = { ok: false, error: e.message }; }
+      if (!d || !d.ok) { this.toast((d && d.error) || 'Could not save.', true); t.disabled = false; t.textContent = 'Save'; return; }
+      this.lp = d; this.lpDraft = JSON.parse(JSON.stringify(d.settings)); this.lpDirty = false;
+      this.toast(d.settings.enabled ? 'Saved. The pulse goes out on the next working morning.' : 'Saved. The pulse is off.');
+      this._renderNotify(this.el.querySelector('#sxa-body'));
+      return;
+    }
+    if (a === 'lp-preview' || a === 'lp-test') {
+      var was = t.textContent; t.disabled = true; t.textContent = a === 'lp-test' ? 'Sending…' : 'Building…';
+      var r; try { r = await this.call('run_leader_pulse', this._body(a === 'lp-test' ? { send: true, test_to_me: true } : {})); } catch (e) { r = { ok: false, error: e.message }; }
+      t.disabled = false; t.textContent = was;
+      if (!r || !r.ok) { this.toast((r && r.error) || 'Could not build the pulse.', true); return; }
+      if (a === 'lp-test') { this.toast('Sent to ' + (r.sent_to || 'you') + '. Only you got it.'); return; }
+      var m = this._modal('<div class="sxa-sec" style="margin-top:0">Your pulse for ' + h(calDateLabel(r.date)) + '</div>' +
+        '<div class="sxa-note">A preview: nothing was sent. ' + h(r.headline || '') + '</div>' +
+        '<iframe title="Pulse preview" sandbox="" style="width:100%;height:66vh;border:1px solid var(--border,#e6e0d2);border-radius:8px;background:#F0E8DA" srcdoc="' + h(r.html || '') + '"></iframe>' +
+        '<div class="sxa-actions"><button class="sxa-btn sxa-btn-ghost" data-close>Close</button></div>');
+      m.querySelector('[data-close]').onclick = function () { m.remove(); };
+      void self;
+    }
+  };
+
+  // ── Mailboxes: why one is stale, catch up, remind (Drop U) ─────────────
+  var CAUSE = { ok: ['Working', 'ok'], never_connected: ['Never connected', 'off'], signin_revoked_or_expired: ['Sign-in ended', 'bad'], oauth_client_changed: ['Old sign-in', 'bad'],
+    refresh_failed: ['Sign-in failed', 'bad'], missing_permission: ['Missing permission', 'bad'], mail_unreachable: ['Mail did not answer', 'warn'], not_picked_up: ['Not checked lately', 'warn'], last_scan_failed: ['Last check failed', 'warn'] };
+  Console.prototype._mbDiag = function (html) { this._mbDiagHtml = html; var el = this.el.querySelector('#sxa-mb-diag'); if (el) el.innerHTML = html; };
+  Console.prototype._mbCheck = async function (btn) {
+    btn.disabled = true; var was = btn.textContent; btn.textContent = 'Checking…';
+    this._mbDiag('<div class="sxa-empty">Checking each connection. This takes a few seconds per person.</div>');
+    var d; try { d = await this.call('mailbox_check', this._body()); } catch (e) { d = { ok: false, error: e.message }; }
+    btn.disabled = false; btn.textContent = was;
+    if (!d || !d.ok) { this._mbDiag('<div class="sxa-empty sxa-err">' + h((d && d.error) || 'Could not check.') + '</div>'); return; }
+    var rows = d.people.slice().sort(function (a, b) { return (a.cause === 'ok') - (b.cause === 'ok') || String(a.name).localeCompare(String(b.name)); });
+    this._mbDiag('<div class="sxa-sec">Connections, checked now</div><div class="sxa-note">' + h(d.queue) + '</div>' +
+      '<div class="sxa-list">' + rows.map(function (x) {
+        var c = CAUSE[x.cause] || ['Unknown', 'off'];
+        return '<div class="sxa-row sxa-mb-row"><div class="sxa-person"><span class="sxa-av">' + h(initials({ name: x.name, email: x.email })) + '</span><div class="sxa-pw"><div class="sxa-pn">' + h(x.name) + '</div><div class="sxa-pe">' + h(x.provider ? x.provider + ' · ' + x.email : x.email) + '</div></div></div>' +
+          '<div class="sxa-cell"><span class="sxa-mb-st ' + c[1] + '">' + h(c[0]) + '</span></div>' +
+          (x.fix ? '<div class="sxa-mb-why" style="color:' + (c[1] === 'bad' ? '#b3261e' : 'var(--text2,#5f5e5a)') + '">' + h(x.fix) + '</div>' : '') + '</div>';
+      }).join('') + '</div>');
+  };
+  Console.prototype._mbCatchup = function () {
+    var self = this;
+    var def = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+    var m = this._modal('<div class="sxa-sec" style="margin-top:0">Catch up after mailboxes were down</div>' +
+      '<div class="sxa-note">SAM checks every connected mailbox and calendar from this date, a few days at a time, so deals stop showing as quiet or unknown, and fills in each person&rsquo;s daily counts. It runs by itself and takes a few minutes per person. People who still need to reconnect are listed when it finishes.</div>' +
+      '<label class="sxa-f"><span class="sxa-lbl">From</span><input class="sxa-in" type="date" data-cu-from value="' + def + '" max="' + new Date().toISOString().slice(0, 10) + '"/></label>' +
+      '<div class="sxa-actions"><button class="sxa-btn sxa-btn-ghost" data-close>Cancel</button><button class="sxa-btn sxa-btn-gold" data-go>Start catching up</button></div>');
+    m.querySelector('[data-close]').onclick = function () { m.remove(); };
+    m.querySelector('[data-go]').onclick = async function () {
+      var from = m.querySelector('[data-cu-from]').value;
+      var d; try { d = await self.call('activity_backfill', self._body({ from: from })); } catch (e) { d = { ok: false, error: e.message }; }
+      if (!d || !d.ok) { self.toast((d && d.error) || 'Could not start.', true); return; }
+      m.remove();
+      self.toast(d.already_running ? 'A catch-up is already running.' : 'Catching up from ' + calDateLabel(from) + '. You can leave this page.');
+      self._mbPoll(0);
+    };
+  };
+  Console.prototype._mbPoll = async function (n) {
+    var self = this;
+    if (this.tab !== 'mailboxes' || n > 90) return;
+    var d; try { d = await this.call('activity_backfill', this._body({ status: true })); } catch (e) { d = null; }
+    var j = d && d.job;
+    if (!j) return;
+    var names = {}; ((this.data && this.data.people) || []).forEach(function (p) { names[p.user_id] = p.name || p.email; });
+    var res = j.results || {};
+    var list = Object.keys(res).map(function (u) { var r = res[u]; return '<li><span><b>' + h(names[u] || 'Someone') + '</b>: ' + h(r.note || r.pass || 'in progress') + (r.days ? ', ' + r.days + ' days counted' : '') + '</span></li>'; }).join('');
+    this._mbDiag('<div class="sxa-sec">Catch-up from ' + h(calDateLabel(j.from)) + (j.done ? ': done' : ': ' + j.i + ' of ' + j.users.length + ' people') + '</div><ul class="sxa-log">' + list + '</ul>');
+    if (!j.done) setTimeout(function () { self._mbPoll(n + 1); }, 8000);
+    else if (this.tab === 'mailboxes') this._renderMailboxes(this.el.querySelector('#sxa-body'), true);
+  };
+  Console.prototype._mbNudge = async function (btn) {
+    var self = this;
+    btn.disabled = true;
+    var d; try { d = await this.call('mailbox_nudge', this._body()); } catch (e) { d = { ok: false, error: e.message }; }
+    btn.disabled = false;
+    if (!d || !d.ok) { this.toast((d && d.error) || 'Could not load.', true); return; }
+    var due = d.people.filter(function (p) { return p.due; });
+    if (!d.people.length) { this.toast('Every mailbox is connected and working.'); return; }
+    var W = { none: 'not connected', reconnect: 'reconnect needed', stale: 'stopped' };
+    var m = this._modal('<div class="sxa-sec" style="margin-top:0">Remind them to reconnect</div>' +
+      '<div class="sxa-note">An email from SAM saying what they get back: replies first on Today, meeting prep, credit for their work, and follow-ups that stop on time.</div>' +
+      '<ul class="sxa-log">' + d.people.map(function (p) { return '<li><span><b>' + h(p.name) + '</b>: ' + h(W[p.status] || p.status) + (p.due ? '' : ' (reminded in the last 3 days)') + '</span></li>'; }).join('') + '</ul>' +
+      '<div class="sxa-actions"><button class="sxa-btn sxa-btn-ghost" data-close>Cancel</button><button class="sxa-btn sxa-btn-gold" data-go' + (due.length ? '' : ' disabled') + '>Send to ' + due.length + (due.length === 1 ? ' person' : ' people') + '</button></div>');
+    m.querySelector('[data-close]').onclick = function () { m.remove(); };
+    m.querySelector('[data-go]').onclick = async function () {
+      var r; try { r = await self.call('mailbox_nudge', self._body({ send: true })); } catch (e) { r = { ok: false, error: e.message }; }
+      m.remove();
+      if (!r || !r.ok) { self.toast((r && r.error) || 'Could not send.', true); return; }
+      self.toast('Reminder sent to ' + r.sent + (r.sent === 1 ? ' person' : ' people') + '.');
+    };
+  };
 
   window.SamoraAccessConsole = {
     mount: function (el, opts) {
@@ -2086,4 +2261,3 @@ function _spRepliesHtml(id, o) {
 }
 
 // Insights
- 
