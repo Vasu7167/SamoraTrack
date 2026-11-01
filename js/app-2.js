@@ -1368,7 +1368,7 @@ async function sendWeeklyDigest() {
   const toReps = document.getElementById('digestToReps')?.checked !== false;
   try {
     const extraEmails = (document.getElementById('digestExtraEmails')?.value||'').split(',').map(function(e){return e.trim();}).filter(function(e){return e.includes('@');});
-    const r = await fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify({ action: 'weekly_digest', date_from: from, date_to: to, send_to_manager: toManager, send_to_reps: toReps, extra_emails: extraEmails }) });
+    const r = await fetch(EDGE_FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentUser.token, 'apikey': SB_KEY }, body: JSON.stringify({ action: 'weekly_digest', send: true, date_from: from, date_to: to, send_to_manager: toManager, send_to_reps: toReps, extra_emails: extraEmails }) });
     const data = await r.json();
     if (data.success) {
       // Partial delivery is not success and must not read like it. Six
