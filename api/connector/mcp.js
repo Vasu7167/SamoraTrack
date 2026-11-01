@@ -132,6 +132,7 @@ WHEN THE USER SAYS...
 - "reach them on LinkedIn" / "they have no email" / "connect with them" -> set_sampaign_sequence with an invite step, then save_sampaign_linkedin_notes for everyone in one call. The plugin plans and runs the steps from there; queue_linkedin_actions is only for a one-off push outside the sequence (dry run first)
 - "what's waiting on LinkedIn" / "did they accept" -> get_linkedin_queue
 - "how am I doing this week" / "my numbers" / "team scorecard" -> get_weekly_scorecard
+- "how did the team do yesterday" / "daily pulse" / "who replied" / "which mailboxes are down" -> get_leader_pulse (a preview; it sends nothing)
 - "stop the LinkedIn ones" -> cancel_linkedin_queue, scoped to a campaign
 
 USE WHAT WE ALREADY HAVE BEFORE YOU BUY MORE
