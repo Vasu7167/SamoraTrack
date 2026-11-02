@@ -855,8 +855,17 @@ function buildAuthOrbit() {
     if (cachedProfile) { try { profile = JSON.parse(cachedProfile); } catch(e) {} }
     // Refresh token if we have one (non-blocking — launchApp runs after)
     if (currentUser?.refresh_token) {
-      const ok = await refreshToken();
-      if (!ok) { localStorage.removeItem('dt-user'); currentUser = null; registerSW(); return; }
+      // Drop U3: a token good for 5 more minutes paints the app now; the
+      // refresh runs behind it. Only an expired token waits for the refresh.
+      if (_jwtExpMs(currentUser.token) > Date.now() + 5 * 60000) {
+        refreshToken().then(function (ok) { if (!ok) { localStorage.removeItem('dt-user'); location.reload(); } });
+        // Launch once every app file has loaded, so the later files' launch
+        // hooks (links from email, the LinkedIn plugin's links) are in place.
+        if (document.readyState === 'loading') await new Promise(function (r) { document.addEventListener('DOMContentLoaded', r, { once: true }); });
+      } else {
+        const ok = await refreshToken();
+        if (!ok) { localStorage.removeItem('dt-user'); currentUser = null; try { window.__warmOff(); } catch (_e) {} registerSW(); return; }
+      }
     }
     if (currentUser?.must_change) { showSetPasswordScreen(); registerSW(); return; }
     const _finishLaunch = function() {
@@ -877,7 +886,7 @@ function buildAuthOrbit() {
       // No cached profile — must load it before we can launch.
       await loadProfile();
       if (profile) { launchApp(); _finishLaunch(); }
-      else { localStorage.removeItem('dt-user'); }
+      else { localStorage.removeItem('dt-user'); try { window.__warmOff(); } catch (_e) {} }
     }
   }
   registerSW();
@@ -6989,4 +6998,3 @@ function _showResetExpired() {
   _screen('resetScreen');
 }
 
- 
