@@ -93,21 +93,50 @@ function sbHeaders(token) {
   if (t) h['Authorization'] = 'Bearer ' + t;
   return h;
 }
-async function refreshToken() {
-  if (!SB_URL || !currentUser?.refresh_token) return false;
+// Drop U3: one session across tabs. Refresh tokens are single use, so a tab
+// that refreshed with a token another tab had already used was signed out.
+// Now every tab adopts the newest token from storage first, and a network
+// failure keeps the session (only a rejected token signs out).
+function _jwtExpMs(t) { try { var p = JSON.parse(atob(String(t).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))); return (Number(p.exp) || 0) * 1000; } catch (_e) { return 0; } }
+function _adoptStoredSession() {
   try {
-    const r = await fetch(SB_URL + '/auth/v1/token?grant_type=refresh_token', {
-      method: 'POST', headers: { 'apikey': SB_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: currentUser.refresh_token })
-    });
-    const d = await r.json();
-    if (d.access_token) {
-      currentUser.token = d.access_token; currentUser.refresh_token = d.refresh_token;
-      localStorage.setItem('dt-user', JSON.stringify(currentUser)); return true;
+    var s = JSON.parse(localStorage.getItem('dt-user') || 'null');
+    if (s && currentUser && s.id === currentUser.id && s.token && s.token !== currentUser.token && _jwtExpMs(s.token) >= _jwtExpMs(currentUser.token)) {
+      currentUser.token = s.token; if (s.refresh_token) currentUser.refresh_token = s.refresh_token; return true;
     }
-  } catch(e) {}
+  } catch (_e) {}
   return false;
 }
+var _refreshing = null;
+async function refreshToken() {
+  if (!SB_URL || !currentUser?.refresh_token) return false;
+  _adoptStoredSession();
+  if (_jwtExpMs(currentUser.token) > Date.now() + 5 * 60000) return true;
+  if (_refreshing) return _refreshing;
+  _refreshing = (async function () {
+    try {
+      const r = await fetch(SB_URL + '/auth/v1/token?grant_type=refresh_token', {
+        method: 'POST', headers: { 'apikey': SB_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: currentUser.refresh_token })
+      });
+      const d = await r.json().catch(function () { return {}; });
+      if (d.access_token) {
+        currentUser.token = d.access_token; currentUser.refresh_token = d.refresh_token;
+        localStorage.setItem('dt-user', JSON.stringify(currentUser)); return true;
+      }
+      // Another tab may have used the token a moment ago: take theirs.
+      if (_adoptStoredSession() && _jwtExpMs(currentUser.token) > Date.now()) return true;
+      return !(r.status >= 400 && r.status < 500);
+    } catch (e) { return true; }
+    finally { setTimeout(function () { _refreshing = null; }, 0); }
+  })();
+  return _refreshing;
+}
+window.addEventListener('storage', function (e) {
+  if (e.key !== 'dt-user' || !currentUser) return;
+  if (!e.newValue) { try { location.reload(); } catch (_e) {} return; }
+  _adoptStoredSession();
+});
 async function sbGet(path, token) {
   const r = await fetch(SB_URL + '/rest/v1/' + path, { headers: sbHeaders(token) });
   if (!r.ok) throw new Error(await r.text());
@@ -488,6 +517,7 @@ async function loadProfile() {
 // Clearing every .screen before setting one makes the invariant structural
 // instead of something each call site has to remember.
 function showScreen(id) {
+  try { if (window.__warmOff) window.__warmOff(); } catch (_e) {}
   var all = document.querySelectorAll('.screen');
   for (var i = 0; i < all.length; i++) all[i].classList.remove('active');
   var el = document.getElementById(id);
@@ -802,8 +832,25 @@ function _markActiveToday() {
 }
 document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') _markActiveToday(); });
 
+// Drop U3: the full splash is for a cold start only: the first open in this
+// browser in 12 hours, or with nothing cached yet. A reload, a second tab or a
+// link from an email opens straight into the app, the way Linear, Slack and
+// Gmail do, with the sync badge showing fresh data arriving.
+function _shouldSplash() {
+  try {
+    if (/[?&](open|sampaign|connect)=/.test(location.search)) return false;
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
+    var id = currentUser && currentUser.id; if (!id) return true;
+    var k = 'samora-splash-' + id, last = Number(localStorage.getItem(k)) || 0;
+    if (localStorage.getItem('dt-v4-' + id) && Date.now() - last < 12 * 3600000) return false;
+    localStorage.setItem(k, String(Date.now()));
+    return true;
+  } catch (_e) { return true; }
+}
 function launchApp() {
-  showSplash('Loading your pipeline, SAMpaigns and signals…');
+  if (_shouldSplash()) showSplash('Loading your pipeline, SAMpaigns and signals…');
+  else { _splashDone = true; }
+  try { if (window.__warmOff) window.__warmOff(); } catch (_e) {}
   _markActiveToday();
   showScreen('appScreen');
   const role = profile?.role || 'member';
