@@ -88,21 +88,28 @@
     var q = new URLSearchParams(location.search), o = q.get('open');
     if (!o) return;
     try { history.replaceState(null, '', location.pathname); } catch (e) {}
+    var rep = q.get('rep'), filter = q.get('filter');
     setTimeout(function () {
       try {
-        if (o === 'deals') { switchTab('pipeline'); }
+        if (o === 'deals' && (rep || filter) && typeof sdGoDeals === 'function') {
+          // The pulse's per-person and quiet links open that exact view.
+          if (filter === 'quiet') { _sc.view.boardFilter = 'quiet'; _sc.view.dealsScope = 'team'; sdGoDeals('stage'); }
+          else sdGoDeals('list', rep);
+        }
+        else if (o === 'deals') { switchTab('pipeline'); }
         else if (o === 'replies') { switchTab('today'); }
         else if (o === 'meetings') { switchTab('today'); var m = document.getElementById('meetingPrepSection'); if (m) m.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
         else if (o === 'team') { if (typeof switchToOrgPanel === 'function') switchToOrgPanel(); else switchTab('org'); setTimeout(function () { try { if (window._sxaConsole) { window._sxaConsole.tab = 'mailboxes'; window._sxaConsole.render(); } } catch (e) {} }, 800); }
         else if (o === 'connect-mailbox') { connect(); }
       } catch (e) {}
-    }, 500);
+    }, 0);
   }
 
   var base = launchApp;
   launchApp = function () {
     var r = base.apply(this, arguments);
-    setTimeout(function () { handleOpen(); load(); }, 1200);
+    handleOpen();
+    setTimeout(load, 1200);
     return r;
   };
   var baseYou = typeof renderYouPanel === 'function' ? renderYouPanel : null;
