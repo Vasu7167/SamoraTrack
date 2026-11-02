@@ -929,7 +929,7 @@ function joinOrgCancel() {
             '<div class="sxa-cell' + (x.provider ? '' : ' sxa-mb-blank') + '"><span class="sxa-lbl">Last checked</span><span class="sxa-static" title="' + h(x.last_pass_at ? fmtWhen(x.last_pass_at) : '') + '">' + h(x.provider ? mbAgo(x.last_ok_at || x.last_pass_at) : '') + '</span></div>' +
             '<div class="sxa-cell' + (x.provider ? '' : ' sxa-mb-blank') + '"><span class="sxa-lbl">Last check found</span><span class="sxa-static">' + h(found) + '</span></div>' +
             '<div class="sxa-cell"><span class="sxa-mb-st ' + s[1] + '" title="' + h(x.error || '') + '">' + h(s[0]) + '</span></div>' +
-            '<div class="sxa-cell sxa-cell-act">' + (x.provider && x.status !== 'reconnect' ? '<button type="button" class="sxa-btn sxa-btn-ghost" data-sxa="mb-scan" data-id="' + h(x.user_id) + '">Check now</button>' : '') + '</div>' +
+            '<div class="sxa-cell sxa-cell-act">' + (x.provider ? '<button type="button" class="sxa-btn sxa-btn-ghost" data-sxa="mb-scan" data-id="' + h(x.user_id) + '">Check now</button>' : '') + '</div>' +
             (x.status === 'reconnect' || x.status === 'error' ? '<div class="sxa-mb-why">' + h(x.status === 'reconnect' ? (nm + ' needs to reconnect their mailbox under You, Email.') : (x.error || 'The last check failed.')) + '</div>' : '') +
           '</div>';
         }).join('') + '</div>' : '<div class="sxa-empty">Nobody here yet.</div>') +
@@ -941,8 +941,9 @@ function joinOrgCancel() {
     btn.disabled = true; var was = btn.textContent; btn.textContent = 'Checking…';
     var d;
     try { d = await this.call('org_admin_mailbox_scan', this._body({ user_id: id })); } catch (e) { d = { ok: false, error: e.message }; }
-    if (d && d.ok) this.toast('Checked: ' + (d.messages || 0) + ' emails, ' + (d.accounts_credited || 0) + ' accounts credited');
-    else if (d && d.skipped) this.toast('Already being checked. Try again in a minute.');
+    if (d && d.skipped) this.toast('Already being checked. Try again in a few minutes.');
+    else if (d && d.ok && d.state_error) this.toast('Checked, but the result could not be saved: ' + d.state_error, true);
+    else if (d && d.ok) this.toast('Checked: ' + (d.messages || 0) + ' emails, ' + (d.accounts_credited || 0) + ' accounts credited' + (d.caught_up === false ? '. More to catch up: press Catch up.' : ''));
     else this.toast((d && d.error) || 'Could not check this mailbox.', true);
     btn.disabled = false; btn.textContent = was;
     if (this.tab === 'mailboxes') this._renderMailboxes(this.el.querySelector('#sxa-body'), true);
@@ -1295,7 +1296,8 @@ function joinOrgCancel() {
         var c = CAUSE[x.cause] || ['Unknown', 'off'];
         return '<div class="sxa-row sxa-mb-row"><div class="sxa-person"><span class="sxa-av">' + h(initials({ name: x.name, email: x.email })) + '</span><div class="sxa-pw"><div class="sxa-pn">' + h(x.name) + '</div><div class="sxa-pe">' + h(x.provider ? x.provider + ' · ' + x.email : x.email) + '</div></div></div>' +
           '<div class="sxa-cell"><span class="sxa-mb-st ' + c[1] + '">' + h(c[0]) + '</span></div>' +
-          (x.fix ? '<div class="sxa-mb-why" style="color:' + (c[1] === 'bad' ? '#b3261e' : 'var(--text2,#5f5e5a)') + '">' + h(x.fix) + '</div>' : '') + '</div>';
+          (x.fix ? '<div class="sxa-mb-why" style="color:' + (c[1] === 'bad' ? '#b3261e' : 'var(--text2,#5f5e5a)') + '">' + h(x.fix) + '</div>' : '') +
+          (x.scopes && x.scopes.length ? '<div class="sxa-mb-why" style="color:var(--text3,#7a756b)">Google gave: ' + h(x.scopes.filter(function (s) { return /gmail|calendar|mail\.google/.test(s); }).join(', ') || 'no mail or calendar access') + (x.search ? '. Test search: ' + h(x.search === 200 ? 'worked' : x.search) : '') + '</div>' : '') + '</div>';
       }).join('') + '</div>');
   };
   Console.prototype._mbCatchup = function () {
