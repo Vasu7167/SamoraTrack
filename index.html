@@ -26,6 +26,36 @@
      itself stays on Archivo alone. -->
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@500;600&family=DM+Mono:wght@400&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <script>
+/* Drop U3: warm start. When this browser already holds a session, hide the
+   sign-in form and show a quiet app shell until the app paints (usually well
+   under a second). The full brand splash is kept for a cold start only.
+   Failsafe: after 6s the shell steps aside whatever happens. */
+(function(){try{
+  if(localStorage.getItem('dt-user')){
+    document.documentElement.classList.add('warm-boot');
+    window.__warmOff=function(){document.documentElement.classList.remove('warm-boot');var b=document.getElementById('bootShell');if(b)b.remove();};
+    setTimeout(function(){if(window.__warmOff)window.__warmOff();},6000);
+  }else{window.__warmOff=function(){};}
+}catch(e){window.__warmOff=function(){};}})();
+</script>
+<style>
+html.warm-boot #authScreen{visibility:hidden}
+#bootShell{display:none}
+html.warm-boot #bootShell{display:flex;position:fixed;inset:0;z-index:9000;background:var(--bg,#FAF8F4)}
+#bootShell .bs-rail{width:240px;padding:28px 20px;border-right:1px solid rgba(0,0,0,.06);display:flex;flex-direction:column;gap:22px}
+#bootShell .bs-brand{display:flex;align-items:center;gap:10px;font:600 17px/1 Archivo,Helvetica,Arial,sans-serif;color:var(--text,#1F1B14)}
+#bootShell .bs-brand b{color:#C9973E;font-size:22px}
+#bootShell .bs-main{flex:1;padding:40px 48px;display:flex;flex-direction:column;gap:18px}
+#bootShell .bs-bar{height:12px;border-radius:6px;background:linear-gradient(90deg,rgba(0,0,0,.05) 0%,rgba(0,0,0,.09) 50%,rgba(0,0,0,.05) 100%);background-size:200% 100%;animation:bsPulse 1.2s ease-in-out infinite}
+#bootShell .bs-card{height:84px;border-radius:12px;background:rgba(0,0,0,.035)}
+#bootShell .bs-top{position:absolute;top:0;left:0;height:2px;width:30%;background:#C9973E;animation:bsLoad 1.1s ease-in-out infinite}
+@keyframes bsPulse{0%{background-position:100% 0}100%{background-position:-100% 0}}
+@keyframes bsLoad{0%{left:-30%}100%{left:100%}}
+@media (max-width:900px){#bootShell .bs-rail{display:none}#bootShell .bs-main{padding:24px 16px}}
+@media (prefers-reduced-motion:reduce){#bootShell .bs-bar,#bootShell .bs-top{animation:none}}
+html[data-theme="dark"] #bootShell{background:#14110C}
+</style>
+<script>
 /* Set the theme before first paint. app.js re-applies this later, but by then
    the page has already drawn, so without this a dark-mode user gets a flash of
    the light canvas on every load. Reads the same key the You tab writes. */
@@ -2970,7 +3000,7 @@ body.g24[data-tab="today"] .cal-num{font-size:15px}
 .g24-adm code{display:block;margin-top:6px;padding:8px 10px;border-radius:8px;background:var(--surface2);font-size:11.5px;white-space:pre-wrap;word-break:break-word;color:var(--text2)}
 .g24-eh{font-size:12.5px;color:var(--text2);margin-top:8px}
 </style>
-<script src="/js/vendor/sortable.min.js?v=20261102-02"></script>
+<script src="/js/vendor/sortable.min.js?v=20261102-03"></script>
 <style>
 /* Drop Q: Samora Intelligence */
 .sq-intent{background:var(--surface2);border-radius:var(--r-md);padding:12px;margin-bottom:12px}
@@ -3021,6 +3051,7 @@ body.g24[data-tab="today"] .cal-num{font-size:15px}
      A dim ghost of the whole trace sits under a bright segment that sweeps
      along it, which is what a cardiac monitor actually looks like and keeps
      the shape legible the whole time rather than materialising from nothing. -->
+<div id="bootShell" aria-hidden="true"><div class="bs-top"></div><div class="bs-rail"><div class="bs-brand"><b>S</b> SamoraOS</div><div class="bs-bar" style="width:70%"></div><div class="bs-bar" style="width:55%"></div><div class="bs-bar" style="width:62%"></div><div class="bs-bar" style="width:48%"></div></div><div class="bs-main"><div class="bs-bar" style="width:34%;height:18px"></div><div class="bs-bar" style="width:52%"></div><div class="bs-card"></div><div class="bs-card"></div><div class="bs-card" style="width:80%"></div></div></div>
 <div id="splashScreen" aria-hidden="true">
   <div class="splash-inner">
     <svg class="splash-svg" viewBox="-900 -190 1800 380" role="img" aria-label="Samora">
@@ -4238,13 +4269,13 @@ body.g24[data-tab="today"] .cal-num{font-size:15px}
 </div>
 </div>
 <!-- Drop K: the app in five parts, loaded in this order. ?v= lets browsers keep each file until the next release. -->
-<script src="/js/app-1.js?v=20261102-02"></script>
-<script src="/js/app-2.js?v=20261102-02"></script>
-<script src="/js/app-3.js?v=20261102-02"></script>
-<script src="/js/app-4.js?v=20261102-02"></script>
-<script src="/js/app-5.js?v=20261102-02"></script>
-<script src="/js/app-intel.js?v=20261102-02"></script>
-<script src="/js/app-pulse.js?v=20261102-02"></script>
+<script src="/js/app-1.js?v=20261102-03"></script>
+<script src="/js/app-2.js?v=20261102-03"></script>
+<script src="/js/app-3.js?v=20261102-03"></script>
+<script src="/js/app-4.js?v=20261102-03"></script>
+<script src="/js/app-5.js?v=20261102-03"></script>
+<script src="/js/app-intel.js?v=20261102-03"></script>
+<script src="/js/app-pulse.js?v=20261102-03"></script>
 
     <!-- Template Manager Modal -->
     <div id="templateModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:500;align-items:center;justify-content:center;padding:20px">
@@ -4308,7 +4339,7 @@ body.g24[data-tab="today"] .cal-num{font-size:15px}
           <button onclick="closeReminderModal()" style="flex:1;padding:11px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text2);font-family:var(--font);font-size:14px;cursor:pointer">Cancel</button>
           <button onclick="confirmCreateReminder()" style="flex:2;padding:11px;background:var(--gold);border:none;border-radius:var(--r-sm);color:#18160F;font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer">⏰ Set reminder</button> </div> </div> </div>
 
-<script src="/js/app-tail.js?v=20261102-02"></script>
+<script src="/js/app-tail.js?v=20261102-03"></script>
 
 <div id="doneConfirmModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:700;align-items:center;justify-content:center;padding:20px">
   <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-md);width:100%;max-width:380px;padding:24px">
