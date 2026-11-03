@@ -217,6 +217,7 @@ function joinOrgCancel() {
     tabs.push(['currency', 'Currency']);
     tabs.push(['reveals', 'Usage']);
     tabs.push(['mailboxes', 'Mailboxes']);
+    if (window.wsSafetyTab) tabs.push(['sendsafe', 'Send safety']);
     tabs.push(['notify', 'Notifications']);
     tabs.push(['log', 'Activity']);
     this._parkHosted();
@@ -275,6 +276,7 @@ function joinOrgCancel() {
     if (this.tab === 'reveals') { this._renderReveals(body); return; }
     if (this.tab === 'mailboxes') { this._renderMailboxes(body); return; }
     if (this.tab === 'notify') { this._renderNotify(body); return; }
+    if (this.tab === 'sendsafe' && window.wsSafetyTab) { window.wsSafetyTab(body, this); return; }
     if (this.tab === 'people') body.innerHTML = this._people();
     else if (this.tab === 'tree') body.innerHTML = this._tree();
     else if (this.tab === 'access') body.innerHTML = this._access();
@@ -502,6 +504,7 @@ function joinOrgCancel() {
     else if (a === 'mb-catchup') this._mbCatchup();
     else if (a === 'mb-nudge') this._mbNudge(t);
     else if (a.indexOf('lp-') === 0) this._lpClick(a, t);
+    else if (a.indexOf('ws-') === 0 && window.wsSafetyClick) window.wsSafetyClick(a, t, this);
     else if (a === 'cur-save') this._saveCurrency(t);
     else if (a === 'rev-save') this._saveReveals(t);
     else if (a.indexOf('use-') === 0) this._g19Act(a, t);
@@ -510,6 +513,7 @@ function joinOrgCancel() {
   Console.prototype._change = function (e) {
     var t = e.target, a = t.getAttribute && t.getAttribute('data-sxa'), id = t.getAttribute && t.getAttribute('data-id');
     if (a && a.indexOf('lp-') === 0 && a !== 'lp-save' && a !== 'lp-preview' && a !== 'lp-test') { this._lpChange(a, t); return; }
+    if ((a === 'ws-hold' || a === 'ws-pct') && window.wsSafetyChange) { window.wsSafetyChange(a, t, this); return; }
     if (a === 'role') this._update(id, { role: t.value }, t);
     else if (a === 'mgr') this._update(id, { manager_id: t.value || null }, t);
     else if (a === 'admin') this._update(id, { is_org_admin: !!t.checked }, t);

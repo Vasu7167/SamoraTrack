@@ -2377,6 +2377,10 @@ async function loadSampaignSendQueue(campaignId) {
       return;
     }
     var mine = byLaunch[window._sampLaunch] || [];
+    // Drop W: the Send check sits above the wave whenever something in it is still to go.
+    var wsNeed = mine.some(function(x){ return ['draft','pending','held','blocked'].indexOf(x.status) !== -1; });
+    var wsBox = wsNeed && window.wsRenderCheck ? '<div id="wsCheck"></div>' : '';
+    var wsGo = function(){ if (wsBox) { try { window.wsRenderCheck(campaignId, window._sampLaunch || 1, d.is_owner); } catch(_e) {} } };
 
     if (!mine.length) {
       box.innerHTML = tabsHtml +
@@ -2394,19 +2398,21 @@ async function loadSampaignSendQueue(campaignId) {
     var draftRows = d.sends.filter(function(x){ return x.status === 'draft'; });
     d.sends = d.sends.filter(function(x){ return x.status !== 'draft'; });
     var draftHtml = _renderSampaignDrafts(campaignId, draftRows);
-    if (!d.sends.length) { box.innerHTML = tabsHtml + draftHtml; return; }
+    if (!d.sends.length) { box.innerHTML = tabsHtml + wsBox + draftHtml; wsGo(); return; }
     var META = {
       pending:   { label:'Queued',    color:'var(--gold)' },
       sent:      { label:'Sent',      color:'var(--green)' },
       failed:    { label:'Not sent',  color:'var(--coral)' },
       cancelled: { label:'Cancelled', color:'var(--text3)' },
+      held:      { label:'Held',      color:'var(--amber)' },
+      blocked:   { label:'Blocked',   color:'var(--coral)' },
       blocked_no_email: { label:'No email', color:'var(--text3)' }
     };
     // Summary counts the WAVE being viewed, not the campaign, so the numbers
     // agree with the rows underneath them.
     var s = { pending:0, sent:0, failed:0, cancelled:0 };
     d.sends.forEach(function(x){ s[x.status] = (s[x.status]||0) + 1; });
-    box.innerHTML = tabsHtml + draftHtml +
+    box.innerHTML = tabsHtml + wsBox + draftHtml +
       // Hover state makes the rows read as clickable before anyone clicks.
       '<style>.samp-send-row:hover{background:var(--surface)}.samp-send-row.open{background:var(--surface)}</style>' +
       '<div style="border-top:1px solid var(--border);padding-top:11px">' +
@@ -2449,7 +2455,7 @@ async function loadSampaignSendQueue(campaignId) {
               // same read/write split as everywhere else in SAMpaign. This
               // previously required ownership even to open the row, so a
               // manager saw 48 unopenable lines with no indication why.
-              var editable = (x.status === 'pending') && d.is_owner;
+              var editable = (x.status === 'pending' || x.status === 'held') && d.is_owner;
               var readable = true;
               var who = x.name || x.email || '—';
               var initial = String(who).trim().charAt(0).toUpperCase() || '?';
@@ -2471,7 +2477,7 @@ async function loadSampaignSendQueue(campaignId) {
                       _rtEditor(x.id, x.body || '', 12) +
                       '<div style="display:flex;gap:9px;align-items:center;margin-top:6px">' +
                         '<button onclick="event.stopPropagation();saveSampaignDraftEdit(\''+esc(campaignId)+'\',\''+esc(x.id)+'\')" style="font-size:11px;font-weight:600;padding:6px 13px;border-radius:var(--r-sm);background:var(--green);border:none;color:#fff;cursor:pointer;font-family:var(--sans)">Save edit</button>' +
-                        '<span style="font-size:11px;color:var(--text3)">Send time stays the same</span>' +
+                        '<span style="font-size:11px;color:var(--text3)">'+(x.status === 'held' ? 'Saving puts it back in the queue, checked again as it goes' : 'Send time stays the same')+'</span>' +
                       '</div>'
                     // Read-only for sent, cancelled, and for anyone who is not
                     // the owner. An editable box on delivered mail would let
@@ -2487,11 +2493,13 @@ async function loadSampaignSendQueue(campaignId) {
                          : !d.is_owner ? 'Read only, this is '+esc((camp.owner_email||'the owner').split('@')[0])+'’s campaign'
                          : 'Read only')+'</div>') +
                 '</div>' +
-                (x.error ? '<div style="font-size:11px;color:var(--coral);padding:0 10px 8px 46px" title="'+esc(x.error)+'">'+esc(x.status === 'failed' ? _spFailText(x.error) : x.error)+'</div>' : '');
+                ((x.status === 'held' || x.status === 'blocked') && window.wsReasonLine ? window.wsReasonLine(x) :
+                (x.error ? '<div style="font-size:11px;color:var(--coral);padding:0 10px 8px 46px" title="'+esc(x.error)+'">'+esc(x.status === 'failed' ? _spFailText(x.error) : x.error)+'</div>' : ''));
             }).join('');
         }).join('');
       })() +
     '</div>';
+    wsGo();
   } catch(e) { box.innerHTML = ''; }
 }
 
