@@ -281,6 +281,7 @@
       '<span style="display:flex;gap:8px;align-items:center">' + tierBadge(t) + '<span class="ws-tag">' + stTag + '</span></span>' +
       '<div class="ws-why">' + e(first) + '</div>' +
       (second ? '<div class="ws-why2">' + e(second) + '</div>' : '') +
+      (r.english && r.english.body ? '<details class="ws-why2 ws-en"><summary style="cursor:pointer;font-weight:600;color:var(--text2)">Read it in English' + (r.english.state === 'stale' ? ' (out of date)' : '') + '</summary><div style="margin-top:6px;white-space:pre-wrap;color:var(--text2)">' + (r.english.subject ? '<b>' + e(r.english.subject) + '</b>\n' : '') + e(r.english.body) + '</div></details>' : '') +
       (acts ? '<div class="ws-acts">' + acts + '</div>' : '') +
     '</div>';
   }

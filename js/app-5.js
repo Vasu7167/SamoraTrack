@@ -2268,7 +2268,7 @@ function _renderSampaignDrafts(campaignId, drafts) {
           '<span class="g18-subj">' + esc(x.subject || '') + '</span>' + chip + '<span class="g18-chev" id="chev_' + esc(x.id) + '" aria-hidden="true">' + SP_ICON.arrow + '</span></button>' +
         '<div id="draft_' + esc(x.id) + '" class="g18-open" style="display:none">' +
           '<label class="g18-lab">Subject<input id="draftSubj_' + esc(x.id) + '" value="' + esc(x.subject || '') + '"></label>' +
-          _rtEditor(x.id, x.body || '', 13.5) +
+          (window.xBi ? window.xBi(x, _rtEditor(x.id, x.body || '', 13.5), true) : _rtEditor(x.id, x.body || '', 13.5)) +
           _g18Checks(x) +
           '<div class="g18-acts"><button class="g-btn sp-sm sp-gold" type="button" onclick="saveSampaignDraftEdit(\'' + esc(campaignId) + '\',\'' + esc(x.id) + '\')">Save</button>' +
             '<button class="g-btn sp-sm" type="button" onclick="g18RewriteOne(\'' + esc(campaignId) + '\',' + (x.launch || 1) + ',\'' + esc(x.contact_id) + '\',\'' + esc(x.id) + '\')">' + SP_ICON.spark + ' Rewrite with SAM</button>' +
@@ -2299,13 +2299,13 @@ async function g18Rewrite(campaignId, launch, contactIds, instruction, reopenId)
   var done = 0, err = null;
   try {
     for (var i = 0; i < contactIds.length; i += 6) {
-      var d = await _sampEdge('write_sampaign_drafts', { campaign_id: campaignId, launch: launch, replace: true, contact_ids: contactIds.slice(i, i + 6), instruction: instruction || '', sender_name: _sigNameHint().split(' ')[0] || '', sender_full_name: _sigNameHint() });
+      var d = await _sampEdge('write_sampaign_drafts', { campaign_id: campaignId, launch: launch, replace: true, which: 'both', contact_ids: contactIds.slice(i, i + 6), instruction: instruction || '', sender_name: _sigNameHint().split(' ')[0] || '', sender_full_name: _sigNameHint() });
       if (!d.ok) { err = d.error || 'SAM could not rewrite these'; break; }
       done += d.written || 0;
     }
   } catch (e) { err = e.message; }
   m.remove();
-  showToast(err ? err : done ? 'Rewrote ' + _spPlural(done, 'draft') + '. Have a look.' : 'Nothing to rewrite: only drafts can be rewritten.');
+  showToast(err ? err : done ? 'Rewrote ' + _spPlural(done, 'email') + '. Same place, same send time.' : 'Nothing to rewrite: emails already sent are never changed.');
   await loadSampaignSendQueue(campaignId);
   // Drop S: the draft stays where it was, open, so the change is in view.
   if (reopenId) { var el = document.getElementById('draft_' + reopenId); if (el && el.style.display === 'none') _toggleDraft(reopenId); var row = document.getElementById('g18row_' + reopenId); if (row) row.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
@@ -2674,7 +2674,7 @@ async function g19TamSearch() {
   T.busy = true; T.res = null; T.picked = {}; T.t0 = Date.now(); _g19TamRender();
   if (T.elT) clearInterval(T.elT);
   T.elT = setInterval(function () { var el = document.getElementById('g21TamEl'); if (!T.busy || !el) { clearInterval(T.elT); T.elT = null; return; } el.textContent = Math.round((Date.now() - T.t0) / 1000) + 's'; }, 1000);
-  var d = await _sampEdge('discover_accounts', { description: String(T.q).trim(), region_hint: String(T.region || '').trim() || undefined, limit: T.n, use_database: (T.apollo && T.useDb) || undefined });
+  var d = await _sampEdge('discover_accounts', { description: String(T.q).trim(), region_hint: String(T.region || '').trim() || undefined, limit: T.n, use_database: (T.apollo && T.useDb) || undefined, campaign_id: T.demoCampaignId || undefined });
   T.busy = false;
   if (!d.ok) {
     if (d.locked) { window._orgConfig = Object.assign({}, window._orgConfig || {}, { samTam: false }); showToast(d.error || 'SAM-TAM Discovery is a premium feature'); _g19TamRender(); return; }
@@ -2702,6 +2702,7 @@ function g19TamUse() {
   var T = window._g19Tam;
   var pick = (T.res.candidates || []).filter(function (x) { return T.picked[x.id]; });
   var lines = pick.map(function (x) { return [x.name, x.domain || '', x.region || ''].filter(function (v, i) { return i < 2 || v; }).join(', ').replace(/, $/, ''); });
+  if (T.demoCampaignId && window.xDemoAddCompanies) { window.xDemoAddCompanies(T.demoCampaignId, pick); return; }
   if (T.fromWizard && window._sampW) {
     var W = window._sampW;
     W.companies = (String(W.companies || '').trim() ? String(W.companies).trim() + '\n' : '') + lines.join('\n');
@@ -2897,7 +2898,7 @@ async function g23RenderLi(id) {
     var body = editing
       ? '<textarea class="g23-ta" id="g23Ta_' + esc(p.id) + '" rows="' + (kind === 'invite' ? 3 : 5) + '" oninput="var n=this.value.length,c=document.getElementById(\'g23Cc_' + esc(p.id) + '\');c.textContent=n+\' / ' + lim + '\';c.classList.toggle(\'over\',n>' + lim + ')">' + esc(txt) + '</textarea>' +
         '<div class="g23-ea"><span class="g23-cc' + (txt.length > lim ? ' over' : '') + '" id="g23Cc_' + esc(p.id) + '">' + txt.length + ' / ' + lim + '</span><span class="g23-sp"></span><button class="g-btn sp-sm" type="button" onclick="window._g23Li[\'' + esc(id) + '\'].editing=null;g23RenderLi(\'' + esc(id) + '\')">Cancel</button><button class="g-btn sp-sm sp-gold" type="button" onclick="g23LiSave(\'' + esc(id) + '\',\'' + esc(p.id) + '\',\'' + kind + '\',this)">Save</button></div>'
-      : txt ? '<div class="g23-tx">' + esc(txt) + '</div><div class="g23-meta">' + txt.length + ' / ' + lim + (kind === 'invite' && p.note_by ? ' · ' + (p.note_by === 'rep' ? 'edited by you' : 'written by SAM') : '') + '</div>'
+      : txt ? '<div class="g23-tx">' + esc(txt) + '</div><div class="g23-meta">' + txt.length + ' / ' + lim + (kind === 'invite' && p.note_by ? ' · ' + (p.note_by === 'rep' ? 'edited by you' : 'written by SAM') : '') + (p.lang_name && p.lang !== 'en' ? ' · in ' + esc(p.lang_name) : '') + '</div>' + (window.xLiEn ? window.xLiEn(id, p, kind) : '')
       : '<div class="g23-tx none">' + (kind === 'invite' ? 'No note yet.' : p.stage === 'connected' ? 'No message yet.' : 'SAM writes it when they accept.') + '</div>';
     var acts = '';
     if (d.is_owner && !editing) {
@@ -2913,6 +2914,7 @@ async function g23RenderLi(id) {
       '<a class="sd-li" href="' + esc(p.linkedin_url) + '" target="_blank" rel="noopener" aria-label="Open LinkedIn profile">in</a><span class="sp-chip ' + st[1] + ' g23-st">' + esc(st[0]) + '</span></div>' +
       body + (acts ? '<div class="g23-la">' + acts + '</div>' : '') + '</div></li>';
   }).join('');
+  if (window.xSettleLi) window.xSettleLi(id, d);
   host.innerHTML = head + (rows ? '<ul class="g23-ll">' + rows + '</ul>' : '<div class="sp-empty" style="padding:22px 8px">' + (L.filter === 'removed' ? 'Nobody taken out.' : L.filter === 'todo' ? 'Nothing to write.' : kind === 'message' ? 'No messages yet. SAM writes them as people accept your invites.' : 'Nobody with a LinkedIn profile yet.') + '</div>');
 }
 async function g23LiSave(id, cid, kind, btn) {
@@ -4703,4 +4705,3 @@ function g36Pipeline(id, cid) {
     _g36People(id, true);
   };
 }
- 

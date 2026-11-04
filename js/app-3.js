@@ -2474,11 +2474,12 @@ async function loadSampaignSendQueue(campaignId) {
                 '<div id="draft_'+esc(x.id)+'" style="display:none;padding:2px 10px 12px 46px">' +
                   (editable
                     ? '<input id="draftSubj_'+esc(x.id)+'" value="'+esc(x.subject||'')+'" style="width:100%;box-sizing:border-box;padding:7px 9px;border-radius:var(--r-sm);border:1px solid var(--border2);background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12px;font-weight:600;margin-bottom:5px"/>' +
-                      _rtEditor(x.id, x.body || '', 12) +
+                      (window.xBi ? window.xBi(x, _rtEditor(x.id, x.body || '', 12), true) : _rtEditor(x.id, x.body || '', 12)) +
                       '<div style="display:flex;gap:9px;align-items:center;margin-top:6px">' +
                         '<button onclick="event.stopPropagation();saveSampaignDraftEdit(\''+esc(campaignId)+'\',\''+esc(x.id)+'\')" style="font-size:11px;font-weight:600;padding:6px 13px;border-radius:var(--r-sm);background:var(--green);border:none;color:#fff;cursor:pointer;font-family:var(--sans)">Save edit</button>' +
+                        (typeof g18RewriteOne === 'function' ? '<button class="g-btn sp-sm" type="button" onclick="event.stopPropagation();g18RewriteOne(\''+esc(campaignId)+'\','+(x.launch||1)+',\''+esc(x.contact_id)+'\',\''+esc(x.id)+'\')">Rewrite with SAM</button>' : '') +
                         '<span style="font-size:11px;color:var(--text3)">'+(x.status === 'held' ? 'Saving puts it back in the queue, checked again as it goes' : 'Send time stays the same')+'</span>' +
-                      '</div>'
+                      '</div><div id="g18rw_'+esc(x.id)+'" onclick="event.stopPropagation()"></div>'
                     // Read-only for sent, cancelled, and for anyone who is not
                     // the owner. An editable box on delivered mail would let
                     // the UI show corrected text the recipient never received.
@@ -2486,7 +2487,7 @@ async function loadSampaignSendQueue(campaignId) {
                       // Rendered, not escaped. A sent email shown as raw markup
                       // is unreadable, and worse, it looks like what the
                       // recipient got — which for one week it actually was.
-                      '<div style="font-size:12px;color:var(--text2);line-height:1.6;background:var(--surface);border-radius:var(--r-sm);padding:10px 12px;border:1px solid var(--border);overflow-wrap:anywhere">'+sanitizeEmailHtml(x.body||'')+'</div>' +
+                      (window.xBi ? window.xBi(x, '<div style="font-size:12px;color:var(--text2);line-height:1.6;background:var(--surface);border-radius:var(--r-sm);padding:10px 12px;border:1px solid var(--border);overflow-wrap:anywhere">'+sanitizeEmailHtml(x.body||'')+'</div>', false) : '<div style="font-size:12px;color:var(--text2);line-height:1.6;background:var(--surface);border-radius:var(--r-sm);padding:10px 12px;border:1px solid var(--border);overflow-wrap:anywhere">'+sanitizeEmailHtml(x.body||'')+'</div>') +
                       '<div style="font-size:11px;color:var(--text3);margin-top:5px">'+
                         (x.status==='sent' ? 'Already sent, read only'
                          : x.status==='cancelled' ? 'Cancelled, never sent'
@@ -2500,6 +2501,7 @@ async function loadSampaignSendQueue(campaignId) {
       })() +
     '</div>';
     wsGo();
+    if (window.xSettleQueue) window.xSettleQueue(campaignId, all);
   } catch(e) { box.innerHTML = ''; }
 }
 

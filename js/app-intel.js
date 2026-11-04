@@ -109,7 +109,7 @@ async function _samTamRun(action, payload, queryLabel) {
   if (typeof g19UsageLoad === 'function') await g19UsageLoad(true);
   _g19TamRender(); setTimeout(function () { _g20Reveal('.g19-tamres'); }, 60);
 }
-function _samTamLookalike() { var T = window._g19Tam; _samTamRun('discover_accounts', { mode: 'lookalike', limit: T.n || 10 }, 'Like my won deals'); }
+function _samTamLookalike() { var T = window._g19Tam; _samTamRun('discover_accounts', { mode: 'lookalike', limit: T.n || 10, campaign_id: T.demoCampaignId || undefined }, T.demoCampaignId ? 'Like their customers' : 'Like my won deals'); }
 function _samTamWarm() { var T = window._g19Tam; _samTamRun('discover_warm_accounts', { limit: T.n > 5 ? T.n : 10, include_mailbox: T.warmMail !== false }, 'From your activity'); }
 
 // Score chip and its parts on each candidate.
