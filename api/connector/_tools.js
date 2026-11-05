@@ -355,7 +355,7 @@ export async function executeTool(accessToken, name, args = {}) {
       if (!d.deals) return d;
       return { total_pipeline_usd: d.totalValue, weighted_forecast_usd: d.weightedValue, by_tier: d.byTier, accounts: d.deals.map(a => ({ account: a.account, signal_score: a.signal_score, tier: a.tier, deal_value_usd: a.deal_value_usd, deal_type: a.deal_type, region: a.region, icp_score: a.icp_score, rep: a.rep_email?.split('@')[0] })) };
     }
-    case 'get_account_signals':   return edge(accessToken, 'search_account',         { account: args.account, days: args.days || 30 });
+    case 'get_account_signals':   return edge(accessToken, 'search_account',         { query: args.account, account: args.account, days: args.days || 30 });
     case 'get_account_timeline':  return edge(accessToken, 'get_account_timeline',    { account_id: args.account_id, days: args.days || 90 });
     case 'get_coverage': {
       const d = await edge(accessToken, 'account_coverage', { date_from: args.date_from || today(), date_to: args.date_to || today(), rep_user_id: args.rep_user_id || null });
