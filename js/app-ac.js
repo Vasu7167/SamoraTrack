@@ -207,7 +207,7 @@
       }
       var bar = liOn || (rsCached(id) && rsCached(id).locked) ? rsBar(id) : '';
       var pct = Math.round(doneN / Math.max(1, core.length) * 100);
-      el.innerHTML = '<section class="sp-card g18-guide"><div class="g18-gh"><div><div class="sp-lbl">Launch plan</div><div class="g18-gt">' + (doneN ? doneN + ' of ' + core.length + ' done. ' : '') + 'Next: ' + e(steps[nowIdx].title.toLowerCase()) + '.</div></div>' +
+      el.innerHTML = '<section class="sp-card g18-guide"><div class="g18-gh"><div><div class="sp-lbl">Launch plan</div><div class="g18-gt">' + (doneN ? doneN + ' of ' + core.length + ' done. ' : '') + 'Next: ' + e(steps[nowIdx].title.charAt(0).toLowerCase() + steps[nowIdx].title.slice(1)) + '.</div></div>' +
         '<div class="g18-gr"><div class="g18-bar"><span style="width:' + pct + '%"></span></div><button class="g18-link" type="button" onclick="g18HideGuide(\'' + e(id) + '\', true)">Hide</button></div></div>' + bar +
         '<ol class="g18-steps">' + steps.map(function (s, i) {
           var state = s.done ? 'done' : i === nowIdx ? 'now' : s.auto ? 'auto' : s.optional ? 'opt' : 'later';
