@@ -276,7 +276,10 @@
   }
 
   // ══ 4. Add Samora to Chrome ════════════════════════════════════════════
-  var STORE = { url: (typeof LI_STORE_URL === 'string' && LI_STORE_URL) || null, asked: false };
+  // The plugin's page on the Chrome Web Store (unlisted: installable by link).
+  var LI_STORE_DEFAULT = 'https://chromewebstore.google.com/detail/samora-for-linkedin/jpinpcjolcbbgpjebphkjjcifgapmcpf';
+  var STORE = { url: (typeof LI_STORE_URL === 'string' && LI_STORE_URL) || LI_STORE_DEFAULT, asked: false };
+  try { if (!LI_STORE_URL) LI_STORE_URL = STORE.url; } catch (_e) {}
   async function storeUrl() {
     if (STORE.url || STORE.asked) return STORE.url;
     STORE.asked = true;
