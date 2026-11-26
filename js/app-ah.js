@@ -184,7 +184,7 @@
   function navHtml(cur) {
     var B = AH.badges || {};
     var t = function (k, lbl, badge, gold) { return '<button class="ah-tab' + (cur === k ? ' on' : '') + '" type="button" role="tab" aria-selected="' + (cur === k) + '" data-ah-nav="' + k + '">' + lbl + (badge ? '<i' + (gold ? ' class="g"' : '') + '>' + e(badge) + '</i>' : '') + '</button>'; };
-    return '<nav class="ah-tabs" role="tablist" aria-label="SAMpaign views">' + t('home', 'SAMpaigns') + t('people', 'People', B.fix ? B.fix + ' to fix' : '') + t('outbox', 'Outbox', B.failed ? B.failed + ' failed' : (B.drafts ? B.drafts + ' to review' : ''), !B.failed) + '</nav>';
+    return '<nav class="ah-tabs" role="tablist" aria-label="SAMpaign views">' + t('home', 'SAMpaigns') + t('people', 'People', B.fix ? B.fix + ' to fix' : '') + t('outbox', 'Outbox', (B.failed || 0) + (B.li || 0) ? ((B.failed || 0) + (B.li || 0)) + ((B.li && !B.failed) ? ' stuck' : B.failed && !B.li ? ' failed' : ' to fix') : (B.drafts ? B.drafts + ' to review' : ''), !((B.failed || 0) + (B.li || 0))) + '</nav>';
   }
   document.addEventListener('click', function (ev) {
     var b = ev.target.closest && ev.target.closest('[data-ah-nav]'); if (!b) return;
@@ -229,6 +229,8 @@
       if (o && o.ok) { AH.badges.failed = o.counts.failed || 0; AH.badges.drafts = o.counts.drafts || 0; }
       var p = await call('get_people_view', { scope: 'mine', limit: 20 });
       if (p && p.ok) AH.badges.fix = (p.overlaps || 0) + (p.dnc_live || 0);
+      var lh = await call('get_linkedin_health', {});
+      if (lh && lh.ok) AH.badges.li = lh.stuck || 0;
     } catch (_e) {}
     homeNav();
   }
@@ -316,7 +318,7 @@
       '<a class="ah-ib" ' + (ph ? 'href="tel:' + e(String(ph).replace(/[^+\d]/g, '')) + '"' : 'aria-disabled="true"') + ' title="' + (ph ? 'Call ' + e(ph) : 'No number yet') + '" aria-label="Call ' + e(r.name) + '">' + IC.call + '</a></div>';
     var more = (r.sampaigns || []).length > 1 ? ' <small>+' + ((r.sampaigns || []).length - 1) + ' more</small>' : '';
     return '<tr class="' + (fix ? 'fix' : '') + '" data-cid="' + e(r.contact_id) + '"><td><input class="ah-ck" type="checkbox" data-ah-sel="' + e(r.contact_id) + '"' + (sel ? ' checked' : '') + ' aria-label="Select ' + e(r.name) + '"></td>' +
-      '<td><div class="ah-who"><span class="ah-av" aria-hidden="true">' + e(ini(r.name)) + '</span><div style="min-width:0"><b>' + e(r.name || r.email) + '</b><small>' + e([r.title, r.company].filter(Boolean).join(' · ')) + '</small>' + flags + '</div></div></td>' +
+      '<td><div class="ah-who"><span class="ah-av" aria-hidden="true">' + e(ini(r.name)) + '</span><div style="min-width:0"><b>' + e(r.name || r.email) + '</b><small>' + e([r.title, r.company].filter(Boolean).join(' · ')) + '</small>' + (r.local ? '<button class="ah-loc' + (r.local.at_work ? ' on' : '') + '" type="button" data-ai-zone="' + e(r.contact_id) + '" title="' + e('From ' + (r.local.why || 'what SAM knows') + '. Change it') + '">' + e(r.local.clock + ' · ' + r.local.label) + '</button>' : '<button class="ah-loc none" type="button" data-ai-zone="' + e(r.contact_id) + '">Set their time zone</button>') + flags + '</div></div></td>' +
       '<td><span class="ah-st ' + e(r.stage) + '">' + e(STAGE[r.stage] || r.stage) + '</span></td>' +
       '<td>' + e(r.last || '') + (r.last_at ? '<small>' + e(ago(r.last_at)) + '</small>' : '') + '</td>' +
       '<td>' + (r.next ? e(r.next) : '<small>Nothing due</small>') + '</td>' +
@@ -415,6 +417,7 @@
   async function obLoad() {
     var pg = page(); if (!pg) return;
     pg.innerHTML = obShell('<div class="ah-card" style="padding:16px"><div class="ah-sk" style="width:35%"></div><div class="ah-sk"></div><div class="ah-sk" style="width:65%"></div></div>');
+    if (AH.obCh === 'linkedin' && typeof window.aiLiPaint === 'function') return window.aiLiPaint(pg, obShell);
     var d = await call('get_outbox', { tab: AH.obTab, scope: AH.obScope, limit: 300 });
     if (AH.view !== 'outbox') return;
     if (!d || !d.ok) { pg.innerHTML = obShell(window.ahEmpty('outbox', 'The Outbox did not load', e((d && d.error) || 'Try again in a moment.'), '<button class="ah-btn gold" type="button" onclick="ahGo(\'outbox\')">Try again</button>')); return; }
@@ -423,7 +426,9 @@
     obPaint();
   }
   function obShell(inner) {
-    return navHtml('outbox') + '<div class="ah-head"><div><h2>Outbox</h2><p>Every email across your SAMpaigns that is written, queued or stuck. Changes happen in place, in the SAMpaign.</p></div></div>' + inner;
+    var li = AH.obCh === 'linkedin', B = AH.badges || {};
+    var ch = typeof window.aiLiPaint === 'function' ? '<div class="ah-seg" role="tablist" aria-label="Channel"><button type="button" role="tab" aria-selected="' + !li + '" class="' + (li ? '' : 'on') + '" data-ob-ch="email">Email</button><button type="button" role="tab" aria-selected="' + li + '" class="' + (li ? 'on' : '') + '" data-ob-ch="linkedin">LinkedIn' + (B.li ? ' · ' + B.li + ' stuck' : '') + '</button></div>' : '';
+    return navHtml('outbox') + '<div class="ah-head"><div><h2>Outbox</h2><p>' + (li ? 'Every LinkedIn step across your SAMpaigns: what is waiting, what is stuck and why, with one fix for each.' : 'Every email across your SAMpaigns that is written, queued or stuck. Changes happen in place, in the SAMpaign.') + '</p></div>' + ch + '</div>' + (li ? '' : '<div id="aiTheirLine"></div>') + inner;
   }
   function obPaint() {
     var pg = page(), d = AH.ob; if (!pg || !d) return;
@@ -451,7 +456,7 @@
         if (d.tab === 'scheduled' || d.tab === 'all') { var dl = x.at ? dayLbl(x.at) : ''; if (dl !== last) { h = '<li class="ah-dh" style="display:block">' + e(dl || 'No date') + '</li>'; last = dl; } }
         var st = x.status === 'failed' ? '<span class="ah-st" style="background:rgba(var(--ah-mul),.14);color:var(--ah-mul-t)">' + e(x.reason || 'Failed') + '</span>' : x.status === 'draft' ? '<span class="ah-st">Draft</span>' : x.status === 'sent' ? '<span class="ah-st meeting">Sent</span>' : x.held ? '<span class="ah-st">Held</span>' : '<span class="ah-st deal">' + e(tm(x.at)) + '</span>';
         return h + '<li><span class="ah-av" aria-hidden="true">' + e(ini(x.name)) + '</span><div class="ah-obm"><b>' + e(x.name) + '</b> <small style="color:var(--text3)">' + e([x.company, x.wave].filter(Boolean).join(' · ')) + '</small><div class="s">' + e(x.subject || '(no subject)') + '</div><div class="p">' + e(x.preview) + '</div></div>' +
-          '<div class="ah-obr">' + st + '<small>' + e(x.campaign) + (x.status === 'sent' ? ' · ' + e(ago(x.at)) : '') + '</small><button class="ah-btn sm" type="button" data-ob-open="' + e(x.campaign_id) + '|sequence">' + (x.status === 'draft' ? 'Review' : 'Open') + '</button></div></li>';
+          '<div class="ah-obr">' + st + (x.their && (x.status === 'pending' || x.status === 'held') ? '<small class="ah-their">' + e(x.their.clock + ' in ' + x.their.label) + '</small>' : '') + '<small>' + e(x.campaign) + (x.status === 'sent' ? ' · ' + e(ago(x.at)) : '') + '</small><button class="ah-btn sm" type="button" data-ob-open="' + e(x.campaign_id) + '|sequence">' + (x.status === 'draft' ? 'Review' : 'Open') + '</button></div></li>';
       }).join('') + '</ul>' + (d.total > items.length ? '<div class="ah-more" style="cursor:default">' + (d.total - items.length) + ' more in the SAMpaigns</div>' : '') + '</div>';
     }
     pg.innerHTML = obShell(tabs + pulse + banners + body);
@@ -460,7 +465,8 @@
     var pg = document.getElementById('ahPage'); if (!pg || pg.hidden || !pg.contains(ev.target) || AH.view !== 'outbox') return;
     var t = ev.target.closest('button'); if (!t) return;
     var a;
-    if ((a = t.getAttribute('data-ob-tab'))) { AH.obTab = a; obLoad(); }
+    if ((a = t.getAttribute('data-ob-ch'))) { AH.obCh = a === 'linkedin' ? 'linkedin' : 'email'; obLoad(); }
+    else if ((a = t.getAttribute('data-ob-tab'))) { AH.obTab = a; obLoad(); }
     else if ((a = t.getAttribute('data-ob-scope'))) { AH.obScope = a; obLoad(); }
     else if ((a = t.getAttribute('data-ob-open'))) { var p = a.split('|'); try { openSampaignDetail(p[0], p[1] || 'sequence'); } catch (_e) {} }
     else if ((a = t.getAttribute('data-ob-retry'))) {
@@ -583,8 +589,8 @@
   });
 
   // ══ 5. The account as one stream ══════════════════════════════════════
-  var AK = [['', 'All'], ['meeting', 'Meetings'], ['reply', 'Replies'], ['linkedin', 'LinkedIn'], ['email', 'Emails'], ['deal', 'Deal'], ['crm', 'Changes'], ['risk', 'Risks']];
-  var AIC = { meeting: IC.meeting, reply: IC.reply, linkedin: IC.li, email: IC.email, deal: IC.deal, crm: IC.crm, risk: IC.risk };
+  var AK = [['', 'All'], ['meeting', 'Meetings'], ['reply', 'Replies'], ['linkedin', 'LinkedIn'], ['call', 'Calls'], ['email', 'Emails'], ['deal', 'Deal'], ['crm', 'Changes'], ['risk', 'Risks']];
+  var AIC = { meeting: IC.meeting, reply: IC.reply, linkedin: IC.li, call: IC.call, email: IC.email, deal: IC.deal, crm: IC.crm, risk: IC.risk };
   window._ahAct = window._ahAct || {};
   function actHtml(id) {
     var A = window._ahAct[id] || {};
@@ -806,5 +812,6 @@
   }
   setInterval(function () { if (document.getElementById('sampaignCampaignsList') && !listObs) listEmpty(); }, 1500);
 
+  window._ahApi = { page: page, obShell: obShell, obLoad: obLoad, peopleLoad: function () { return peopleLoad(true); }, badges: function () { badgeAt = 0; return badgesLoad(true); }, dlg: dlg, IC: IC, art: art };
   window._ahReady = true;
 })();
