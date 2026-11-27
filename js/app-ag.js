@@ -35,11 +35,13 @@
   })();
 
   var AG_FMT = [
-    ['sheet', 'Sales sheet', 'The columns your sales team fills in today, filled in by Samora. Readable, for marketing.'],
-    ['brevo', 'Brevo import', 'Brevo’s own column names. Import it into a list; Brevo’s Meta Ads integration can sync that list.'],
-    ['meta', 'Meta', 'Facebook and Instagram, hashed. Meta needs at least 100 matched people.'],
-    ['linkedin_companies', 'LinkedIn companies', 'The companies only, no personal data. Works at any size.']
+    ['sheet', 'Sales sheet (readable)', 'Names, emails and companies you can read, in the columns your sales team fills in today. Open it in Excel or Google Sheets.', 'Sales sheet'],
+    ['brevo', 'Brevo import', 'Brevo’s own column names. Import it into a list; Brevo’s Meta Ads integration can sync that list.', 'Brevo import'],
+    ['meta', 'Meta upload (scrambled, not readable)', 'For Meta Ads only. Every email and name is scrambled so Meta can match people privately, so the file looks like random letters. Upload it to Meta as it is. To read the list, download the Sales sheet.', 'for Meta upload'],
+    ['linkedin_companies', 'LinkedIn companies', 'The companies only, no personal data. Works at any size.', 'LinkedIn companies']
   ];
+  // The older audiences say the same.
+  try { if (typeof G19_FMT !== 'undefined') G19_FMT.forEach(function (f) { if (f[0] === 'meta') { f[1] = 'Meta upload (scrambled, not readable)'; f[2] = 'For Meta Ads only. Emails, phone numbers and names are scrambled so Meta can match people privately; nobody can read the file. Upload it as it is. Meta suggests at least 1,000 people.'; } }); } catch (_e) {}
   var SEG_LBL = { deal: 'Deal in progress', met: 'Met', replied: 'Replied', connected: 'Connected' };
   var LEFT = { not_interested: 'said not interested', opted_out: 'opted out', bounced: 'bounced', won: 'won clients', internal: 'your own team', lost: 'not going ahead', older: 'outside the time window' };
 
@@ -92,7 +94,7 @@
       '<div class="g19-sec">From</div><div class="g19-camps">' + (A.camps || []).map(function (c) { return '<label class="g19-camp"><input type="checkbox" data-g19-camp="' + e(c.id) + '"' + (A.picked[c.id] ? ' checked' : '') + '><span><b>' + e(c.name) + '</b><small>' + pl(c.people, 'person', 'people') + (c.owner ? ' · ' + e(c.owner) : '') + '</small></span></label>'; }).join('') + '</div>' +
       '<div class="g19-sec">Download</div><div class="g19-fmts">' + AG_FMT.map(function (f) { return '<button type="button" class="g19-fmt' + (A.fmt === f[0] ? ' on' : '') + '" data-g19-fmt="' + f[0] + '"><b>' + f[1] + '</b><span>' + f[2] + '</span></button>'; }).join('') + '</div>' +
       '<div class="g19-sec">Brevo</div>' + agBrevoHtml(A) +
-      '<div class="sp-foot"><button class="g-btn" type="button" onclick="document.getElementById(\'g19Aud\').remove()">Close</button><button class="g-btn sp-gold" type="button" data-ag-dl="1"' + (!ids.length || (s && !s.people) ? ' disabled' : '') + '>' + (typeof G19_ICON !== 'undefined' ? G19_ICON.dl : '') + ' Download ' + e((AG_FMT.find(function (f) { return f[0] === A.fmt; }) || AG_FMT[0])[1]) + '</button></div>';
+      '<div class="sp-foot"><button class="g-btn" type="button" onclick="document.getElementById(\'g19Aud\').remove()">Close</button><button class="g-btn sp-gold" type="button" data-ag-dl="1"' + (!ids.length || (s && !s.people) ? ' disabled' : '') + '>' + (typeof G19_ICON !== 'undefined' ? G19_ICON.dl : '') + ' Download ' + e(((AG_FMT.find(function (f) { return f[0] === A.fmt; }) || AG_FMT[0])[3])) + '</button></div>';
   };
 
   var basePreview = window._g19AudPreview, agT = null;
